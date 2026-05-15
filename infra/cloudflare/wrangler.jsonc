@@ -1,0 +1,133 @@
+{
+  "$schema": "../../packages/api/node_modules/wrangler/config-schema.json",
+  "name": "xtbit-apps-api",
+  "main": "../../packages/api/src/index.ts",
+  "compatibility_date": "2026-05-13",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "dev.aiappsbox.com/api/*",
+      "zone_name": "aiappsbox.com"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "vars": {
+    "APP_ENV": "dev",
+    "STRIPE_PUBLISHABLE_KEY": "pk_test_51TWqHjA3Z1ROdg7ejHxMhYXjfHpxgafUrzWot3dYTltO2CxCuNYm6V5tBV4KDkxXtm2rJKszaVIdlDny9wVT4q3300MVrLNJPn",
+    "STRIPE_PRICE_PRO_MONTHLY": "price_1TWs7wA3Z1ROdg7eLd34XFBn",
+    "STRIPE_SUCCESS_URL": "https://dev.xtbit-apps.pages.dev/?billing=success",
+    "STRIPE_CANCEL_URL": "https://dev.xtbit-apps.pages.dev/?billing=cancelled",
+    "STRIPE_PORTAL_RETURN_URL": "https://dev.xtbit-apps.pages.dev/?billing=portal",
+    "OPENAI_MODEL": "gpt-5-mini",
+    "LLM_DEFAULT_ROUTE": "cheap-dialogue",
+    "AI_TV_DATING_FREE_MESSAGE_LIMIT": "8"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xtbit-apps-dev",
+      "database_id": "baffe629-fa09-4d13-b172-6ddb09e621b9",
+      "migrations_dir": "../../packages/api/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "xtbit-apps-dev-assets"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG",
+      "id": "48a69782e2574e13a6b2df71f5b456f7"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOB_QUEUE",
+        "queue": "xtbit-apps-dev-jobs"
+      }
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "GameRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "GameRoom"
+      ]
+    }
+  ],
+  "env": {
+    "production": {
+      "name": "xtbit-apps-api-prod",
+      "routes": [
+        {
+          "pattern": "aiappsbox.com/api/*",
+          "zone_name": "aiappsbox.com"
+        }
+      ],
+      "vars": {
+        "APP_ENV": "prod",
+        "STRIPE_PUBLISHABLE_KEY": "",
+        "STRIPE_PRICE_PRO_MONTHLY": "",
+        "STRIPE_SUCCESS_URL": "https://aiappsbox.com/?billing=success",
+        "STRIPE_CANCEL_URL": "https://aiappsbox.com/?billing=cancelled",
+        "STRIPE_PORTAL_RETURN_URL": "https://aiappsbox.com/?billing=portal",
+        "OPENAI_MODEL": "gpt-5-mini",
+        "LLM_DEFAULT_ROUTE": "cheap-dialogue",
+        "AI_TV_DATING_FREE_MESSAGE_LIMIT": "8"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "xtbit-apps-prod",
+          "database_id": "14a9ebf0-69f0-4599-b6bf-a832211865e9",
+          "migrations_dir": "../../packages/api/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS",
+          "bucket_name": "xtbit-apps-prod-assets"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "CONFIG",
+          "id": "4265d3978ef149dba26c987285f81d2f"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "JOB_QUEUE",
+            "queue": "xtbit-apps-prod-jobs"
+          }
+        ]
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "ROOMS",
+            "class_name": "GameRoom"
+          }
+        ]
+      }
+    }
+  }
+}

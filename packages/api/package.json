@@ -1,0 +1,24 @@
+{
+  "name": "@xtbit/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/tasks/run.mjs api:dev",
+    "deploy": "node ../../scripts/tasks/run.mjs api:deploy-dev",
+    "deploy:dev": "node ../../scripts/tasks/run.mjs api:deploy-dev",
+    "cf:types": "node ../../scripts/tasks/run.mjs api:cf-types",
+    "d1:migrate:local": "node ../../scripts/tasks/run.mjs api:d1-migrate-local",
+    "d1:migrate:dev": "node ../../scripts/tasks/run.mjs api:d1-migrate-dev",
+    "d1:migrate:prod": "node ../../scripts/tasks/run.mjs api:d1-migrate-prod",
+    "typecheck": "node ../../scripts/tasks/run.mjs api:typecheck"
+  },
+  "dependencies": {
+    "@xtbit/shared": "file:../shared"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260511.1",
+    "typescript": "~5.9.2",
+    "wrangler": "^4.90.1"
+  }
+}

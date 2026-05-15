@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+.wrangler/
+.turbo/
+tmp/
+dist/
+build/
+coverage/
+*.local
+.env
+.env.*
+!.env.example
+.dev.vars
+*.tsbuildinfo
+worker-configuration.d.ts

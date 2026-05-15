@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS app_events (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS asset_objects (
+  key TEXT PRIMARY KEY,
+  content_type TEXT,
+  size_bytes INTEGER,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
