@@ -68,7 +68,7 @@ export function buildTurnDraft(input: {
     return {
       options: [],
       question:
-        "Before the guests start asking, tell the room a little about yourself — your age range, what you do, and what makes your off-hours worth living. The more real, the better the questions.",
+        "Before the guests start asking, tell the room a little about yourself: your age range, what you do, and what makes your off-hours worth living. The more real, the better the questions.",
       speakerKey: hostKey,
       speakerName: hostName,
       stageKey: input.stageKey,
@@ -83,7 +83,7 @@ export function buildTurnDraft(input: {
 
     return {
       options: answerStyleWithMoveOnOptions(),
-      // Placeholder — createTurnForStage replaces this with an LLM-generated question
+      // Placeholder: createTurnForStage replaces this with an LLM-generated question.
       question: `${guest.name}: What do you want the room to know first?`,
       speakerKey: guest.characterKey,
       speakerName: guest.name,
@@ -95,7 +95,7 @@ export function buildTurnDraft(input: {
     return {
       options: moveToFinalOptions(),
       question:
-        "The floor is yours. Pick any guest and ask them anything — this is your chance before the final call.",
+        "The floor is yours. Pick any guest and ask them anything. This is your chance before the final call.",
       speakerKey: hostKey,
       speakerName: hostName,
       stageKey: input.stageKey,
@@ -178,7 +178,7 @@ export function answerStyleWithMoveOnOptions(): TurnOption[] {
     ...answerStyleOptions(),
     {
       id: "move_on",
-      label: "Ask my questions →",
+      label: "Ask my questions ->",
       preview: "I am ready to ask the guests my own questions now.",
       signalText: "",
     },
@@ -189,7 +189,7 @@ export function moveToFinalOptions(): TurnOption[] {
   return [
     {
       id: "move_to_final",
-      label: "Make my choice →",
+      label: "Make my choice ->",
       preview: "I have heard enough. I am ready to choose.",
       signalText: "",
     },
@@ -219,11 +219,10 @@ export function chooseQuestioningGuest(
   return sorted[session.messageCount % Math.max(sorted.length, 1)];
 }
 
-function normalizeShortText(value: string | undefined, fallback: string, maxLength: number): string {
-  const normalized = value?.trim().replace(/\s+/g, " ");
-  if (!normalized) {
+function normalizeShortText(value: unknown, fallback: string, maxLength: number) {
+  if (typeof value !== "string") {
     return fallback;
   }
 
-  return normalized.length > maxLength ? normalized.slice(0, maxLength) : normalized;
+  return value.trim().slice(0, maxLength);
 }

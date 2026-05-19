@@ -59,15 +59,16 @@ const DEFAULT_CHARACTER_ASSET_MAP = {
   noah: require('@/assets/ai-companion/show/noah.png'),
 };
 
-export default function AiCompanionHome() {
-  const { width } = useWindowDimensions();
-  const compact = width < 760;
-  const { draftEmail, email, persistEmail, setDraftEmail, signOut } = useAuthEmail();
 const CHAPTER_TWO_ASSET_MAP = {
   'apps/ai-companion/chapter-two/bar-date.png': require('@/assets/ai-companion/chapter-two/bar-date.png'),
   'apps/ai-companion/chapter-two/cafe-date.png': require('@/assets/ai-companion/chapter-two/cafe-date.png'),
   'apps/ai-companion/chapter-two/cinema-date.png': require('@/assets/ai-companion/chapter-two/cinema-date.png'),
 };
+
+export default function AiCompanionHome() {
+  const { width } = useWindowDimensions();
+  const compact = width < 760;
+  const { draftEmail, email, persistEmail, setDraftEmail, signOut } = useAuthEmail();
 
   const signedIn = email.trim().length > 0;
   const username = email ? email.split('@')[0] || 'Player' : '';
@@ -89,6 +90,7 @@ const CHAPTER_TWO_ASSET_MAP = {
   const [selectedChapterTwoLocationKey, setSelectedChapterTwoLocationKey] = useState('cafe');
   const [guestStreamingLines, setGuestStreamingLines] = useState<Record<string, string>>({});
   const [turnSubmitting, setTurnSubmitting] = useState(false);
+  const [chapterTwoSubmitting, setChapterTwoSubmitting] = useState(false);
 
   const guests = useMemo(
     () => library.status === 'ready' ? library.data.characters.filter((guest) => guest.role === 'guest') : [],
@@ -123,6 +125,8 @@ const CHAPTER_TWO_ASSET_MAP = {
     [workspaceLineupGuests],
   );
 
+  const unlockedCompanions = workspace.status === 'ready' ? workspace.data.companions : [];
+
   const chapterOneSlotCount = workspace.status === 'ready'
     ? clampSlotCount(workspace.data.chapterOne?.slotCount)
     : DEFAULT_CHAPTER_ONE_SLOT_COUNT;
@@ -139,7 +143,6 @@ const CHAPTER_TWO_ASSET_MAP = {
   const loadWorkspace = useCallback(async (nextEmail = email) => {
     if (!nextEmail.trim()) {
       setWorkspace({ status: 'idle' });
-  const unlockedCompanions = workspace.status === 'ready' ? workspace.data.companions : [];
       return;
     }
 
@@ -150,6 +153,15 @@ const CHAPTER_TWO_ASSET_MAP = {
       setWorkspace({ status: 'error', message: String(error) });
     }
   }, [email]);
+
+  const loadChapterTwoLocations = useCallback(async () => {
+    setChapterTwoLocations({ status: 'loading' });
+    try {
+      setChapterTwoLocations({ status: 'ready', data: await fetchChapterTwoLocations() });
+    } catch (error) {
+      setChapterTwoLocations({ status: 'error', message: String(error) });
+    }
+  }, []);
 
   const performCheckout = useCallback(async (nextEmail = email) => {
     setNotice('Opening checkout...');
@@ -164,15 +176,6 @@ const CHAPTER_TWO_ASSET_MAP = {
   const performJoin = useCallback(async (characterKey: string, nextEmail = email, options?: { silent?: boolean }) => {
     if (!nextEmail.trim()) {
       return false;
-  const loadChapterTwoLocations = useCallback(async () => {
-    setChapterTwoLocations({ status: 'loading' });
-    try {
-      setChapterTwoLocations({ status: 'ready', data: await fetchChapterTwoLocations() });
-    } catch (error) {
-      setChapterTwoLocations({ status: 'error', message: String(error) });
-    }
-  }, []);
-
     }
 
     setJoiningKey(characterKey);
@@ -229,15 +232,15 @@ const CHAPTER_TWO_ASSET_MAP = {
     if (!email || !pendingAction) {
       return;
     }
-  useEffect(() => {
-    void loadChapterTwoLocations();
-  }, [loadChapterTwoLocations]);
-
 
     const action = pendingAction;
     setPendingAction(null);
     void runPendingAction(action, email);
   }, [email, pendingAction, runPendingAction]);
+
+  useEffect(() => {
+    void loadChapterTwoLocations();
+  }, [loadChapterTwoLocations]);
 
   useEffect(() => {
     setSelectedGuestKeys((current) => current.slice(0, chapterOneSlotCount));
@@ -256,6 +259,10 @@ const CHAPTER_TWO_ASSET_MAP = {
       return false;
     }
 
+    openSignIn(action);
+    return true;
+  }, [openSignIn, signedIn]);
+
   useEffect(() => {
     if (workspace.status !== 'ready' || selectedChapterTwoCompanionId) {
       return;
@@ -263,10 +270,6 @@ const CHAPTER_TWO_ASSET_MAP = {
 
     setSelectedChapterTwoCompanionId(workspace.data.companions[0]?.id ?? '');
   }, [selectedChapterTwoCompanionId, workspace]);
-
-    openSignIn(action);
-    return true;
-  }, [openSignIn, signedIn]);
 
   const confirmSignIn = useCallback(async () => {
     const normalized = draftEmail.trim().toLowerCase();
@@ -355,6 +358,16 @@ const CHAPTER_TWO_ASSET_MAP = {
       setNotice('Chapter 1 supports up to 5 guests.');
       return;
     }
+
+    setSelectedGuestKeys((current) => {
+      if (current.includes(guest.characterKey)) {
+        return current;
+      }
+
+      return [...current, guest.characterKey].slice(0, chapterOneSlotCount);
+    });
+  }, [chapterOneSlotCount, requireSignIn, selectedGuestKeys, workspaceLineupGuestKeys]);
+
   const enterChapterTwo = useCallback(() => {
     setChapterModalOpen(false);
     if (workspace.status !== 'ready') {
@@ -365,16 +378,6 @@ const CHAPTER_TWO_ASSET_MAP = {
     setChapterTwoSession({ status: 'idle' });
     setSelectedChapterTwoCompanionId((current) => current || unlockedCompanions[0]?.id || '');
   }, [email, loadWorkspace, unlockedCompanions, workspace.status]);
-
-
-    setSelectedGuestKeys((current) => {
-      if (current.includes(guest.characterKey)) {
-        return current;
-      }
-
-      return [...current, guest.characterKey].slice(0, chapterOneSlotCount);
-    });
-  }, [chapterOneSlotCount, requireSignIn, selectedGuestKeys, workspaceLineupGuestKeys]);
 
   const removeChapterGuest = useCallback((characterKey: string) => {
     setSelectedGuestKeys((current) => current.filter((key) => key !== characterKey));
@@ -467,6 +470,24 @@ const CHAPTER_TWO_ASSET_MAP = {
         data: await answerShowTurnStream(showSession.data.session.id, input.turnId, {
           email,
           freeText: input.freeText,
+          selectedCharacterKey: input.selectedCharacterKey,
+          selectedOptionId: input.selectedOptionId,
+        }, {
+          onDelta: (delta) => {
+            const key = delta.speakerKey ?? fallbackSpeakerKey;
+            setGuestStreamingLines((prev) => ({ ...prev, [key]: (prev[key] ?? '') + delta.text }));
+          },
+          onStart: () => setGuestStreamingLines({}),
+        }),
+      });
+      setGuestStreamingLines({});
+    } catch (error) {
+      setShowSession({ status: 'error', message: String(error) });
+    } finally {
+      setTurnSubmitting(false);
+    }
+  }, [email, showSession, turnSubmitting]);
+
   const startChapterTwo = useCallback(async () => {
     if (requireSignIn({ type: 'chapters' })) {
       return;
@@ -537,24 +558,6 @@ const CHAPTER_TWO_ASSET_MAP = {
       setChapterTwoSubmitting(false);
     }
   }, [chapterTwoSession, chapterTwoSubmitting, email]);
-
-          selectedCharacterKey: input.selectedCharacterKey,
-          selectedOptionId: input.selectedOptionId,
-        }, {
-          onDelta: (delta) => {
-            const key = delta.speakerKey ?? fallbackSpeakerKey;
-            setGuestStreamingLines((prev) => ({ ...prev, [key]: (prev[key] ?? '') + delta.text }));
-          },
-          onStart: () => setGuestStreamingLines({}),
-        }),
-      });
-      setGuestStreamingLines({});
-    } catch (error) {
-      setShowSession({ status: 'error', message: String(error) });
-    } finally {
-      setTurnSubmitting(false);
-    }
-  }, [email, showSession, turnSubmitting]);
 
   const previewSpeech = useCallback(async (input: {
     messageId?: string;
@@ -638,6 +641,23 @@ const CHAPTER_TWO_ASSET_MAP = {
             turnSubmitting={turnSubmitting}
             workspaceState={workspace}
           />
+        ) : mode === 'chapter-two' ? (
+          <ChapterTwoView
+            companions={unlockedCompanions}
+            compact={compact}
+            locationState={chapterTwoLocations}
+            onBack={openHome}
+            onRefreshSession={refreshChapterTwoSession}
+            onSelectCompanion={setSelectedChapterTwoCompanionId}
+            onSelectLocation={setSelectedChapterTwoLocationKey}
+            onStart={startChapterTwo}
+            onSubmitTurn={answerChapterTwoTurn}
+            selectedCompanionId={selectedChapterTwoCompanionId}
+            selectedLocationKey={selectedChapterTwoLocationKey}
+            sessionState={chapterTwoSession}
+            submitting={chapterTwoSubmitting}
+            workspaceState={workspace}
+          />
         ) : (
           <HomeView
             communityGuests={communityGuests}
@@ -669,23 +689,6 @@ const CHAPTER_TWO_ASSET_MAP = {
           onClose={() => {
             setSigninOpen(false);
             setPendingAction(null);
-        ) : mode === 'chapter-two' ? (
-          <ChapterTwoView
-            companions={unlockedCompanions}
-            compact={compact}
-            locationState={chapterTwoLocations}
-            onBack={openHome}
-            onRefreshSession={refreshChapterTwoSession}
-            onSelectCompanion={setSelectedChapterTwoCompanionId}
-            onSelectLocation={setSelectedChapterTwoLocationKey}
-            onStart={startChapterTwo}
-            onSubmitTurn={answerChapterTwoTurn}
-            selectedCompanionId={selectedChapterTwoCompanionId}
-            selectedLocationKey={selectedChapterTwoLocationKey}
-            sessionState={chapterTwoSession}
-            submitting={chapterTwoSubmitting}
-            workspaceState={workspace}
-          />
           }}
           onSubmit={confirmSignIn}
           signingIn={signingIn}
@@ -2630,6 +2633,7 @@ const styles = StyleSheet.create({
     height: 148,
     justifyContent: 'center',
     width: '100%',
+  },
   chapterDateCard: {
     borderColor: colors.border,
     borderRadius: 8,
@@ -2645,7 +2649,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     height: 140,
     width: '100%',
-  },
   },
   characterImage: {
     backgroundColor: colors.softBlue,

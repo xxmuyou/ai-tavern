@@ -34,16 +34,16 @@ describe("dating stage machine", () => {
   it("declares the fixed show flow as data", () => {
     expect(DATING_SHOW_FLOW.stages.map((stage) => stage.stageKey)).toEqual([
       "initial_pick",
-      "profile_judgment",
+      "self_intro",
       "guest_questions",
-      "user_declaration",
+      "user_questions",
       "final_choice",
     ]);
   });
 
-  it("builds initial pick and identity check turns", () => {
+  it("builds initial pick and self intro turns", () => {
     expect(buildTurnDraft({ guests, session, stageKey: "initial_pick" })?.options).toHaveLength(3);
-    expect(buildTurnDraft({ guests, session, stageKey: "profile_judgment" })?.question).toContain("designer");
+    expect(buildTurnDraft({ guests, session, stageKey: "self_intro" })?.question).toContain("your age range");
   });
 
   it("lets the initially picked guest ask the first guest question", () => {

@@ -182,8 +182,6 @@ export type ChapterTwoDateSessionPayload = {
 };
 
 export type ShowGuest = {
-
-export type ShowGuest = {
   ageRange?: string;
   avatarObjectKey: string | null;
   characterKey: string;

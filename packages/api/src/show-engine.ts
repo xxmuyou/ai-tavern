@@ -120,6 +120,10 @@ type TurnAnswerOptions = {
 
 type CompanionStoryAnswerRequest = {
   email?: string;
+  freeText?: string;
+  selectedOptionId?: string;
+};
+
 type ChapterTwoDateCreateRequest = {
   companionId?: string;
   email?: string;
@@ -128,10 +132,6 @@ type ChapterTwoDateCreateRequest = {
 
 type ChapterTwoDateAnswerRequest = {
   email?: string;
-  freeText?: string;
-  selectedOptionId?: string;
-};
-
   freeText?: string;
   selectedOptionId?: string;
 };
@@ -410,6 +410,10 @@ type CompanionStoryTurnRow = {
   scene_title: string;
   selected_option_id: string | null;
   status: "awaiting_user" | "answered";
+  turn_index: number;
+  updated_at: string;
+};
+
 type ChapterTwoDateSessionRow = {
   app_key: string;
   character_key: string;
@@ -435,10 +439,6 @@ type ChapterTwoDateTurnRow = {
   selected_option_id: string | null;
   status: "awaiting_user" | "answered";
   step_key: string;
-  turn_index: number;
-  updated_at: string;
-};
-
   turn_index: number;
   updated_at: string;
 };
@@ -633,6 +633,10 @@ async function handleShowScopedRequest(
 
   if (restPath === "/characters" && request.method === "POST") {
     const body = await readJson<CreateCharacterRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    return jsonResponse(await createUserCharacter(env, showKey, body), { status: 201 });
+  }
+
   if (restPath === "/chapter-two/locations" && request.method === "GET") {
     return jsonResponse({ locations: listChapterTwoDateLocations() });
   }
@@ -661,10 +665,6 @@ async function handleShowScopedRequest(
     }
 
     return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
-  }
-
-    body.email = await requireAuthEmail(env, request, body.email);
-    return jsonResponse(await createUserCharacter(env, showKey, body), { status: 201 });
   }
 
   if (restPath === "/characters/validate" && request.method === "POST") {
@@ -3545,6 +3545,16 @@ async function getCurrentCompanionStoryTurn(
 ): Promise<CompanionStoryTurnRow | null> {
   return env.DB.prepare(
     `SELECT id, turn_index, scene_title, prompt, options, selected_option_id,
+           answer_text, response_text, status, created_at, updated_at
+     FROM companion_story_turns
+     WHERE companion_id = ? AND user_id = ? AND status = ?
+     ORDER BY turn_index DESC
+     LIMIT 1`,
+  )
+    .bind(companion.id, user.id, "awaiting_user")
+    .first<CompanionStoryTurnRow>();
+}
+
 async function createChapterTwoDateSession(
   env: ShowEngineEnv,
   showKey: string,
@@ -3835,16 +3845,6 @@ function readChapterTwoDateOptions(value: string): ChapterTwoDateOption[] {
       tone: typeof option.tone === "string" ? option.tone : "",
     }))
     .filter((option) => option.id && option.label && option.preview);
-}
-
-            answer_text, response_text, status, created_at, updated_at
-     FROM companion_story_turns
-     WHERE companion_id = ? AND user_id = ? AND status = ?
-     ORDER BY turn_index DESC
-     LIMIT 1`,
-  )
-    .bind(companion.id, user.id, "awaiting_user")
-    .first<CompanionStoryTurnRow>();
 }
 
 async function getCompanionStoryTurns(
