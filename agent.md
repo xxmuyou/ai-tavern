@@ -10,6 +10,14 @@ The default stack is:
 - `packages/api/migrations`: database migrations.
 - `docs/specs`: numbered feature and product specs.
 
+# Local Environment
+
+This repository is WSL-first. All local development, tests, builds, migrations, dev servers, and agent sandbox commands must run inside Ubuntu WSL2 from:
+
+`/home/pgx123/private/xtbit/publisher-apps/xtbit-apps`
+
+Do not run project npm commands from Windows PowerShell, CMD, or the old `/mnt/c/...` working copy. The project scripts intentionally fail fast outside Ubuntu WSL so Windows and Linux Node dependencies do not get mixed. Use native Linux Node.js `>=22` and run commands through `npm run ...` from the WSL repo root unless a spec says otherwise.
+
 # Cloudflare-First Architecture
 
 Cloudflare is the primary runtime and data plane. Prefer Cloudflare products before adding AWS services.

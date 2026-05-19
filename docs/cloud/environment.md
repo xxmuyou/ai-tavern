@@ -10,18 +10,19 @@ The repo uses exactly three env files:
 
 The variable names should stay the same across all three files. Only the values differ by environment.
 
+Local development is Ubuntu WSL2 only. Use the Linux filesystem working copy:
+
+```bash
+cd /home/pgx123/private/xtbit/publisher-apps/xtbit-apps
+```
+
+Do not run project npm commands from Windows PowerShell, CMD, or the old `/mnt/c/...` path.
+
 Create local files from the template:
 
 ```bash
 cp .env.example .env.dev
 cp .env.example .env.prod
-```
-
-On Windows PowerShell:
-
-```powershell
-Copy-Item .env.example .env.dev
-Copy-Item .env.example .env.prod
 ```
 
 Local commands run through `scripts/tasks/run.mjs` load `.env.dev` by default for `npm run dev:app`, `npm run dev:api`, and dev deploy/export tasks. Production secrets should be filled in `.env.prod` and uploaded to the production platform explicitly; do not rely on `.env.dev` for prod.
@@ -30,20 +31,13 @@ Local commands run through `scripts/tasks/run.mjs` load `.env.dev` by default fo
 
 Set `EXPO_PUBLIC_API_BASE_URL` when the API is not running at the default local URL:
 
-```powershell
-$env:EXPO_PUBLIC_API_BASE_URL="http://127.0.0.1:8787"
-npm run dev:app
-```
-
-On macOS/Linux:
-
 ```bash
 EXPO_PUBLIC_API_BASE_URL="http://127.0.0.1:8787" npm run dev:app
 ```
 
-## Cross-platform scripts
+## WSL scripts
 
-Team commands should be run through `npm run ...` from the repo root. Project task wrappers are Node scripts, not `sh`, PowerShell, or CMD scripts, so the same commands work on Windows PowerShell, Windows CMD, macOS, and Linux as long as Node/npm are available.
+Team commands should be run through `npm run ...` from the repo root inside Ubuntu WSL. Project task wrappers intentionally fail fast outside WSL so local tools do not mix Windows and Linux Node dependencies.
 
 Important shared commands:
 
@@ -67,9 +61,7 @@ Prod deploys and prod migrations still require explicit manual confirmation in t
 
 Use the local dev launcher when you want to restart both the API and web app after changing `.env.dev`.
 
-Windows PowerShell, CMD, macOS, and Linux:
-
-```text
+```bash
 node scripts/local-dev.mjs
 ```
 
@@ -82,14 +74,7 @@ It keeps both services attached to the terminal. Keep that terminal open. Press 
 
 ## Cloudflare secrets
 
-Use the ignored local `.env.dev` file for local process env. Use the ignored local tmp secrets file for uploading dev Worker secrets. Do not commit `.dev.vars`, `.env.dev`, `.env.prod`, or anything under `tmp/`. The upload command is cross-platform and runs through Node, so it works on Windows PowerShell, Windows CMD, macOS, and Linux.
-
-```powershell
-notepad .\tmp\cloudflare-dev-secrets.env
-npm run cf:secrets:dev
-```
-
-On macOS/Linux:
+Use the ignored local `.env.dev` file for local process env. Use the ignored local tmp secrets file for uploading dev Worker secrets. Do not commit `.dev.vars`, `.env.dev`, `.env.prod`, or anything under `tmp/`. The upload command runs through Node inside Ubuntu WSL.
 
 ```bash
 nano ./tmp/cloudflare-dev-secrets.env

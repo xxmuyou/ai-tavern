@@ -1,3 +1,4 @@
+import "../ensure-wsl.mjs";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -81,10 +82,6 @@ if (!taskName || !tasks[taskName]) {
 await tasks[taskName]();
 
 function runNpx(args, options = {}) {
-  if (process.platform === "win32") {
-    return run("cmd.exe", ["/d", "/s", "/c", "npx", ...args], options);
-  }
-
   return run("npx", args, options);
 }
 

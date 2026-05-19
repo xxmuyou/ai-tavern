@@ -2,7 +2,10 @@
 
 Expo Router app for Web, Android, and iOS.
 
-```powershell
+Run from the Ubuntu WSL repo copy:
+
+```bash
+cd /home/pgx123/private/xtbit/publisher-apps/xtbit-apps
 npm run dev:app
 ```
 

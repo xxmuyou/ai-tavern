@@ -11,9 +11,11 @@ Before production deploys, replace placeholder resource IDs with real values:
 
 Useful commands:
 
-```powershell
+Run these from Ubuntu WSL at `/home/pgx123/private/xtbit/publisher-apps/xtbit-apps`:
+
+```bash
 npm run cf:types
 npm run dev:api
 npm run cf:d1:migrate:local
-npm --workspace @xtbit/api run deploy
+npm run deploy:api:dev
 ```

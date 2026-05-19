@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./ensure-wsl.mjs";
 import { spawn } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -50,9 +51,7 @@ await stopChildren();
 process.exit(1);
 
 function startProcess(label, args) {
-  const command = process.platform === "win32" ? "cmd.exe" : "npm";
-  const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "npm", ...args] : args;
-  const child = spawn(command, commandArgs, {
+  const child = spawn("npm", args, {
     cwd: repoRoot,
     env: process.env,
     shell: false,
@@ -95,22 +94,6 @@ async function stopChildren() {
 }
 
 async function stopPorts(values) {
-  if (process.platform === "win32") {
-    const portList = values.join(",");
-    await runQuiet("powershell.exe", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-      `$ports=@(${portList}); ` +
-        "Get-NetTCPConnection -LocalPort $ports -State Listen -ErrorAction SilentlyContinue | " +
-        "Select-Object -ExpandProperty OwningProcess -Unique | " +
-        "Where-Object { $_ -and $_ -ne $PID } | " +
-        "ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }",
-    ]);
-    return;
-  }
-
   for (const port of values) {
     const pids = await capture("sh", ["-c", `command -v lsof >/dev/null 2>&1 && lsof -ti tcp:${port} || true`]);
     for (const pid of pids.split(/\s+/).filter(Boolean)) {
@@ -121,11 +104,6 @@ async function stopPorts(values) {
 
 async function stopProcess(pid) {
   if (!pid || pid === process.pid) {
-    return;
-  }
-
-  if (process.platform === "win32") {
-    await runQuiet("taskkill.exe", ["/PID", String(pid), "/T", "/F"]);
     return;
   }
 

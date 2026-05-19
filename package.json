@@ -7,13 +7,14 @@
     "packages/*"
   ],
   "scripts": {
+    "ensure:wsl": "node ./scripts/ensure-wsl.mjs",
     "dev": "node ./scripts/local-dev.mjs",
     "dev:app": "node ./scripts/tasks/run.mjs app:web",
     "dev:api": "node ./scripts/tasks/run.mjs api:dev",
-    "test": "npm run --workspaces --if-present test",
-    "test:api": "npm run --workspace @xtbit/api test",
-    "typecheck": "npm run --workspaces --if-present typecheck",
-    "lint": "npm run --workspaces --if-present lint",
+    "test": "npm run ensure:wsl && npm run --workspaces --if-present test",
+    "test:api": "npm run ensure:wsl && npm run --workspace @xtbit/api test",
+    "typecheck": "npm run ensure:wsl && npm run --workspaces --if-present typecheck",
+    "lint": "npm run ensure:wsl && npm run --workspaces --if-present lint",
     "cf:types": "node ./scripts/tasks/run.mjs api:cf-types",
     "cf:d1:migrate:local": "node ./scripts/tasks/run.mjs api:d1-migrate-local",
     "cf:d1:migrate:dev": "node ./scripts/tasks/run.mjs api:d1-migrate-dev",

@@ -1,3 +1,4 @@
+import "../ensure-wsl.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -71,14 +72,9 @@ function parseSecrets(contents) {
 }
 
 function uploadSecret(key, value) {
-  const command = process.platform === "win32" ? "cmd.exe" : "npx";
-  const args =
-    process.platform === "win32"
-      ? ["/d", "/s", "/c", "npx", "wrangler", "secret", "put", key, "--config", configFile, "--env="]
-      : ["wrangler", "secret", "put", key, "--config", configFile, "--env="];
   const child = spawn(
-    command,
-    args,
+    "npx",
+    ["wrangler", "secret", "put", key, "--config", configFile, "--env="],
     {
       shell: false,
       stdio: ["pipe", "inherit", "inherit"],
