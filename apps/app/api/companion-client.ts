@@ -381,20 +381,14 @@ export async function joinWorkspaceGuest(characterKey: string, email: string): P
 }
 
 export async function createChapterOneSession(input: {
-  ageRange: string;
   email: string;
-  hobbies: string;
-  occupation: string;
   selectedGuestKeys: string[];
 }): Promise<ShowSessionPayload> {
   return requestJson<ShowSessionPayload>(`/shows/${DATING_SHOW_KEY}/sessions`, {
     body: JSON.stringify({
-      ageRange: input.ageRange,
       avatarLabel: 'Spotlight Guest',
       email: input.email,
       guestPreference: 'any',
-      hobbies: input.hobbies,
-      occupation: input.occupation,
       selectedGuestKeys: input.selectedGuestKeys,
     }),
     headers: { 'content-type': 'application/json' },

@@ -7,31 +7,31 @@ export const DATING_SHOW_FLOW: ShowFlowDefinition = {
   stages: [
     {
       allowedActions: ["answer"],
-      nextStageRuleKey: "first_impression_to_profile",
+      nextStageRuleKey: "initial_pick_to_self_intro",
       resolverKey: "initial_pick",
       stageKey: "initial_pick",
       turnBuilderKey: "first_impression",
     },
     {
       allowedActions: ["answer"],
-      nextStageRuleKey: "profile_to_guest_questions",
-      resolverKey: "profile_judgment",
-      stageKey: "profile_judgment",
-      turnBuilderKey: "profile_identity",
+      nextStageRuleKey: "self_intro_to_guest_questions",
+      resolverKey: "self_intro",
+      stageKey: "self_intro",
+      turnBuilderKey: "self_intro",
     },
     {
       allowedActions: ["answer"],
-      nextStageRuleKey: "question_rounds_before_declaration",
+      nextStageRuleKey: "guest_questions_or_move_on",
       resolverKey: "guest_questions",
       stageKey: "guest_questions",
       turnBuilderKey: "guest_question",
     },
     {
       allowedActions: ["answer"],
-      nextStageRuleKey: "declaration_to_final_choice",
-      resolverKey: "user_declaration",
-      stageKey: "user_declaration",
-      turnBuilderKey: "user_declaration",
+      nextStageRuleKey: "user_questions_or_final",
+      resolverKey: "user_questions",
+      stageKey: "user_questions",
+      turnBuilderKey: "user_questions",
     },
     {
       allowedActions: ["final_choice"],
@@ -64,11 +64,11 @@ export function buildTurnDraft(input: {
     };
   }
 
-  if (input.stageKey === "profile_judgment") {
-    const identitySummary = sessionIdentitySummary(input.session.userProfile);
+  if (input.stageKey === "self_intro") {
     return {
-      options: profileOptions(),
-      question: `Identity board: ${identitySummary}. Which part should the guests test first before they decide whether the signal feels real?`,
+      options: [],
+      question:
+        "Before the guests start asking, tell the room a little about yourself — your age range, what you do, and what makes your off-hours worth living. The more real, the better the questions.",
       speakerKey: hostKey,
       speakerName: hostName,
       stageKey: input.stageKey,
@@ -82,19 +82,20 @@ export function buildTurnDraft(input: {
     }
 
     return {
-      options: answerStyleOptions(),
-      question: questionForGuest(guest, input.session.messageCount),
+      options: answerStyleWithMoveOnOptions(),
+      // Placeholder — createTurnForStage replaces this with an LLM-generated question
+      question: `${guest.name}: What do you want the room to know first?`,
       speakerKey: guest.characterKey,
       speakerName: guest.name,
       stageKey: input.stageKey,
     };
   }
 
-  if (input.stageKey === "user_declaration") {
+  if (input.stageKey === "user_questions") {
     return {
-      options: declarationOptions(),
+      options: moveToFinalOptions(),
       question:
-        "Final declaration: tell the room what you want, what you will protect, and what you cannot accept.",
+        "The floor is yours. Pick any guest and ask them anything — this is your chance before the final call.",
       speakerKey: hostKey,
       speakerName: hostName,
       stageKey: input.stageKey,
@@ -149,29 +150,6 @@ export function firstImpressionOptions(): TurnOption[] {
   ];
 }
 
-export function profileOptions(): TurnOption[] {
-  return [
-    {
-      id: "work_rhythm",
-      label: "Work rhythm",
-      preview: "I explain what my work says about how I spend energy with people.",
-      signalText: "responsibility ambition communicate maturity",
-    },
-    {
-      id: "hobby_story",
-      label: "Hobby spark",
-      preview: "I share one hobby story that shows how I relax, play, or stay curious.",
-      signalText: "creativity shared_fun humor warmth",
-    },
-    {
-      id: "direct_basics",
-      label: "Direct basics",
-      preview: "I keep the intro simple and let the room ask sharper follow-ups.",
-      signalText: "honesty sincere stability maturity",
-    },
-  ];
-}
-
 export function answerStyleOptions(): TurnOption[] {
   return [
     {
@@ -195,25 +173,25 @@ export function answerStyleOptions(): TurnOption[] {
   ];
 }
 
-export function declarationOptions(): TurnOption[] {
+export function answerStyleWithMoveOnOptions(): TurnOption[] {
+  return [
+    ...answerStyleOptions(),
+    {
+      id: "move_on",
+      label: "Ask my questions →",
+      preview: "I am ready to ask the guests my own questions now.",
+      signalText: "",
+    },
+  ];
+}
+
+export function moveToFinalOptions(): TurnOption[] {
   return [
     {
-      id: "mutual_growth",
-      label: "Mutual growth",
-      preview: "I want a relationship where both people become more honest and alive.",
-      signalText: "honesty maturity warmth responsibility",
-    },
-    {
-      id: "daily_romance",
-      label: "Daily romance",
-      preview: "I care about the small daily proof: kindness, humor, and showing up.",
-      signalText: "kindness humor family stability warmth",
-    },
-    {
-      id: "clear_boundaries",
-      label: "Clear boundaries",
-      preview: "I can be warm, but I will not accept disrespect, control, or dishonesty.",
-      signalText: "honesty boundary responsibility communication",
+      id: "move_to_final",
+      label: "Make my choice →",
+      preview: "I have heard enough. I am ready to choose.",
+      signalText: "",
     },
   ];
 }
@@ -239,41 +217,6 @@ export function chooseQuestioningGuest(
 
   const sorted = [...guests].sort((left, right) => right.affinityScore - left.affinityScore);
   return sorted[session.messageCount % Math.max(sorted.length, 1)];
-}
-
-export function questionForGuest(guest: StageGuest, round: number): string {
-  const key = guest.characterKey;
-  const fallbacks = [
-    `${guest.name}: What do you do when a first impression goes well, but the real person needs patience?`,
-    `${guest.name}: What is one thing you would never fake just to be liked on a stage like this?`,
-    `${guest.name}: When someone disappoints you, do you get direct, quiet, funny, or gone?`,
-  ];
-
-  const questions: Record<string, string[]> = {
-    ivy: [
-      "Ivy: I like confidence, but I listen for proof. When pressure hits, what do you actually do?",
-      "Ivy: Give me one example of reliability that is not just a slogan.",
-      "Ivy: What ambition would you protect, and what would you never sacrifice for it?",
-    ],
-    leo: [
-      "Leo: If we had one free day in a city neither of us knows, how would you lead it?",
-      "Leo: What makes you brave in love without becoming reckless?",
-      "Leo: Do you believe romance needs a plan, a surprise, or both?",
-    ],
-    mia: [
-      "Mia: I can spot a performance pretty fast. What is something real you would say without polishing it?",
-      "Mia: How do you flirt when you actually respect the person in front of you?",
-      "Mia: What kind of joke would make you relax on a first date?",
-    ],
-    noah: [
-      "Noah: I trust small actions. What daily habit would make someone feel safe with you?",
-      "Noah: When life gets ordinary, how do you keep care from becoming automatic?",
-      "Noah: What is your version of practical romance?",
-    ],
-  };
-
-  const list = questions[key] ?? fallbacks;
-  return list[round % list.length] ?? fallbacks[0] ?? `${guest.name}: What do you want the room to know first?`;
 }
 
 function normalizeShortText(value: string | undefined, fallback: string, maxLength: number): string {

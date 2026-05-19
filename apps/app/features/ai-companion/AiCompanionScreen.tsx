@@ -34,18 +34,6 @@ type PendingAction =
   | { type: 'price' }
   | { type: 'workspace' };
 
-type PlayerProfileDraft = {
-  ageRange: string;
-  hobbies: string;
-  occupation: string;
-};
-
-const defaultProfile: PlayerProfileDraft = {
-  ageRange: '25-35',
-  hobbies: '',
-  occupation: '',
-};
-
 const DEFAULT_CHAPTER_ONE_SLOT_COUNT = 5;
 
 const DEFAULT_SHOW_ASSET_MAP = {
@@ -81,7 +69,6 @@ export default function AiCompanionHome() {
   const [notice, setNotice] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [selectedGuestKeys, setSelectedGuestKeys] = useState<string[]>([]);
-  const [profileDraft, setProfileDraft] = useState<PlayerProfileDraft>(defaultProfile);
   const [showSession, setShowSession] = useState<AsyncState<ShowSessionPayload>>({ status: 'idle' });
   const [guestStreamingLines, setGuestStreamingLines] = useState<Record<string, string>>({});
   const [turnSubmitting, setTurnSubmitting] = useState(false);
@@ -353,26 +340,17 @@ export default function AiCompanionHome() {
       setNotice('One selected Guest is no longer in your Workspace.');
       return;
     }
-    if (!profileDraft.ageRange.trim() || !profileDraft.occupation.trim() || !profileDraft.hobbies.trim()) {
-      setNotice('Age range, occupation, and hobbies are required for Chapter 1.');
-      return;
-    }
-
     setShowSession({ status: 'loading' });
     try {
       setShowSession({
         status: 'ready',
-        data: await createChapterOneSession({
-          ...profileDraft,
-          email,
-          selectedGuestKeys,
-        }),
+        data: await createChapterOneSession({ email, selectedGuestKeys }),
       });
       await loadWorkspace(email);
     } catch (error) {
       setShowSession({ status: 'error', message: String(error) });
     }
-  }, [email, loadWorkspace, profileDraft, requireSignIn, selectedGuestKeys, workspaceLineupGuestKeys]);
+  }, [email, loadWorkspace, requireSignIn, selectedGuestKeys, workspaceLineupGuestKeys]);
 
   const replaceSystemAsset = useCallback(async (asset: SystemAsset) => {
     if (workspace.status !== 'ready' || !workspace.data.admin?.isAdmin) {
@@ -530,10 +508,8 @@ export default function AiCompanionHome() {
             onInsertGuest={insertChapterGuest}
             onPreviewSpeech={previewSpeech}
             onSubmitTurn={answerChapterTurn}
-            profileDraft={profileDraft}
             selectedGuestKeys={selectedGuestKeys}
             sessionState={showSession}
-            setProfileDraft={setProfileDraft}
             slotCount={chapterOneSlotCount}
             guestStreamingLines={guestStreamingLines}
             turnSubmitting={turnSubmitting}
@@ -952,10 +928,8 @@ function ChapterOneView({
   onStart,
   onPreviewSpeech,
   onSubmitTurn,
-  profileDraft,
   selectedGuestKeys,
   sessionState,
-  setProfileDraft,
   slotCount,
   guestStreamingLines,
   turnSubmitting,
@@ -981,10 +955,8 @@ function ChapterOneView({
     selectedOptionId: string;
     turnId: string;
   }) => void;
-  profileDraft: PlayerProfileDraft;
   selectedGuestKeys: string[];
   sessionState: AsyncState<ShowSessionPayload>;
-  setProfileDraft: (draft: PlayerProfileDraft) => void;
   slotCount: number;
   guestStreamingLines: Record<string, string>;
   turnSubmitting: boolean;
@@ -1022,31 +994,7 @@ function ChapterOneView({
             <Text style={styles.linkButtonText}>Back home</Text>
           </Pressable>
           <Text style={styles.heroTitleSmall}>Chapter 1: Heart Signal Live</Text>
-          <Text style={styles.heroBody}>Choose 1 to 5 Guests, set your basic profile, then step into the opening dating-show story.</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your profile</Text>
-        <View style={styles.formGrid}>
-          <LabeledInput
-            label="Age range"
-            onChangeText={(ageRange) => setProfileDraft({ ...profileDraft, ageRange })}
-            placeholder="25-35"
-            value={profileDraft.ageRange}
-          />
-          <LabeledInput
-            label="Occupation"
-            onChangeText={(occupation) => setProfileDraft({ ...profileDraft, occupation })}
-            placeholder="designer, student, founder..."
-            value={profileDraft.occupation}
-          />
-          <LabeledInput
-            label="Hobbies"
-            onChangeText={(hobbies) => setProfileDraft({ ...profileDraft, hobbies })}
-            placeholder="music, cooking, hiking..."
-            value={profileDraft.hobbies}
-          />
+          <Text style={styles.heroBody}>Choose 1 to 5 Guests, then step into the opening dating-show story. You will introduce yourself inside the show.</Text>
         </View>
       </View>
 
@@ -1277,10 +1225,12 @@ function StorySessionPanel({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedCharacterKey, setSelectedCharacterKey] = useState<string | undefined>();
   const [selectedOptionId, setSelectedOptionId] = useState('');
+  const [selfIntroProfile, setSelfIntroProfile] = useState({ ageRange: '', hobbies: '', occupation: '' });
   useEffect(() => {
     setFreeText('');
     setSelectedOptionId(currentTurn?.options[0]?.id ?? '');
     setSelectedCharacterKey(currentTurn?.stageKey === 'initial_pick' ? payload?.guests[0]?.characterKey : undefined);
+    setSelfIntroProfile({ ageRange: '', hobbies: '', occupation: '' });
   }, [currentTurn?.id, currentTurn?.stageKey, payload?.guests]);
 
   if (sessionState.status === 'idle') {
@@ -1325,7 +1275,8 @@ function StorySessionPanel({
   const canSubmitTurn = Boolean(
     currentTurn &&
     selectedOptionId &&
-    (currentTurn.stageKey !== 'initial_pick' || selectedCharacterKey),
+    selectedCharacterKey &&
+    currentTurn.stageKey === 'initial_pick',
   ) && !turnSubmitting;
 
   return (
@@ -1425,63 +1376,182 @@ function StorySessionPanel({
                 </View>
               </View>
 
-              <View style={styles.optionGrid}>
-                {currentTurn.stageKey === 'initial_pick' ? payload.guests.map((guest) => (
+              {/* initial_pick: choose a guest */}
+              {currentTurn.stageKey === 'initial_pick' ? (
+                <>
+                  <View style={styles.optionGrid}>
+                    {payload.guests.map((guest) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={guest.characterKey}
+                        onPress={() => setSelectedCharacterKey(guest.characterKey)}
+                        style={[styles.optionButton, selectedCharacterKey === guest.characterKey && styles.optionButtonSelected]}>
+                        <View style={styles.optionGuestHeader}>
+                          <SessionGuestAvatar guest={guest} />
+                          <View style={styles.optionGuestCopy}>
+                            <Text style={styles.optionTitle}>{guest.name}</Text>
+                            <Text style={styles.optionPreview}>{guest.profile.occupationTag ?? 'First heartbeat'}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.optionGrid}>
+                    {currentTurn.options.map((option) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={option.id}
+                        onPress={() => setSelectedOptionId(option.id)}
+                        style={[styles.optionButton, selectedOptionId === option.id && styles.optionButtonSelected]}>
+                        <Text style={styles.optionTitle}>{option.label}</Text>
+                        <Text style={styles.optionPreview}>{option.preview}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <TextInput
+                    multiline
+                    onChangeText={setFreeText}
+                    placeholder="Add your own words..."
+                    placeholderTextColor="#8b8f98"
+                    style={[styles.input, styles.storyInput]}
+                    value={freeText}
+                  />
                   <Pressable
                     accessibilityRole="button"
-                    key={guest.characterKey}
-                    onPress={() => setSelectedCharacterKey(guest.characterKey)}
-                    style={[
-                      styles.optionButton,
-                      selectedCharacterKey === guest.characterKey && styles.optionButtonSelected,
-                    ]}>
-                    <View style={styles.optionGuestHeader}>
-                      <SessionGuestAvatar guest={guest} />
-                      <View style={styles.optionGuestCopy}>
-                        <Text style={styles.optionTitle}>{guest.name}</Text>
-                        <Text style={styles.optionPreview}>{guest.profile.occupationTag ?? 'First heartbeat'}</Text>
-                      </View>
-                    </View>
+                    disabled={!canSubmitTurn}
+                    onPress={() => currentTurn && onSubmitTurn({ freeText, selectedCharacterKey, selectedOptionId, turnId: currentTurn.id })}
+                    style={[styles.primaryButton, styles.turnSubmitButton, !canSubmitTurn && styles.disabledAction]}>
+                    <Text style={styles.primaryButtonText}>{turnSubmitting ? 'Streaming...' : 'Choose this guest'}</Text>
                   </Pressable>
-                )) : null}
-              </View>
+                </>
+              ) : null}
 
-              <View style={styles.optionGrid}>
-                {currentTurn.options.map((option) => (
+              {/* self_intro: profile form inside the game */}
+              {currentTurn.stageKey === 'self_intro' ? (
+                <>
+                  <View style={styles.formGrid}>
+                    <LabeledInput
+                      label="Age range"
+                      onChangeText={(ageRange) => setSelfIntroProfile((p) => ({ ...p, ageRange }))}
+                      placeholder="25-35"
+                      value={selfIntroProfile.ageRange}
+                    />
+                    <LabeledInput
+                      label="Occupation"
+                      onChangeText={(occupation) => setSelfIntroProfile((p) => ({ ...p, occupation }))}
+                      placeholder="designer, student, founder..."
+                      value={selfIntroProfile.occupation}
+                    />
+                    <LabeledInput
+                      label="Hobbies"
+                      onChangeText={(hobbies) => setSelfIntroProfile((p) => ({ ...p, hobbies }))}
+                      placeholder="music, cooking, hiking..."
+                      value={selfIntroProfile.hobbies}
+                    />
+                  </View>
                   <Pressable
                     accessibilityRole="button"
-                    key={option.id}
-                    onPress={() => setSelectedOptionId(option.id)}
-                    style={[
-                      styles.optionButton,
-                      selectedOptionId === option.id && styles.optionButtonSelected,
-                    ]}>
-                    <Text style={styles.optionTitle}>{option.label}</Text>
-                    <Text style={styles.optionPreview}>{option.preview}</Text>
+                    disabled={turnSubmitting || (!selfIntroProfile.ageRange.trim() && !selfIntroProfile.occupation.trim())}
+                    onPress={() => currentTurn && onSubmitTurn({
+                      freeText: JSON.stringify(selfIntroProfile),
+                      selectedOptionId: '',
+                      turnId: currentTurn.id,
+                    })}
+                    style={[styles.primaryButton, styles.turnSubmitButton, (turnSubmitting || (!selfIntroProfile.ageRange.trim() && !selfIntroProfile.occupation.trim())) && styles.disabledAction]}>
+                    <Text style={styles.primaryButtonText}>{turnSubmitting ? 'Streaming...' : 'Introduce myself'}</Text>
                   </Pressable>
-                ))}
-              </View>
+                </>
+              ) : null}
 
-              <TextInput
-                multiline
-                onChangeText={setFreeText}
-                placeholder="Add your own words..."
-                placeholderTextColor="#8b8f98"
-                style={[styles.input, styles.storyInput]}
-                value={freeText}
-              />
-              <Pressable
-                accessibilityRole="button"
-                disabled={!canSubmitTurn}
-                onPress={() => currentTurn && onSubmitTurn({
-                  freeText,
-                  selectedCharacterKey,
-                  selectedOptionId,
-                  turnId: currentTurn.id,
-                })}
-                style={[styles.primaryButton, styles.turnSubmitButton, !canSubmitTurn && styles.disabledAction]}>
-                <Text style={styles.primaryButtonText}>{turnSubmitting ? 'Streaming...' : 'Send answer'}</Text>
-              </Pressable>
+              {/* guest_questions: answer + move-on button */}
+              {currentTurn.stageKey === 'guest_questions' ? (
+                <>
+                  <View style={styles.optionGrid}>
+                    {currentTurn.options.filter((o) => o.id !== 'move_on').map((option) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={option.id}
+                        onPress={() => setSelectedOptionId(option.id)}
+                        style={[styles.optionButton, selectedOptionId === option.id && styles.optionButtonSelected]}>
+                        <Text style={styles.optionTitle}>{option.label}</Text>
+                        <Text style={styles.optionPreview}>{option.preview}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <TextInput
+                    multiline
+                    onChangeText={setFreeText}
+                    placeholder="Add your own words..."
+                    placeholderTextColor="#8b8f98"
+                    style={[styles.input, styles.storyInput]}
+                    value={freeText}
+                  />
+                  <View style={styles.turnButtonRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={!canSubmitTurn}
+                      onPress={() => currentTurn && onSubmitTurn({ freeText, selectedOptionId, turnId: currentTurn.id })}
+                      style={[styles.primaryButton, styles.turnSubmitButton, styles.turnButtonFlex, !canSubmitTurn && styles.disabledAction]}>
+                      <Text style={styles.primaryButtonText}>{turnSubmitting ? 'Streaming...' : 'Send answer'}</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={turnSubmitting}
+                      onPress={() => currentTurn && onSubmitTurn({ freeText: '', selectedOptionId: 'move_on', turnId: currentTurn.id })}
+                      style={[styles.secondaryButton, styles.turnButtonFlex, turnSubmitting && styles.disabledAction]}>
+                      <Text style={styles.secondaryButtonText}>Ask my questions →</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
+
+              {/* user_questions: pick guest + ask question */}
+              {currentTurn.stageKey === 'user_questions' ? (
+                <>
+                  <Text style={styles.rowMeta}>Pick a guest and ask them anything.</Text>
+                  <View style={styles.optionGrid}>
+                    {payload.guests.filter((g) => g.available).map((guest) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={guest.characterKey}
+                        onPress={() => setSelectedCharacterKey(guest.characterKey)}
+                        style={[styles.optionButton, selectedCharacterKey === guest.characterKey && styles.optionButtonSelected]}>
+                        <View style={styles.optionGuestHeader}>
+                          <SessionGuestAvatar guest={guest} />
+                          <View style={styles.optionGuestCopy}>
+                            <Text style={styles.optionTitle}>{guest.name}</Text>
+                            <Text style={styles.optionPreview}>{guest.profile.occupationTag ?? 'Ask anything'}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <TextInput
+                    multiline
+                    onChangeText={setFreeText}
+                    placeholder="Ask anything..."
+                    placeholderTextColor="#8b8f98"
+                    style={[styles.input, styles.storyInput]}
+                    value={freeText}
+                  />
+                  <View style={styles.turnButtonRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={turnSubmitting || !freeText.trim() || !selectedCharacterKey}
+                      onPress={() => currentTurn && onSubmitTurn({ freeText, selectedCharacterKey, selectedOptionId: '', turnId: currentTurn.id })}
+                      style={[styles.primaryButton, styles.turnSubmitButton, styles.turnButtonFlex, (turnSubmitting || !freeText.trim() || !selectedCharacterKey) && styles.disabledAction]}>
+                      <Text style={styles.primaryButtonText}>{turnSubmitting ? 'Streaming...' : 'Ask this guest'}</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={turnSubmitting}
+                      onPress={() => currentTurn && onSubmitTurn({ freeText: '', selectedOptionId: 'move_to_final', turnId: currentTurn.id })}
+                      style={[styles.secondaryButton, styles.turnButtonFlex, turnSubmitting && styles.disabledAction]}>
+                      <Text style={styles.secondaryButtonText}>Make my choice →</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
             </View>
           ) : null}
         </ScrollView>
@@ -3324,6 +3394,14 @@ const styles = StyleSheet.create({
   },
   turnSubmitButton: {
     alignSelf: 'stretch',
+  },
+  turnButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  turnButtonFlex: {
+    flex: 1,
+    alignSelf: 'auto',
   },
   voiceButton: {
     alignItems: 'center',

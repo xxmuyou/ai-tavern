@@ -44,6 +44,7 @@ import {
 import {
   buildTurnDraft as buildDomainTurnDraft,
   composeTurnAnswer,
+  sessionIdentitySummary,
 } from "./show-engine/domain/stage-machine";
 import type { GuestCharacterPackage } from "./show-engine/domain/types";
 
@@ -80,8 +81,11 @@ type MessageRequest = {
 };
 
 type TurnAnswerRequest = {
+  ageRange?: string;
   email?: string;
   freeText?: string;
+  hobbies?: string;
+  occupation?: string;
   selectedCharacterKey?: string;
   selectedOptionId?: string;
   stream?: boolean;
@@ -1527,10 +1531,6 @@ async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSe
   const avatarLabel = normalizeShortText(body.avatarLabel, "Spotlight Guest", 80);
   const avatarObjectKey = normalizeObjectKey(body.avatarObjectKey);
   const hardProfile = normalizeHardProfile(body, avatarObjectKey);
-  if (!hardProfile.ageRange || !hardProfile.occupation || hardProfile.hobbies.length === 0) {
-    throw new Response("hard_profile_required", { status: 400 });
-  }
-
   await upsertUserShowProfile(env, show, user, hardProfile);
   const selectedGuestKeys = normalizeSelectedGuestKeys(body.selectedGuestKeys);
   const legacyRequestedKeys = new Set(body.userCharacterKeys ?? []);
@@ -1874,7 +1874,8 @@ async function answerTurn(
 
   const options = readTurnOptions(turn.options);
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? null;
-  if (!selectedOption && !freeText && turn.stage_key !== "initial_pick") {
+  const stagesWithoutRequiredAnswer = ["initial_pick", "self_intro", "user_questions"];
+  if (!selectedOption && !freeText && !stagesWithoutRequiredAnswer.includes(turn.stage_key)) {
     throw new Response("answer_required", { status: 400 });
   }
 
@@ -1972,11 +1973,10 @@ async function answerTurn(
     });
   }
 
-  if (turn.stage_key === "profile_judgment") {
-    return handleProfileTurnAnswer(env, {
+  if (turn.stage_key === "self_intro") {
+    return handleSelfIntroTurnAnswer(env, {
       answerText: signalText,
-      semanticJudgment,
-      selectedOptionId: selectedOption?.id ?? null,
+      freeText,
       session,
       sessionId,
       show,
@@ -1989,6 +1989,7 @@ async function answerTurn(
   if (turn.stage_key === "guest_questions") {
     return handleGuestQuestionTurnAnswer(env, {
       answerText: signalText,
+      selectedOptionId: selectedOption?.id ?? null,
       semanticJudgment,
       session,
       sessionId,
@@ -1999,10 +2000,12 @@ async function answerTurn(
     });
   }
 
-  if (turn.stage_key === "user_declaration") {
-    return handleDeclarationTurnAnswer(env, {
+  if (turn.stage_key === "user_questions") {
+    return handleUserQuestionTurnAnswer(env, {
       answerText: signalText,
-      semanticJudgment,
+      freeText,
+      selectedCharacterKey: pickedGuest?.character_key ?? selectedCharacterKey,
+      selectedOptionId: selectedOption?.id ?? null,
       session,
       sessionId,
       show,
@@ -2029,7 +2032,7 @@ async function handleInitialPickTurnAnswer(
     user: UserRecord;
   },
 ) {
-  const nextStage = "profile_judgment";
+  const nextStage = "self_intro";
   const outcomes = await applySemanticJudgmentToGuests(env, {
     judgment: input.semanticJudgment,
     multiplier: 0.7,
@@ -2095,7 +2098,7 @@ async function handleInitialPickTurnAnswer(
 
   const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
   await insertHostSummary(env, {
-    content: "First impression locked. Now the host asks how your hard identity shows up in real moments.",
+    content: "First heartbeat locked. Before the guests start asking, the host needs to know a little about you.",
     session: nextSession,
     show: input.show,
     stageKey: nextStage,
@@ -2113,12 +2116,11 @@ async function handleInitialPickTurnAnswer(
   return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
 }
 
-async function handleProfileTurnAnswer(
+async function handleSelfIntroTurnAnswer(
   env: ShowEngineEnv,
   input: {
     answerText: string;
-    semanticJudgment: SemanticTurnJudgment;
-    selectedOptionId: string | null;
+    freeText: string;
     session: ShowSessionRow;
     sessionId: string;
     show: ShowTemplateRow;
@@ -2127,67 +2129,44 @@ async function handleProfileTurnAnswer(
     user: UserRecord;
   },
 ) {
-  const outcomes = await applySemanticJudgmentToGuests(env, {
-    judgment: input.semanticJudgment,
-    multiplier: 1,
-    session: input.session,
-    sessionId: input.sessionId,
-    user: input.user,
-  });
-  await insertSemanticJudgmentEvent(env, {
-    judgment: input.semanticJudgment,
-    outcomes,
-    sessionId: input.sessionId,
-    show: input.show,
-    stageKey: input.turn.stage_key,
-    turnId: input.turn.id,
-    user: input.user,
-  });
-  await emitReactionEvents(env, {
-    outcomes,
-    sessionId: input.sessionId,
-    show: input.show,
-    stageKey: input.turn.stage_key,
-    turnId: input.turn.id,
-    user: input.user,
-  });
-  await emitGeneratedReactions(env, {
-    answerText: input.answerText,
-    currentSpeakerKey: input.turn.speaker_key,
-    focusCharacterKey: input.session.initial_pick_character_key,
-    judgment: input.semanticJudgment,
-    outcomes,
-    session: input.session,
-    sessionId: input.sessionId,
-    show: input.show,
-    stageKey: input.turn.stage_key,
-    stream: input.stream,
-    turnId: input.turn.id,
-    user: input.user,
-  });
-
-  if (await completeIfNoLights(env, input.show, input.sessionId, input.user)) {
-    return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+  // Parse profile fields from the body (forwarded via answerText/freeText)
+  // The frontend sends a JSON string in freeText containing { ageRange, occupation, hobbies }
+  let profileUpdate: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(input.freeText);
+    if (parsed && typeof parsed === "object") {
+      profileUpdate = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // freeText is plain text — treat it as a plain intro
+    profileUpdate = { intro: input.freeText };
   }
 
-  const nextStage = "guest_questions";
   const existingProfile = readJsonObject(input.session.user_profile);
+  const merged = { ...existingProfile, ...profileUpdate };
+  const signals = extractSignals(
+    [profileUpdate.ageRange, profileUpdate.occupation, profileUpdate.hobbies].filter(Boolean).join(" "),
+  );
+  await applySignalsToGuests(env, { multiplier: 0.8, session: input.session, sessionId: input.sessionId, signals, user: input.user });
+  await upsertUserShowProfile(env, input.show, input.user, {
+    ageRange: typeof profileUpdate.ageRange === "string" ? profileUpdate.ageRange : "",
+    avatarObjectKey: input.session.avatar_object_key,
+    hobbies: typeof profileUpdate.hobbies === "string" ? splitUserList(profileUpdate.hobbies) : [],
+    occupation: typeof profileUpdate.occupation === "string" ? profileUpdate.occupation : "",
+  });
+
+  const nextStage = "guest_questions";
   await env.DB.prepare(
     `UPDATE show_sessions
      SET user_profile = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND user_id = ?`,
   )
-    .bind(
-      JSON.stringify({ ...existingProfile, intro: input.answerText, stance: input.selectedOptionId }),
-      nextStage,
-      input.sessionId,
-      input.user.id,
-    )
+    .bind(JSON.stringify(merged), nextStage, input.sessionId, input.user.id)
     .run();
 
   const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
   await insertHostSummary(env, {
-    content: `Profile check complete. ${await visibleRoomSummary(env, input.show, input.sessionId, input.user)} The guests now ask first.`,
+    content: `Got it. The guests have been listening. Now they get to ask you one question each — and they know a little more than before.`,
     session: nextSession,
     show: input.show,
     stageKey: nextStage,
@@ -2195,8 +2174,8 @@ async function handleProfileTurnAnswer(
     user: input.user,
   });
   await createTurnForStage(env, {
-    show: input.show,
     session: nextSession,
+    show: input.show,
     stageKey: nextStage,
     stream: input.stream,
     user: input.user,
@@ -2209,6 +2188,7 @@ async function handleGuestQuestionTurnAnswer(
   env: ShowEngineEnv,
   input: {
     answerText: string;
+    selectedOptionId: string | null;
     semanticJudgment: SemanticTurnJudgment;
     session: ShowSessionRow;
     sessionId: string;
@@ -2218,6 +2198,37 @@ async function handleGuestQuestionTurnAnswer(
     user: UserRecord;
   },
 ) {
+  // User chose to move to user_questions stage
+  if (input.selectedOptionId === "move_on") {
+    await env.DB.prepare(
+      `UPDATE show_sessions
+       SET current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_id = ?`,
+    )
+      .bind("user_questions", input.sessionId, input.user.id)
+      .run();
+
+    const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
+    await insertHostSummary(env, {
+      content: "Now the room flips. You get to ask the guests anything you want before the final call.",
+      session: nextSession,
+      show: input.show,
+      stageKey: "user_questions",
+      stream: input.stream,
+      user: input.user,
+    });
+    await createTurnForStage(env, {
+      session: nextSession,
+      show: input.show,
+      stageKey: "user_questions",
+      stream: input.stream,
+      user: input.user,
+    });
+
+    return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+  }
+
+  // Regular answer — apply affinity changes, emit reactions, stay in guest_questions
   const outcomes = await applySemanticJudgmentToGuests(env, {
     judgment: input.semanticJudgment,
     multiplier: 1,
@@ -2262,31 +2273,27 @@ async function handleGuestQuestionTurnAnswer(
   }
 
   const nextCount = input.session.message_count + 1;
-  const nextStage = nextCount >= readTurnRoundsBeforeDeclaration(input.show) ? "user_declaration" : "guest_questions";
   await env.DB.prepare(
     `UPDATE show_sessions
      SET message_count = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND user_id = ?`,
   )
-    .bind(nextCount, nextStage, input.sessionId, input.user.id)
+    .bind(nextCount, "guest_questions", input.sessionId, input.user.id)
     .run();
 
   const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
   await insertHostSummary(env, {
-    content:
-      nextStage === "user_declaration"
-        ? "Three questions are on the board. The studio goes quiet for your final declaration."
-        : "The lights have shifted. Another guest steps forward with the next question.",
+    content: "The room reacts. Another guest steps forward.",
     session: nextSession,
     show: input.show,
-    stageKey: nextStage,
+    stageKey: "guest_questions",
     stream: input.stream,
     user: input.user,
   });
   await createTurnForStage(env, {
-    show: input.show,
     session: nextSession,
-    stageKey: nextStage,
+    show: input.show,
+    stageKey: "guest_questions",
     stream: input.stream,
     user: input.user,
   });
@@ -2294,11 +2301,13 @@ async function handleGuestQuestionTurnAnswer(
   return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
 }
 
-async function handleDeclarationTurnAnswer(
+async function handleUserQuestionTurnAnswer(
   env: ShowEngineEnv,
   input: {
     answerText: string;
-    semanticJudgment: SemanticTurnJudgment;
+    freeText: string;
+    selectedCharacterKey: string | undefined;
+    selectedOptionId: string | null;
     session: ShowSessionRow;
     sessionId: string;
     show: ShowTemplateRow;
@@ -2307,64 +2316,93 @@ async function handleDeclarationTurnAnswer(
     user: UserRecord;
   },
 ) {
-  const outcomes = await applySemanticJudgmentToGuests(env, {
-    judgment: input.semanticJudgment,
-    multiplier: 1.4,
-    session: input.session,
-    sessionId: input.sessionId,
-    user: input.user,
-  });
-  await insertSemanticJudgmentEvent(env, {
-    judgment: input.semanticJudgment,
-    outcomes,
-    sessionId: input.sessionId,
-    show: input.show,
-    stageKey: input.turn.stage_key,
-    turnId: input.turn.id,
-    user: input.user,
-  });
-  await emitReactionEvents(env, {
-    outcomes,
-    sessionId: input.sessionId,
-    show: input.show,
-    stageKey: input.turn.stage_key,
-    turnId: input.turn.id,
-    user: input.user,
-  });
-  await emitGeneratedReactions(env, {
-    answerText: input.answerText,
-    currentSpeakerKey: input.turn.speaker_key,
-    focusCharacterKey: input.session.initial_pick_character_key,
-    judgment: input.semanticJudgment,
-    outcomes,
-    session: input.session,
-    sessionId: input.sessionId,
-    show: input.show,
-    stageKey: input.turn.stage_key,
-    stream: input.stream,
-    turnId: input.turn.id,
-    user: input.user,
-  });
+  // User is ready to make the final choice
+  if (input.selectedOptionId === "move_to_final") {
+    await env.DB.prepare(
+      `UPDATE show_sessions
+       SET current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_id = ?`,
+    )
+      .bind("final_choice", input.sessionId, input.user.id)
+      .run();
 
-  if (await completeIfNoLights(env, input.show, input.sessionId, input.user)) {
+    const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
+    const roomSummary = await visibleRoomSummary(env, input.show, input.sessionId, input.user);
+    await insertHostSummary(env, {
+      content: `This is it. ${roomSummary} Choose one guest to walk off this stage with, or leave alone. The light does not lie.`,
+      session: nextSession,
+      show: input.show,
+      stageKey: "final_choice",
+      stream: input.stream,
+      user: input.user,
+    });
+
     return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
   }
 
-  const nextStage = "final_choice";
+  // User is asking a guest a question
+  const question = input.freeText;
+  if (!question) {
+    throw new Response("answer_required", { status: 400 });
+  }
+
+  const characters = await getSessionCharacters(env, input.show, input.sessionId, input.user);
+  const targetKey = input.selectedCharacterKey;
+  const targetGuest = targetKey
+    ? characters.find((c) => c.character_key === targetKey && c.role === "guest" && c.is_available === 1)
+    : characters.filter((c) => c.role === "guest" && c.is_available === 1)[0];
+
+  if (!targetGuest) {
+    throw new Response("character_not_found", { status: 404 });
+  }
+
+  await insertMessage(env, {
+    appKey: input.show.app_key,
+    content: question,
+    role: "user",
+    sessionId: input.sessionId,
+    showKey: input.show.show_key,
+    speakerKey: input.user.id,
+    speakerName: "You",
+    stageKey: input.turn.stage_key,
+    userId: input.user.id,
+  });
+
+  // Generate and stream the guest's answer
+  const guestAnswer = await generateGuestAnswer(env, {
+    guest: targetGuest,
+    session: input.session,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    stream: input.stream,
+    userQuestion: question,
+  });
+
+  await insertMessage(env, {
+    appKey: input.show.app_key,
+    content: guestAnswer,
+    role: "character",
+    sessionId: input.sessionId,
+    showKey: input.show.show_key,
+    speakerKey: targetGuest.character_key,
+    speakerName: targetGuest.name,
+    stageKey: input.turn.stage_key,
+    userId: input.user.id,
+  });
+
   await env.DB.prepare(
     `UPDATE show_sessions
-     SET user_declaration = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+     SET message_count = message_count + 1, updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND user_id = ?`,
   )
-    .bind(input.answerText, nextStage, input.sessionId, input.user.id)
+    .bind(input.sessionId, input.user.id)
     .run();
 
   const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
-  await insertHostSummary(env, {
-    content: `Final declaration received. ${await visibleRoomSummary(env, input.show, input.sessionId, input.user)} Choose someone whose light is still with you, or walk away clean.`,
+  await createTurnForStage(env, {
     session: nextSession,
     show: input.show,
-    stageKey: nextStage,
+    stageKey: "user_questions",
     stream: input.stream,
     user: input.user,
   });
@@ -2452,7 +2490,7 @@ async function submitInitialPick(
     throw new Response("character_not_found", { status: 404 });
   }
 
-  const nextStage = findStage(stages, "profile_judgment") ?? fallbackStage();
+  const nextStage = findStage(stages, "self_intro") ?? fallbackStage();
   await env.DB.prepare(
     `UPDATE show_sessions
      SET initial_pick_character_key = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
@@ -2463,7 +2501,7 @@ async function submitInitialPick(
 
   await insertMessage(env, {
     appKey: show.app_key,
-    content: `Your first heartbeat is locked on ${picked.name}. The guests still keep their true signals hidden.`,
+    content: `Your first heartbeat is locked on ${picked.name}. Before the guests start, tell the room a little about yourself.`,
     role: "host",
     sessionId,
     showKey: show.show_key,
@@ -2843,6 +2881,26 @@ async function getMessages(
   return results;
 }
 
+async function getRecentMessages(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  sessionId: string,
+  user: UserRecord,
+  limit: number,
+): Promise<ShowMessageRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, role, speaker_key, speaker_name, content, stage_key, created_at
+     FROM show_messages
+     WHERE session_id = ? AND app_key = ? AND show_key = ? AND user_id = ?
+     ORDER BY created_at DESC
+     LIMIT ?`,
+  )
+    .bind(sessionId, show.app_key, show.show_key, user.id, limit)
+    .all<ShowMessageRow>();
+
+  return results.reverse();
+}
+
 async function requireTurn(
   env: ShowEngineEnv,
   show: ShowTemplateRow,
@@ -2933,6 +2991,22 @@ async function createTurnForStage(
     return null;
   }
 
+  // For guest_questions, replace the placeholder question with an LLM-generated one
+  if (input.stageKey === "guest_questions") {
+    const speakerGuest = characters.find((c) => c.character_key === draft.speakerKey);
+    if (speakerGuest) {
+      const recentMessages = await getRecentMessages(env, input.show, input.session.id, input.user, 6);
+      draft.question = await generateGuestQuestion(env, {
+        guest: speakerGuest,
+        recentMessages,
+        session: input.session,
+        show: input.show,
+        stageKey: input.stageKey,
+        stream: input.stream,
+      });
+    }
+  }
+
   const nextIndex = await getNextTurnIndex(env, input.show, input.session.id, input.user);
   const turnId = crypto.randomUUID();
   await env.DB.prepare(
@@ -2957,10 +3031,13 @@ async function createTurnForStage(
     )
     .run();
 
-  await emitTextDelta(input.stream, draft.question, {
-    speakerKey: draft.speakerKey,
-    speakerName: draft.speakerName,
-  });
+  // Only emit the question if we didn't already stream it (LLM streams inline for guest_questions)
+  if (input.stageKey !== "guest_questions") {
+    await emitTextDelta(input.stream, draft.question, {
+      speakerKey: draft.speakerKey,
+      speakerName: draft.speakerName,
+    });
+  }
   await insertShowEvent(env, {
     appKey: input.show.app_key,
     content: draft.question,
@@ -4819,6 +4896,125 @@ async function emitGeneratedReactions(
   }
 
   return reactions;
+}
+
+async function generateGuestQuestion(
+  env: ShowEngineEnv,
+  input: {
+    guest: SessionCharacterRow;
+    recentMessages: ShowMessageRow[];
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    stageKey: string;
+    stream?: TurnAnswerOptions;
+  },
+): Promise<string> {
+  const snapshot = parseSnapshot(input.guest.snapshot) as CharacterSnapshot;
+  const profileSummary = sessionIdentitySummary(input.session.user_profile);
+  const history = input.recentMessages
+    .slice(-4)
+    .map((m) => `${m.speaker_name}: ${m.content}`)
+    .join("\n");
+  const fallbackText = `${input.guest.name}: What is something about you that a first impression usually gets wrong?`;
+
+  const result = await generateText(env, {
+    fallbackText,
+    maxOutputTokens: 80,
+    messages: [
+      {
+        content: [
+          `You are ${input.guest.name}, a guest on a live dating show.`,
+          `Your personality: ${snapshot.personality}`,
+          `Your goal: ${snapshot.goal}`,
+          `Speaking style: ${snapshot.speakingStyle}`,
+          `Hidden preferences: ${snapshot.hiddenPreferences}`,
+          "",
+          `The contestant's background: ${profileSummary}`,
+          "",
+          `Recent conversation:\n${history || "(none yet)"}`,
+          "",
+          "Ask ONE natural, specific question directly to the contestant.",
+          `Start with "${input.guest.name}:" — under 40 words, first person.`,
+          "Reference their actual job, hobbies, or age range if possible. No generic questions.",
+        ].join("\n"),
+        role: "user",
+      },
+    ],
+    metadata: {
+      appKey: input.session.app_key,
+      purpose: "guest_question_generation",
+      sessionId: input.session.id,
+      showKey: input.show.show_key,
+      stageKey: input.stageKey,
+      userId: input.session.user_id,
+    },
+    onDelta: input.stream?.onDelta
+      ? (text) => input.stream?.onDelta?.(text, { speakerKey: input.guest.character_key, speakerName: input.guest.name })
+      : undefined,
+    route: "cheap-dialogue",
+    stream: input.stream?.stream,
+    temperature: 0.75,
+  });
+
+  return sanitizeGeneratedLine(normalizeShortText(result.text, fallbackText, 320), fallbackText, input.guest.name);
+}
+
+async function generateGuestAnswer(
+  env: ShowEngineEnv,
+  input: {
+    guest: SessionCharacterRow;
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    stageKey: string;
+    stream?: TurnAnswerOptions;
+    userQuestion: string;
+  },
+): Promise<string> {
+  const snapshot = parseSnapshot(input.guest.snapshot) as CharacterSnapshot;
+  const profileSummary = sessionIdentitySummary(input.session.user_profile);
+  const fallbackText = `${input.guest.name}: That is a fair question. Let me think about it for a moment.`;
+
+  const result = await generateText(env, {
+    fallbackText,
+    maxOutputTokens: 120,
+    messages: [
+      {
+        content: [
+          `You are ${input.guest.name}, a guest on a live dating show.`,
+          `Your personality: ${snapshot.personality}`,
+          `Your goal: ${snapshot.goal}`,
+          `Speaking style: ${snapshot.speakingStyle}`,
+          `Hidden preferences: ${snapshot.hiddenPreferences}`,
+          `Boundaries: ${snapshot.boundaries}`,
+          `Current affinity: ${input.guest.affinity_score}`,
+          "",
+          `Contestant background: ${profileSummary}`,
+          "",
+          `The contestant asked you: "${input.userQuestion}"`,
+          "",
+          `Answer in character — under 50 words, first person. Start with "${input.guest.name}:".`,
+          "Be honest and specific. Show your personality. PG-13.",
+        ].join("\n"),
+        role: "user",
+      },
+    ],
+    metadata: {
+      appKey: input.session.app_key,
+      purpose: "guest_answer_generation",
+      sessionId: input.session.id,
+      showKey: input.show.show_key,
+      stageKey: input.stageKey,
+      userId: input.session.user_id,
+    },
+    onDelta: input.stream?.onDelta
+      ? (text) => input.stream?.onDelta?.(text, { speakerKey: input.guest.character_key, speakerName: input.guest.name })
+      : undefined,
+    route: "cheap-dialogue",
+    stream: input.stream?.stream,
+    temperature: 0.72,
+  });
+
+  return sanitizeGeneratedLine(normalizeShortText(result.text, fallbackText, 400), fallbackText, input.guest.name);
 }
 
 async function generateCharacterReactionLine(
