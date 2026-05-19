@@ -112,6 +112,73 @@ export type SceneSessionPayload = {
   turns: SceneTurn[];
 };
 
+export type ChapterTwoDateLocation = {
+  assetKey: string;
+  locationKey: 'bar' | 'cafe' | 'cinema';
+  summary: string;
+  title: string;
+};
+
+export type ChapterTwoDateOption = {
+  id: string;
+  label: string;
+  preview: string;
+  tone: string;
+};
+
+export type ChapterTwoDateTurn = {
+  answerText: string | null;
+  createdAt: string;
+  id: string;
+  options: ChapterTwoDateOption[];
+  prompt: string;
+  responseText: string | null;
+  selectedOptionId: string | null;
+  status: 'answered' | 'awaiting_user';
+  stepKey: string;
+  turnIndex: number;
+  updatedAt: string;
+};
+
+export type UnlockedCompanion = {
+  avatarObjectKey: string | null;
+  characterKey: string;
+  id: string;
+  lastStoryAt: string | null;
+  name: string;
+  profile?: {
+    avatarObjectKey?: string | null;
+    characterKey?: string;
+    name?: string;
+    occupationTag?: string;
+    personalityKeywords?: string[];
+    source?: string;
+  };
+  relationshipState: string;
+  sourceSessionId?: string;
+  storyTurnCount: number;
+  unlockStatus: string;
+  updatedAt: string;
+};
+
+export type ChapterTwoDateSessionPayload = {
+  companion: UnlockedCompanion;
+  currentTurn: ChapterTwoDateTurn | null;
+  location: ChapterTwoDateLocation | null;
+  session: {
+    characterKey: string;
+    companionId: string;
+    currentStepKey: string;
+    id: string;
+    locationKey: string;
+    showKey: string;
+    status: 'active' | 'completed';
+    turnCount: number;
+    updatedAt: string;
+  };
+  turns: ChapterTwoDateTurn[];
+};
+
 export type ShowGuest = {
   ageRange?: string;
   avatarObjectKey: string | null;
@@ -164,17 +231,7 @@ export type ShowWorkspacePayload = {
   chapterOne?: {
     slotCount: number;
   };
-  companions: {
-    avatarObjectKey: string | null;
-    characterKey: string;
-    id: string;
-    lastStoryAt: string | null;
-    name: string;
-    relationshipState: string;
-    storyTurnCount: number;
-    unlockStatus: string;
-    updatedAt: string;
-  }[];
+  companions: UnlockedCompanion[];
   guestAssets: WorkspaceGuest[];
   profile: {
     avatarObjectKey: string | null;
@@ -400,6 +457,43 @@ export async function createChapterOneSession(input: {
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });
+}
+
+export async function fetchChapterTwoLocations(): Promise<{ locations: ChapterTwoDateLocation[] }> {
+  return requestJson<{ locations: ChapterTwoDateLocation[] }>(`/shows/${DATING_SHOW_KEY}/chapter-two/locations`);
+}
+
+export async function createChapterTwoDateSession(input: {
+  companionId: string;
+  email: string;
+  locationKey: string;
+}): Promise<ChapterTwoDateSessionPayload> {
+  return requestJson<ChapterTwoDateSessionPayload>(`/shows/${DATING_SHOW_KEY}/chapter-two/sessions`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function fetchChapterTwoDateSession(sessionId: string, email: string): Promise<ChapterTwoDateSessionPayload> {
+  return requestJson<ChapterTwoDateSessionPayload>(
+    `/shows/${DATING_SHOW_KEY}/chapter-two/sessions/${encodeURIComponent(sessionId)}?email=${encodeURIComponent(email.trim())}`,
+  );
+}
+
+export async function answerChapterTwoDateTurn(sessionId: string, turnId: string, input: {
+  email: string;
+  freeText: string;
+  selectedOptionId: string;
+}): Promise<ChapterTwoDateSessionPayload> {
+  return requestJson<ChapterTwoDateSessionPayload>(
+    `/shows/${DATING_SHOW_KEY}/chapter-two/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/answer`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
 }
 
 export async function fetchShowSession(sessionId: string, email: string): Promise<ShowSessionPayload> {

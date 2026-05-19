@@ -6,14 +6,21 @@ import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-n
 
 import {
   type AsyncState,
+  type ChapterTwoDateLocation,
+  type ChapterTwoDateSessionPayload,
   type ShowGuest,
   type ShowSessionPayload,
   type ShowWorkspacePayload,
   type SpeechPreviewPayload,
   type SystemAsset,
+  type UnlockedCompanion,
   type WorkspaceGuest,
+  answerChapterTwoDateTurn,
   answerShowTurnStream,
+  createChapterTwoDateSession,
   createChapterOneSession,
+  fetchChapterTwoDateSession,
+  fetchChapterTwoLocations,
   fetchShowCharacters,
   fetchShowSession,
   fetchShowWorkspace,
@@ -26,7 +33,7 @@ import {
 } from '@/api/companion-client';
 import { useAuthEmail } from '@/hooks/use-auth-email';
 
-type ScreenMode = 'home' | 'workspace' | 'faq' | 'chapter-one';
+type ScreenMode = 'home' | 'workspace' | 'faq' | 'chapter-one' | 'chapter-two';
 type GuestLibrary = Awaited<ReturnType<typeof fetchShowCharacters>>;
 type PendingAction =
   | { characterKey: string; type: 'join' }
@@ -56,6 +63,12 @@ const DEFAULT_SHOW_ASSET_MAP = {
   'apps/ai-tv-dating/guests/noah.png': require('@/assets/ai-companion/show/noah.png'),
 };
 
+const CHAPTER_TWO_ASSET_MAP = {
+  'apps/ai-companion/chapter-two/bar-date.png': require('@/assets/ai-companion/chapter-two/bar-date.png'),
+  'apps/ai-companion/chapter-two/cafe-date.png': require('@/assets/ai-companion/chapter-two/cafe-date.png'),
+  'apps/ai-companion/chapter-two/cinema-date.png': require('@/assets/ai-companion/chapter-two/cinema-date.png'),
+};
+
 const DEFAULT_CHARACTER_ASSET_MAP = {
   host: require('@/assets/ai-companion/show/host.png'),
   ivy: require('@/assets/ai-companion/show/ivy.png'),
@@ -83,8 +96,13 @@ export default function AiCompanionHome() {
   const [selectedGuestKeys, setSelectedGuestKeys] = useState<string[]>([]);
   const [profileDraft, setProfileDraft] = useState<PlayerProfileDraft>(defaultProfile);
   const [showSession, setShowSession] = useState<AsyncState<ShowSessionPayload>>({ status: 'idle' });
+  const [chapterTwoLocations, setChapterTwoLocations] = useState<AsyncState<{ locations: ChapterTwoDateLocation[] }>>({ status: 'idle' });
+  const [chapterTwoSession, setChapterTwoSession] = useState<AsyncState<ChapterTwoDateSessionPayload>>({ status: 'idle' });
+  const [selectedChapterTwoCompanionId, setSelectedChapterTwoCompanionId] = useState('');
+  const [selectedChapterTwoLocationKey, setSelectedChapterTwoLocationKey] = useState('cafe');
   const [guestStreamingLines, setGuestStreamingLines] = useState<Record<string, string>>({});
   const [turnSubmitting, setTurnSubmitting] = useState(false);
+  const [chapterTwoSubmitting, setChapterTwoSubmitting] = useState(false);
 
   const guests = useMemo(
     () => library.status === 'ready' ? library.data.characters.filter((guest) => guest.role === 'guest') : [],
@@ -122,6 +140,7 @@ export default function AiCompanionHome() {
   const chapterOneSlotCount = workspace.status === 'ready'
     ? clampSlotCount(workspace.data.chapterOne?.slotCount)
     : DEFAULT_CHAPTER_ONE_SLOT_COUNT;
+  const unlockedCompanions = workspace.status === 'ready' ? workspace.data.companions : [];
 
   const loadLibrary = useCallback(async (nextEmail = email) => {
     setLibrary({ status: 'loading' });
@@ -145,6 +164,15 @@ export default function AiCompanionHome() {
       setWorkspace({ status: 'error', message: String(error) });
     }
   }, [email]);
+
+  const loadChapterTwoLocations = useCallback(async () => {
+    setChapterTwoLocations({ status: 'loading' });
+    try {
+      setChapterTwoLocations({ status: 'ready', data: await fetchChapterTwoLocations() });
+    } catch (error) {
+      setChapterTwoLocations({ status: 'error', message: String(error) });
+    }
+  }, []);
 
   const performCheckout = useCallback(async (nextEmail = email) => {
     setNotice('Opening checkout...');
@@ -203,6 +231,10 @@ export default function AiCompanionHome() {
   }, [loadLibrary]);
 
   useEffect(() => {
+    void loadChapterTwoLocations();
+  }, [loadChapterTwoLocations]);
+
+  useEffect(() => {
     if (signedIn) {
       void loadWorkspace(email);
       return;
@@ -224,6 +256,14 @@ export default function AiCompanionHome() {
   useEffect(() => {
     setSelectedGuestKeys((current) => current.slice(0, chapterOneSlotCount));
   }, [chapterOneSlotCount]);
+
+  useEffect(() => {
+    if (workspace.status !== 'ready' || selectedChapterTwoCompanionId) {
+      return;
+    }
+
+    setSelectedChapterTwoCompanionId(workspace.data.companions[0]?.id ?? '');
+  }, [selectedChapterTwoCompanionId, workspace]);
 
   const openSignIn = useCallback((action?: PendingAction) => {
     if (action) {
@@ -267,6 +307,8 @@ export default function AiCompanionHome() {
     setWorkspace({ status: 'idle' });
     setSelectedGuestKeys([]);
     setShowSession({ status: 'idle' });
+    setChapterTwoSession({ status: 'idle' });
+    setSelectedChapterTwoCompanionId('');
     setNotice(null);
   }, [signOut]);
 
@@ -313,6 +355,17 @@ export default function AiCompanionHome() {
     setMode('chapter-one');
     setShowSession({ status: 'idle' });
   }, []);
+
+  const enterChapterTwo = useCallback(() => {
+    setChapterModalOpen(false);
+    if (workspace.status !== 'ready') {
+      void loadWorkspace(email);
+    }
+
+    setMode('chapter-two');
+    setChapterTwoSession({ status: 'idle' });
+    setSelectedChapterTwoCompanionId((current) => current || unlockedCompanions[0]?.id || '');
+  }, [email, loadWorkspace, unlockedCompanions, workspace.status]);
 
   const insertChapterGuest = useCallback((guest: ShowGuest | WorkspaceGuest) => {
     if (requireSignIn({ type: 'chapters' })) {
@@ -414,6 +467,77 @@ export default function AiCompanionHome() {
       setShowSession({ status: 'error', message: String(error) });
     }
   }, [email, showSession]);
+
+  const startChapterTwo = useCallback(async () => {
+    if (requireSignIn({ type: 'chapters' })) {
+      return;
+    }
+    if (!selectedChapterTwoCompanionId) {
+      setNotice('Unlock a companion in Chapter 1 before entering Chapter 2.');
+      return;
+    }
+    if (!selectedChapterTwoLocationKey) {
+      setNotice('Choose a date location before starting Chapter 2.');
+      return;
+    }
+
+    setChapterTwoSession({ status: 'loading' });
+    try {
+      setChapterTwoSession({
+        status: 'ready',
+        data: await createChapterTwoDateSession({
+          companionId: selectedChapterTwoCompanionId,
+          email,
+          locationKey: selectedChapterTwoLocationKey,
+        }),
+      });
+      await loadWorkspace(email);
+    } catch (error) {
+      setChapterTwoSession({ status: 'error', message: String(error) });
+    }
+  }, [email, loadWorkspace, requireSignIn, selectedChapterTwoCompanionId, selectedChapterTwoLocationKey]);
+
+  const refreshChapterTwoSession = useCallback(async () => {
+    if (chapterTwoSession.status !== 'ready') {
+      return;
+    }
+
+    setChapterTwoSession({ status: 'loading' });
+    try {
+      setChapterTwoSession({
+        status: 'ready',
+        data: await fetchChapterTwoDateSession(chapterTwoSession.data.session.id, email),
+      });
+    } catch (error) {
+      setChapterTwoSession({ status: 'error', message: String(error) });
+    }
+  }, [chapterTwoSession, email]);
+
+  const answerChapterTwoTurn = useCallback(async (input: {
+    freeText: string;
+    selectedOptionId: string;
+    turnId: string;
+  }) => {
+    if (!email || chapterTwoSession.status !== 'ready' || chapterTwoSubmitting) {
+      return;
+    }
+
+    setChapterTwoSubmitting(true);
+    try {
+      setChapterTwoSession({
+        status: 'ready',
+        data: await answerChapterTwoDateTurn(chapterTwoSession.data.session.id, input.turnId, {
+          email,
+          freeText: input.freeText,
+          selectedOptionId: input.selectedOptionId,
+        }),
+      });
+    } catch (error) {
+      setChapterTwoSession({ status: 'error', message: String(error) });
+    } finally {
+      setChapterTwoSubmitting(false);
+    }
+  }, [chapterTwoSession, chapterTwoSubmitting, email]);
 
   const answerChapterTurn = useCallback(async (input: {
     freeText: string;
@@ -539,6 +663,23 @@ export default function AiCompanionHome() {
             turnSubmitting={turnSubmitting}
             workspaceState={workspace}
           />
+        ) : mode === 'chapter-two' ? (
+          <ChapterTwoView
+            companions={unlockedCompanions}
+            compact={compact}
+            locationState={chapterTwoLocations}
+            onBack={openHome}
+            onRefreshSession={refreshChapterTwoSession}
+            onSelectCompanion={setSelectedChapterTwoCompanionId}
+            onSelectLocation={setSelectedChapterTwoLocationKey}
+            onStart={startChapterTwo}
+            onSubmitTurn={answerChapterTwoTurn}
+            selectedCompanionId={selectedChapterTwoCompanionId}
+            selectedLocationKey={selectedChapterTwoLocationKey}
+            sessionState={chapterTwoSession}
+            submitting={chapterTwoSubmitting}
+            workspaceState={workspace}
+          />
         ) : (
           <HomeView
             communityGuests={communityGuests}
@@ -555,7 +696,14 @@ export default function AiCompanionHome() {
         )}
       </ScrollView>
 
-      {chapterModalOpen ? <ChapterModal onClose={() => setChapterModalOpen(false)} onEnter={enterChapterOne} /> : null}
+      {chapterModalOpen ? (
+        <ChapterModal
+          chapterTwoUnlocked={unlockedCompanions.length > 0}
+          onClose={() => setChapterModalOpen(false)}
+          onEnterChapterOne={enterChapterOne}
+          onEnterChapterTwo={enterChapterTwo}
+        />
+      ) : null}
       {signinOpen ? (
         <SignInOverlay
           draftEmail={draftEmail}
@@ -1835,7 +1983,240 @@ function SessionGuestAvatar({ guest }: { guest: ShowSessionPayload['guests'][num
   );
 }
 
-function ChapterModal({ onClose, onEnter }: { onClose: () => void; onEnter: () => void }) {
+function ChapterTwoView({
+  companions,
+  compact,
+  locationState,
+  onBack,
+  onRefreshSession,
+  onSelectCompanion,
+  onSelectLocation,
+  onStart,
+  onSubmitTurn,
+  selectedCompanionId,
+  selectedLocationKey,
+  sessionState,
+  submitting,
+  workspaceState,
+}: {
+  companions: UnlockedCompanion[];
+  compact: boolean;
+  locationState: AsyncState<{ locations: ChapterTwoDateLocation[] }>;
+  onBack: () => void;
+  onRefreshSession: () => void;
+  onSelectCompanion: (companionId: string) => void;
+  onSelectLocation: (locationKey: string) => void;
+  onStart: () => void;
+  onSubmitTurn: (input: { freeText: string; selectedOptionId: string; turnId: string }) => void;
+  selectedCompanionId: string;
+  selectedLocationKey: string;
+  sessionState: AsyncState<ChapterTwoDateSessionPayload>;
+  submitting: boolean;
+  workspaceState: AsyncState<ShowWorkspacePayload>;
+}) {
+  const payload = sessionState.status === 'ready' ? sessionState.data : null;
+  const currentTurn = payload?.currentTurn ?? null;
+  const [selectedOptionId, setSelectedOptionId] = useState(currentTurn?.options[0]?.id ?? '');
+  const [freeText, setFreeText] = useState('');
+
+  useEffect(() => {
+    setSelectedOptionId(currentTurn?.options[0]?.id ?? '');
+    setFreeText('');
+  }, [currentTurn?.id]);
+
+  if (workspaceState.status === 'error') {
+    return <EmptyState title="Chapter 2 unavailable" body={workspaceState.message} />;
+  }
+
+  if (workspaceState.status !== 'ready') {
+    return <EmptyState title="Loading Chapter 2" body="Fetching unlocked companions for your next date." />;
+  }
+
+  if (sessionState.status === 'loading') {
+    return (
+      <Animated.View entering={FadeIn.duration(220)} style={[styles.gameStage, compact && styles.gameStageCompact]}>
+        <View style={styles.stageLoadingPanel}>
+          <Text style={styles.eyebrowLight}>Chapter 2</Text>
+          <Text style={styles.stageTitle}>Preparing the date</Text>
+          <Text style={styles.stageSubtitle}>Setting the scene with your unlocked companion.</Text>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  if (sessionState.status === 'error') {
+    return <EmptyState title="Chapter 2 unavailable" body={sessionState.message} />;
+  }
+
+  if (payload) {
+    const backgroundSource = imageSourceForObjectKey(payload.location?.assetKey);
+    const completed = payload.session.status === 'completed';
+    return (
+      <Animated.View entering={FadeIn.duration(240)} layout={LinearTransition} style={[styles.gameStage, compact && styles.gameStageCompact]}>
+        <View style={styles.stageVisualPane}>
+          {backgroundSource ? <Image contentFit="cover" source={backgroundSource} style={styles.stageBackgroundImage} /> : null}
+          <View style={styles.stageScrim} />
+          <View style={styles.stageTopbar}>
+            <Pressable accessibilityRole="button" onPress={onBack} style={styles.stageGhostButton}>
+              <Text style={styles.stageGhostButtonText}>Back</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={onRefreshSession} style={styles.stageGhostButton}>
+              <Text style={styles.stageGhostButtonText}>Refresh</Text>
+            </Pressable>
+          </View>
+          <View style={styles.dateHeroCard}>
+            <Text style={styles.eyebrowLight}>Chapter 2 / {payload.location?.title ?? 'Date'}</Text>
+            <Text style={styles.stageTitle}>{payload.companion.name}</Text>
+            <Text style={styles.stageSubtitle}>{payload.location?.summary ?? 'A private date scene with your unlocked companion.'}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.stageInteractionPane, compact && styles.stageInteractionPaneCompact]}>
+          <ScrollView contentContainerStyle={styles.stageInteractionContent} nestedScrollEnabled showsVerticalScrollIndicator>
+            <View>
+              <Text style={styles.eyebrow}>Date scene</Text>
+              <Text style={styles.sectionTitle}>{completed ? 'Date complete' : 'Your move'}</Text>
+            </View>
+
+            {payload.turns.map((turn) => turn.status === 'answered' ? (
+              <View key={turn.id} style={styles.dataRow}>
+                <Text style={styles.rowTitle}>Turn {turn.turnIndex}</Text>
+                <Text style={styles.rowMeta}>{turn.answerText}</Text>
+                <Text style={styles.rowMeta}>{turn.responseText}</Text>
+              </View>
+            ) : null)}
+
+            {completed ? (
+              <View style={styles.resultPanel}>
+                <Text style={styles.rowTitle}>The date settles into memory</Text>
+                <Text style={styles.rowMeta}>This Chapter 2 scene is complete. You can return home or start another date later.</Text>
+              </View>
+            ) : currentTurn ? (
+              <View style={styles.turnPanel}>
+                <Text style={styles.currentPromptText}>{currentTurn.prompt}</Text>
+                <View style={styles.optionGrid}>
+                  {currentTurn.options.map((option) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={option.id}
+                      onPress={() => setSelectedOptionId(option.id)}
+                      style={[
+                        styles.optionButton,
+                        selectedOptionId === option.id && styles.optionButtonSelected,
+                      ]}>
+                      <Text style={styles.optionTitle}>{option.label}</Text>
+                      <Text style={styles.optionPreview}>{option.preview}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  multiline
+                  onChangeText={setFreeText}
+                  placeholder="Add what you say in the moment..."
+                  placeholderTextColor="#7b6b60"
+                  style={styles.storyInput}
+                  value={freeText}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={submitting || !selectedOptionId}
+                  onPress={() => onSubmitTurn({ freeText, selectedOptionId, turnId: currentTurn.id })}
+                  style={[styles.primaryButton, (submitting || !selectedOptionId) && styles.disabledAction]}>
+                  <Text style={styles.primaryButtonText}>{submitting ? 'Sending...' : 'Answer'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </ScrollView>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  const locations = locationState.status === 'ready' ? locationState.data.locations : [];
+
+  return (
+    <Animated.View entering={FadeInDown.duration(260)} layout={LinearTransition} style={styles.chapterOneShell}>
+      <View style={styles.detailHero}>
+        <View style={styles.blankChapterImage}>
+          <Text style={styles.characterInitial}>2</Text>
+        </View>
+        <View style={styles.detailCopy}>
+          <Pressable accessibilityRole="button" onPress={onBack} style={styles.linkButton}>
+            <Text style={styles.linkButtonText}>Back home</Text>
+          </Pressable>
+          <Text style={styles.heroTitleSmall}>Chapter 2: Date Scene</Text>
+          <Text style={styles.heroBody}>Choose one unlocked companion and a location, then start a private date.</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Unlocked companion</Text>
+        {companions.length ? (
+          <View style={styles.galleryGrid}>
+            {companions.map((companion) => (
+              <Pressable
+                accessibilityRole="button"
+                key={companion.id}
+                onPress={() => onSelectCompanion(companion.id)}
+                style={[
+                  styles.optionButton,
+                  selectedCompanionId === companion.id && styles.optionButtonSelected,
+                ]}>
+                <Text style={styles.optionTitle}>{companion.name}</Text>
+                <Text style={styles.optionPreview}>{companion.relationshipState} / {companion.storyTurnCount} story turns</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          <EmptyState title="Chapter 2 locked" body="Complete Chapter 1 with a successful final choice to unlock a companion." />
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Date location</Text>
+        {locationState.status === 'error' ? <Text selectable style={styles.errorText}>{locationState.message}</Text> : null}
+        <View style={styles.galleryGrid}>
+          {locations.map((location) => (
+            <Pressable
+              accessibilityRole="button"
+              key={location.locationKey}
+              onPress={() => onSelectLocation(location.locationKey)}
+              style={[
+                styles.chapterDateCard,
+                selectedLocationKey === location.locationKey && styles.optionButtonSelected,
+              ]}>
+              <Image contentFit="cover" source={imageSourceForObjectKey(location.assetKey) ?? undefined} style={styles.chapterDateImage} />
+              <Text style={styles.characterName}>{location.title}</Text>
+              <Text style={styles.characterMeta}>{location.summary}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!companions.length || !selectedCompanionId || !selectedLocationKey}
+          onPress={onStart}
+          style={[
+            styles.primaryButton,
+            (!companions.length || !selectedCompanionId || !selectedLocationKey) && styles.disabledAction,
+          ]}>
+          <Text style={styles.primaryButtonText}>Start Chapter 2</Text>
+        </Pressable>
+      </View>
+    </Animated.View>
+  );
+}
+
+function ChapterModal({
+  chapterTwoUnlocked,
+  onClose,
+  onEnterChapterOne,
+  onEnterChapterTwo,
+}: {
+  chapterTwoUnlocked: boolean;
+  onClose: () => void;
+  onEnterChapterOne: () => void;
+  onEnterChapterTwo: () => void;
+}) {
   return (
     <View style={styles.modalBackdrop}>
       <View style={styles.chapterPanel}>
@@ -1846,8 +2227,8 @@ function ChapterModal({ onClose, onEnter }: { onClose: () => void; onEnter: () =
           </Pressable>
         </View>
         <View style={styles.chapterGrid}>
-          <ChapterCard index="1" locked={false} onPress={onEnter} title="Heart Signal Live" />
-          <ChapterCard index="2" locked title="Afterparty" />
+          <ChapterCard index="1" locked={false} onPress={onEnterChapterOne} title="Heart Signal Live" />
+          <ChapterCard index="2" locked={!chapterTwoUnlocked} onPress={onEnterChapterTwo} title="Date Scene" />
           <ChapterCard index="3" locked title="Solo Story" />
         </View>
       </View>
@@ -1948,7 +2329,9 @@ function imageSourceForObjectKey(key: string | null | undefined) {
     return null;
   }
 
-  return DEFAULT_SHOW_ASSET_MAP[key as keyof typeof DEFAULT_SHOW_ASSET_MAP] ?? { uri: objectUrl(key) };
+  return DEFAULT_SHOW_ASSET_MAP[key as keyof typeof DEFAULT_SHOW_ASSET_MAP] ??
+    CHAPTER_TWO_ASSET_MAP[key as keyof typeof CHAPTER_TWO_ASSET_MAP] ??
+    { uri: objectUrl(key) };
 }
 
 function resolveSessionSpeaker(payload: ShowSessionPayload, speakerKey: string | null | undefined) {
@@ -2248,6 +2631,22 @@ const styles = StyleSheet.create({
   chapterCardLocked: {
     opacity: 0.62,
   },
+  chapterDateCard: {
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexBasis: 220,
+    flexGrow: 1,
+    gap: 8,
+    overflow: 'hidden',
+    padding: 10,
+  },
+  chapterDateImage: {
+    backgroundColor: colors.softBlue,
+    borderRadius: 8,
+    height: 140,
+    width: '100%',
+  },
   chapterGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -2299,6 +2698,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 5,
     padding: 12,
+  },
+  dateHeroCard: {
+    backgroundColor: 'rgba(23, 32, 43, 0.72)',
+    borderColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 8,
+    borderWidth: 1,
+    bottom: 22,
+    gap: 8,
+    left: 22,
+    maxWidth: 560,
+    padding: 16,
+    position: 'absolute',
+    right: 22,
   },
   detailCopy: {
     flex: 1,
