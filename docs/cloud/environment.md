@@ -1,5 +1,31 @@
 # Environment setup
 
+## Environment files
+
+The repo uses exactly three env files:
+
+- `.env.example`: tracked template with the complete variable list.
+- `.env.dev`: local development and dev deploy values.
+- `.env.prod`: production values.
+
+The variable names should stay the same across all three files. Only the values differ by environment.
+
+Create local files from the template:
+
+```bash
+cp .env.example .env.dev
+cp .env.example .env.prod
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.dev
+Copy-Item .env.example .env.prod
+```
+
+Local commands run through `scripts/tasks/run.mjs` load `.env.dev` by default for `npm run dev:app`, `npm run dev:api`, and dev deploy/export tasks. Production secrets should be filled in `.env.prod` and uploaded to the production platform explicitly; do not rely on `.env.dev` for prod.
+
 ## Local app
 
 Set `EXPO_PUBLIC_API_BASE_URL` when the API is not running at the default local URL:
@@ -22,6 +48,7 @@ Team commands should be run through `npm run ...` from the repo root. Project ta
 Important shared commands:
 
 ```bash
+npm run dev
 npm run dev:app
 npm run dev:api
 npm run typecheck
@@ -36,9 +63,26 @@ npm run deploy:web:dev
 
 Prod deploys and prod migrations still require explicit manual confirmation in the current conversation before running.
 
+## One-command local restart
+
+Use the local dev launcher when you want to restart both the API and web app after changing `.env.dev`.
+
+Windows PowerShell, CMD, macOS, and Linux:
+
+```text
+node scripts/local-dev.mjs
+```
+
+The launcher stops existing local listeners on ports `8081` and `8787`, then starts:
+
+- API: `http://127.0.0.1:8787`
+- Web: `http://localhost:8081`
+
+It keeps both services attached to the terminal. Keep that terminal open. Press `Ctrl+C` in that terminal to stop both. Logs are also written to `tmp/local-dev.log`.
+
 ## Cloudflare secrets
 
-Use the ignored local tmp secrets file for dev secrets. Do not commit `.dev.vars` or anything under `tmp/`. The upload command is cross-platform and runs through Node, so it works on Windows PowerShell, Windows CMD, macOS, and Linux.
+Use the ignored local `.env.dev` file for local process env. Use the ignored local tmp secrets file for uploading dev Worker secrets. Do not commit `.dev.vars`, `.env.dev`, `.env.prod`, or anything under `tmp/`. The upload command is cross-platform and runs through Node, so it works on Windows PowerShell, Windows CMD, macOS, and Linux.
 
 ```powershell
 notepad .\tmp\cloudflare-dev-secrets.env
@@ -85,11 +129,13 @@ The public Stripe test publishable key and test price ID are configured in Wrang
 
 Current dev Stripe return URLs point to `https://dev.xtbit-apps.pages.dev` because `dev.aiappsbox.com/api/*` is routed to Workers and the Pages root custom domain still needs a clean dev-only mapping.
 
-Local development may use `.dev.vars` in the repo root when running `wrangler dev`, but the preferred shared machine workflow is `tmp/cloudflare-dev-secrets.env`:
+Local development loads `.env.dev` through the task runner. Wrangler-only workflows may also use `.dev.vars`, but the preferred shared machine workflow is `.env.dev` for local commands and `tmp/cloudflare-dev-secrets.env` for uploading dev Worker secrets:
 
 ```text
 STRIPE_SECRET_KEY=sk_test_rotated_value
 STRIPE_WEBHOOK_SECRET=whsec_local_or_dev_value
+DEEPSEEK_API_KEY=
+ARK_API_KEY=
 ```
 
 Dev Workers need secrets uploaded from the ignored tmp file:

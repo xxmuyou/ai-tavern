@@ -1,6 +1,51 @@
 import { jsonResponse, readJson } from "./http";
+import {
+  isAdminEmail,
+  optionalAuthEmail,
+  optionalAuthUser,
+  requireAdminUser,
+  requireAuthEmail,
+  requireAuthUser,
+} from "./auth";
 import { ensureUserByEmail, normalizeEmail, PLATFORM_APP_KEY, type UserRecord } from "./identity";
 import { generateText, type LlmMessage } from "./llm";
+import {
+  characterDefinitionToSnapshot,
+  toCharacterDefinition,
+} from "./show-engine/domain/character-definition";
+import {
+  companionResponseLine as buildCompanionResponseLine,
+  companionStoryScenes,
+  readCompanionStoryOptions,
+  shouldRequirePlatformPass,
+} from "./show-engine/domain/companion-story-engine";
+import {
+  bindGuestAsset,
+  guestPackageFromRow,
+  guestPackageToCharacterFields,
+  selectGuestVisualObjectKey,
+  validateGuestCharacterPackage,
+} from "./show-engine/domain/guest-character-package";
+import {
+  normalizeSelectedGuestKeys,
+  resolveSelectedGuestLineup,
+} from "./show-engine/domain/guest-lineup";
+import {
+  extractSignals,
+  hardPreferenceBoost as calculateHardPreferenceBoost,
+  tagsFromSignals,
+} from "./show-engine/domain/signal-extractor";
+import {
+  applySignalsToGuest,
+  countOverlap,
+  reactionEventType,
+  reactionLine,
+} from "./show-engine/domain/rule-engine";
+import {
+  buildTurnDraft as buildDomainTurnDraft,
+  composeTurnAnswer,
+} from "./show-engine/domain/stage-machine";
+import type { GuestCharacterPackage } from "./show-engine/domain/types";
 
 const DEFAULT_FREE_MESSAGE_LIMIT = 8;
 export const DATING_SHOW_KEY = "dating-heart-signal";
@@ -9,21 +54,65 @@ type ShowEngineEnv = Env & {
   AI_TV_DATING_FREE_MESSAGE_LIMIT?: string;
 };
 
+type SystemAssetTarget =
+  | { kind: "background" }
+  | { characterKey: string; kind: "character" };
+
 type BootstrapQuery = {
   email?: string;
 };
 
 type CreateSessionRequest = {
+  ageRange?: string;
   avatarLabel?: string;
   avatarObjectKey?: string;
   email?: string;
   guestPreference?: AudiencePreference;
+  hobbies?: string;
+  occupation?: string;
+  selectedGuestKeys?: string[];
   userCharacterKeys?: string[];
 };
 
 type MessageRequest = {
   email?: string;
   message?: string;
+};
+
+type TurnAnswerRequest = {
+  email?: string;
+  freeText?: string;
+  selectedCharacterKey?: string;
+  selectedOptionId?: string;
+  stream?: boolean;
+};
+
+type SpeechPreviewRequest = {
+  email?: string;
+  messageId?: string;
+  speakerKey?: string | null;
+  text?: string;
+};
+
+type TurnAnswerDeltaMeta = {
+  speakerKey?: string | null;
+  speakerName?: string | null;
+};
+
+type TurnAnswerOptions = {
+  onDelta?: (text: string, meta?: TurnAnswerDeltaMeta) => void | Promise<void>;
+  stream?: boolean;
+};
+
+type CompanionStoryAnswerRequest = {
+  email?: string;
+  freeText?: string;
+  selectedOptionId?: string;
+};
+
+type AdvanceStageRequest = {
+  email?: string;
+  targetStage?: string;
 };
 
 type InitialPickRequest = {
@@ -66,12 +155,51 @@ type CreateCharacterRequest = {
   occupation?: string;
   personalityKeywords?: string;
   speakingStyle?: string;
+  characterPackage?: GuestCharacterPackage;
+};
+
+type CharacterPackageRequest = {
+  characterPackage?: GuestCharacterPackage;
+  email?: string;
+  package?: GuestCharacterPackage;
+};
+
+type CharacterAssetRequest = {
+  email?: string;
+  objectKey?: string;
+  slot?: "avatar" | "gallery" | "portrait" | "visual_state";
+  visualStateKey?: string;
+};
+
+type PublishCharacterRequest = {
+  email?: string;
+  visibility?: "private" | "public";
+};
+
+type WorkspaceGuestRequest = {
+  acquisitionMethod?: "community_added" | "created" | "joined_home" | "system_default" | "unlocked";
+  characterKey?: string;
+  email?: string;
 };
 
 type AudiencePreference = "male" | "female" | "any";
 type SessionStatus = "active" | "completed";
 type CharacterRole = "host" | "guest" | "support";
 type MessageRole = "user" | "host" | "character" | "system";
+type TurnStatus = "awaiting_user" | "answered" | "skipped";
+type ShowEventType =
+  | "blow_up"
+  | "guest_doubt"
+  | "guest_heart"
+  | "guest_object"
+  | "guest_question"
+  | "guest_reaction"
+  | "host_opening"
+  | "host_summary"
+  | "light_off"
+  | "semantic_judgment"
+  | "stage_change"
+  | "user_answer";
 
 type ShowTemplateRow = {
   app_key: string;
@@ -95,6 +223,7 @@ type ShowCharacterRow = {
   dealbreaker_signals: string;
   gender: "male" | "female" | null;
   goal: string;
+  hard_preference_signals: string;
   hidden_preferences: string;
   initial_affinity: number;
   match_threshold: number;
@@ -106,6 +235,7 @@ type ShowCharacterRow = {
   public_profile: string;
   relationship_to_user: string;
   role: CharacterRole;
+  soft_preference_signals: string;
   source: "official" | "user";
   speaking_style: string;
 };
@@ -164,7 +294,177 @@ type ShowMessageRow = {
   stage_key: string;
 };
 
+type ShowTurnRow = {
+  answer_text: string | null;
+  created_at: string;
+  id: string;
+  options: string;
+  question: string;
+  selected_character_key: string | null;
+  selected_option_id: string | null;
+  speaker_key: string | null;
+  speaker_name: string;
+  stage_key: string;
+  status: TurnStatus;
+  turn_index: number;
+  updated_at: string;
+};
+
+type ShowEventRow = {
+  content: string;
+  created_at: string;
+  data: string;
+  event_order: number;
+  event_type: ShowEventType;
+  id: string;
+  speaker_key: string | null;
+  speaker_name: string;
+  stage_key: string;
+  turn_id: string | null;
+};
+
+type WorkspaceAssetRow = {
+  content_type: string | null;
+  created_at: string;
+  key: string;
+  size_bytes: number | null;
+};
+
+type UserGuestAssetRow = {
+  acquisition_method: string;
+  app_key: string;
+  character_key: string;
+  created_at: string;
+  id: string;
+  show_key: string;
+  source: "community" | "official" | "user";
+  status: "active" | "archived";
+  updated_at: string;
+  user_id: string;
+};
+
+type WorkspacePointEventRow = {
+  created_at: string;
+  event_type: string;
+  points: number;
+};
+
+type UserShowProfileRow = {
+  age_range: string;
+  avatar_object_key: string | null;
+  derived_tags: string;
+  hobbies: string;
+  occupation: string;
+  updated_at: string;
+};
+
+type UserCompanionRow = {
+  app_key: string;
+  character_key: string;
+  created_at: string;
+  id: string;
+  last_story_at: string | null;
+  relationship_state: string;
+  show_key: string;
+  snapshot: string;
+  source_session_id: string;
+  story_turn_count: number;
+  unlock_status: string;
+  updated_at: string;
+  user_id: string;
+};
+
+type CompanionStoryTurnRow = {
+  answer_text: string | null;
+  created_at: string;
+  id: string;
+  options: string;
+  prompt: string;
+  response_text: string | null;
+  scene_title: string;
+  selected_option_id: string | null;
+  status: "awaiting_user" | "answered";
+  turn_index: number;
+  updated_at: string;
+};
+
+type WorkspaceSessionRow = Pick<
+  ShowSessionRow,
+  | "audience_preference"
+  | "avatar_label"
+  | "avatar_object_key"
+  | "current_stage_key"
+  | "id"
+  | "match_success"
+  | "message_count"
+  | "points_awarded"
+  | "result_summary"
+  | "selected_character_key"
+  | "show_key"
+  | "status"
+  | "updated_at"
+>;
+
 type CharacterSnapshot = ReturnType<typeof serializeCharacter>;
+
+type TurnOption = {
+  id: string;
+  label: string;
+  preview: string;
+  signalText: string;
+};
+
+type CompanionStoryOption = {
+  id: string;
+  label: string;
+  preview: string;
+};
+
+type TurnDraft = {
+  options: TurnOption[];
+  question: string;
+  speakerKey: string;
+  speakerName: string;
+  stageKey: string;
+};
+
+type SignalApplication = {
+  attractionTags?: string[];
+  characterKey: string;
+  dealbreakerHits: number;
+  dealbreakerTriggered: boolean;
+  delta: number;
+  name: string;
+  negativeHits: number;
+  nextAffinity: number;
+  nextLightState: "on" | "off" | "blow_up";
+  nextStrongSignalCount: number;
+  positiveHits: number;
+  previousLightState: "on" | "off" | "blow_up";
+  reason?: string;
+  riskTags?: string[];
+};
+
+type SemanticGuestJudgment = {
+  attractionTags: string[];
+  characterKey: string;
+  delta: number;
+  reason: string;
+  riskTags: string[];
+};
+
+type SemanticTurnJudgment = {
+  expressionTraits: string[];
+  guestJudgments: SemanticGuestJudgment[];
+  source: "fallback" | "llm";
+  userIntent: string;
+};
+
+type GeneratedReaction = {
+  characterKey: string;
+  reason: string;
+  text: string;
+};
 
 export async function handleShowRequest(
   request: Request,
@@ -201,6 +501,37 @@ export async function handleDatingCompatRequest(
   return handleShowScopedRequest(request, env as ShowEngineEnv, DATING_SHOW_KEY, restPath);
 }
 
+export async function handleCompanionRequest(
+  request: Request,
+  env: Env,
+  pathname: string,
+): Promise<Response | null> {
+  const match = pathname.match(/^\/companions\/([^/]+)\/story(?:\/turns\/([^/]+)\/answer)?$/);
+  if (!match) {
+    return null;
+  }
+
+  const companionId = decodeURIComponent(match[1] ?? "");
+  const turnId = match[2] ? decodeURIComponent(match[2]) : null;
+  if (!companionId) {
+    return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+  }
+
+  if (!turnId && request.method === "GET") {
+    const url = new URL(request.url);
+    const user = await requireAuthUser(env, request, url.searchParams.get("email"));
+    return jsonResponse(await getCompanionStory(env as ShowEngineEnv, companionId, user));
+  }
+
+  if (turnId && request.method === "POST") {
+    const body = await readJson<CompanionStoryAnswerRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    return jsonResponse(await answerCompanionStoryTurn(env as ShowEngineEnv, companionId, turnId, body));
+  }
+
+  return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+}
+
 async function handleShowScopedRequest(
   request: Request,
   env: ShowEngineEnv,
@@ -209,71 +540,233 @@ async function handleShowScopedRequest(
 ): Promise<Response> {
   if (restPath === "/bootstrap" && request.method === "GET") {
     const url = new URL(request.url);
-    return jsonResponse(await getBootstrap(env, showKey, { email: url.searchParams.get("email") ?? undefined }));
+    const email = await optionalAuthEmail(env, request, url.searchParams.get("email"));
+    return jsonResponse(await getBootstrap(env, showKey, { email }));
   }
 
   if (restPath === "/characters" && request.method === "GET") {
     const url = new URL(request.url);
-    const email = normalizeEmail(url.searchParams.get("email"));
-    const user = email ? await ensureUserByEmail(env, email) : null;
+    const user = await optionalAuthUser(env, request, url.searchParams.get("email"));
     return jsonResponse(await getCharacterLibrary(env, showKey, user));
+  }
+
+  if (restPath === "/workspace" && request.method === "GET") {
+    const url = new URL(request.url);
+    const user = await requireAuthUser(env, request, url.searchParams.get("email"));
+    return jsonResponse(await getWorkspace(env, showKey, user));
+  }
+
+  if (restPath === "/workspace/guests" && request.method === "POST") {
+    const body = await readJson<WorkspaceGuestRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    return jsonResponse(await joinWorkspaceGuest(env, showKey, body), { status: 201 });
+  }
+
+  const systemAssetMatch = restPath.match(/^\/admin\/system-assets\/(?:background|characters\/([^/]+))$/);
+  if (systemAssetMatch) {
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+
+    const admin = await requireAdminUser(env, request);
+    const characterKey = systemAssetMatch[1] ? normalizeCharacterKeyValue(decodeURIComponent(systemAssetMatch[1])) : "";
+    const target: SystemAssetTarget = characterKey
+      ? { characterKey, kind: "character" }
+      : { kind: "background" };
+    return jsonResponse(await uploadSystemAsset(env, showKey, target, request, admin), { status: 201 });
   }
 
   if (restPath === "/characters" && request.method === "POST") {
     const body = await readJson<CreateCharacterRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await createUserCharacter(env, showKey, body), { status: 201 });
+  }
+
+  if (restPath === "/characters/validate" && request.method === "POST") {
+    const body = await readJson<CharacterPackageRequest>(request);
+    const validation = validateGuestCharacterPackage(body.characterPackage ?? body.package ?? body);
+    return jsonResponse({
+      characterPackage: validation.package,
+      errors: validation.errors,
+      ok: validation.errors.length === 0,
+    });
+  }
+
+  const characterMatch = restPath.match(/^\/characters\/([^/]+)(?:\/(package|assets|publish))?$/);
+  if (characterMatch) {
+    const characterKey = decodeURIComponent(characterMatch[1] ?? "");
+    const action = characterMatch[2] ?? "";
+
+    if (action === "package" && request.method === "GET") {
+      const url = new URL(request.url);
+      const user = await requireAuthUser(env, request, url.searchParams.get("email"));
+      return jsonResponse(await getUserCharacterPackage(env, showKey, characterKey, user));
+    }
+
+    if (!action && request.method === "PATCH") {
+      const body = await readJson<CharacterPackageRequest>(request);
+      body.email = await requireAuthEmail(env, request, body.email);
+      return jsonResponse(await updateUserCharacterPackage(env, showKey, characterKey, body));
+    }
+
+    if (action === "assets" && request.method === "POST") {
+      const body = await readJson<CharacterAssetRequest>(request);
+      body.email = await requireAuthEmail(env, request, body.email);
+      return jsonResponse(await bindUserCharacterAsset(env, showKey, characterKey, body));
+    }
+
+    if (action === "publish" && request.method === "POST") {
+      const body = await readJson<PublishCharacterRequest>(request);
+      body.email = await requireAuthEmail(env, request, body.email);
+      return jsonResponse(await publishUserCharacter(env, showKey, characterKey, body));
+    }
+
+    return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
   }
 
   if (restPath === "/sessions" && request.method === "POST") {
     const body = await readJson<CreateSessionRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await createSession(env, showKey, body), { status: 201 });
   }
 
-  const sessionMatch = restPath.match(/^\/sessions\/([^/]+)(?:\/([^/]+))?$/);
+  const sessionMatch = restPath.match(/^\/sessions\/([^/]+)(?:\/(.+))?$/);
   if (!sessionMatch) {
     return jsonResponse({ error: "not_found" }, { status: 404 });
   }
 
   const sessionId = decodeURIComponent(sessionMatch[1] ?? "");
-  const action = sessionMatch[2];
+  const actionPath = sessionMatch[2] ?? "";
+  const action = actionPath.split("/")[0] ?? "";
 
   if (!action && request.method === "GET") {
     const url = new URL(request.url);
-    const email = normalizeEmail(url.searchParams.get("email"));
-    if (!email) {
-      return jsonResponse({ error: "email_required" }, { status: 400 });
+    const user = await requireAuthUser(env, request, url.searchParams.get("email"));
+    return jsonResponse(await getSessionPayload(env, showKey, sessionId, user));
+  }
+
+  const turnMatch = actionPath.match(/^turns\/([^/]+)\/answer$/);
+  if (turnMatch && request.method === "POST") {
+    const url = new URL(request.url);
+    const turnId = decodeURIComponent(turnMatch[1] ?? "");
+    const body = await readJson<TurnAnswerRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    if (shouldStreamTurnAnswer(url, body)) {
+      return streamTurnAnswer(env, showKey, sessionId, turnId, body);
     }
 
-    const user = await ensureUserByEmail(env, email);
-    return jsonResponse(await getSessionPayload(env, showKey, sessionId, user));
+    return jsonResponse(await answerTurn(env, showKey, sessionId, turnId, body));
   }
 
   if (action === "messages" && request.method === "POST") {
     const body = await readJson<MessageRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await addMessage(env, showKey, sessionId, body));
+  }
+
+  if (action === "speech-preview" && request.method === "POST") {
+    const body = await readJson<SpeechPreviewRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    return jsonResponse(await previewSessionSpeech(env, showKey, sessionId, body));
+  }
+
+  if (action === "advance" && request.method === "POST") {
+    const body = await readJson<AdvanceStageRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    return jsonResponse(await advanceStage(env, showKey, sessionId, body));
   }
 
   if (action === "initial-pick" && request.method === "POST") {
     const body = await readJson<InitialPickRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await submitInitialPick(env, showKey, sessionId, body));
   }
 
   if (action === "profile" && request.method === "POST") {
     const body = await readJson<ProfileJudgmentRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await submitProfileJudgment(env, showKey, sessionId, body));
   }
 
   if (action === "declaration" && request.method === "POST") {
     const body = await readJson<UserDeclarationRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await submitUserDeclaration(env, showKey, sessionId, body));
   }
 
   if (action === "final-choice" && request.method === "POST") {
     const body = await readJson<FinalChoiceRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await finalizeSession(env, showKey, sessionId, body));
   }
 
   return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+}
+
+function shouldStreamTurnAnswer(url: URL, body: TurnAnswerRequest): boolean {
+  const streamParam = url.searchParams.get("stream");
+  if (streamParam && ["1", "true", "yes"].includes(streamParam.toLowerCase())) {
+    return true;
+  }
+
+  return body.stream === true;
+}
+
+function streamTurnAnswer(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  turnId: string,
+  body: TurnAnswerRequest,
+): Response {
+  const stream = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = stream.writable.getWriter();
+  const encoder = new TextEncoder();
+
+  const writeEvent = async (event: string, data: unknown) => {
+    await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+  };
+
+  void (async () => {
+    try {
+      await writeEvent("start", { sessionId, turnId });
+      const payload = await answerTurn(env, showKey, sessionId, turnId, body, {
+        onDelta: (text, meta) => writeEvent("delta", {
+          speakerKey: meta?.speakerKey ?? null,
+          speakerName: meta?.speakerName ?? null,
+          text,
+        }),
+        stream: true,
+      });
+      await writeEvent("session", payload);
+    } catch (error) {
+      await writeEvent("error", await serializeStreamError(error));
+    } finally {
+      await writer.close().catch(() => undefined);
+    }
+  })();
+
+  return new Response(stream.readable, {
+    headers: {
+      "cache-control": "no-cache, no-transform",
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
+async function serializeStreamError(error: unknown) {
+  if (error instanceof Response) {
+    return {
+      error: (await error.clone().text().catch(() => "")) || error.statusText || "stream_error",
+      status: error.status,
+    };
+  }
+
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    status: 500,
+  };
 }
 
 async function listShows(env: ShowEngineEnv) {
@@ -312,12 +805,15 @@ async function getBootstrap(env: ShowEngineEnv, showKey: string, query: Bootstra
   return {
     appKey: show.app_key,
     appName: show.title,
-    characters: characters.map(serializeCharacter),
+    characters: characters.map(serializePublicCharacter),
+    chapterOne: {
+      slotCount: readChapterOneSlotCount(show),
+    },
     defaultAvatars: readJsonArray<{ label: string; objectKey: string }>(show.default_avatar_options),
     entitlement: user ? await getEntitlement(env, user, show) : freeEntitlement(env, show),
     guestPreferences: ["female", "male", "any"] satisfies AudiencePreference[],
-    guests: guests.map(serializeCharacter),
-    userCharacters: characters.filter((character) => character.source === "user").map(serializeCharacter),
+    guests: guests.map(serializePublicCharacter),
+    userCharacters: characters.filter((character) => isOwnedCharacter(character, user)).map(serializePublicCharacter),
     show: serializeShow(show),
     stages: stages.map(serializeStage),
     user: user ? { email: user.email, id: user.id } : null,
@@ -328,10 +824,343 @@ async function getCharacterLibrary(env: ShowEngineEnv, showKey: string, user: Us
   const characters = await getCharacters(env, showKey, "any", user);
 
   return {
-    characters: characters.map(serializeCharacter),
-    officialCharacters: characters.filter((character) => character.source === "official").map(serializeCharacter),
-    userCharacters: characters.filter((character) => character.source === "user").map(serializeCharacter),
+    characters: characters.map(serializePublicCharacter),
+    officialCharacters: characters.filter((character) => character.source === "official").map(serializePublicCharacter),
+    communityCharacters: characters.filter((character) => isCommunityCharacter(character)).map(serializePublicCharacter),
+    userCharacters: characters.filter((character) => isOwnedCharacter(character, user)).map(serializePublicCharacter),
   };
+}
+
+async function getWorkspace(env: ShowEngineEnv, showKey: string, user: UserRecord) {
+  const show = await requireShow(env, showKey);
+  const [characters, sessions, points, entitlement, profile, companions, guestAssets] = await Promise.all([
+    getCharacters(env, showKey, "any", user),
+    getRecentSessions(env, show, user),
+    getPointSummary(env, show, user),
+    getEntitlement(env, user, show),
+    getUserShowProfile(env, show, user),
+    getUserCompanions(env, show, user),
+    getUserGuestAssets(env, showKey, user),
+  ]);
+  const userCharacters = characters.filter((character) => isOwnedCharacter(character, user));
+  const assetByCharacterKey = new Map(guestAssets.map((asset) => [asset.character_key, asset]));
+  const joinedGuests = characters.filter((character) => character.role === "guest" && assetByCharacterKey.has(character.character_key));
+  const workspaceCharacters = uniqueCharacters([...joinedGuests, ...userCharacters]);
+  const assetKeys = uniqueStrings([
+    ...workspaceCharacters.flatMap(characterAssetKeys),
+    ...sessions.map((session) => session.avatar_object_key),
+    ...companions.map((companion) => companion.avatarObjectKey),
+  ]);
+  const assets = await getAssetSummary(env, assetKeys);
+  const admin = isAdminEmail(env, user.email);
+
+  return {
+    admin: {
+      isAdmin: admin,
+      systemAssets: admin ? serializeSystemAssets(show, characters) : [],
+    },
+    assets,
+    characters: workspaceCharacters.map(serializePublicCharacter),
+    chapterOne: {
+      slotCount: readChapterOneSlotCount(show),
+    },
+    companions,
+    entitlement,
+    guestAssets: joinedGuests.map((character) => ({
+      ...serializePublicCharacter(character),
+      asset: serializeUserGuestAsset(assetByCharacterKey.get(character.character_key)),
+    })),
+    points,
+    profile: profile ? serializeUserShowProfile(profile) : {
+      avatarObjectKey: sessions.find((session) => session.avatar_object_key)?.avatar_object_key ?? null,
+      derivedTags: [],
+      displayName: user.email.split("@")[0] ?? "Player",
+      hardIdentity: {
+        ageRange: "",
+        hobbies: [],
+        occupation: "",
+      },
+    },
+    recentSessions: sessions.map(serializeWorkspaceSession),
+    show: serializeShow(show),
+    user: {
+      email: user.email,
+      id: user.id,
+    },
+    userCharacters: userCharacters.map(serializePublicCharacter),
+  };
+}
+
+async function joinWorkspaceGuest(env: ShowEngineEnv, showKey: string, body: WorkspaceGuestRequest) {
+  const email = normalizeEmail(body.email);
+  const characterKey = normalizeCharacterKeyValue(body.characterKey);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+  if (!characterKey) {
+    throw new Response("character_key_required", { status: 400 });
+  }
+
+  const [show, user] = await Promise.all([
+    requireShow(env, showKey),
+    ensureUserByEmail(env, email),
+  ]);
+  const characters = await getCharacters(env, showKey, "any", user);
+  const character = characters.find((item) => item.character_key === characterKey);
+  if (!character) {
+    throw new Response("character_not_found", { status: 404 });
+  }
+  if (character.role !== "guest") {
+    throw new Response("guest_required", { status: 400 });
+  }
+
+  const assetSource = guestAssetSource(character, user);
+  const acquisitionMethod = normalizeGuestAcquisitionMethod(
+    body.acquisitionMethod,
+    assetSource === "community" ? "community_added" : "joined_home",
+  );
+  await env.DB.prepare(
+    `INSERT INTO user_guest_assets (
+       id, app_key, show_key, user_id, character_key, source, acquisition_method, status, updated_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)
+     ON CONFLICT(user_id, show_key, character_key) DO UPDATE SET
+       source = excluded.source,
+       acquisition_method = excluded.acquisition_method,
+       status = 'active',
+       updated_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(crypto.randomUUID(), show.app_key, show.show_key, user.id, character.character_key, assetSource, acquisitionMethod)
+    .run();
+
+  return getWorkspace(env, showKey, user);
+}
+
+async function getUserGuestAssets(env: ShowEngineEnv, showKey: string, user: UserRecord): Promise<UserGuestAssetRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, app_key, show_key, user_id, character_key, source, acquisition_method, status, created_at, updated_at
+     FROM user_guest_assets
+     WHERE user_id = ? AND show_key = ? AND status = 'active'
+     ORDER BY updated_at DESC, created_at DESC`,
+  )
+    .bind(user.id, showKey)
+    .all<UserGuestAssetRow>();
+
+  return results;
+}
+
+function guestAssetSource(character: ShowCharacterRow, user: UserRecord): UserGuestAssetRow["source"] {
+  if (character.source === "official") {
+    return "official";
+  }
+
+  return character.owner_user_id === user.id ? "user" : "community";
+}
+
+function serializeUserGuestAsset(asset: UserGuestAssetRow | undefined) {
+  if (!asset) {
+    return null;
+  }
+
+  return {
+    acquisitionMethod: asset.acquisition_method,
+    characterKey: asset.character_key,
+    createdAt: asset.created_at,
+    id: asset.id,
+    source: asset.source,
+    status: asset.status,
+    updatedAt: asset.updated_at,
+  };
+}
+
+async function uploadSystemAsset(
+  env: ShowEngineEnv,
+  showKey: string,
+  target: SystemAssetTarget,
+  request: Request,
+  admin: UserRecord,
+) {
+  if (!request.body) {
+    throw jsonResponse({ error: "missing_body" }, { status: 400 });
+  }
+
+  const contentType = request.headers.get("content-type") ?? "application/octet-stream";
+  if (!contentType.toLowerCase().startsWith("image/")) {
+    throw jsonResponse({ error: "image_content_type_required" }, { status: 400 });
+  }
+
+  const show = await requireShow(env, showKey);
+  if (target.kind === "character") {
+    await requireOfficialSystemCharacter(env, showKey, target.characterKey);
+  }
+
+  const sizeBytes = Number(request.headers.get("content-length") ?? "0") || undefined;
+  const objectKey = systemAssetObjectKey(showKey, target, contentType);
+  await env.ASSETS.put(objectKey, request.body, {
+    customMetadata: {
+      actorEmail: admin.email,
+      source: "show-admin",
+    },
+    httpMetadata: {
+      contentType,
+    },
+  });
+  await recordUploadedAsset(env, objectKey, contentType, sizeBytes);
+
+  if (target.kind === "background") {
+    await env.DB.prepare(
+      `UPDATE show_templates
+       SET background_image_key = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE show_key = ?`,
+    )
+      .bind(objectKey, show.show_key)
+      .run();
+  } else {
+    await env.DB.prepare(
+      `UPDATE show_characters
+       SET avatar_object_key = ?
+       WHERE show_key = ? AND character_key = ? AND source = ? AND status = ?`,
+    )
+      .bind(objectKey, show.show_key, target.characterKey, "official", "active")
+      .run();
+  }
+
+  await insertShowAdminAudit(env, admin.email, "replace_system_asset", target.kind, target.kind === "background" ? "background" : target.characterKey, {
+    contentType,
+    objectKey,
+    sizeBytes,
+    showKey: show.show_key,
+  });
+
+  const [updatedShow, characters] = await Promise.all([
+    requireShow(env, showKey),
+    getCharacters(env, showKey, "any", null),
+  ]);
+
+  return {
+    asset: {
+      contentType,
+      objectKey,
+      sizeBytes: sizeBytes ?? null,
+    },
+    systemAssets: serializeSystemAssets(updatedShow, characters),
+  };
+}
+
+async function requireOfficialSystemCharacter(env: ShowEngineEnv, showKey: string, characterKey: string): Promise<void> {
+  const row = await env.DB.prepare(
+    `SELECT character_key
+     FROM show_characters
+     WHERE show_key = ? AND character_key = ? AND source = ? AND status = ? AND role IN (?, ?)
+     LIMIT 1`,
+  )
+    .bind(showKey, characterKey, "official", "active", "host", "guest")
+    .first<{ character_key: string }>();
+
+  if (!row) {
+    throw jsonResponse({ error: "system_character_not_found" }, { status: 404 });
+  }
+}
+
+async function recordUploadedAsset(
+  env: ShowEngineEnv,
+  objectKey: string,
+  contentType: string,
+  sizeBytes: number | undefined,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO asset_objects (key, content_type, size_bytes) VALUES (?, ?, ?)",
+  )
+    .bind(objectKey, contentType, sizeBytes ?? null)
+    .run();
+
+  await env.JOB_QUEUE.send({
+    createdAt: new Date().toISOString(),
+    id: crypto.randomUUID(),
+    key: objectKey,
+    type: "asset.uploaded",
+  });
+}
+
+async function insertShowAdminAudit(
+  env: ShowEngineEnv,
+  actorEmail: string,
+  action: string,
+  targetType: string,
+  targetKey: string,
+  payload: unknown,
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO admin_audit_events (
+       id, actor_email, action, target_type, target_key, payload_json
+     )
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(crypto.randomUUID(), actorEmail, action, targetType, targetKey, JSON.stringify(payload ?? {}))
+    .run();
+}
+
+function serializeSystemAssets(show: ShowTemplateRow, characters: ShowCharacterRow[]) {
+  const officialCharacters = characters
+    .filter((character) => character.source === "official" && (character.role === "host" || character.role === "guest"))
+    .sort((left, right) => roleSort(left.role) - roleSort(right.role) || left.name.localeCompare(right.name));
+
+  return [
+    {
+      characterKey: null,
+      kind: "background",
+      label: "Studio background",
+      objectKey: show.background_image_key,
+      role: "background",
+    },
+    ...officialCharacters.map((character) => ({
+      characterKey: character.character_key,
+      kind: "character",
+      label: character.name,
+      objectKey: character.avatar_object_key,
+      role: character.role,
+    })),
+  ];
+}
+
+function roleSort(role: CharacterRole | "background"): number {
+  if (role === "background") {
+    return 0;
+  }
+
+  return role === "host" ? 1 : 2;
+}
+
+function systemAssetObjectKey(showKey: string, target: SystemAssetTarget, contentType: string): string {
+  const extension = imageExtension(contentType);
+  const targetKey = target.kind === "background" ? "background" : target.characterKey;
+  const key = `apps/ai-companion/${showKey}/system/${target.kind}/${targetKey}-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  return normalizeObjectKey(key) ?? `apps/ai-companion/${showKey}/system/${crypto.randomUUID()}.${extension}`;
+}
+
+function imageExtension(contentType: string): string {
+  const normalized = contentType.toLowerCase().split(";")[0]?.trim();
+  if (normalized === "image/jpeg" || normalized === "image/jpg") {
+    return "jpg";
+  }
+  if (normalized === "image/webp") {
+    return "webp";
+  }
+  if (normalized === "image/gif") {
+    return "gif";
+  }
+
+  return "png";
+}
+
+function normalizeGuestAcquisitionMethod(value: unknown, fallback: UserGuestAssetRow["acquisition_method"]) {
+  return value === "community_added" ||
+    value === "created" ||
+    value === "joined_home" ||
+    value === "system_default" ||
+    value === "unlocked"
+    ? value
+    : fallback;
 }
 
 async function createUserCharacter(env: ShowEngineEnv, showKey: string, body: CreateCharacterRequest) {
@@ -342,6 +1171,25 @@ async function createUserCharacter(env: ShowEngineEnv, showKey: string, body: Cr
 
   const user = await ensureUserByEmail(env, email);
   await requireShow(env, showKey);
+
+  if (body.characterPackage) {
+    const validation = validateGuestCharacterPackage(body.characterPackage);
+    if (validation.errors.length > 0) {
+      throw jsonResponse({ error: "invalid_character_package", errors: validation.errors }, { status: 400 });
+    }
+
+    validation.package.publicProfile = {
+      ...validation.package.publicProfile,
+      visibility: "private",
+    };
+    const fields = guestPackageToCharacterFields(validation.package);
+    const characterKey = `user-${user.id.slice(0, 8)}-${slugify(fields.name)}-${Date.now().toString(36)}`;
+    await insertUserCharacter(env, showKey, user, characterKey, fields);
+
+    const created = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+    return serializeCharacterPackageResponse(created);
+  }
+
   const name = normalizeShortText(body.name, "", 80);
   const gender = body.gender === "male" || body.gender === "female" ? body.gender : null;
   if (!name || !gender) {
@@ -365,7 +1213,69 @@ async function createUserCharacter(env: ShowEngineEnv, showKey: string, body: Cr
     occupationTag: normalizeShortText(body.occupation, "creator", 80),
     personalityKeywords: splitUserList(body.personalityKeywords),
     preferences: splitUserList(body.favoritePartnerTraits),
+    visibility: "private",
   };
+  const characterPackage = validateGuestCharacterPackage({
+    assets: {
+      avatarObjectKey: normalizeObjectKey(body.avatarObjectKey),
+      galleryObjectKeys: [],
+      portraitObjectKey: normalizeObjectKey(body.avatarObjectKey),
+      visualStates: {},
+    },
+    identity: {
+      ageRange: publicProfile.ageRange,
+      cityOrLifestyle: publicProfile.cityOrLifestyle,
+      gender,
+      hobbies: publicProfile.hobbies,
+      name,
+      occupation: publicProfile.occupationTag,
+    },
+    matchRules: {
+      blowUpSignals: signals.positiveSignals.slice(0, 3),
+      dealbreakerSignals: signals.dealbreakerSignals.length ? signals.dealbreakerSignals : ["aggression"],
+      hardPreferenceSignals: [],
+      initialAffinity: 50,
+      matchThreshold: 75,
+      negativeSignals: signals.negativeSignals.length ? signals.negativeSignals : ["avoidance"],
+      positiveSignals: signals.positiveSignals.length ? signals.positiveSignals : ["honesty", "kindness"],
+      softPreferenceSignals: signals.positiveSignals.length ? signals.positiveSignals : ["honesty", "kindness"],
+    },
+    persona: {
+      boundaries: normalizeShortText(body.dealbreakers, "Avoid disrespect, aggression, and dishonesty.", 240),
+      goal: "Discover whether the user matches this character's stated values and hidden preferences.",
+      hiddenPreferences: normalizeShortText(body.favoritePartnerTraits, "", 240),
+      personality: normalizeShortText(body.personalityKeywords, "open, curious, emotionally present", 240),
+      relationshipToUser: "A user-created companion character for the opening story.",
+      speakingStyle: normalizeShortText(body.speakingStyle, "natural, concise, emotionally clear", 160),
+    },
+    publicProfile,
+    stateModel: {
+      coefficients: {},
+      runtimeDefaults: {
+        action: "idle",
+        curiosity: 50,
+        energy: 50,
+        expression: "neutral",
+        intimacy: 0,
+        mood: "neutral",
+      },
+    },
+  }).package;
+
+  await insertUserCharacter(env, showKey, user, characterKey, guestPackageToCharacterFields(characterPackage));
+
+  const created = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  return serializeCharacterPackageResponse(created);
+}
+
+async function insertUserCharacter(
+  env: ShowEngineEnv,
+  showKey: string,
+  user: UserRecord,
+  characterKey: string,
+  fields: ReturnType<typeof guestPackageToCharacterFields>,
+) {
+  const publicProfile = withCharacterVisibility(fields.publicProfile);
 
   await env.DB.prepare(
     `INSERT INTO show_characters (
@@ -401,34 +1311,201 @@ async function createUserCharacter(env: ShowEngineEnv, showKey: string, body: Cr
       showKey,
       characterKey,
       "guest",
-      name,
-      gender,
-      normalizeObjectKey(body.avatarObjectKey),
-      normalizeShortText(body.personalityKeywords, "open, curious, emotionally present", 240),
-      "Discover whether the user matches this character's stated values and hidden preferences.",
-      normalizeShortText(body.dealbreakers, "Avoid disrespect, aggression, and dishonesty.", 240),
-      normalizeShortText(body.speakingStyle, "natural, concise, emotionally clear", 160),
-      "A user-created guest in the dating show.",
-      normalizeShortText(body.favoritePartnerTraits, "", 240),
+      fields.name,
+      fields.gender,
+      fields.avatarObjectKey,
+      fields.personality,
+      fields.goal,
+      fields.boundaries,
+      fields.speakingStyle,
+      fields.relationshipToUser,
+      fields.hiddenPreferences,
       JSON.stringify(publicProfile),
       user.id,
       "user",
-      JSON.stringify(signals.positiveSignals.length ? signals.positiveSignals : ["honesty", "kindness"]),
-      JSON.stringify(signals.negativeSignals.length ? signals.negativeSignals : ["avoidance"]),
-      JSON.stringify(signals.dealbreakerSignals.length ? signals.dealbreakerSignals : ["aggression"]),
-      JSON.stringify(signals.positiveSignals.slice(0, 3)),
-      75,
-      50,
+      JSON.stringify(fields.positiveSignals),
+      JSON.stringify(fields.negativeSignals),
+      JSON.stringify(fields.dealbreakerSignals),
+      JSON.stringify(fields.blowUpSignals),
+      fields.matchThreshold,
+      fields.initialAffinity,
       "active",
       1000,
     )
     .run();
+}
 
-  const created = (await getCharacters(env, showKey, "any", user)).find(
-    (character) => character.character_key === characterKey,
-  );
+async function getUserCharacterPackage(env: ShowEngineEnv, showKey: string, characterKey: string, user: UserRecord) {
+  const character = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  return serializeCharacterPackageResponse(character);
+}
 
-  return { character: created ? serializeCharacter(created) : null };
+async function updateUserCharacterPackage(
+  env: ShowEngineEnv,
+  showKey: string,
+  characterKey: string,
+  body: CharacterPackageRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const current = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const validation = validateGuestCharacterPackage(body.characterPackage ?? body.package ?? body, guestPackageFromRow(current));
+  if (validation.errors.length > 0) {
+    throw jsonResponse({ error: "invalid_character_package", errors: validation.errors }, { status: 400 });
+  }
+
+  const fields = guestPackageToCharacterFields(validation.package);
+  await updateUserCharacterFields(env, showKey, characterKey, user, fields);
+
+  const updated = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  return serializeCharacterPackageResponse(updated);
+}
+
+async function bindUserCharacterAsset(
+  env: ShowEngineEnv,
+  showKey: string,
+  characterKey: string,
+  body: CharacterAssetRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const objectKey = normalizeObjectKey(body.objectKey);
+  if (!objectKey) {
+    throw new Response("invalid_object_key", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const current = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const nextPackage = bindGuestAsset(guestPackageFromRow(current), {
+    objectKey,
+    slot: body.slot,
+    visualStateKey: body.visualStateKey,
+  });
+  await updateUserCharacterFields(env, showKey, characterKey, user, guestPackageToCharacterFields(nextPackage));
+
+  const updated = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  return serializeCharacterPackageResponse(updated);
+}
+
+async function publishUserCharacter(
+  env: ShowEngineEnv,
+  showKey: string,
+  characterKey: string,
+  body: PublishCharacterRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const current = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const characterPackage = guestPackageFromRow(current);
+  const visibility = body.visibility === "private" ? "private" : "public";
+  characterPackage.publicProfile = {
+    ...characterPackage.publicProfile,
+    publishedAt: visibility === "public" ? new Date().toISOString() : null,
+    visibility,
+  };
+
+  await updateUserCharacterFields(env, showKey, characterKey, user, guestPackageToCharacterFields(characterPackage));
+
+  const updated = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  return serializeCharacterPackageResponse(updated);
+}
+
+async function updateUserCharacterFields(
+  env: ShowEngineEnv,
+  showKey: string,
+  characterKey: string,
+  user: UserRecord,
+  fields: ReturnType<typeof guestPackageToCharacterFields>,
+) {
+  const publicProfile = withCharacterVisibility(fields.publicProfile);
+
+  await env.DB.prepare(
+    `UPDATE show_characters
+     SET name = ?,
+         gender = ?,
+         avatar_object_key = ?,
+         personality = ?,
+         goal = ?,
+         boundaries = ?,
+         speaking_style = ?,
+         relationship_to_user = ?,
+         hidden_preferences = ?,
+         public_profile = ?,
+         positive_signals = ?,
+         negative_signals = ?,
+         dealbreaker_signals = ?,
+         blow_up_signals = ?,
+         hard_preference_signals = ?,
+         soft_preference_signals = ?,
+         match_threshold = ?,
+         initial_affinity = ?
+     WHERE show_key = ? AND character_key = ? AND owner_user_id = ? AND source = ?`,
+  )
+    .bind(
+      fields.name,
+      fields.gender,
+      fields.avatarObjectKey,
+      fields.personality,
+      fields.goal,
+      fields.boundaries,
+      fields.speakingStyle,
+      fields.relationshipToUser,
+      fields.hiddenPreferences,
+      JSON.stringify(publicProfile),
+      JSON.stringify(fields.positiveSignals),
+      JSON.stringify(fields.negativeSignals),
+      JSON.stringify(fields.dealbreakerSignals),
+      JSON.stringify(fields.blowUpSignals),
+      JSON.stringify(fields.hardPreferenceSignals),
+      JSON.stringify(fields.softPreferenceSignals),
+      fields.matchThreshold,
+      fields.initialAffinity,
+      showKey,
+      characterKey,
+      user.id,
+      "user",
+    )
+    .run();
+}
+
+async function requireOwnedUserCharacter(
+  env: ShowEngineEnv,
+  showKey: string,
+  characterKey: string,
+  user: UserRecord,
+): Promise<ShowCharacterRow> {
+  const character = await env.DB.prepare(
+    `SELECT character_key, role, name, gender, avatar_object_key, personality, goal, boundaries,
+            speaking_style, relationship_to_user, hidden_preferences, public_profile, owner_user_id,
+            source, positive_signals, negative_signals, dealbreaker_signals, blow_up_signals,
+            hard_preference_signals, soft_preference_signals, match_threshold, initial_affinity
+     FROM show_characters
+     WHERE show_key = ? AND character_key = ? AND status = ?
+     LIMIT 1`,
+  )
+    .bind(showKey, characterKey, "active")
+    .first<ShowCharacterRow>();
+
+  if (!character) {
+    throw new Response("character_not_found", { status: 404 });
+  }
+
+  if (character.source !== "user" || character.owner_user_id !== user.id) {
+    throw new Response("character_forbidden", { status: 403 });
+  }
+
+  return character;
 }
 
 async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSessionRequest) {
@@ -449,17 +1526,24 @@ async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSe
   const sessionId = crypto.randomUUID();
   const avatarLabel = normalizeShortText(body.avatarLabel, "Spotlight Guest", 80);
   const avatarObjectKey = normalizeObjectKey(body.avatarObjectKey);
-  const characters = await getCharacters(env, showKey, audiencePreference, user);
-  const host = characters.find((character) => character.role === "host");
-  const requestedKeys = new Set(body.userCharacterKeys ?? []);
-  const officialGuests = characters.filter((character) => character.role === "guest" && character.source === "official");
-  const userGuests = characters.filter(
-    (character) =>
-      character.role === "guest" &&
-      character.source === "user" &&
-      (requestedKeys.size === 0 || requestedKeys.has(character.character_key)),
+  const hardProfile = normalizeHardProfile(body, avatarObjectKey);
+  if (!hardProfile.ageRange || !hardProfile.occupation || hardProfile.hobbies.length === 0) {
+    throw new Response("hard_profile_required", { status: 400 });
+  }
+
+  await upsertUserShowProfile(env, show, user, hardProfile);
+  const selectedGuestKeys = normalizeSelectedGuestKeys(body.selectedGuestKeys);
+  const legacyRequestedKeys = new Set(body.userCharacterKeys ?? []);
+  const characters = await getCharacters(
+    env,
+    showKey,
+    selectedGuestKeys || legacyRequestedKeys.size > 0 ? "any" : audiencePreference,
+    user,
   );
-  const guests = [...userGuests, ...officialGuests].slice(0, 4);
+  const host = characters.find((character) => character.role === "host");
+  const guests = selectedGuestKeys
+    ? resolveSelectedSessionGuests(characters, selectedGuestKeys)
+    : resolveLegacySessionGuests(characters, audiencePreference, legacyRequestedKeys);
 
   if (!host || guests.length === 0) {
     throw new Response("show_characters_missing", { status: 500 });
@@ -468,9 +1552,9 @@ async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSe
   await env.DB.prepare(
     `INSERT INTO show_sessions (
        id, app_key, show_key, user_id, avatar_object_key, avatar_label, audience_preference,
-       current_stage_key, status, updated_at
+       current_stage_key, status, user_profile, updated_at
      )
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
   )
     .bind(
       sessionId,
@@ -482,6 +1566,7 @@ async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSe
       audiencePreference,
       firstStage.stage_key,
       "active",
+      JSON.stringify(serializeHardProfileForSession(hardProfile, [])),
     )
     .run();
 
@@ -501,7 +1586,14 @@ async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSe
         character.role,
         character.name,
         JSON.stringify(serializeCharacter(character)),
-        character.role === "guest" ? character.initial_affinity : 100,
+        character.role === "guest"
+          ? clamp(
+              character.initial_affinity +
+                calculateHardPreferenceBoost({ hardPreferenceSignals: character.hard_preference_signals }, hardProfile),
+              0,
+              100,
+            )
+          : 100,
         1,
       )
       .run();
@@ -519,7 +1611,82 @@ async function createSession(env: ShowEngineEnv, showKey: string, body: CreateSe
     userId: user.id,
   });
 
+  await insertShowEvent(env, {
+    appKey: show.app_key,
+    content: show.opening_scene,
+    eventType: "host_opening",
+    sessionId,
+    showKey: show.show_key,
+    speakerKey: "host",
+    speakerName: host.name,
+    stageKey: firstStage.stage_key,
+    userId: user.id,
+  });
+  await createTurnForStage(env, {
+    show,
+    session: {
+      app_key: show.app_key,
+      audience_preference: audiencePreference,
+      avatar_label: avatarLabel,
+      avatar_object_key: avatarObjectKey,
+      current_stage_key: firstStage.stage_key,
+      id: sessionId,
+      initial_pick_character_key: null,
+      match_success: 0,
+      message_count: 0,
+      points_awarded: 0,
+      result_summary: null,
+      selected_character_key: null,
+      show_key: show.show_key,
+      status: "active",
+      updated_at: new Date().toISOString(),
+      user_declaration: null,
+      user_id: user.id,
+      user_profile: JSON.stringify(serializeHardProfileForSession(hardProfile, [])),
+    },
+    stageKey: firstStage.stage_key,
+    user,
+  });
+
   return getSessionPayload(env, showKey, sessionId, user);
+}
+
+function resolveSelectedSessionGuests(characters: ShowCharacterRow[], selectedGuestKeys: string[]): ShowCharacterRow[] {
+  const result = resolveSelectedGuestLineup(
+    characters.map((character) => ({
+      ...character,
+      characterKey: character.character_key,
+    })),
+    selectedGuestKeys,
+    5,
+  );
+
+  if (!result.ok) {
+    throw new Response(result.error, { status: result.status });
+  }
+
+  return result.guests;
+}
+
+function resolveLegacySessionGuests(
+  characters: ShowCharacterRow[],
+  audiencePreference: AudiencePreference,
+  requestedKeys: Set<string>,
+): ShowCharacterRow[] {
+  const officialGuests = characters.filter(
+    (character) =>
+      character.role === "guest" &&
+      character.source === "official" &&
+      (audiencePreference === "any" || character.gender === audiencePreference),
+  );
+  const userGuests = characters.filter(
+    (character) =>
+      character.role === "guest" &&
+      character.source === "user" &&
+      requestedKeys.has(character.character_key),
+  );
+
+  return [...userGuests, ...officialGuests].slice(0, 4);
 }
 
 async function addMessage(env: ShowEngineEnv, showKey: string, sessionId: string, body: MessageRequest) {
@@ -544,6 +1711,10 @@ async function addMessage(env: ShowEngineEnv, showKey: string, sessionId: string
     throw new Response("session_completed", { status: 409 });
   }
 
+  if (session.current_stage_key !== "guest_questions") {
+    throw new Response("messages_only_available_in_guest_interaction", { status: 409 });
+  }
+
   await insertMessage(env, {
     appKey: show.app_key,
     content,
@@ -560,13 +1731,10 @@ async function addMessage(env: ShowEngineEnv, showKey: string, sessionId: string
   const guests = characters.filter((character) => character.role === "guest");
   const host = characters.find((character) => character.role === "host");
   const nextCount = session.message_count + 1;
-  const nextStage =
-    session.current_stage_key === "guest_questions"
-      ? findStage(stages, "user_declaration") ?? fallbackStage()
-      : findStage(stages, session.current_stage_key) ?? findStage(stages, "guest_questions") ?? fallbackStage();
+  const currentStage = findStage(stages, session.current_stage_key) ?? fallbackStage();
   const signals = extractSignals(content);
   await applySignalsToGuests(env, {
-    multiplier: session.current_stage_key === "guest_questions" ? 1 : 0.6,
+    multiplier: 1,
     session,
     sessionId,
     signals,
@@ -580,31 +1748,8 @@ async function addMessage(env: ShowEngineEnv, showKey: string, sessionId: string
 
   const nextSession: ShowSessionRow = {
     ...session,
-    current_stage_key: nextStage.stage_key,
     message_count: nextCount,
   };
-  const hostLine = await generateShowLine(env, {
-    content,
-    host,
-    nextAffinity,
-    role: "host",
-    selectedCharacter: selectedGuest,
-    session: nextSession,
-    show,
-    stage: nextStage,
-  });
-
-  await insertMessage(env, {
-    appKey: show.app_key,
-    content: hostLine,
-    role: "host",
-    sessionId,
-    showKey: show.show_key,
-    speakerKey: "host",
-    speakerName: host?.name ?? "Host",
-    stageKey: nextStage.stage_key,
-    userId: user.id,
-  });
 
   if (selectedGuest) {
     const guestLine = await generateShowLine(env, {
@@ -615,7 +1760,7 @@ async function addMessage(env: ShowEngineEnv, showKey: string, sessionId: string
       selectedCharacter: selectedGuest,
       session: nextSession,
       show,
-      stage: nextStage,
+      stage: currentStage,
     });
 
     await insertMessage(env, {
@@ -626,18 +1771,655 @@ async function addMessage(env: ShowEngineEnv, showKey: string, sessionId: string
       showKey: show.show_key,
       speakerKey: selectedGuest.character_key,
       speakerName: selectedGuest.name,
-      stageKey: nextStage.stage_key,
+      stageKey: currentStage.stage_key,
       userId: user.id,
     });
   }
 
   await env.DB.prepare(
     `UPDATE show_sessions
-     SET current_stage_key = ?, message_count = ?, updated_at = CURRENT_TIMESTAMP
+     SET message_count = ?, updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND user_id = ?`,
   )
-    .bind(nextStage.stage_key, nextCount, sessionId, user.id)
+    .bind(nextCount, sessionId, user.id)
     .run();
+
+  return getSessionPayload(env, showKey, sessionId, user);
+}
+
+async function previewSessionSpeech(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  body: SpeechPreviewRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const [show] = await Promise.all([
+    requireShow(env, showKey),
+    requireSession(env, showKey, sessionId, user),
+  ]);
+  let speakerKey = normalizeShortText(body.speakerKey ?? undefined, "", 100) || null;
+  let text = normalizeShortText(body.text, "", 1200);
+  const messageId = normalizeShortText(body.messageId, "", 100);
+
+  if (messageId) {
+    const message = await env.DB.prepare(
+      `SELECT speaker_key, content
+       FROM show_messages
+       WHERE id = ? AND app_key = ? AND show_key = ? AND session_id = ? AND user_id = ?
+       LIMIT 1`,
+    )
+      .bind(messageId, show.app_key, show.show_key, sessionId, user.id)
+      .first<{ content: string; speaker_key: string | null }>();
+
+    if (!message) {
+      throw new Response("message_not_found", { status: 404 });
+    }
+
+    speakerKey = message.speaker_key ?? speakerKey;
+    text = message.content || text;
+  }
+
+  if (!text) {
+    throw new Response("speech_text_required", { status: 400 });
+  }
+
+  return {
+    audioUrl: null,
+    speakerKey,
+    status: "not_configured",
+    text,
+  };
+}
+
+async function answerTurn(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  turnId: string,
+  body: TurnAnswerRequest,
+  streamOptions: TurnAnswerOptions = {},
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const selectedOptionId = normalizeShortText(body.selectedOptionId, "", 80);
+  const selectedCharacterKey = normalizeShortText(body.selectedCharacterKey, "", 100);
+  const freeText = normalizeShortText(body.freeText, "", 1200);
+  const user = await ensureUserByEmail(env, email);
+  const [show, session] = await Promise.all([
+    requireShow(env, showKey),
+    requireSession(env, showKey, sessionId, user),
+  ]);
+
+  if (session.status === "completed") {
+    throw new Response("session_completed", { status: 409 });
+  }
+
+  const turn = await requireTurn(env, show, sessionId, turnId, user);
+  if (turn.status !== "awaiting_user") {
+    throw new Response("turn_already_answered", { status: 409 });
+  }
+
+  if (turn.stage_key !== session.current_stage_key) {
+    throw new Response("turn_stage_mismatch", { status: 409 });
+  }
+
+  const options = readTurnOptions(turn.options);
+  const selectedOption = options.find((option) => option.id === selectedOptionId) ?? null;
+  if (!selectedOption && !freeText && turn.stage_key !== "initial_pick") {
+    throw new Response("answer_required", { status: 400 });
+  }
+
+  const guests = (await getSessionCharacters(env, show, sessionId, user)).filter(
+    (character) => character.role === "guest",
+  );
+  const pickedGuest = selectedCharacterKey
+    ? guests.find((guest) => guest.character_key === selectedCharacterKey)
+    : null;
+
+  if (turn.stage_key === "initial_pick" && !pickedGuest) {
+    throw new Response("character_required", { status: 400 });
+  }
+
+  const answerText = composeTurnAnswer({
+    freeText,
+    pickedGuestName: pickedGuest?.name,
+    selectedOption,
+    stageKey: turn.stage_key,
+  });
+  if (!answerText) {
+    throw new Response("answer_required", { status: 400 });
+  }
+
+  await env.DB.prepare(
+    `UPDATE show_turns
+     SET selected_option_id = ?, selected_character_key = ?, answer_text = ?,
+         status = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND session_id = ? AND user_id = ?`,
+  )
+    .bind(
+      selectedOption?.id ?? null,
+      pickedGuest?.character_key ?? null,
+      answerText,
+      "answered",
+      turn.id,
+      sessionId,
+      user.id,
+    )
+    .run();
+
+  await insertMessage(env, {
+    appKey: show.app_key,
+    content: answerText,
+    role: "user",
+    sessionId,
+    showKey: show.show_key,
+    speakerKey: user.id,
+    speakerName: "You",
+    stageKey: turn.stage_key,
+    userId: user.id,
+  });
+  await insertShowEvent(env, {
+    appKey: show.app_key,
+    content: answerText,
+    eventType: "user_answer",
+    sessionId,
+    showKey: show.show_key,
+    speakerKey: user.id,
+    speakerName: "You",
+    stageKey: turn.stage_key,
+    turnId: turn.id,
+    userId: user.id,
+  });
+
+  const signalText = `${answerText} ${selectedOption?.signalText ?? ""}`;
+  const turnSignals = extractSignals(signalText);
+  await mergeDerivedProfileTags(env, {
+    session,
+    show,
+    signals: turnSignals,
+    user,
+  });
+  const semanticJudgment = await judgeTurnSemantics(env, {
+    answerText: signalText,
+    pickedGuestKey: pickedGuest?.character_key ?? null,
+    selectedOption,
+    session,
+    sessionId,
+    show,
+    turn,
+    user,
+  });
+  if (turn.stage_key === "initial_pick") {
+    return handleInitialPickTurnAnswer(env, {
+      answerText: signalText,
+      pickedGuest: pickedGuest!,
+      semanticJudgment,
+      session,
+      sessionId,
+      show,
+      stream: streamOptions,
+      turn,
+      user,
+    });
+  }
+
+  if (turn.stage_key === "profile_judgment") {
+    return handleProfileTurnAnswer(env, {
+      answerText: signalText,
+      semanticJudgment,
+      selectedOptionId: selectedOption?.id ?? null,
+      session,
+      sessionId,
+      show,
+      stream: streamOptions,
+      turn,
+      user,
+    });
+  }
+
+  if (turn.stage_key === "guest_questions") {
+    return handleGuestQuestionTurnAnswer(env, {
+      answerText: signalText,
+      semanticJudgment,
+      session,
+      sessionId,
+      show,
+      stream: streamOptions,
+      turn,
+      user,
+    });
+  }
+
+  if (turn.stage_key === "user_declaration") {
+    return handleDeclarationTurnAnswer(env, {
+      answerText: signalText,
+      semanticJudgment,
+      session,
+      sessionId,
+      show,
+      stream: streamOptions,
+      turn,
+      user,
+    });
+  }
+
+  throw new Response("unsupported_turn_stage", { status: 409 });
+}
+
+async function handleInitialPickTurnAnswer(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    pickedGuest: SessionCharacterRow;
+    semanticJudgment: SemanticTurnJudgment;
+    session: ShowSessionRow;
+    sessionId: string;
+    show: ShowTemplateRow;
+    stream?: TurnAnswerOptions;
+    turn: ShowTurnRow;
+    user: UserRecord;
+  },
+) {
+  const nextStage = "profile_judgment";
+  const outcomes = await applySemanticJudgmentToGuests(env, {
+    judgment: input.semanticJudgment,
+    multiplier: 0.7,
+    session: input.session,
+    sessionId: input.sessionId,
+    user: input.user,
+  });
+  await insertSemanticJudgmentEvent(env, {
+    judgment: input.semanticJudgment,
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  const heartbeatText = `${input.pickedGuest.name} catches the first heartbeat. The rest of the room is watching how specific your reason feels.`;
+  await emitTextDelta(input.stream, heartbeatText, {
+    speakerKey: input.pickedGuest.character_key,
+    speakerName: input.pickedGuest.name,
+  });
+  await insertShowEvent(env, {
+    appKey: input.show.app_key,
+    content: heartbeatText,
+    eventType: "guest_heart",
+    sessionId: input.sessionId,
+    showKey: input.show.show_key,
+    speakerKey: input.pickedGuest.character_key,
+    speakerName: input.pickedGuest.name,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    userId: input.user.id,
+  });
+  await emitReactionEvents(env, {
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitGeneratedReactions(env, {
+    answerText: input.answerText,
+    currentSpeakerKey: input.turn.speaker_key,
+    focusCharacterKey: input.pickedGuest.character_key,
+    judgment: input.semanticJudgment,
+    outcomes,
+    session: input.session,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    stream: input.stream,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET initial_pick_character_key = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(input.pickedGuest.character_key, nextStage, input.sessionId, input.user.id)
+    .run();
+
+  const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
+  await insertHostSummary(env, {
+    content: "First impression locked. Now the host asks how your hard identity shows up in real moments.",
+    session: nextSession,
+    show: input.show,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+  await createTurnForStage(env, {
+    show: input.show,
+    session: nextSession,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+
+  return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+}
+
+async function handleProfileTurnAnswer(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    semanticJudgment: SemanticTurnJudgment;
+    selectedOptionId: string | null;
+    session: ShowSessionRow;
+    sessionId: string;
+    show: ShowTemplateRow;
+    stream?: TurnAnswerOptions;
+    turn: ShowTurnRow;
+    user: UserRecord;
+  },
+) {
+  const outcomes = await applySemanticJudgmentToGuests(env, {
+    judgment: input.semanticJudgment,
+    multiplier: 1,
+    session: input.session,
+    sessionId: input.sessionId,
+    user: input.user,
+  });
+  await insertSemanticJudgmentEvent(env, {
+    judgment: input.semanticJudgment,
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitReactionEvents(env, {
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitGeneratedReactions(env, {
+    answerText: input.answerText,
+    currentSpeakerKey: input.turn.speaker_key,
+    focusCharacterKey: input.session.initial_pick_character_key,
+    judgment: input.semanticJudgment,
+    outcomes,
+    session: input.session,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    stream: input.stream,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+
+  if (await completeIfNoLights(env, input.show, input.sessionId, input.user)) {
+    return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+  }
+
+  const nextStage = "guest_questions";
+  const existingProfile = readJsonObject(input.session.user_profile);
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET user_profile = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(
+      JSON.stringify({ ...existingProfile, intro: input.answerText, stance: input.selectedOptionId }),
+      nextStage,
+      input.sessionId,
+      input.user.id,
+    )
+    .run();
+
+  const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
+  await insertHostSummary(env, {
+    content: `Profile check complete. ${await visibleRoomSummary(env, input.show, input.sessionId, input.user)} The guests now ask first.`,
+    session: nextSession,
+    show: input.show,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+  await createTurnForStage(env, {
+    show: input.show,
+    session: nextSession,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+
+  return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+}
+
+async function handleGuestQuestionTurnAnswer(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    semanticJudgment: SemanticTurnJudgment;
+    session: ShowSessionRow;
+    sessionId: string;
+    show: ShowTemplateRow;
+    stream?: TurnAnswerOptions;
+    turn: ShowTurnRow;
+    user: UserRecord;
+  },
+) {
+  const outcomes = await applySemanticJudgmentToGuests(env, {
+    judgment: input.semanticJudgment,
+    multiplier: 1,
+    session: input.session,
+    sessionId: input.sessionId,
+    user: input.user,
+  });
+  await insertSemanticJudgmentEvent(env, {
+    judgment: input.semanticJudgment,
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitReactionEvents(env, {
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitGeneratedReactions(env, {
+    answerText: input.answerText,
+    currentSpeakerKey: input.turn.speaker_key,
+    focusCharacterKey: input.turn.speaker_key,
+    judgment: input.semanticJudgment,
+    outcomes,
+    session: input.session,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    stream: input.stream,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+
+  if (await completeIfNoLights(env, input.show, input.sessionId, input.user)) {
+    return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+  }
+
+  const nextCount = input.session.message_count + 1;
+  const nextStage = nextCount >= readTurnRoundsBeforeDeclaration(input.show) ? "user_declaration" : "guest_questions";
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET message_count = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(nextCount, nextStage, input.sessionId, input.user.id)
+    .run();
+
+  const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
+  await insertHostSummary(env, {
+    content:
+      nextStage === "user_declaration"
+        ? "Three questions are on the board. The studio goes quiet for your final declaration."
+        : "The lights have shifted. Another guest steps forward with the next question.",
+    session: nextSession,
+    show: input.show,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+  await createTurnForStage(env, {
+    show: input.show,
+    session: nextSession,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+
+  return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+}
+
+async function handleDeclarationTurnAnswer(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    semanticJudgment: SemanticTurnJudgment;
+    session: ShowSessionRow;
+    sessionId: string;
+    show: ShowTemplateRow;
+    stream?: TurnAnswerOptions;
+    turn: ShowTurnRow;
+    user: UserRecord;
+  },
+) {
+  const outcomes = await applySemanticJudgmentToGuests(env, {
+    judgment: input.semanticJudgment,
+    multiplier: 1.4,
+    session: input.session,
+    sessionId: input.sessionId,
+    user: input.user,
+  });
+  await insertSemanticJudgmentEvent(env, {
+    judgment: input.semanticJudgment,
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitReactionEvents(env, {
+    outcomes,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+  await emitGeneratedReactions(env, {
+    answerText: input.answerText,
+    currentSpeakerKey: input.turn.speaker_key,
+    focusCharacterKey: input.session.initial_pick_character_key,
+    judgment: input.semanticJudgment,
+    outcomes,
+    session: input.session,
+    sessionId: input.sessionId,
+    show: input.show,
+    stageKey: input.turn.stage_key,
+    stream: input.stream,
+    turnId: input.turn.id,
+    user: input.user,
+  });
+
+  if (await completeIfNoLights(env, input.show, input.sessionId, input.user)) {
+    return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+  }
+
+  const nextStage = "final_choice";
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET user_declaration = ?, current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(input.answerText, nextStage, input.sessionId, input.user.id)
+    .run();
+
+  const nextSession = await requireSession(env, input.show.show_key, input.sessionId, input.user);
+  await insertHostSummary(env, {
+    content: `Final declaration received. ${await visibleRoomSummary(env, input.show, input.sessionId, input.user)} Choose someone whose light is still with you, or walk away clean.`,
+    session: nextSession,
+    show: input.show,
+    stageKey: nextStage,
+    stream: input.stream,
+    user: input.user,
+  });
+
+  return getSessionPayload(env, input.show.show_key, input.sessionId, input.user);
+}
+
+async function advanceStage(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  body: AdvanceStageRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const [show, session, stages] = await Promise.all([
+    requireShow(env, showKey),
+    requireSession(env, showKey, sessionId, user),
+    getStages(env, showKey),
+  ]);
+
+  if (session.status === "completed") {
+    throw new Response("session_completed", { status: 409 });
+  }
+
+  const targetStage = normalizeShortText(body.targetStage, "user_declaration", 80);
+  if (session.current_stage_key !== "guest_questions" || targetStage !== "user_declaration") {
+    throw new Response("invalid_stage_advance", { status: 409 });
+  }
+
+  const nextStage = findStage(stages, "user_declaration") ?? fallbackStage();
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET current_stage_key = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(nextStage.stage_key, sessionId, user.id)
+    .run();
+
+  const roomSummary = await visibleRoomSummary(env, show, sessionId, user);
+  await insertMessage(env, {
+    appKey: show.app_key,
+    content: `The room is ready for your declaration. ${roomSummary}`,
+    role: "host",
+    sessionId,
+    showKey: show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: nextStage.stage_key,
+    userId: user.id,
+  });
 
   return getSessionPayload(env, showKey, sessionId, user);
 }
@@ -837,7 +2619,7 @@ async function finalizeSession(env: ShowEngineEnv, showKey: string, sessionId: s
   const pointsAwarded = matchSuccess ? 100 : 0;
   const summary = selectedCharacter
     ? matchSuccess
-      ? `${selectedCharacter.name} steps into the final spotlight with you. The host calls it a mutual match, and you earn ${pointsAwarded} platform points.`
+      ? `${selectedCharacter.name} steps into the final spotlight with you. The host calls it a mutual match, and ${selectedCharacter.name} is now unlocked for solo date stories in your Workspace.`
       : `${selectedCharacter.name} stays thoughtful under the lights. The choice is sincere, but the hidden signal is not strong enough for a successful hand-in-hand finale.`
     : "You leave the stage solo tonight. The host frames it as a brave choice: no forced match, no fake spark, just a clean ending.";
 
@@ -861,6 +2643,12 @@ async function finalizeSession(env: ShowEngineEnv, showKey: string, sessionId: s
       .run();
 
     if (matchSuccess) {
+      await unlockCompanion(env, {
+        selectedCharacter,
+        session,
+        show,
+        user,
+      });
       await env.DB.prepare(
         `INSERT INTO platform_point_events (
            id, app_key, show_key, session_id, user_id, event_type, points, metadata
@@ -907,13 +2695,24 @@ async function getSessionPayload(env: ShowEngineEnv, showKey: string, sessionId:
     getEntitlement(env, user, show),
     getStages(env, showKey),
   ]);
+  const [currentTurn, eventLog] = await Promise.all([
+    getCurrentTurn(env, show, sessionId, user),
+    getEventLog(env, show, sessionId, user),
+  ]);
+  const profile = await getUserShowProfile(env, show, user);
   const guests = characters.filter((character) => character.role === "guest");
+  const serializedEventLog = eventLog.map(serializeEvent);
 
   return {
     characters: characters.map(serializeSessionCharacter),
+    currentTurn: currentTurn ? serializeTurn(currentTurn) : null,
     entitlement,
+    eventLog: serializedEventLog,
+    generatedReactions: serializeGeneratedReactions(serializedEventLog),
+    guestStates: serializeGuestStates(guests, serializedEventLog),
     guests: guests.map(serializeSessionGuest),
     messages: messages.map(serializeMessage),
+    profile: profile ? serializeUserShowProfile(profile) : readJsonObject(session.user_profile),
     session: serializeSession(session),
     show: serializeShow(show),
     stages: stages.map(serializeStage),
@@ -944,34 +2743,29 @@ async function getCharacters(
   audiencePreference: AudiencePreference,
   user: UserRecord | null,
 ): Promise<ShowCharacterRow[]> {
-  const ownerClause = user ? "AND (owner_user_id IS NULL OR owner_user_id = ?)" : "AND owner_user_id IS NULL";
   const query =
     audiencePreference === "any"
       ? `SELECT character_key, role, name, gender, avatar_object_key, personality, goal, boundaries,
                 speaking_style, relationship_to_user, hidden_preferences, public_profile, owner_user_id,
                 source, positive_signals, negative_signals, dealbreaker_signals, blow_up_signals,
-                match_threshold, initial_affinity
+                hard_preference_signals, soft_preference_signals, match_threshold, initial_affinity
          FROM show_characters
-         WHERE show_key = ? AND status = ? ${ownerClause}
+         WHERE show_key = ? AND status = ?
          ORDER BY sort_order ASC`
       : `SELECT character_key, role, name, gender, avatar_object_key, personality, goal, boundaries,
                 speaking_style, relationship_to_user, hidden_preferences, public_profile, owner_user_id,
                 source, positive_signals, negative_signals, dealbreaker_signals, blow_up_signals,
-                match_threshold, initial_affinity
+                hard_preference_signals, soft_preference_signals, match_threshold, initial_affinity
          FROM show_characters
-         WHERE show_key = ? AND status = ? AND (role != ? OR gender = ?) ${ownerClause}
+         WHERE show_key = ? AND status = ? AND (role != ? OR gender = ?)
          ORDER BY sort_order ASC`;
   const prepared = env.DB.prepare(query);
   const result =
     audiencePreference === "any"
-      ? user
-        ? await prepared.bind(showKey, "active", user.id).all<ShowCharacterRow>()
-        : await prepared.bind(showKey, "active").all<ShowCharacterRow>()
-      : user
-        ? await prepared.bind(showKey, "active", "guest", audiencePreference, user.id).all<ShowCharacterRow>()
-        : await prepared.bind(showKey, "active", "guest", audiencePreference).all<ShowCharacterRow>();
+      ? await prepared.bind(showKey, "active").all<ShowCharacterRow>()
+      : await prepared.bind(showKey, "active", "guest", audiencePreference).all<ShowCharacterRow>();
 
-  return result.results;
+  return result.results.filter((character) => canReadCharacter(character, user));
 }
 
 async function getStages(env: ShowEngineEnv, showKey: string): Promise<ShowStageRow[]> {
@@ -1023,7 +2817,7 @@ async function getSessionCharacters(
             light_state, dealbreaker_triggered, strong_signal_count
      FROM show_session_characters
      WHERE session_id = ? AND app_key = ? AND show_key = ? AND user_id = ?
-     ORDER BY created_at ASC`,
+     ORDER BY rowid ASC`,
   )
     .bind(sessionId, show.app_key, show.show_key, user.id)
     .all<SessionCharacterRow>();
@@ -1047,6 +2841,715 @@ async function getMessages(
     .all<ShowMessageRow>();
 
   return results;
+}
+
+async function requireTurn(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  sessionId: string,
+  turnId: string,
+  user: UserRecord,
+): Promise<ShowTurnRow> {
+  const turn = await env.DB.prepare(
+    `SELECT id, stage_key, turn_index, speaker_key, speaker_name, question, options,
+            selected_option_id, selected_character_key, answer_text, status, created_at, updated_at
+     FROM show_turns
+     WHERE id = ? AND session_id = ? AND app_key = ? AND show_key = ? AND user_id = ?
+     LIMIT 1`,
+  )
+    .bind(turnId, sessionId, show.app_key, show.show_key, user.id)
+    .first<ShowTurnRow>();
+
+  if (!turn) {
+    throw new Response("turn_not_found", { status: 404 });
+  }
+
+  return turn;
+}
+
+async function getCurrentTurn(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  sessionId: string,
+  user: UserRecord,
+): Promise<ShowTurnRow | null> {
+  return env.DB.prepare(
+    `SELECT id, stage_key, turn_index, speaker_key, speaker_name, question, options,
+            selected_option_id, selected_character_key, answer_text, status, created_at, updated_at
+     FROM show_turns
+     WHERE session_id = ? AND app_key = ? AND show_key = ? AND user_id = ? AND status = ?
+     ORDER BY turn_index DESC, created_at DESC
+     LIMIT 1`,
+  )
+    .bind(sessionId, show.app_key, show.show_key, user.id, "awaiting_user")
+    .first<ShowTurnRow>();
+}
+
+async function getEventLog(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  sessionId: string,
+  user: UserRecord,
+): Promise<ShowEventRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, turn_id, event_order, event_type, speaker_key, speaker_name, content,
+            stage_key, data, created_at
+     FROM show_events
+     WHERE session_id = ? AND app_key = ? AND show_key = ? AND user_id = ?
+     ORDER BY event_order ASC, created_at ASC
+     LIMIT 80`,
+  )
+    .bind(sessionId, show.app_key, show.show_key, user.id)
+    .all<ShowEventRow>();
+
+  return results;
+}
+
+async function createTurnForStage(
+  env: ShowEngineEnv,
+  input: {
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    stageKey: string;
+    stream?: TurnAnswerOptions;
+    user: UserRecord;
+  },
+): Promise<ShowTurnRow | null> {
+  const existing = await getCurrentTurn(env, input.show, input.session.id, input.user);
+  if (existing && existing.stage_key === input.stageKey) {
+    return existing;
+  }
+
+  const characters = await getSessionCharacters(env, input.show, input.session.id, input.user);
+  const guests = characters.filter((character) => character.role === "guest");
+  const host = characters.find((character) => character.role === "host");
+  const draft = buildTurnDraft({
+    guests,
+    host,
+    session: input.session,
+    stageKey: input.stageKey,
+  });
+  if (!draft) {
+    return null;
+  }
+
+  const nextIndex = await getNextTurnIndex(env, input.show, input.session.id, input.user);
+  const turnId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO show_turns (
+       id, session_id, app_key, show_key, user_id, stage_key, turn_index,
+       speaker_key, speaker_name, question, options
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      turnId,
+      input.session.id,
+      input.show.app_key,
+      input.show.show_key,
+      input.user.id,
+      draft.stageKey,
+      nextIndex,
+      draft.speakerKey,
+      draft.speakerName,
+      draft.question,
+      JSON.stringify(draft.options),
+    )
+    .run();
+
+  await emitTextDelta(input.stream, draft.question, {
+    speakerKey: draft.speakerKey,
+    speakerName: draft.speakerName,
+  });
+  await insertShowEvent(env, {
+    appKey: input.show.app_key,
+    content: draft.question,
+    eventType: draft.stageKey === "guest_questions" ? "guest_question" : "host_summary",
+    sessionId: input.session.id,
+    showKey: input.show.show_key,
+    speakerKey: draft.speakerKey,
+    speakerName: draft.speakerName,
+    stageKey: draft.stageKey,
+    turnId,
+    userId: input.user.id,
+  });
+
+  return requireTurn(env, input.show, input.session.id, turnId, input.user);
+}
+
+async function getNextTurnIndex(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  sessionId: string,
+  user: UserRecord,
+): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(MAX(turn_index), 0) + 1 AS nextIndex
+     FROM show_turns
+     WHERE session_id = ? AND app_key = ? AND show_key = ? AND user_id = ?`,
+  )
+    .bind(sessionId, show.app_key, show.show_key, user.id)
+    .first<{ nextIndex: number }>();
+
+  return row?.nextIndex ?? 1;
+}
+
+async function insertShowEvent(
+  env: ShowEngineEnv,
+  input: {
+    appKey: string;
+    content: string;
+    data?: Record<string, unknown>;
+    eventType: ShowEventType;
+    sessionId: string;
+    showKey: string;
+    speakerKey: string | null;
+    speakerName: string;
+    stageKey: string;
+    turnId?: string | null;
+    userId: string;
+  },
+): Promise<void> {
+  const orderRow = await env.DB.prepare(
+    `SELECT COALESCE(MAX(event_order), 0) + 1 AS nextOrder
+     FROM show_events
+     WHERE session_id = ? AND app_key = ? AND show_key = ? AND user_id = ?`,
+  )
+    .bind(input.sessionId, input.appKey, input.showKey, input.userId)
+    .first<{ nextOrder: number }>();
+
+  await env.DB.prepare(
+    `INSERT INTO show_events (
+       id, session_id, app_key, show_key, user_id, turn_id, event_order,
+       event_type, speaker_key, speaker_name, content, stage_key, data
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      input.sessionId,
+      input.appKey,
+      input.showKey,
+      input.userId,
+      input.turnId ?? null,
+      orderRow?.nextOrder ?? 1,
+      input.eventType,
+      input.speakerKey,
+      input.speakerName,
+      input.content,
+      input.stageKey,
+      JSON.stringify(input.data ?? {}),
+    )
+    .run();
+}
+
+function normalizeHardProfile(body: CreateSessionRequest, avatarObjectKey: string | null) {
+  return {
+    ageRange: normalizeShortText(body.ageRange, "", 60),
+    avatarObjectKey,
+    hobbies: splitUserList(body.hobbies).slice(0, 8),
+    occupation: normalizeShortText(body.occupation, "", 120),
+  };
+}
+
+function serializeHardProfileForSession(
+  profile: ReturnType<typeof normalizeHardProfile>,
+  derivedTags: string[],
+) {
+  return {
+    ageRange: profile.ageRange,
+    avatarObjectKey: profile.avatarObjectKey,
+    derivedTags,
+    hobbies: profile.hobbies,
+    occupation: profile.occupation,
+  };
+}
+
+async function upsertUserShowProfile(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  user: UserRecord,
+  profile: ReturnType<typeof normalizeHardProfile>,
+): Promise<void> {
+  const existing = await getUserShowProfile(env, show, user);
+  await env.DB.prepare(
+    `INSERT INTO user_show_profiles (
+       user_id, app_key, show_key, age_range, occupation, hobbies, avatar_object_key, derived_tags
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, app_key, show_key) DO UPDATE SET
+       age_range = excluded.age_range,
+       occupation = excluded.occupation,
+       hobbies = excluded.hobbies,
+       avatar_object_key = excluded.avatar_object_key,
+       updated_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(
+      user.id,
+      show.app_key,
+      show.show_key,
+      profile.ageRange,
+      profile.occupation,
+      JSON.stringify(profile.hobbies),
+      profile.avatarObjectKey,
+      existing?.derived_tags ?? "[]",
+    )
+    .run();
+}
+
+async function getUserShowProfile(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  user: UserRecord,
+): Promise<UserShowProfileRow | null> {
+  return env.DB.prepare(
+    `SELECT age_range, occupation, hobbies, avatar_object_key, derived_tags, updated_at
+     FROM user_show_profiles
+     WHERE user_id = ? AND app_key = ? AND show_key = ?
+     LIMIT 1`,
+  )
+    .bind(user.id, show.app_key, show.show_key)
+    .first<UserShowProfileRow>();
+}
+
+function serializeUserShowProfile(row: UserShowProfileRow) {
+  return {
+    avatarObjectKey: row.avatar_object_key,
+    derivedTags: readJsonArray<string>(row.derived_tags),
+    displayName: row.occupation || "Player",
+    hardIdentity: {
+      ageRange: row.age_range,
+      hobbies: readJsonArray<string>(row.hobbies),
+      occupation: row.occupation,
+    },
+    updatedAt: row.updated_at,
+  };
+}
+
+async function mergeDerivedProfileTags(
+  env: ShowEngineEnv,
+  input: {
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    signals: SignalExtraction;
+    user: UserRecord;
+  },
+): Promise<void> {
+  const tags = tagsFromSignals(input.signals);
+  if (tags.length === 0) {
+    return;
+  }
+
+  const currentProfile = await getUserShowProfile(env, input.show, input.user);
+  const currentTags = currentProfile ? readJsonArray<string>(currentProfile.derived_tags) : [];
+  const nextTags = uniqueStrings([...currentTags, ...tags]).slice(0, 12);
+  await env.DB.prepare(
+    `UPDATE user_show_profiles
+     SET derived_tags = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = ? AND app_key = ? AND show_key = ?`,
+  )
+    .bind(JSON.stringify(nextTags), input.user.id, input.show.app_key, input.show.show_key)
+    .run();
+
+  const sessionProfile = readJsonObject(input.session.user_profile);
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET user_profile = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(JSON.stringify({ ...sessionProfile, derivedTags: nextTags }), input.session.id, input.user.id)
+    .run();
+}
+
+async function getRecentSessions(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  user: UserRecord,
+): Promise<WorkspaceSessionRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, show_key, avatar_object_key, avatar_label, audience_preference,
+            current_stage_key, status, selected_character_key, result_summary,
+            match_success, points_awarded, message_count, updated_at
+     FROM show_sessions
+     WHERE app_key = ? AND show_key = ? AND user_id = ?
+     ORDER BY updated_at DESC
+     LIMIT 5`,
+  )
+    .bind(show.app_key, show.show_key, user.id)
+    .all<WorkspaceSessionRow>();
+
+  return results;
+}
+
+async function getUserCompanions(env: ShowEngineEnv, show: ShowTemplateRow, user: UserRecord) {
+  const { results } = await env.DB.prepare(
+    `SELECT id, app_key, show_key, user_id, character_key, source_session_id, unlock_status,
+            relationship_state, story_turn_count, last_story_at, snapshot, created_at, updated_at
+     FROM user_companions
+     WHERE app_key = ? AND show_key = ? AND user_id = ? AND unlock_status = ?
+     ORDER BY COALESCE(last_story_at, updated_at) DESC`,
+  )
+    .bind(show.app_key, show.show_key, user.id, "unlocked")
+    .all<UserCompanionRow>();
+
+  return results.map(serializeCompanion);
+}
+
+async function unlockCompanion(
+  env: ShowEngineEnv,
+  input: {
+    selectedCharacter: SessionCharacterRow;
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    user: UserRecord;
+  },
+): Promise<UserCompanionRow> {
+  const existing = await env.DB.prepare(
+    `SELECT id, app_key, show_key, user_id, character_key, source_session_id, unlock_status,
+            relationship_state, story_turn_count, last_story_at, snapshot, created_at, updated_at
+     FROM user_companions
+     WHERE user_id = ? AND show_key = ? AND character_key = ?
+     LIMIT 1`,
+  )
+    .bind(input.user.id, input.show.show_key, input.selectedCharacter.character_key)
+    .first<UserCompanionRow>();
+  const companionId = existing?.id ?? crypto.randomUUID();
+
+  await env.DB.prepare(
+    `INSERT INTO user_companions (
+       id, app_key, show_key, user_id, character_key, source_session_id,
+       unlock_status, relationship_state, snapshot, last_story_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(user_id, show_key, character_key) DO UPDATE SET
+       source_session_id = excluded.source_session_id,
+       unlock_status = excluded.unlock_status,
+       relationship_state = user_companions.relationship_state,
+       snapshot = excluded.snapshot,
+       updated_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(
+      companionId,
+      input.show.app_key,
+      input.show.show_key,
+      input.user.id,
+      input.selectedCharacter.character_key,
+      input.session.id,
+      "unlocked",
+      "unlocked",
+      input.selectedCharacter.snapshot,
+    )
+    .run();
+
+  const companion = await requireCompanion(env, companionId, input.user);
+  await ensureCompanionStoryTurn(env, input.show, companion, input.user);
+  return companion;
+}
+
+async function requireCompanion(
+  env: ShowEngineEnv,
+  companionId: string,
+  user: UserRecord,
+): Promise<UserCompanionRow> {
+  const companion = await env.DB.prepare(
+    `SELECT id, app_key, show_key, user_id, character_key, source_session_id, unlock_status,
+            relationship_state, story_turn_count, last_story_at, snapshot, created_at, updated_at
+     FROM user_companions
+     WHERE id = ? AND user_id = ? AND unlock_status = ?
+     LIMIT 1`,
+  )
+    .bind(companionId, user.id, "unlocked")
+    .first<UserCompanionRow>();
+
+  if (!companion) {
+    throw new Response("companion_not_found", { status: 404 });
+  }
+
+  return companion;
+}
+
+async function getCompanionStory(env: ShowEngineEnv, companionId: string, user: UserRecord) {
+  const companion = await requireCompanion(env, companionId, user);
+  const show = await requireShow(env, companion.show_key);
+  const [turn, entitlement] = await Promise.all([
+    ensureCompanionStoryTurn(env, show, companion, user),
+    getEntitlement(env, user, show),
+  ]);
+  const recentTurns = await getCompanionStoryTurns(env, companion, user);
+  const freeLimit = readFreeCompanionStoryTurns(show);
+
+  return {
+    companion: serializeCompanion(companion),
+    currentTurn: turn ? serializeCompanionStoryTurn(turn) : null,
+    entitlement,
+    freeTurnLimit: freeLimit,
+    paywallRequired: !entitlement.active && companion.story_turn_count >= freeLimit && !turn,
+    recentTurns: recentTurns.map(serializeCompanionStoryTurn),
+    show: serializeShow(show),
+  };
+}
+
+async function answerCompanionStoryTurn(
+  env: ShowEngineEnv,
+  companionId: string,
+  turnId: string,
+  body: CompanionStoryAnswerRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const companion = await requireCompanion(env, companionId, user);
+  const show = await requireShow(env, companion.show_key);
+  const entitlement = await getEntitlement(env, user, show);
+  const freeLimit = readFreeCompanionStoryTurns(show);
+  if (shouldRequirePlatformPass({
+    activeEntitlement: entitlement.active,
+    freeTurnLimit: freeLimit,
+    storyTurnCount: companion.story_turn_count,
+  })) {
+    throw jsonResponse({ error: "platform_pass_required", freeTurnLimit: freeLimit, paywallRequired: true }, { status: 402 });
+  }
+
+  const turn = await requireCompanionStoryTurn(env, companion, turnId, user);
+  if (turn.status !== "awaiting_user") {
+    throw new Response("story_turn_already_answered", { status: 409 });
+  }
+
+  const options = readCompanionStoryOptions(turn.options);
+  const selectedOption = options.find((option) => option.id === normalizeShortText(body.selectedOptionId, "", 80)) ?? null;
+  const freeText = normalizeShortText(body.freeText, "", 1000);
+  if (!selectedOption && !freeText) {
+    throw new Response("answer_required", { status: 400 });
+  }
+
+  const answerText = [selectedOption?.preview, freeText].filter(Boolean).join(" ");
+  const responseText = buildCompanionResponseLine({
+    companionName: companionNameFromSnapshot(companion.snapshot),
+    freeText,
+    selectedOption,
+  });
+  await env.DB.prepare(
+    `UPDATE companion_story_turns
+     SET selected_option_id = ?, answer_text = ?, response_text = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND companion_id = ? AND user_id = ?`,
+  )
+    .bind(selectedOption?.id ?? null, answerText, responseText, "answered", turn.id, companion.id, user.id)
+    .run();
+
+  const nextCount = companion.story_turn_count + 1;
+  const relationshipState = nextCount >= 2 ? "warming_up" : "unlocked";
+  await env.DB.prepare(
+    `UPDATE user_companions
+     SET story_turn_count = ?, relationship_state = ?, last_story_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind(nextCount, relationshipState, companion.id, user.id)
+    .run();
+
+  const updatedCompanion = await requireCompanion(env, companion.id, user);
+  if (entitlement.active || nextCount < freeLimit) {
+    await createCompanionStoryTurn(env, show, updatedCompanion, user);
+  }
+
+  return getCompanionStory(env, companion.id, user);
+}
+
+async function ensureCompanionStoryTurn(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  companion: UserCompanionRow,
+  user: UserRecord,
+): Promise<CompanionStoryTurnRow | null> {
+  const current = await getCurrentCompanionStoryTurn(env, companion, user);
+  if (current) {
+    return current;
+  }
+
+  const entitlement = await getEntitlement(env, user, show);
+  if (shouldRequirePlatformPass({
+    activeEntitlement: entitlement.active,
+    freeTurnLimit: readFreeCompanionStoryTurns(show),
+    storyTurnCount: companion.story_turn_count,
+  })) {
+    return null;
+  }
+
+  return createCompanionStoryTurn(env, show, companion, user);
+}
+
+async function getCurrentCompanionStoryTurn(
+  env: ShowEngineEnv,
+  companion: UserCompanionRow,
+  user: UserRecord,
+): Promise<CompanionStoryTurnRow | null> {
+  return env.DB.prepare(
+    `SELECT id, turn_index, scene_title, prompt, options, selected_option_id,
+            answer_text, response_text, status, created_at, updated_at
+     FROM companion_story_turns
+     WHERE companion_id = ? AND user_id = ? AND status = ?
+     ORDER BY turn_index DESC
+     LIMIT 1`,
+  )
+    .bind(companion.id, user.id, "awaiting_user")
+    .first<CompanionStoryTurnRow>();
+}
+
+async function getCompanionStoryTurns(
+  env: ShowEngineEnv,
+  companion: UserCompanionRow,
+  user: UserRecord,
+): Promise<CompanionStoryTurnRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, turn_index, scene_title, prompt, options, selected_option_id,
+            answer_text, response_text, status, created_at, updated_at
+     FROM companion_story_turns
+     WHERE companion_id = ? AND user_id = ?
+     ORDER BY turn_index ASC
+     LIMIT 20`,
+  )
+    .bind(companion.id, user.id)
+    .all<CompanionStoryTurnRow>();
+
+  return results;
+}
+
+async function requireCompanionStoryTurn(
+  env: ShowEngineEnv,
+  companion: UserCompanionRow,
+  turnId: string,
+  user: UserRecord,
+): Promise<CompanionStoryTurnRow> {
+  const turn = await env.DB.prepare(
+    `SELECT id, turn_index, scene_title, prompt, options, selected_option_id,
+            answer_text, response_text, status, created_at, updated_at
+     FROM companion_story_turns
+     WHERE id = ? AND companion_id = ? AND user_id = ?
+     LIMIT 1`,
+  )
+    .bind(turnId, companion.id, user.id)
+    .first<CompanionStoryTurnRow>();
+
+  if (!turn) {
+    throw new Response("story_turn_not_found", { status: 404 });
+  }
+
+  return turn;
+}
+
+async function createCompanionStoryTurn(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  companion: UserCompanionRow,
+  user: UserRecord,
+): Promise<CompanionStoryTurnRow> {
+  const turnIndex = companion.story_turn_count + 1;
+  const snapshot = parseSnapshot(companion.snapshot) as CharacterSnapshot;
+  const name = typeof snapshot.name === "string" ? snapshot.name : "your companion";
+  const scenes = companionStoryScenes(name);
+  const scene = scenes[(turnIndex - 1) % scenes.length] ?? scenes[0]!;
+  const turnId = crypto.randomUUID();
+
+  await env.DB.prepare(
+    `INSERT INTO companion_story_turns (
+       id, companion_id, app_key, show_key, user_id, turn_index, scene_title, prompt, options
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(turnId, companion.id, show.app_key, show.show_key, user.id, turnIndex, scene.sceneTitle, scene.prompt, JSON.stringify(scene.options))
+    .run();
+
+  return requireCompanionStoryTurn(env, companion, turnId, user);
+}
+
+function readFreeCompanionStoryTurns(show: ShowTemplateRow): number {
+  const config = readJsonObject(show.config);
+  const value = config.freeCompanionStoryTurns;
+  return typeof value === "number" && value >= 0 ? value : 2;
+}
+
+function readChapterOneSlotCount(show: ShowTemplateRow): number {
+  const config = readJsonObject(show.config);
+  const value = typeof config.chapterOneSlotCount === "number"
+    ? config.chapterOneSlotCount
+    : typeof config.lineupSlotCount === "number"
+      ? config.lineupSlotCount
+      : typeof config.slotCount === "number"
+        ? config.slotCount
+        : 5;
+  return clamp(Math.round(value), 1, 5);
+}
+
+function companionNameFromSnapshot(snapshotValue: string): string {
+  const snapshot = parseSnapshot(snapshotValue) as CharacterSnapshot;
+  return typeof snapshot.name === "string" ? snapshot.name : "They";
+}
+
+async function getPointSummary(env: ShowEngineEnv, show: ShowTemplateRow, user: UserRecord) {
+  const summary = await env.DB.prepare(
+    `SELECT COALESCE(SUM(points), 0) AS totalPoints, COUNT(*) AS eventCount
+     FROM platform_point_events
+     WHERE app_key = ? AND show_key = ? AND user_id = ?`,
+  )
+    .bind(show.app_key, show.show_key, user.id)
+    .first<{ eventCount: number; totalPoints: number }>();
+  const { results } = await env.DB.prepare(
+    `SELECT event_type, points, created_at
+     FROM platform_point_events
+     WHERE app_key = ? AND show_key = ? AND user_id = ?
+     ORDER BY created_at DESC
+     LIMIT 5`,
+  )
+    .bind(show.app_key, show.show_key, user.id)
+    .all<WorkspacePointEventRow>();
+
+  return {
+    eventCount: summary?.eventCount ?? 0,
+    recentEvents: results.map((event) => ({
+      createdAt: event.created_at,
+      eventType: event.event_type,
+      points: event.points,
+    })),
+    totalPoints: summary?.totalPoints ?? 0,
+  };
+}
+
+async function getAssetSummary(env: ShowEngineEnv, keys: string[]) {
+  if (keys.length === 0) {
+    return {
+      count: 0,
+      objects: [],
+      totalSizeBytes: 0,
+    };
+  }
+
+  const placeholders = keys.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(
+    `SELECT key, content_type, size_bytes, created_at
+     FROM asset_objects
+     WHERE key IN (${placeholders})
+     ORDER BY created_at DESC`,
+  )
+    .bind(...keys)
+    .all<WorkspaceAssetRow>();
+  const metadataByKey = new Map(results.map((asset) => [asset.key, asset]));
+  const objects = keys.map((key) => {
+    const metadata = metadataByKey.get(key);
+    return {
+      contentType: metadata?.content_type ?? null,
+      createdAt: metadata?.created_at ?? null,
+      key,
+      sizeBytes: metadata?.size_bytes ?? null,
+    };
+  });
+
+  return {
+    count: keys.length,
+    objects,
+    totalSizeBytes: objects.reduce((sum, asset) => sum + (asset.sizeBytes ?? 0), 0),
+  };
 }
 
 async function getEntitlement(env: ShowEngineEnv, user: UserRecord, show: ShowTemplateRow) {
@@ -1113,6 +3616,223 @@ async function insertMessage(
     .run();
 }
 
+async function judgeTurnSemantics(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    pickedGuestKey: string | null;
+    selectedOption: TurnOption | null;
+    session: ShowSessionRow;
+    sessionId: string;
+    show: ShowTemplateRow;
+    turn: ShowTurnRow;
+    user: UserRecord;
+  },
+): Promise<SemanticTurnJudgment> {
+  const guests = (await getSessionCharacters(env, input.show, input.sessionId, input.user)).filter(
+    (character) => character.role === "guest",
+  );
+  const fallback = buildFallbackSemanticJudgment({
+    answerText: input.answerText,
+    guests,
+    pickedGuestKey: input.pickedGuestKey,
+  });
+  const guestContext = guests.map((guest) => {
+    const snapshot = parseSnapshot(guest.snapshot) as CharacterSnapshot;
+    return {
+      boundaries: snapshot.boundaries,
+      characterKey: guest.character_key,
+      currentAffinity: guest.affinity_score,
+      dealbreakerSignals: asStringArray(snapshot.dealbreakerSignals),
+      goal: snapshot.goal,
+      hiddenPreferences: snapshot.hiddenPreferences,
+      lightState: guest.light_state,
+      name: guest.name,
+      negativeSignals: asStringArray(snapshot.negativeSignals),
+      personality: snapshot.personality,
+      positiveSignals: asStringArray(snapshot.positiveSignals),
+      speakingStyle: snapshot.speakingStyle,
+    };
+  });
+
+  const result = await generateText(env, {
+    fallbackText: JSON.stringify(fallback),
+    maxOutputTokens: 900,
+    maxTextLength: 6000,
+    messages: [
+      {
+        content: [
+          "You are a structured semantic judge for an interactive companion dating-show chapter.",
+          "Read the user's answer and each Guest's character card.",
+          "Return compact JSON only. Do not include markdown.",
+          "Do not write character dialogue.",
+          "Score deltas must be integers from -35 to 24.",
+          "Use positive delta when the answer matches a Guest's goals, preferences, or emotional style.",
+          "Use negative delta when the answer conflicts with boundaries, risks, or dealbreakers.",
+          "Every Guest must receive exactly one judgment.",
+        ].join(" "),
+        role: "system",
+      },
+      {
+        content: [
+          `Schema: {"userIntent":"short","expressionTraits":["tag"],"guestJudgments":[{"characterKey":"guest-key","delta":0,"reason":"short user-visible reason","attractionTags":["tag"],"riskTags":["tag"]}]}`,
+          `Show: ${input.show.title}`,
+          `Premise: ${input.show.premise}`,
+          `Stage: ${input.turn.stage_key}`,
+          `Question: ${input.turn.question}`,
+          `Selected option: ${input.selectedOption?.label ?? "none"} / ${input.selectedOption?.preview ?? "none"}`,
+          `Picked guest: ${input.pickedGuestKey ?? "none"}`,
+          `User answer: ${input.answerText}`,
+          `Guests: ${JSON.stringify(guestContext)}`,
+        ].join("\n"),
+        role: "user",
+      },
+    ],
+    metadata: {
+      appKey: input.session.app_key,
+      purpose: "show_semantic_judgment",
+      sessionId: input.session.id,
+      showKey: input.show.show_key,
+      stageKey: input.turn.stage_key,
+      userId: input.user.id,
+    },
+    route: "cheap-dialogue",
+    temperature: 0.2,
+  });
+
+  if (result.fallbackUsed) {
+    return fallback;
+  }
+
+  const parsed = parseJsonObject(result.text);
+  return parsed ? normalizeSemanticJudgment(parsed, fallback, guests, "llm") : fallback;
+}
+
+function buildFallbackSemanticJudgment(input: {
+  answerText: string;
+  guests: SessionCharacterRow[];
+  pickedGuestKey: string | null;
+}): SemanticTurnJudgment {
+  const signals = extractSignals(input.answerText);
+  return {
+    expressionTraits: uniqueStrings([...signals.positiveSignals, ...signals.negativeSignals]).slice(0, 8),
+    guestJudgments: input.guests.map((guest) => {
+      const snapshot = parseSnapshot(guest.snapshot) as CharacterSnapshot;
+      const positiveSignals = asStringArray(snapshot.positiveSignals);
+      const negativeSignals = asStringArray(snapshot.negativeSignals);
+      const dealbreakerSignals = asStringArray(snapshot.dealbreakerSignals);
+      const attractionTags = signals.positiveSignals.filter((signal) => positiveSignals.includes(signal));
+      const riskTags = uniqueStrings([
+        ...signals.negativeSignals.filter((signal) => negativeSignals.includes(signal)),
+        ...signals.dealbreakerSignals.filter((signal) => dealbreakerSignals.includes(signal)),
+      ]);
+      const outcome = applySignalsToGuest(
+        {
+          affinityScore: guest.affinity_score,
+          blowUpSignals: asStringArray(snapshot.blowUpSignals),
+          characterKey: guest.character_key,
+          dealbreakerSignals,
+          dealbreakerTriggered: guest.dealbreaker_triggered === 1,
+          lightState: guest.light_state,
+          name: guest.name,
+          negativeSignals,
+          positiveSignals,
+          strongSignalCount: guest.strong_signal_count,
+        },
+        signals,
+        1,
+      );
+      const pickedBoost = input.pickedGuestKey === guest.character_key ? 6 : 0;
+      const delta = clamp((outcome?.delta ?? 0) + pickedBoost, -35, 24);
+
+      return {
+        attractionTags,
+        characterKey: guest.character_key,
+        delta,
+        reason: semanticFallbackReason(guest.name, delta, attractionTags, riskTags, input.pickedGuestKey === guest.character_key),
+        riskTags,
+      };
+    }),
+    source: "fallback",
+    userIntent: normalizeShortText(input.answerText, "The user is trying to answer the room honestly.", 180),
+  };
+}
+
+function normalizeSemanticJudgment(
+  value: Record<string, unknown>,
+  fallback: SemanticTurnJudgment,
+  guests: SessionCharacterRow[],
+  source: SemanticTurnJudgment["source"],
+): SemanticTurnJudgment {
+  const rawJudgments = Array.isArray(value.guestJudgments) ? value.guestJudgments : [];
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const raw of rawJudgments) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+
+    const item = raw as Record<string, unknown>;
+    const key = typeof item.characterKey === "string" ? item.characterKey : "";
+    if (key) {
+      byKey.set(key, item);
+    }
+  }
+  const fallbackByKey = new Map(fallback.guestJudgments.map((judgment) => [judgment.characterKey, judgment]));
+
+  return {
+    expressionTraits: asStringArray(value.expressionTraits).slice(0, 8),
+    guestJudgments: guests.map((guest) => {
+      const raw = byKey.get(guest.character_key);
+      const fallbackJudgment = fallbackByKey.get(guest.character_key);
+      return {
+        attractionTags: asStringArray(raw?.attractionTags).slice(0, 8),
+        characterKey: guest.character_key,
+        delta: clamp(Math.round(typeof raw?.delta === "number" ? raw.delta : fallbackJudgment?.delta ?? 0), -35, 24),
+        reason: normalizeShortText(
+          typeof raw?.reason === "string" ? raw.reason : fallbackJudgment?.reason,
+          fallbackJudgment?.reason ?? `${guest.name} is still reading your signal.`,
+          180,
+        ),
+        riskTags: asStringArray(raw?.riskTags).slice(0, 8),
+      };
+    }),
+    source,
+    userIntent: normalizeShortText(
+      typeof value.userIntent === "string" ? value.userIntent : fallback.userIntent,
+      fallback.userIntent,
+      180,
+    ),
+  };
+}
+
+function semanticFallbackReason(name: string, delta: number, attractionTags: string[], riskTags: string[], picked: boolean): string {
+  if (riskTags.length > 0 || delta < 0) {
+    return `${name} noticed friction around ${riskTags.slice(0, 2).join(", ") || "your answer"} and becomes more cautious.`;
+  }
+
+  if (delta > 0) {
+    return `${name} feels a stronger signal from ${attractionTags.slice(0, 2).join(", ") || (picked ? "being chosen" : "your answer")}.`;
+  }
+
+  return `${name} is listening, but the answer does not shift their signal much yet.`;
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed.slice(start, end + 1)) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
 async function generateShowLine(
   env: ShowEngineEnv,
   input: {
@@ -1124,6 +3844,7 @@ async function generateShowLine(
     session: ShowSessionRow;
     show: ShowTemplateRow;
     stage: ShowStageRow;
+    stream?: TurnAnswerOptions;
   },
 ): Promise<string> {
   const fallbackText = fallbackShowLine(input);
@@ -1131,10 +3852,12 @@ async function generateShowLine(
   const messages: LlmMessage[] = [
     {
       content: [
-      "You write concise, safe, PG-13 dialogue for an interactive AI TV show.",
+      "You write concise, safe, PG-13 dialogue for an interactive AI companion story game.",
       "Use the structured show, stage, and character context.",
       "Keep the tone entertaining and in-format.",
       "Never generate explicit sexual content, identity verification claims, deepfake claims, or coercive pressure.",
+      "For guest lines, write only words the guest says aloud.",
+      "Do not include parenthetical actions, bracketed stage directions, inner thoughts, camera notes, narration, or speaker-name prefixes.",
       "Return one line only.",
       ].join(" "),
       role: "system",
@@ -1151,7 +3874,9 @@ async function generateShowLine(
       `Selected character: ${input.selectedCharacter?.name ?? "none"}`,
       `Character snapshot: ${selectedSnapshot ? JSON.stringify(selectedSnapshot) : "host only"}`,
       `Affinity score: ${input.nextAffinity}`,
-      "Write a single in-character line under 45 words.",
+      input.role === "character"
+        ? "Write a single spoken guest reply under 45 words. React to the user's latest message and, when natural, ask one grounded follow-up question."
+        : "Write a single lightweight host transition or room summary under 45 words.",
       ].join("\n"),
       role: "user",
     },
@@ -1169,11 +3894,46 @@ async function generateShowLine(
       stageKey: input.stage.stage_key,
       userId: input.session.user_id,
     },
+    onDelta: input.stream?.onDelta
+      ? (text) => input.stream?.onDelta?.(text, {
+        speakerKey: input.role === "host" ? "host" : input.selectedCharacter?.character_key ?? null,
+        speakerName: input.role === "host" ? "Host" : input.selectedCharacter?.name ?? null,
+      })
+      : undefined,
     route: "cheap-dialogue",
+    stream: input.stream?.stream,
     temperature: 0.7,
   });
 
-  return normalizeShortText(result.text, fallbackText, 360);
+  return sanitizeGeneratedLine(
+    normalizeShortText(result.text, fallbackText, 360),
+    fallbackText,
+    input.selectedCharacter?.name ?? (input.role === "host" ? "Host" : undefined),
+  );
+}
+
+function sanitizeGeneratedLine(text: string, fallbackText: string, speakerName?: string): string {
+  let sanitized = text
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (speakerName) {
+    const escapedName = escapeRegExp(speakerName);
+    sanitized = sanitized.replace(new RegExp(`^${escapedName}\\s*[:\\-]\\s*`, "i"), "").trim();
+  }
+
+  sanitized = sanitized
+    .replace(/^(host|guest|speaker|character)\s*[:\-]\s*/i, "")
+    .replace(/^["']+|["']+$/g, "")
+    .trim();
+
+  return sanitized || fallbackText;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function fallbackShowLine(input: {
@@ -1230,61 +3990,130 @@ function serializeStage(row: ShowStageRow) {
 }
 
 function serializeCharacter(row: ShowCharacterRow) {
-  const publicProfile = readJsonObject(row.public_profile);
+  return characterDefinitionToSnapshot(toCharacterDefinition(row));
+}
+
+function serializePublicCharacter(row: ShowCharacterRow) {
+  const characterPackage = row.role === "guest" ? guestPackageFromRow(row) : null;
+  const visualStateObjectKey = characterPackage ? selectGuestVisualObjectKey(characterPackage) : null;
+  const visibility = readCharacterVisibility(row);
+
   return {
-    ...publicProfile,
+    ...publicCharacterProfile(readJsonObject(row.public_profile)),
     avatarObjectKey: row.avatar_object_key,
-    blowUpSignals: readJsonArray<string>(row.blow_up_signals),
-    boundaries: row.boundaries,
     characterKey: row.character_key,
-    dealbreakerSignals: readJsonArray<string>(row.dealbreaker_signals),
     gender: row.gender,
-    goal: row.goal,
-    hiddenPreferences: row.hidden_preferences,
     id: row.character_key,
-    initialAffinity: row.initial_affinity,
-    matchThreshold: row.match_threshold,
     name: row.name,
-    negativeSignals: readJsonArray<string>(row.negative_signals),
-    ownerUserId: row.owner_user_id,
-    personality: row.personality,
-    positiveSignals: readJsonArray<string>(row.positive_signals),
-    relationshipToUser: row.relationship_to_user,
+    portraitObjectKey: characterPackage?.assets.portraitObjectKey ?? null,
     role: row.role,
     source: row.source,
-    speakingStyle: row.speaking_style,
+    statusLabel: row.source === "user" ? (visibility === "public" ? "community" : "custom") : "ready",
+    visibility,
+    visualStateObjectKey,
   };
+}
+
+function canReadCharacter(row: ShowCharacterRow, user: UserRecord | null): boolean {
+  return row.source === "official" || isOwnedCharacter(row, user) || isCommunityCharacter(row);
+}
+
+function isOwnedCharacter(row: ShowCharacterRow, user: UserRecord | null): boolean {
+  return row.source === "user" && Boolean(user?.id) && row.owner_user_id === user?.id;
+}
+
+function isCommunityCharacter(row: ShowCharacterRow): boolean {
+  return row.source === "user" && readCharacterVisibility(row) === "public";
+}
+
+function readCharacterVisibility(row: ShowCharacterRow): "private" | "public" {
+  const profile = readJsonObject(row.public_profile);
+  return profile.visibility === "public" ? "public" : "private";
+}
+
+function withCharacterVisibility(profile: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...profile,
+    visibility: profile.visibility === "public" ? "public" : "private",
+  };
+}
+
+function serializeCharacterPackageResponse(row: ShowCharacterRow) {
+  const characterPackage = guestPackageFromRow(row);
+  return {
+    character: serializePublicCharacter(row),
+    characterPackage,
+    visualStateObjectKey: selectGuestVisualObjectKey(characterPackage),
+  };
+}
+
+function characterAssetKeys(row: ShowCharacterRow): Array<string | null> {
+  const characterPackage = row.role === "guest" ? guestPackageFromRow(row) : null;
+  if (!characterPackage) {
+    return [row.avatar_object_key];
+  }
+
+  return [
+    characterPackage.assets.avatarObjectKey,
+    characterPackage.assets.portraitObjectKey,
+    ...characterPackage.assets.galleryObjectKeys,
+    ...Object.values(characterPackage.assets.visualStates).map((visual) => visual.objectKey),
+  ];
+}
+
+function publicCharacterProfile(profile: Record<string, unknown>) {
+  return {
+    ageRange: typeof profile.ageRange === "string" ? profile.ageRange : undefined,
+    cityOrLifestyle: typeof profile.cityOrLifestyle === "string" ? profile.cityOrLifestyle : undefined,
+    hobbies: readPublicStringList(profile.hobbies),
+    occupationTag: typeof profile.occupationTag === "string" ? profile.occupationTag : undefined,
+    personalityKeywords: readPublicStringList(profile.personalityKeywords),
+    preferences: readPublicStringList(profile.preferences),
+  };
+}
+
+function readPublicStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").slice(0, 8) : [];
 }
 
 function serializeSessionCharacter(row: SessionCharacterRow) {
   const snapshot = parseSnapshot(row.snapshot) as CharacterSnapshot;
   return {
-    affinityScore: row.affinity_score,
     available: row.is_available === 1,
+    avatarObjectKey: typeof snapshot.avatarObjectKey === "string" ? snapshot.avatarObjectKey : null,
     characterKey: row.character_key,
-    dealbreakerTriggered: row.dealbreaker_triggered === 1,
+    gender: snapshot.gender,
     lightState: row.light_state,
     name: row.name,
+    profile: {
+      ...publicCharacterProfile(snapshot),
+      avatarObjectKey: typeof snapshot.avatarObjectKey === "string" ? snapshot.avatarObjectKey : null,
+      characterKey: row.character_key,
+      gender: snapshot.gender,
+      name: row.name,
+      source: snapshot.source,
+    },
     role: row.role,
-    snapshot,
-    strongSignalCount: row.strong_signal_count,
   };
 }
 
 function serializeSessionGuest(row: SessionCharacterRow) {
   const snapshot = parseSnapshot(row.snapshot) as CharacterSnapshot;
   return {
-    affectionScore: row.affinity_score,
-    affinityScore: row.affinity_score,
     available: row.is_available === 1,
-    dealbreakerTriggered: row.dealbreaker_triggered === 1,
     gender: snapshot.gender,
     guestTemplateId: row.character_key,
     characterKey: row.character_key,
     lightState: row.light_state,
     name: row.name,
-    profile: snapshot,
-    strongSignalCount: row.strong_signal_count,
+    profile: {
+      ...publicCharacterProfile(snapshot),
+      avatarObjectKey: typeof snapshot.avatarObjectKey === "string" ? snapshot.avatarObjectKey : null,
+      characterKey: row.character_key,
+      gender: snapshot.gender,
+      name: row.name,
+      source: snapshot.source,
+    },
   };
 }
 
@@ -1312,6 +4141,58 @@ function serializeSession(row: ShowSessionRow) {
   };
 }
 
+function serializeWorkspaceSession(row: WorkspaceSessionRow) {
+  return {
+    audiencePreference: row.audience_preference,
+    avatarLabel: row.avatar_label,
+    avatarObjectKey: row.avatar_object_key,
+    currentStage: row.current_stage_key,
+    id: row.id,
+    matchSuccess: row.match_success === 1,
+    messageCount: row.message_count,
+    pointsAwarded: row.points_awarded,
+    resultSummary: row.result_summary,
+    selectedCharacterKey: row.selected_character_key,
+    showKey: row.show_key,
+    status: row.status,
+    updatedAt: row.updated_at,
+  };
+}
+
+function serializeCompanion(row: UserCompanionRow) {
+  const snapshot = parseSnapshot(row.snapshot) as CharacterSnapshot;
+  const profile = publicCharacterProfile(snapshot);
+  return {
+    avatarObjectKey: typeof snapshot.avatarObjectKey === "string" ? snapshot.avatarObjectKey : null,
+    characterKey: row.character_key,
+    id: row.id,
+    lastStoryAt: row.last_story_at,
+    name: typeof snapshot.name === "string" ? snapshot.name : row.character_key,
+    profile,
+    relationshipState: row.relationship_state,
+    sourceSessionId: row.source_session_id,
+    storyTurnCount: row.story_turn_count,
+    unlockStatus: row.unlock_status,
+    updatedAt: row.updated_at,
+  };
+}
+
+function serializeCompanionStoryTurn(row: CompanionStoryTurnRow) {
+  return {
+    answerText: row.answer_text,
+    createdAt: row.created_at,
+    id: row.id,
+    options: readCompanionStoryOptions(row.options),
+    prompt: row.prompt,
+    responseText: row.response_text,
+    sceneTitle: row.scene_title,
+    selectedOptionId: row.selected_option_id,
+    status: row.status,
+    turnIndex: row.turn_index,
+    updatedAt: row.updated_at,
+  };
+}
+
 function serializeMessage(row: ShowMessageRow) {
   return {
     content: row.content,
@@ -1326,6 +4207,344 @@ function serializeMessage(row: ShowMessageRow) {
   };
 }
 
+function serializeTurn(row: ShowTurnRow) {
+  return {
+    answerText: row.answer_text,
+    createdAt: row.created_at,
+    id: row.id,
+    options: readTurnOptions(row.options).map(({ id, label, preview }) => ({ id, label, preview })),
+    question: row.question,
+    selectedCharacterKey: row.selected_character_key,
+    selectedOptionId: row.selected_option_id,
+    speakerKey: row.speaker_key,
+    speakerName: row.speaker_name,
+    stage: row.stage_key,
+    stageKey: row.stage_key,
+    status: row.status,
+    turnIndex: row.turn_index,
+    updatedAt: row.updated_at,
+  };
+}
+
+function serializeEvent(row: ShowEventRow) {
+  return {
+    content: row.content,
+    createdAt: row.created_at,
+    data: readJsonObject(row.data),
+    eventOrder: row.event_order,
+    id: row.id,
+    speakerKey: row.speaker_key,
+    speakerName: row.speaker_name,
+    stage: row.stage_key,
+    stageKey: row.stage_key,
+    turnId: row.turn_id,
+    type: row.event_type,
+  };
+}
+
+type SerializedEvent = ReturnType<typeof serializeEvent>;
+
+function serializeGuestStates(guests: SessionCharacterRow[], events: SerializedEvent[]) {
+  const deltasByKey = new Map<string, ReturnType<typeof readGuestDelta>>();
+  for (const event of events) {
+    const deltas = Array.isArray(event.data.guestDeltas) ? event.data.guestDeltas : [];
+    for (const rawDelta of deltas) {
+      const delta = readGuestDelta(rawDelta);
+      if (delta) {
+        deltasByKey.set(delta.characterKey, delta);
+      }
+    }
+  }
+
+  return guests.map((guest) => {
+    const delta = deltasByKey.get(guest.character_key);
+    return {
+      affinityScore: guest.affinity_score,
+      attractionTags: delta?.attractionTags ?? [],
+      available: guest.is_available === 1,
+      characterKey: guest.character_key,
+      lastDelta: delta?.delta ?? 0,
+      lastReason: delta?.reason ?? "",
+      lightState: guest.light_state,
+      name: guest.name,
+      riskTags: delta?.riskTags ?? [],
+    };
+  });
+}
+
+function serializeGeneratedReactions(events: SerializedEvent[]) {
+  return events
+    .filter((event) => event.type === "guest_reaction" && event.data.generatedReaction === true)
+    .slice(-4)
+    .map((event) => ({
+      characterKey: event.speakerKey,
+      reason: typeof event.data.reason === "string" ? event.data.reason : "",
+      speakerName: event.speakerName,
+      text: event.content,
+    }));
+}
+
+function readGuestDelta(value: unknown): {
+  attractionTags: string[];
+  characterKey: string;
+  delta: number;
+  reason: string;
+  riskTags: string[];
+} | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const characterKey = typeof record.characterKey === "string" ? record.characterKey : "";
+  if (!characterKey) {
+    return null;
+  }
+
+  return {
+    attractionTags: asStringArray(record.attractionTags),
+    characterKey,
+    delta: typeof record.delta === "number" ? record.delta : 0,
+    reason: typeof record.reason === "string" ? record.reason : "",
+    riskTags: asStringArray(record.riskTags),
+  };
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
+}
+
+function uniqueCharacters(values: ShowCharacterRow[]): ShowCharacterRow[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    if (seen.has(value.character_key)) {
+      return false;
+    }
+
+    seen.add(value.character_key);
+    return true;
+  });
+}
+
+function buildTurnDraft(input: {
+  guests: SessionCharacterRow[];
+  host?: SessionCharacterRow;
+  session: ShowSessionRow;
+  stageKey: string;
+}): TurnDraft | null {
+  return buildDomainTurnDraft({
+    guests: input.guests.map(toStageGuest),
+    host: input.host ? toStageGuest(input.host) : undefined,
+    session: {
+      initialPickCharacterKey: input.session.initial_pick_character_key,
+      messageCount: input.session.message_count,
+      userProfile: input.session.user_profile,
+    },
+    stageKey: input.stageKey,
+  });
+}
+
+function toStageGuest(guest: SessionCharacterRow) {
+  return {
+    affinityScore: guest.affinity_score,
+    characterKey: guest.character_key,
+    isAvailable: guest.is_available === 1,
+    lightState: guest.light_state,
+    name: guest.name,
+  };
+}
+
+function readTurnOptions(value: string): TurnOption[] {
+  return readJsonArray<Record<string, unknown>>(value)
+    .map((option) => ({
+      id: typeof option.id === "string" ? option.id : "",
+      label: typeof option.label === "string" ? option.label : "",
+      preview: typeof option.preview === "string" ? option.preview : "",
+      signalText: typeof option.signalText === "string" ? option.signalText : "",
+    }))
+    .filter((option) => option.id && option.label && option.preview);
+}
+
+function readTurnRoundsBeforeDeclaration(show: ShowTemplateRow): number {
+  const config = readJsonObject(show.config);
+  const value = config.turnRoundsBeforeDeclaration;
+  return typeof value === "number" && value > 0 ? value : 3;
+}
+
+async function emitTextDelta(
+  options: TurnAnswerOptions | undefined,
+  content: string,
+  meta?: TurnAnswerDeltaMeta,
+): Promise<void> {
+  if (!options?.stream || !options.onDelta || !content.trim()) {
+    return;
+  }
+
+  const chunks = content.match(/.{1,18}(?:\s|$)/g) ?? [content];
+  for (const chunk of chunks) {
+    if (chunk) {
+      await options.onDelta(chunk, meta);
+    }
+  }
+}
+
+async function insertHostSummary(
+  env: ShowEngineEnv,
+  input: {
+    content: string;
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    stageKey: string;
+    stream?: TurnAnswerOptions;
+    user: UserRecord;
+  },
+): Promise<void> {
+  await emitTextDelta(input.stream, input.content, {
+    speakerKey: "host",
+    speakerName: "Host",
+  });
+  await insertMessage(env, {
+    appKey: input.show.app_key,
+    content: input.content,
+    role: "host",
+    sessionId: input.session.id,
+    showKey: input.show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: input.stageKey,
+    userId: input.user.id,
+  });
+  await insertShowEvent(env, {
+    appKey: input.show.app_key,
+    content: input.content,
+    eventType: "host_summary",
+    sessionId: input.session.id,
+    showKey: input.show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: input.stageKey,
+    userId: input.user.id,
+  });
+}
+
+async function emitReactionEvents(
+  env: ShowEngineEnv,
+  input: {
+    outcomes: SignalApplication[];
+    sessionId: string;
+    stream?: TurnAnswerOptions;
+    show: ShowTemplateRow;
+    stageKey: string;
+    turnId: string;
+    user: UserRecord;
+  },
+): Promise<void> {
+  const significant = input.outcomes
+    .filter(
+      (outcome) =>
+        outcome.previousLightState !== outcome.nextLightState ||
+        outcome.dealbreakerHits > 0 ||
+        outcome.positiveHits > 0 ||
+        outcome.negativeHits > 0,
+    )
+    .slice(0, 4);
+
+  for (const outcome of significant) {
+    const content = reactionLine(outcome);
+    await emitTextDelta(input.stream, content, {
+      speakerKey: outcome.characterKey,
+      speakerName: outcome.name,
+    });
+    await insertShowEvent(env, {
+      appKey: input.show.app_key,
+      content,
+      data: {
+        lightState: outcome.nextLightState,
+        publicChange:
+          outcome.previousLightState === outcome.nextLightState ? "reaction" : `${outcome.previousLightState}_to_${outcome.nextLightState}`,
+      },
+      eventType: reactionEventType(outcome),
+      sessionId: input.sessionId,
+      showKey: input.show.show_key,
+      speakerKey: outcome.characterKey,
+      speakerName: outcome.name,
+      stageKey: input.stageKey,
+      turnId: input.turnId,
+      userId: input.user.id,
+    });
+  }
+
+  const summary = await visibleRoomSummary(env, input.show, input.sessionId, input.user);
+  const summaryContent = significant.length ? summary : `The room stays curious. ${summary}`;
+  await emitTextDelta(input.stream, summaryContent, {
+    speakerKey: "host",
+    speakerName: "Host",
+  });
+  await insertShowEvent(env, {
+    appKey: input.show.app_key,
+    content: summaryContent,
+    eventType: "host_summary",
+    sessionId: input.sessionId,
+    showKey: input.show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: input.stageKey,
+    turnId: input.turnId,
+    userId: input.user.id,
+  });
+}
+
+async function completeIfNoLights(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  sessionId: string,
+  user: UserRecord,
+): Promise<boolean> {
+  const guests = (await getSessionCharacters(env, show, sessionId, user)).filter(
+    (character) => character.role === "guest",
+  );
+  const available = guests.filter((guest) => guest.light_state !== "off" && guest.is_available === 1);
+  if (available.length > 0) {
+    return false;
+  }
+
+  const summary =
+    "All lights are off. The host ends the episode early: no forced chemistry, no empty finale, just a clean exit.";
+  await env.DB.prepare(
+    `UPDATE show_sessions
+     SET current_stage_key = ?, status = ?, result_summary = ?, match_success = ?, points_awarded = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND user_id = ?`,
+  )
+    .bind("completed", "completed", summary, 0, 0, sessionId, user.id)
+    .run();
+
+  await insertMessage(env, {
+    appKey: show.app_key,
+    content: summary,
+    role: "host",
+    sessionId,
+    showKey: show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: "completed",
+    userId: user.id,
+  });
+  await insertShowEvent(env, {
+    appKey: show.app_key,
+    content: summary,
+    eventType: "host_summary",
+    sessionId,
+    showKey: show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: "completed",
+    userId: user.id,
+  });
+
+  return true;
+}
+
 async function applySignalsToGuests(
   env: ShowEngineEnv,
   input: {
@@ -1335,7 +4554,7 @@ async function applySignalsToGuests(
     signals: SignalExtraction;
     user: UserRecord;
   },
-): Promise<void> {
+): Promise<SignalApplication[]> {
   const guests = await env.DB.prepare(
     `SELECT character_key, name, snapshot, affinity_score, is_available, light_state,
             dealbreaker_triggered, strong_signal_count
@@ -1344,6 +4563,7 @@ async function applySignalsToGuests(
   )
     .bind(input.sessionId, input.user.id, "guest")
     .all<SessionCharacterRow>();
+  const outcomes: SignalApplication[] = [];
 
   for (const guest of guests.results) {
     if (guest.light_state === "off") {
@@ -1351,24 +4571,26 @@ async function applySignalsToGuests(
     }
 
     const snapshot = parseSnapshot(guest.snapshot) as CharacterSnapshot;
-    const positiveSignals = asStringArray(snapshot.positiveSignals);
-    const negativeSignals = asStringArray(snapshot.negativeSignals);
-    const dealbreakerSignals = asStringArray(snapshot.dealbreakerSignals);
-    const blowUpSignals = asStringArray(snapshot.blowUpSignals);
-    const positiveHits = countOverlap(input.signals.positiveSignals, positiveSignals);
-    const negativeHits = countOverlap(input.signals.negativeSignals, negativeSignals);
-    const dealbreakerHits = countOverlap(input.signals.dealbreakerSignals, dealbreakerSignals);
-    const blowUpHits = countOverlap(input.signals.positiveSignals, blowUpSignals);
-    const delta = Math.round((positiveHits * 8 - negativeHits * 7) * input.multiplier);
-    const nextAffinity = clamp(guest.affinity_score + delta, 0, 100);
-    const nextStrongSignalCount = guest.strong_signal_count + blowUpHits;
-    const dealbreakerTriggered = guest.dealbreaker_triggered === 1 || dealbreakerHits > 0;
-    const nextLightState =
-      dealbreakerTriggered || nextAffinity <= 15
-        ? "off"
-        : nextAffinity >= 85 || nextStrongSignalCount >= 3
-          ? "blow_up"
-          : "on";
+    const outcome = applySignalsToGuest(
+      {
+        affinityScore: guest.affinity_score,
+        blowUpSignals: asStringArray(snapshot.blowUpSignals),
+        characterKey: guest.character_key,
+        dealbreakerSignals: asStringArray(snapshot.dealbreakerSignals),
+        dealbreakerTriggered: guest.dealbreaker_triggered === 1,
+        lightState: guest.light_state,
+        name: guest.name,
+        negativeSignals: asStringArray(snapshot.negativeSignals),
+        positiveSignals: asStringArray(snapshot.positiveSignals),
+        strongSignalCount: guest.strong_signal_count,
+      },
+      input.signals,
+      input.multiplier,
+    );
+    if (!outcome) {
+      continue;
+    }
+    outcomes.push(outcome);
 
     await env.DB.prepare(
       `UPDATE show_session_characters
@@ -1380,17 +4602,372 @@ async function applySignalsToGuests(
        WHERE session_id = ? AND user_id = ? AND character_key = ?`,
     )
       .bind(
-        nextAffinity,
-        nextLightState === "off" ? 0 : 1,
-        nextLightState,
-        dealbreakerTriggered ? 1 : 0,
-        nextStrongSignalCount,
+        outcome.nextAffinity,
+        outcome.nextLightState === "off" ? 0 : 1,
+        outcome.nextLightState,
+        outcome.dealbreakerTriggered ? 1 : 0,
+        outcome.nextStrongSignalCount,
         input.sessionId,
         input.user.id,
         guest.character_key,
       )
       .run();
   }
+
+  return outcomes;
+}
+
+async function applySemanticJudgmentToGuests(
+  env: ShowEngineEnv,
+  input: {
+    judgment: SemanticTurnJudgment;
+    multiplier: number;
+    session: ShowSessionRow;
+    sessionId: string;
+    user: UserRecord;
+  },
+): Promise<SignalApplication[]> {
+  const guests = await env.DB.prepare(
+    `SELECT character_key, name, snapshot, affinity_score, is_available, light_state,
+            dealbreaker_triggered, strong_signal_count
+     FROM show_session_characters
+     WHERE session_id = ? AND user_id = ? AND role = ?`,
+  )
+    .bind(input.sessionId, input.user.id, "guest")
+    .all<SessionCharacterRow>();
+  const judgmentsByKey = new Map(input.judgment.guestJudgments.map((judgment) => [judgment.characterKey, judgment]));
+  const outcomes: SignalApplication[] = [];
+
+  for (const guest of guests.results) {
+    if (guest.light_state === "off") {
+      continue;
+    }
+
+    const judgment = judgmentsByKey.get(guest.character_key);
+    if (!judgment) {
+      continue;
+    }
+
+    const snapshot = parseSnapshot(guest.snapshot) as CharacterSnapshot;
+    const positiveHits = countOverlap(judgment.attractionTags, asStringArray(snapshot.positiveSignals));
+    const negativeHits = countOverlap(judgment.riskTags, asStringArray(snapshot.negativeSignals));
+    const dealbreakerHits = countOverlap(judgment.riskTags, asStringArray(snapshot.dealbreakerSignals));
+    const blowUpHits = countOverlap(judgment.attractionTags, asStringArray(snapshot.blowUpSignals));
+    const delta = clamp(Math.round(judgment.delta * input.multiplier), -45, 28);
+    const nextAffinity = clamp(guest.affinity_score + delta, 0, 100);
+    const nextStrongSignalCount = guest.strong_signal_count + blowUpHits;
+    const dealbreakerTriggered = guest.dealbreaker_triggered === 1 || dealbreakerHits > 0 || delta <= -35;
+    const nextLightState = semanticNextLightState({
+      dealbreakerTriggered,
+      nextAffinity,
+      nextStrongSignalCount,
+    });
+    const outcome: SignalApplication = {
+      attractionTags: judgment.attractionTags,
+      characterKey: guest.character_key,
+      dealbreakerHits,
+      dealbreakerTriggered,
+      delta,
+      name: guest.name,
+      negativeHits,
+      nextAffinity,
+      nextLightState,
+      nextStrongSignalCount,
+      positiveHits,
+      previousLightState: guest.light_state,
+      reason: judgment.reason,
+      riskTags: judgment.riskTags,
+    };
+    outcomes.push(outcome);
+
+    await env.DB.prepare(
+      `UPDATE show_session_characters
+       SET affinity_score = ?,
+           is_available = ?,
+           light_state = ?,
+           dealbreaker_triggered = ?,
+           strong_signal_count = ?
+       WHERE session_id = ? AND user_id = ? AND character_key = ?`,
+    )
+      .bind(
+        outcome.nextAffinity,
+        outcome.nextLightState === "off" ? 0 : 1,
+        outcome.nextLightState,
+        outcome.dealbreakerTriggered ? 1 : 0,
+        outcome.nextStrongSignalCount,
+        input.sessionId,
+        input.user.id,
+        guest.character_key,
+      )
+      .run();
+  }
+
+  return outcomes;
+}
+
+async function insertSemanticJudgmentEvent(
+  env: ShowEngineEnv,
+  input: {
+    judgment: SemanticTurnJudgment;
+    outcomes: SignalApplication[];
+    sessionId: string;
+    show: ShowTemplateRow;
+    stageKey: string;
+    turnId: string;
+    user: UserRecord;
+  },
+): Promise<void> {
+  await insertShowEvent(env, {
+    appKey: input.show.app_key,
+    content: "The room reads the answer and each Guest's signal shifts.",
+    data: {
+      guestDeltas: input.outcomes.map((outcome) => serializeGuestDelta(outcome)),
+      semanticResult: input.judgment,
+    },
+    eventType: "semantic_judgment",
+    sessionId: input.sessionId,
+    showKey: input.show.show_key,
+    speakerKey: "host",
+    speakerName: "Host",
+    stageKey: input.stageKey,
+    turnId: input.turnId,
+    userId: input.user.id,
+  });
+}
+
+async function emitGeneratedReactions(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    currentSpeakerKey: string | null;
+    focusCharacterKey: string | null;
+    judgment: SemanticTurnJudgment;
+    outcomes: SignalApplication[];
+    session: ShowSessionRow;
+    sessionId: string;
+    show: ShowTemplateRow;
+    stageKey: string;
+    stream?: TurnAnswerOptions;
+    turnId: string;
+    user: UserRecord;
+  },
+): Promise<GeneratedReaction[]> {
+  const characters = await getSessionCharacters(env, input.show, input.sessionId, input.user);
+  const outcomeByKey = new Map(input.outcomes.map((outcome) => [outcome.characterKey, outcome]));
+  const guests = characters.filter((character) => {
+    if (character.role !== "guest") {
+      return false;
+    }
+
+    const outcome = outcomeByKey.get(character.character_key);
+    return (character.light_state !== "off" && character.is_available === 1) || outcome?.nextLightState === "off";
+  });
+  const selected = selectReactionGuests({
+    currentSpeakerKey: input.currentSpeakerKey,
+    focusCharacterKey: input.focusCharacterKey,
+    guests,
+    outcomes: input.outcomes,
+  });
+  const reactions: GeneratedReaction[] = [];
+
+  for (const guest of selected) {
+    const outcome = input.outcomes.find((item) => item.characterKey === guest.character_key);
+    const text = await generateCharacterReactionLine(env, {
+      answerText: input.answerText,
+      guest,
+      judgment: input.judgment,
+      outcome,
+      session: input.session,
+      show: input.show,
+      stageKey: input.stageKey,
+      stream: input.stream,
+    });
+    reactions.push({
+      characterKey: guest.character_key,
+      reason: outcome?.reason ?? "Their signal shifted after the answer.",
+      text,
+    });
+
+    await insertMessage(env, {
+      appKey: input.show.app_key,
+      content: text,
+      role: "character",
+      sessionId: input.sessionId,
+      showKey: input.show.show_key,
+      speakerKey: guest.character_key,
+      speakerName: guest.name,
+      stageKey: input.stageKey,
+      userId: input.user.id,
+    });
+    await insertShowEvent(env, {
+      appKey: input.show.app_key,
+      content: text,
+      data: {
+        generatedReaction: true,
+        reason: outcome?.reason ?? null,
+        semanticSource: input.judgment.source,
+      },
+      eventType: "guest_reaction",
+      sessionId: input.sessionId,
+      showKey: input.show.show_key,
+      speakerKey: guest.character_key,
+      speakerName: guest.name,
+      stageKey: input.stageKey,
+      turnId: input.turnId,
+      userId: input.user.id,
+    });
+  }
+
+  return reactions;
+}
+
+async function generateCharacterReactionLine(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    guest: SessionCharacterRow;
+    judgment: SemanticTurnJudgment;
+    outcome?: SignalApplication;
+    session: ShowSessionRow;
+    show: ShowTemplateRow;
+    stageKey: string;
+    stream?: TurnAnswerOptions;
+  },
+): Promise<string> {
+  const snapshot = parseSnapshot(input.guest.snapshot) as CharacterSnapshot;
+  const fallbackText = fallbackCharacterReactionLine(input.guest.name, input.outcome);
+  const result = await generateText(env, {
+    fallbackText,
+    maxOutputTokens: 120,
+    messages: [
+      {
+        content: [
+          "You write one natural spoken line for a Guest in an interactive companion story.",
+          "Use only this Guest's voice and current state.",
+          "Do not change scores, lights, or rules.",
+          "No narration, no speaker prefix, no parentheses, no stage directions.",
+          "PG-13, concise, emotionally specific.",
+        ].join(" "),
+        role: "system",
+      },
+      {
+        content: [
+          `Guest: ${input.guest.name}`,
+          `Personality: ${snapshot.personality}`,
+          `Goal: ${snapshot.goal}`,
+          `Boundaries: ${snapshot.boundaries}`,
+          `Hidden preferences: ${snapshot.hiddenPreferences}`,
+          `Speaking style: ${snapshot.speakingStyle}`,
+          `Stage: ${input.stageKey}`,
+          `Current affinity after judgment: ${input.outcome?.nextAffinity ?? input.guest.affinity_score}`,
+          `Light state after judgment: ${input.outcome?.nextLightState ?? input.guest.light_state}`,
+          `Why their state changed: ${input.outcome?.reason ?? "The answer did not move them much."}`,
+          `User answer: ${input.answerText}`,
+          "Write one spoken reaction under 36 words. If positive, show what landed. If cautious, name the concern kindly. If light is off, make the boundary clear.",
+        ].join("\n"),
+        role: "user",
+      },
+    ],
+    metadata: {
+      appKey: input.session.app_key,
+      purpose: "show_guest_reaction",
+      sessionId: input.session.id,
+      showKey: input.show.show_key,
+      stageKey: input.stageKey,
+      userId: input.session.user_id,
+    },
+    onDelta: input.stream?.onDelta
+      ? (text) => input.stream?.onDelta?.(text, {
+        speakerKey: input.guest.character_key,
+        speakerName: input.guest.name,
+      })
+      : undefined,
+    route: "cheap-dialogue",
+    stream: input.stream?.stream,
+    temperature: 0.72,
+  });
+
+  return sanitizeGeneratedLine(normalizeShortText(result.text, fallbackText, 320), fallbackText, input.guest.name);
+}
+
+function selectReactionGuests(input: {
+  currentSpeakerKey: string | null;
+  focusCharacterKey: string | null;
+  guests: SessionCharacterRow[];
+  outcomes: SignalApplication[];
+}): SessionCharacterRow[] {
+  const byKey = new Map(input.guests.map((guest) => [guest.character_key, guest]));
+  const orderedKeys = [
+    input.focusCharacterKey,
+    input.currentSpeakerKey,
+    ...[...input.outcomes]
+      .sort((left, right) => Math.abs(right.delta) - Math.abs(left.delta))
+      .map((outcome) => outcome.characterKey),
+  ].filter((key): key is string => Boolean(key));
+  const selected: SessionCharacterRow[] = [];
+  const seen = new Set<string>();
+  for (const key of orderedKeys) {
+    const guest = byKey.get(key);
+    if (!guest || seen.has(key)) {
+      continue;
+    }
+
+    selected.push(guest);
+    seen.add(key);
+    if (selected.length >= 2) {
+      break;
+    }
+  }
+
+  return selected.length ? selected : input.guests.slice(0, 1);
+}
+
+function fallbackCharacterReactionLine(_name: string, outcome?: SignalApplication): string {
+  if (!outcome) {
+    return "I am still listening. I need to hear a little more before my signal changes.";
+  }
+
+  if (outcome.nextLightState === "off") {
+    return "I have to be honest, that crosses a boundary for me, so I am turning my light off.";
+  }
+
+  if (outcome.delta > 0) {
+    return `That part lands with me. ${outcome.reason ?? "It feels more real than a polished answer."}`;
+  }
+
+  if (outcome.delta < 0) {
+    return `I am more cautious now. ${outcome.reason ?? "I need more care and clarity from you."}`;
+  }
+
+  return "I am still curious, but I need a more personal answer before I move closer.";
+}
+
+function serializeGuestDelta(outcome: SignalApplication) {
+  return {
+    attractionTags: outcome.attractionTags ?? [],
+    characterKey: outcome.characterKey,
+    delta: outcome.delta,
+    lightState: outcome.nextLightState,
+    nextAffinity: outcome.nextAffinity,
+    reason: outcome.reason ?? reactionLine(outcome),
+    riskTags: outcome.riskTags ?? [],
+  };
+}
+
+function semanticNextLightState(input: {
+  dealbreakerTriggered: boolean;
+  nextAffinity: number;
+  nextStrongSignalCount: number;
+}): SessionCharacterRow["light_state"] {
+  if (input.dealbreakerTriggered || input.nextAffinity <= 15) {
+    return "off";
+  }
+
+  if (input.nextAffinity >= 85 || input.nextStrongSignalCount >= 3) {
+    return "blow_up";
+  }
+
+  return "on";
 }
 
 async function visibleRoomSummary(
@@ -1421,58 +4998,6 @@ type SignalExtraction = {
   negativeSignals: string[];
   positiveSignals: string[];
 };
-
-function extractSignals(text: string): SignalExtraction {
-  const lower = text.toLowerCase();
-  const positiveSignals = collectSignals(lower, {
-    adventure: ["adventure", "travel", "explore", "brave", "courage", "冒险", "旅行", "探索", "勇敢"],
-    ambition: ["ambition", "career", "business", "goal", "driven", "事业", "目标", "上进", "努力", "拼搏"],
-    creativity: ["creative", "music", "art", "write", "design", "imagine", "创意", "音乐", "艺术", "写作", "设计", "想象"],
-    family: ["family", "kids", "home", "parents", "家庭", "孩子", "父母", "顾家"],
-    honesty: ["honest", "truth", "sincere", "transparent", "real", "真诚", "诚实", "坦诚", "真实"],
-    humor: ["humor", "funny", "laugh", "joke", "playful", "幽默", "有趣", "搞笑", "好玩"],
-    kindness: ["kind", "warm", "gentle", "care", "support", "善良", "温柔", "关心", "支持", "体贴"],
-    maturity: ["mature", "communicate", "communication", "stable emotion", "成熟", "沟通", "情绪稳定", "理性"],
-    responsibility: ["responsible", "commitment", "reliable", "dependable", "负责", "责任", "承诺", "靠谱", "可靠"],
-    shared_fun: ["fun", "together", "shared", "same hobby", "一起", "共同", "同频", "爱好"],
-    stability: ["stable", "steady", "secure", "long term", "稳定", "长期", "安全感"],
-    warmth: ["warm", "tender", "affection", "温暖", "亲密", "有爱"],
-  });
-  const negativeSignals = collectSignals(lower, {
-    arrogance: ["arrogant", "superior", "better than", "look down", "傲慢", "优越感", "看不起"],
-    avoidance: ["avoid", "ignore", "don't talk", "silent treatment", "回避", "冷暴力", "不沟通", "逃避"],
-    chaos: ["chaos", "dramatic", "unpredictable", "混乱", "情绪化", "不稳定"],
-    controlling: ["control", "must obey", "possessive", "控制", "服从", "占有欲"],
-    cynicism: ["cynical", "nothing matters", "love is fake", "犬儒", "爱情是假的", "无所谓"],
-    materialism: ["money only", "rich only", "must be rich", "luxury only", "只看钱", "必须有钱", "拜金", "奢侈"],
-    performative_coolness: ["too cool", "image only", "perform", "装酷", "人设", "表演"],
-    rudeness: ["rude", "insult", "mean", "粗鲁", "冒犯", "刻薄"],
-  });
-  const dealbreakerSignals = collectSignals(lower, {
-    aggression: ["attack", "hit", "threat", "violent", "攻击", "打人", "威胁", "暴力"],
-    contempt: ["contempt", "disgusting", "worthless", "鄙视", "恶心", "废物"],
-    controlling: ["control every", "must obey", "完全控制", "必须服从"],
-    dishonesty: ["lie", "cheat", "dishonest", "撒谎", "欺骗", "出轨", "不诚实"],
-    rudeness: ["rude", "insult", "humiliate", "粗鲁", "羞辱", "侮辱"],
-  });
-
-  return {
-    dealbreakerSignals,
-    negativeSignals,
-    positiveSignals,
-  };
-}
-
-function collectSignals(text: string, dictionary: Record<string, string[]>): string[] {
-  return Object.entries(dictionary)
-    .filter(([, keywords]) => keywords.some((keyword) => text.includes(keyword)))
-    .map(([signal]) => signal);
-}
-
-function countOverlap(left: string[], right: string[]): number {
-  const rightSet = new Set(right);
-  return left.filter((item) => rightSet.has(item)).length;
-}
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -1545,14 +5070,18 @@ function normalizeObjectKey(value: string | undefined): string | null {
   return normalized;
 }
 
+function normalizeCharacterKeyValue(value: string | undefined): string {
+  const normalized = normalizeShortText(value, "", 120);
+  return normalized ? slugify(normalized) : "";
+}
+
 function splitUserList(value: string | undefined): string[] {
   return (value ?? "")
-    .split(/[,，、\n]/)
+    .split(/[,;\n]/)
     .map((item) => item.trim())
     .filter(Boolean)
     .slice(0, 12);
 }
-
 function slugify(value: string): string {
   const slug = value
     .trim()

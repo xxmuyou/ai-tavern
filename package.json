@@ -7,8 +7,11 @@
     "packages/*"
   ],
   "scripts": {
+    "dev": "node ./scripts/local-dev.mjs",
     "dev:app": "node ./scripts/tasks/run.mjs app:web",
     "dev:api": "node ./scripts/tasks/run.mjs api:dev",
+    "test": "npm run --workspaces --if-present test",
+    "test:api": "npm run --workspace @xtbit/api test",
     "typecheck": "npm run --workspaces --if-present typecheck",
     "lint": "npm run --workspaces --if-present lint",
     "cf:types": "node ./scripts/tasks/run.mjs api:cf-types",

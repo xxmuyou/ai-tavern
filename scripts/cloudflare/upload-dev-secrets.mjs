@@ -3,10 +3,14 @@ import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 
 const allowedSecrets = new Set([
+  "AUTH_TOKEN_SECRET",
+  "STRIPE_PUBLISHABLE_KEY",
+  "STRIPE_PRICE_PRO_MONTHLY",
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
-  "SESSION_SECRET",
   "OPENAI_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "ARK_API_KEY",
 ]);
 
 const args = process.argv.slice(2);

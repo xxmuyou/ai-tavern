@@ -14,7 +14,7 @@ admin@aiappsbox.com
 
 ## Current implementation
 
-AI TV Dating currently generates show dialogue through backend code in the show engine.
+AI Companion currently generates opening-story and companion dialogue through backend code in the existing story engine.
 
 Current behavior:
 
@@ -38,12 +38,12 @@ app feature -> shared LLM module -> provider registry -> provider adapter -> mod
 
 The shared LLM module should support scenario routes such as:
 
-- `cheap-dialogue`: default route for AI TV show host and guest lines.
+- `cheap-dialogue`: default route for AI Companion character and narrator lines.
 - Future routes for higher-quality writing, moderation-sensitive tasks, image prompts, or premium features.
 
 Admin model choice should control:
 
-- Default route for AI TV dialogue.
+- Default route for AI Companion dialogue.
 - Provider priority order.
 - Default model per provider.
 - Fallback provider behavior.
@@ -73,7 +73,7 @@ Future providers can include:
 - xAI / Grok.
 - Other providers with useful cost, quality, latency, or safety tradeoffs.
 
-New providers should be added through a provider registry or adapter. Adding a provider should not require rewriting AI TV Dating, future show formats, or app-specific game logic.
+New providers should be added through a provider registry or adapter. Adding a provider should not require rewriting AI Companion story logic or app-specific game logic.
 
 ## Cost-control policy
 
@@ -111,16 +111,16 @@ Admin configuration should be fail-safe:
 
 Admin configuration must not accidentally expose model choice to regular users. Any future admin API must require admin identity checks and must not be reachable as a normal app gameplay endpoint.
 
-## AI TV Dating integration
+## AI Companion integration
 
-AI TV Dating should depend on the shared LLM layer once it is implemented.
+AI Companion should depend on the shared LLM layer once it is implemented.
 
-The dating show should continue to own:
+The companion game should continue to own:
 
-- Show state transitions.
+- Story state transitions.
 - Hidden affinity scoring.
 - Light on/off/blow-up state.
-- Final match rules.
+- Opening-story match rules.
 - Platform points event creation.
 
 The shared LLM layer should own:
@@ -130,7 +130,7 @@ The shared LLM layer should own:
 - Provider-specific request/response normalization.
 - Token usage and cost logging.
 
-AI TV Dating should not expose model/provider details in bootstrap, session, message, or final-choice responses.
+AI Companion should not expose model/provider details in bootstrap, session, story, or final-choice responses.
 
 ## Acceptance criteria
 
@@ -138,7 +138,7 @@ AI TV Dating should not expose model/provider details in bootstrap, session, mes
 - Documentation states that users cannot choose models in v1.
 - Documentation states that `admin@aiappsbox.com` is the first admin identity.
 - Documentation states that token and cost data are internal only.
-- Documentation makes clear that AI TV Dating should use a shared LLM layer in the future instead of direct provider calls.
+- Documentation makes clear that AI Companion should use a shared LLM layer in the future instead of direct provider calls.
 - No code, schema, migration, or frontend behavior changes are required by this spec.
 
 ## Assumptions

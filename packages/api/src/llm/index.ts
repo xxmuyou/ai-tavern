@@ -28,10 +28,13 @@ export type LlmMetadata = {
 
 export type LlmGenerateInput = {
   fallbackText: string;
+  maxTextLength?: number;
   maxOutputTokens?: number;
   messages: LlmMessage[];
   metadata?: LlmMetadata;
+  onDelta?: (text: string) => void | Promise<void>;
   route?: string;
+  stream?: boolean;
   temperature?: number;
 };
 
@@ -82,6 +85,19 @@ type ChatCompletionResponse = {
     prompt_tokens?: number;
     total_tokens?: number;
   };
+};
+
+type ChatCompletionStreamChunk = {
+  choices?: {
+    delta?: {
+      content?: string;
+    };
+  }[];
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  usage?: ChatCompletionResponse["usage"];
 };
 
 type ProviderDefinition = {
@@ -167,8 +183,10 @@ export async function generateText(env: Env, input: LlmGenerateInput): Promise<L
 
     const attemptStarted = Date.now();
     try {
-      const response = await callOpenAiCompatibleChat(provider, apiKey, model, input);
-      const text = normalizeGeneratedText(extractChatText(response), input.fallbackText);
+      const response = input.stream
+        ? await callOpenAiCompatibleChatStream(provider, apiKey, model, input)
+        : await callOpenAiCompatibleChat(provider, apiKey, model, input);
+      const text = normalizeGeneratedText(extractChatText(response), input.fallbackText, input.maxTextLength);
       const usage = normalizeUsage(response.usage);
       const estimatedCostUsd = estimateCost(provider, usage);
 
@@ -227,6 +245,10 @@ export async function generateText(env: Env, input: LlmGenerateInput): Promise<L
     status: "fallback",
     usage: emptyUsage(),
   });
+
+  if (input.stream && input.onDelta) {
+    await input.onDelta(input.fallbackText);
+  }
 
   return {
     estimatedCostUsd: null,
@@ -295,7 +317,7 @@ export function isAdminEmail(email: string | null | undefined): boolean {
   return normalizeEmail(email) === ADMIN_EMAIL;
 }
 
-const DEFAULT_ROUTE_CONFIG_DESCRIPTION = "Low-cost text route for AI TV show host and guest dialogue.";
+const DEFAULT_ROUTE_CONFIG_DESCRIPTION = "Low-cost text route for AI Companion character and narrator dialogue.";
 
 async function getRouteConfig(env: LlmEnv, routeKey: string): Promise<RouteConfig> {
   try {
@@ -350,6 +372,108 @@ async function callOpenAiCompatibleChat(
   }
 
   return data;
+}
+
+async function callOpenAiCompatibleChatStream(
+  provider: ProviderDefinition,
+  apiKey: string,
+  model: string,
+  input: LlmGenerateInput,
+): Promise<ChatCompletionResponse> {
+  const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+    body: JSON.stringify({
+      max_tokens: input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      messages: input.messages,
+      model,
+      stream: true,
+      temperature: input.temperature ?? DEFAULT_TEMPERATURE,
+    }),
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as ChatCompletionResponse;
+    throw new LlmProviderError(data.error?.code || `http_${response.status}`, data.error?.message || "LLM request failed");
+  }
+
+  if (!response.body) {
+    throw new LlmProviderError("empty_stream", "LLM stream response was empty");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let usage: ChatCompletionResponse["usage"] | undefined;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const chunk = await parseStreamLine(line, input.onDelta);
+        if (!chunk) {
+          continue;
+        }
+
+        text += chunk.text;
+        usage = chunk.usage ?? usage;
+      }
+    }
+
+    if (buffer.trim()) {
+      const chunk = await parseStreamLine(buffer, input.onDelta);
+      if (chunk) {
+        text += chunk.text;
+        usage = chunk.usage ?? usage;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return {
+    choices: [{ message: { content: text } }],
+    usage,
+  };
+}
+
+async function parseStreamLine(
+  line: string,
+  onDelta: LlmGenerateInput["onDelta"],
+): Promise<{ text: string; usage?: ChatCompletionResponse["usage"] } | null> {
+  const trimmed = line.trim();
+  if (!trimmed || !trimmed.startsWith("data:")) {
+    return null;
+  }
+
+  const data = trimmed.slice("data:".length).trim();
+  if (!data || data === "[DONE]") {
+    return null;
+  }
+
+  const parsed = JSON.parse(data) as ChatCompletionStreamChunk;
+  if (parsed.error) {
+    throw new LlmProviderError(parsed.error.code || "stream_error", parsed.error.message || "LLM stream failed");
+  }
+
+  const text = parsed.choices?.map((choice) => choice.delta?.content ?? "").join("") ?? "";
+  if (text && onDelta) {
+    await onDelta(text);
+  }
+
+  return { text, usage: parsed.usage };
 }
 
 async function logGeneration(
@@ -416,9 +540,9 @@ function extractChatText(data: ChatCompletionResponse): string | undefined {
   return data.choices?.[0]?.message?.content;
 }
 
-function normalizeGeneratedText(value: string | undefined, fallback: string): string {
+function normalizeGeneratedText(value: string | undefined, fallback: string, maxLength = 360): string {
   const normalized = value?.trim();
-  return normalized ? normalized.slice(0, 360) : fallback;
+  return normalized ? normalized.slice(0, maxLength) : fallback;
 }
 
 function normalizeUsage(value: ChatCompletionResponse["usage"]): LlmUsage {

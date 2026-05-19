@@ -1,4 +1,5 @@
 import { jsonResponse, readJson } from "./http";
+import { requireAuthEmail, requireAuthUser } from "./auth";
 import {
   ensureUserByEmail,
   findUserById,
@@ -72,13 +73,7 @@ export async function handleBillingRequest(
   }
 
   if (pathname === "/billing/subscription" && request.method === "GET") {
-    const email = normalizeEmail(url.searchParams.get("email"));
-
-    if (!email) {
-      return jsonResponse({ active: false, status: "missing_email" }, { status: 400 });
-    }
-
-    const user = await ensureUserByEmail(billingEnv, email);
+    const user = await requireAuthUser(billingEnv, request, url.searchParams.get("email"));
     return jsonResponse(await getSubscriptionStatus(billingEnv, user));
   }
 
@@ -107,12 +102,7 @@ async function createCheckoutSession(
   const stripeSecretKey = requireStripeSecret(env);
   const priceId = requireConfig(env.STRIPE_PRICE_PRO_MONTHLY, "STRIPE_PRICE_PRO_MONTHLY");
   const sourceAppKey = normalizeAppKey(body.appKey);
-  const email = normalizeEmail(body.email);
-
-  if (!email) {
-    return jsonResponse({ error: "email_required" }, { status: 400 });
-  }
-
+  const email = await requireAuthEmail(env, request, body.email);
   const user = await ensureUserByEmail(env, email);
   const origin = new URL(request.url).origin;
   const successUrl = env.STRIPE_SUCCESS_URL || `${origin}/?billing=success`;
@@ -156,12 +146,7 @@ async function createPortalSession(
   body: PortalRequest,
 ): Promise<Response> {
   const stripeSecretKey = requireStripeSecret(env);
-  const email = normalizeEmail(body.email);
-
-  if (!email) {
-    return jsonResponse({ error: "email_required" }, { status: 400 });
-  }
-
+  const email = await requireAuthEmail(env, request, body.email);
   const user = await ensureUserByEmail(env, email);
   const customer = await env.DB.prepare(
     `SELECT stripe_customer_id

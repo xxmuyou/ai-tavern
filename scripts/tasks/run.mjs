@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,10 +25,12 @@ const tasks = {
   "api:deploy-dev": () =>
     runNpx(["wrangler", "deploy", "--config", "../../infra/cloudflare/wrangler.jsonc", "--env="], {
       cwd: "packages/api",
+      envFile: ".env.dev",
     }),
   "api:dev": () =>
     runNpx(["wrangler", "dev", "--config", "../../infra/cloudflare/wrangler.jsonc"], {
       cwd: "packages/api",
+      envFile: ".env.dev",
     }),
   "api:typecheck": async () => {
     await tasks["api:cf-types"]();
@@ -36,11 +39,12 @@ const tasks = {
   "app:export-web-dev": () =>
     runNpx(["expo", "export", "--platform", "web"], {
       cwd: "apps/app",
+      envFile: ".env.dev",
       env: {
         EXPO_PUBLIC_API_BASE_URL: "https://dev.aiappsbox.com/api",
       },
     }),
-  "app:web": () => runNpx(["expo", "start", "--web"], { cwd: "apps/app" }),
+  "app:web": () => runNpx(["expo", "start", "--web"], { cwd: "apps/app", envFile: ".env.dev" }),
   "deploy:web-dev": async () => {
     await tasks["app:export-web-dev"]();
     await runNpx(
@@ -85,10 +89,12 @@ function runNpx(args, options = {}) {
 }
 
 function run(command, args, options = {}) {
+  const fileEnv = options.envFile ? readEnvFile(options.envFile) : {};
   const child = spawn(command, args, {
     cwd: resolve(repoRoot, options.cwd ?? "."),
     env: {
       ...process.env,
+      ...fileEnv,
       ...(options.env ?? {}),
     },
     shell: false,
@@ -106,4 +112,41 @@ function run(command, args, options = {}) {
       rejectRun(new Error(`${command} ${args.join(" ")} failed with exit code ${code}`));
     });
   });
+}
+
+function readEnvFile(relativePath) {
+  const fullPath = resolve(repoRoot, relativePath);
+  if (!existsSync(fullPath)) {
+    return {};
+  }
+
+  const env = {};
+  for (const rawLine of readFileSync(fullPath, "utf8").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line.slice(separatorIndex + 1).trim();
+    env[key] = unwrapEnvValue(value);
+  }
+
+  return env;
+}
+
+function unwrapEnvValue(value) {
+  if (
+    (value.startsWith("\"") && value.endsWith("\"")) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+
+  return value;
 }

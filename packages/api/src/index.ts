@@ -1,10 +1,12 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
-import { handleAiTvDatingRequest } from "./ai-tv-dating";
 import { handleAppsRequest } from "./apps";
+import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
+import { handleCompanionEngineRequest } from "./companion-engine";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleLlmAdminRequest } from "./llm/admin";
+import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
 import { handleShowRequest } from "./show-engine";
 export { GameRoom } from "./room";
 
@@ -20,32 +22,46 @@ export default {
 
     try {
       if (request.method === "OPTIONS") {
-        return corsResponse(null);
+        return jsonCorsResponse(request, env, null);
+      }
+
+      if (isRequestBodyTooLarge(request, env, pathname)) {
+        return jsonCorsResponse(request, env, { error: "request_body_too_large" }, { status: 413 });
+      }
+
+      const rateLimitResponse = await enforceRateLimit(env, request, pathname);
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
+      const authResponse = await handleAuthRequest(request, env, pathname);
+      if (authResponse) {
+        return withCors(request, env, authResponse);
       }
 
       const billingResponse = await handleBillingRequest(request, env, pathname);
       if (billingResponse) {
-        return withCors(billingResponse);
+        return withCors(request, env, billingResponse);
       }
 
-      const datingResponse = await handleAiTvDatingRequest(request, env, pathname);
-      if (datingResponse) {
-        return withCors(datingResponse);
+      const companionResponse = await handleCompanionEngineRequest(request, env, pathname);
+      if (companionResponse) {
+        return withCors(request, env, companionResponse);
       }
 
       const showResponse = await handleShowRequest(request, env, pathname);
       if (showResponse) {
-        return withCors(showResponse);
+        return withCors(request, env, showResponse);
       }
 
       const llmAdminResponse = await handleLlmAdminRequest(request, env, pathname);
       if (llmAdminResponse) {
-        return withCors(llmAdminResponse);
+        return withCors(request, env, llmAdminResponse);
       }
 
       const appsResponse = await handleAppsRequest(request, env, pathname);
       if (appsResponse) {
-        return withCors(appsResponse);
+        return withCors(request, env, appsResponse);
       }
 
       if (pathname === "/health" && request.method === "GET") {
@@ -56,17 +72,17 @@ export default {
           environment: env.APP_ENV,
         };
 
-        return corsResponse(body);
+        return jsonCorsResponse(request, env, body);
       }
 
       if (pathname === "/config/bootstrap" && request.method === "GET") {
         const config = await env.CONFIG.get("client:bootstrap", "json");
-        return corsResponse({ config: config ?? {} });
+        return jsonCorsResponse(request, env, { config: config ?? {} });
       }
 
       if (pathname === "/db/ping" && request.method === "GET") {
         const result = await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
-        return corsResponse({ ok: result?.ok === 1 });
+        return jsonCorsResponse(request, env, { ok: result?.ok === 1 });
       }
 
       if (pathname === "/jobs" && request.method === "POST") {
@@ -77,14 +93,14 @@ export default {
           body,
           createdAt: new Date().toISOString(),
         });
-        return corsResponse({ ok: true }, { status: 202 });
+        return jsonCorsResponse(request, env, { ok: true }, { status: 202 });
       }
 
       const objectMatch = pathname.match(/^\/objects\/(.+)$/);
       if (objectMatch) {
         const objectKey = objectMatch[1];
         if (!objectKey) {
-          return corsResponse({ error: "invalid_object_key" }, { status: 400 });
+          return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
         }
 
         return handleObjectRequest(request, env, ctx, decodeURIComponent(objectKey));
@@ -94,7 +110,7 @@ export default {
       if (roomMatch) {
         const matchedRoomId = roomMatch[1];
         if (!matchedRoomId) {
-          return corsResponse({ error: "invalid_room_id" }, { status: 400 });
+          return jsonCorsResponse(request, env, { error: "invalid_room_id" }, { status: 400 });
         }
 
         const roomId = decodeURIComponent(matchedRoomId);
@@ -105,14 +121,14 @@ export default {
         return room.fetch(new Request(roomUrl, request));
       }
 
-      return corsResponse({ error: "not_found" }, { status: 404 });
+      return jsonCorsResponse(request, env, { error: "not_found" }, { status: 404 });
     } catch (error) {
       if (error instanceof Response) {
-        return withCors(error);
+        return withCors(request, env, error);
       }
 
       console.error(JSON.stringify({ message: "Unhandled API error", error: String(error) }));
-      return corsResponse({ error: "internal_error" }, { status: 500 });
+      return jsonCorsResponse(request, env, { error: "internal_error" }, { status: 500 });
     }
   },
 } satisfies ExportedHandler<Env>;
@@ -137,12 +153,14 @@ async function handleObjectRequest(
 ): Promise<Response> {
   const normalizedKey = normalizeObjectKey(key);
   if (!normalizedKey) {
-    return corsResponse({ error: "invalid_object_key" }, { status: 400 });
+    return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
   }
 
   if (request.method === "PUT") {
+    await requireAdminUser(env, request);
+
     if (!request.body) {
-      return corsResponse({ error: "missing_body" }, { status: 400 });
+      return jsonCorsResponse(request, env, { error: "missing_body" }, { status: 400 });
     }
 
     const contentType = request.headers.get("content-type") ?? "application/octet-stream";
@@ -160,23 +178,23 @@ async function handleObjectRequest(
 
     ctx.waitUntil(recordAsset(env, normalizedKey, metadata));
 
-    return corsResponse({ key: normalizedKey }, { status: 201 });
+    return jsonCorsResponse(request, env, { key: normalizedKey }, { status: 201 });
   }
 
   if (request.method === "GET") {
     const object = await env.ASSETS.get(normalizedKey);
     if (!object) {
-      return notFound();
+      return withCors(request, env, notFound());
     }
 
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
 
-    return withCors(new Response(object.body, { headers }));
+    return withCors(request, env, new Response(object.body, { headers }));
   }
 
-  return corsResponse({ error: "method_not_allowed" }, { status: 405 });
+  return jsonCorsResponse(request, env, { error: "method_not_allowed" }, { status: 405 });
 }
 
 async function recordAsset(env: Env, key: string, metadata: UploadMetadata): Promise<void> {
@@ -202,21 +220,4 @@ function normalizeObjectKey(key: string): string | null {
   }
 
   return trimmed;
-}
-
-function corsResponse(data: unknown, init: ResponseInit = {}): Response {
-  return withCors(jsonResponse(data, init));
-}
-
-function withCors(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.set("access-control-allow-origin", "*");
-  headers.set("access-control-allow-methods", "GET,POST,PUT,OPTIONS");
-  headers.set("access-control-allow-headers", "content-type,authorization");
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
