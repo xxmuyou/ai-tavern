@@ -247,7 +247,7 @@ export async function generateText(env: Env, input: LlmGenerateInput): Promise<L
   });
 
   if (input.stream && input.onDelta) {
-    await input.onDelta(input.fallbackText);
+    await emitStreamText(input.fallbackText, input.onDelta);
   }
 
   return {
@@ -470,10 +470,43 @@ async function parseStreamLine(
 
   const text = parsed.choices?.map((choice) => choice.delta?.content ?? "").join("") ?? "";
   if (text && onDelta) {
-    await onDelta(text);
+    await emitStreamText(text, onDelta);
   }
 
   return { text, usage: parsed.usage };
+}
+
+async function emitStreamText(
+  text: string,
+  onDelta: NonNullable<LlmGenerateInput["onDelta"]>,
+): Promise<void> {
+  for (const chunk of splitStreamText(text)) {
+    if (chunk) {
+      await onDelta(chunk);
+    }
+  }
+}
+
+function splitStreamText(text: string): string[] {
+  if (text.length <= 36) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 24) {
+    const breakAt = Math.max(
+      remaining.lastIndexOf(" ", 24),
+      remaining.lastIndexOf("\n", 24),
+    );
+    const end = breakAt > 8 ? breakAt + 1 : 24;
+    chunks.push(remaining.slice(0, end));
+    remaining = remaining.slice(end);
+  }
+  if (remaining) {
+    chunks.push(remaining);
+  }
+  return chunks;
 }
 
 async function logGeneration(

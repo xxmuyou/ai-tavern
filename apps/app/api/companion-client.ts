@@ -140,6 +140,81 @@ export type ChapterTwoDateTurn = {
   updatedAt: string;
 };
 
+export type GuestCharacterPackage = {
+  assets: {
+    avatarObjectKey: string | null;
+    galleryObjectKeys: string[];
+    portraitObjectKey: string | null;
+    visualStates: Record<string, { label?: string; objectKey: string }>;
+  };
+  identity: {
+    ageRange?: string;
+    cityOrLifestyle?: string;
+    gender: 'female' | 'male' | null;
+    hobbies: string[];
+    name: string;
+    occupation?: string;
+  };
+  matchRules: {
+    blowUpSignals: string[];
+    dealbreakerSignals: string[];
+    hardPreferenceSignals: string[];
+    initialAffinity: number;
+    matchThreshold: number;
+    negativeSignals: string[];
+    positiveSignals: string[];
+    softPreferenceSignals: string[];
+  };
+  persona: {
+    backstory?: string;
+    boundaries: string;
+    goal: string;
+    hiddenPreferences: string;
+    personality: string;
+    relationshipToUser: string;
+    speakingStyle: string;
+  };
+  publicProfile: Record<string, unknown>;
+  stateModel: {
+    coefficients: Record<string, number>;
+    runtimeDefaults: {
+      action: string;
+      curiosity: number;
+      energy: number;
+      expression: string;
+      intimacy: number;
+      mood: string;
+    };
+  };
+};
+
+export type GuestCharacterPackagePayload = {
+  character: ShowGuest;
+  characterPackage: GuestCharacterPackage;
+  visualStateObjectKey: string | null;
+};
+
+export type RelationshipState = 'regular_friend' | 'date_object' | 'love_object';
+
+export function canEnterChapterTwoForCompanion(
+  companion: { relationshipState?: string | null },
+  isAdmin: boolean,
+): boolean {
+  if (isAdmin) {
+    return true;
+  }
+  return companion.relationshipState === 'date_object' || companion.relationshipState === 'love_object';
+}
+
+export function canEnterChapterThreeForCompanion(
+  companion: { relationshipState?: string | null },
+  isAdmin: boolean,
+): boolean {
+  if (isAdmin) {
+    return true;
+  }
+  return companion.relationshipState === 'love_object';
+}
 
 export type UnlockedCompanion = {
   avatarObjectKey: string | null;
@@ -155,7 +230,7 @@ export type UnlockedCompanion = {
     personalityKeywords?: string[];
     source?: string;
   };
-  relationshipState: string;
+  relationshipState: RelationshipState;
   sourceSessionId?: string;
   storyTurnCount: number;
   unlockStatus: string;
@@ -436,6 +511,34 @@ export async function joinWorkspaceGuest(characterKey: string, email: string): P
     }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
+  });
+}
+
+export async function createShowCharacter(input: {
+  characterPackage: GuestCharacterPackage;
+  email: string;
+}): Promise<GuestCharacterPackagePayload> {
+  return requestJson<GuestCharacterPackagePayload>(`/shows/${DATING_SHOW_KEY}/characters`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function fetchShowCharacterPackage(characterKey: string, email: string): Promise<GuestCharacterPackagePayload> {
+  return requestJson<GuestCharacterPackagePayload>(
+    `/shows/${DATING_SHOW_KEY}/characters/${encodeURIComponent(characterKey)}/package?email=${encodeURIComponent(email.trim())}`,
+  );
+}
+
+export async function updateShowCharacterPackage(characterKey: string, input: {
+  characterPackage: GuestCharacterPackage;
+  email: string;
+}): Promise<GuestCharacterPackagePayload> {
+  return requestJson<GuestCharacterPackagePayload>(`/shows/${DATING_SHOW_KEY}/characters/${encodeURIComponent(characterKey)}`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PATCH',
   });
 }
 

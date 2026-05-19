@@ -23,8 +23,10 @@ import {
   characterDefinitionToSnapshot,
   toCharacterDefinition,
 } from "./show-engine/domain/character-definition";
+import { canEditShowCharacter } from "./show-engine/domain/character-permissions";
 import {
   companionResponseLine as buildCompanionResponseLine,
+  canEnterChapterTwo,
   companionStoryScenes,
   readCompanionStoryOptions,
   shouldRequirePlatformPass,
@@ -36,6 +38,7 @@ import {
   selectGuestVisualObjectKey,
   validateGuestCharacterPackage,
 } from "./show-engine/domain/guest-character-package";
+import { buildGuestPromptContext } from "./show-engine/domain/guest-prompt-context";
 import {
   normalizeSelectedGuestKeys,
   resolveSelectedGuestLineup,
@@ -810,17 +813,27 @@ function streamTurnAnswer(
 
   const writeEvent = async (event: string, data: unknown) => {
     await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+    await writer.ready;
+  };
+
+  const writeComment = async (comment: string) => {
+    await writer.write(encoder.encode(`: ${comment}\n\n`));
+    await writer.ready;
   };
 
   void (async () => {
     try {
+      await writeComment("stream-open " + " ".repeat(2048));
       await writeEvent("start", { sessionId, turnId });
       const payload = await answerTurn(env, showKey, sessionId, turnId, body, {
-        onDelta: (text, meta) => writeEvent("delta", {
-          speakerKey: meta?.speakerKey ?? null,
-          speakerName: meta?.speakerName ?? null,
-          text,
-        }),
+        onDelta: async (text, meta) => {
+          await writeEvent("delta", {
+            speakerKey: meta?.speakerKey ?? null,
+            speakerName: meta?.speakerName ?? null,
+            text,
+          });
+          await writeComment("keep-alive");
+        },
         stream: true,
       });
       await writeEvent("session", payload);
@@ -918,26 +931,32 @@ async function getCharacterLibrary(env: ShowEngineEnv, showKey: string, user: Us
 
 async function getWorkspace(env: ShowEngineEnv, showKey: string, user: UserRecord) {
   const show = await requireShow(env, showKey);
-  const [characters, sessions, points, entitlement, profile, companions, guestAssets] = await Promise.all([
+  const [characters, sessions, points, entitlement, profile, guestAssets] = await Promise.all([
     getCharacters(env, showKey, "any", user),
     getRecentSessions(env, show, user),
     getPointSummary(env, show, user),
     getEntitlement(env, user, show),
     getUserShowProfile(env, show, user),
-    getUserCompanions(env, show, user),
     getUserGuestAssets(env, showKey, user),
   ]);
   const userCharacters = characters.filter((character) => isOwnedCharacter(character, user));
   const assetByCharacterKey = new Map(guestAssets.map((asset) => [asset.character_key, asset]));
-  const joinedGuests = characters.filter((character) => character.role === "guest" && assetByCharacterKey.has(character.character_key));
+  const admin = isAdminEmail(env, user.email);
+  const allGuests = characters.filter((character) => character.role === "guest");
+  const joinedGuests = admin
+    ? allGuests
+    : allGuests.filter((character) => assetByCharacterKey.has(character.character_key));
   const workspaceCharacters = uniqueCharacters([...joinedGuests, ...userCharacters]);
+  if (admin) {
+    await ensureAdminCompanionUnlocks(env, show, user, joinedGuests);
+  }
+  const companions = await getUserCompanions(env, show, user);
   const assetKeys = uniqueStrings([
     ...workspaceCharacters.flatMap(characterAssetKeys),
     ...sessions.map((session) => session.avatar_object_key),
     ...companions.map((companion) => companion.avatarObjectKey),
   ]);
   const assets = await getAssetSummary(env, assetKeys);
-  const admin = isAdminEmail(env, user.email);
 
   return {
     admin: {
@@ -1017,6 +1036,13 @@ async function joinWorkspaceGuest(env: ShowEngineEnv, showKey: string, body: Wor
   )
     .bind(crypto.randomUUID(), show.app_key, show.show_key, user.id, character.character_key, assetSource, acquisitionMethod)
     .run();
+
+  await ensureRegularFriendCompanion(env, {
+    character,
+    show,
+    sourceSessionId: "workspace_join",
+    user,
+  });
 
   return getWorkspace(env, showKey, user);
 }
@@ -1421,7 +1447,7 @@ async function insertUserCharacter(
 }
 
 async function getUserCharacterPackage(env: ShowEngineEnv, showKey: string, characterKey: string, user: UserRecord) {
-  const character = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const character = await requireEditableCharacter(env, showKey, characterKey, user);
   return serializeCharacterPackageResponse(character);
 }
 
@@ -1437,16 +1463,16 @@ async function updateUserCharacterPackage(
   }
 
   const user = await ensureUserByEmail(env, email);
-  const current = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const current = await requireEditableCharacter(env, showKey, characterKey, user);
   const validation = validateGuestCharacterPackage(body.characterPackage ?? body.package ?? body, guestPackageFromRow(current));
   if (validation.errors.length > 0) {
     throw jsonResponse({ error: "invalid_character_package", errors: validation.errors }, { status: 400 });
   }
 
   const fields = guestPackageToCharacterFields(validation.package);
-  await updateUserCharacterFields(env, showKey, characterKey, user, fields);
+  await updateUserCharacterFields(env, showKey, characterKey, user, fields, { allowAdmin: true });
 
-  const updated = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const updated = await requireEditableCharacter(env, showKey, characterKey, user);
   return serializeCharacterPackageResponse(updated);
 }
 
@@ -1467,15 +1493,15 @@ async function bindUserCharacterAsset(
   }
 
   const user = await ensureUserByEmail(env, email);
-  const current = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const current = await requireEditableCharacter(env, showKey, characterKey, user);
   const nextPackage = bindGuestAsset(guestPackageFromRow(current), {
     objectKey,
     slot: body.slot,
     visualStateKey: body.visualStateKey,
   });
-  await updateUserCharacterFields(env, showKey, characterKey, user, guestPackageToCharacterFields(nextPackage));
+  await updateUserCharacterFields(env, showKey, characterKey, user, guestPackageToCharacterFields(nextPackage), { allowAdmin: true });
 
-  const updated = await requireOwnedUserCharacter(env, showKey, characterKey, user);
+  const updated = await requireEditableCharacter(env, showKey, characterKey, user);
   return serializeCharacterPackageResponse(updated);
 }
 
@@ -1512,8 +1538,10 @@ async function updateUserCharacterFields(
   characterKey: string,
   user: UserRecord,
   fields: ReturnType<typeof guestPackageToCharacterFields>,
+  options: { allowAdmin?: boolean } = {},
 ) {
   const publicProfile = withCharacterVisibility(fields.publicProfile);
+  const admin = options.allowAdmin && isAdminEmail(env, user.email);
 
   await env.DB.prepare(
     `UPDATE show_characters
@@ -1535,7 +1563,7 @@ async function updateUserCharacterFields(
          soft_preference_signals = ?,
          match_threshold = ?,
          initial_affinity = ?
-     WHERE show_key = ? AND character_key = ? AND owner_user_id = ? AND source = ?`,
+     WHERE show_key = ? AND character_key = ? AND (? = 1 OR (owner_user_id = ? AND source = ?))`,
   )
     .bind(
       fields.name,
@@ -1558,6 +1586,7 @@ async function updateUserCharacterFields(
       fields.initialAffinity,
       showKey,
       characterKey,
+      admin ? 1 : 0,
       user.id,
       "user",
     )
@@ -1565,6 +1594,20 @@ async function updateUserCharacterFields(
 }
 
 async function requireOwnedUserCharacter(
+  env: ShowEngineEnv,
+  showKey: string,
+  characterKey: string,
+  user: UserRecord,
+): Promise<ShowCharacterRow> {
+  const character = await requireEditableCharacter(env, showKey, characterKey, user);
+  if (character.source !== "user" || character.owner_user_id !== user.id) {
+    throw new Response("character_forbidden", { status: 403 });
+  }
+
+  return character;
+}
+
+async function requireEditableCharacter(
   env: ShowEngineEnv,
   showKey: string,
   characterKey: string,
@@ -1586,7 +1629,7 @@ async function requireOwnedUserCharacter(
     throw new Response("character_not_found", { status: 404 });
   }
 
-  if (character.source !== "user" || character.owner_user_id !== user.id) {
+  if (!canEditShowCharacter(character, { isAdmin: isAdminEmail(env, user.email), userId: user.id })) {
     throw new Response("character_forbidden", { status: 403 });
   }
 
@@ -3344,13 +3387,107 @@ async function getUserCompanions(env: ShowEngineEnv, show: ShowTemplateRow, user
     `SELECT id, app_key, show_key, user_id, character_key, source_session_id, unlock_status,
             relationship_state, story_turn_count, last_story_at, snapshot, created_at, updated_at
      FROM user_companions
-     WHERE app_key = ? AND show_key = ? AND user_id = ? AND unlock_status = ?
+     WHERE app_key = ? AND show_key = ? AND user_id = ?
      ORDER BY COALESCE(last_story_at, updated_at) DESC`,
   )
-    .bind(show.app_key, show.show_key, user.id, "unlocked")
+    .bind(show.app_key, show.show_key, user.id)
     .all<UserCompanionRow>();
 
   return results.map(serializeCompanion);
+}
+
+async function ensureRegularFriendCompanion(
+  env: ShowEngineEnv,
+  input: {
+    character: ShowCharacterRow;
+    show: ShowTemplateRow;
+    sourceSessionId: string;
+    user: UserRecord;
+  },
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO user_companions (
+       id, app_key, show_key, user_id, character_key, source_session_id,
+       unlock_status, relationship_state, snapshot, last_story_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(user_id, show_key, character_key) DO UPDATE SET
+       unlock_status = CASE
+         WHEN user_companions.unlock_status = 'unlocked' THEN user_companions.unlock_status
+         ELSE excluded.unlock_status
+       END,
+       relationship_state = CASE
+         WHEN user_companions.relationship_state IN ('date_object', 'love_object') THEN user_companions.relationship_state
+         ELSE excluded.relationship_state
+       END,
+       snapshot = CASE
+         WHEN user_companions.relationship_state IN ('date_object', 'love_object') THEN user_companions.snapshot
+         ELSE excluded.snapshot
+       END,
+       updated_at = CURRENT_TIMESTAMP`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      input.show.app_key,
+      input.show.show_key,
+      input.user.id,
+      input.character.character_key,
+      input.sourceSessionId,
+      "locked",
+      "regular_friend",
+      JSON.stringify(serializeCharacter(input.character)),
+    )
+    .run();
+}
+
+async function ensureAdminCompanionUnlocks(
+  env: ShowEngineEnv,
+  show: ShowTemplateRow,
+  user: UserRecord,
+  joinedGuests: ShowCharacterRow[],
+): Promise<void> {
+  if (joinedGuests.length === 0) {
+    return;
+  }
+  const { results: existing } = await env.DB.prepare(
+    `SELECT character_key FROM user_companions
+     WHERE app_key = ? AND show_key = ? AND user_id = ?`,
+  )
+    .bind(show.app_key, show.show_key, user.id)
+    .all<{ character_key: string }>();
+  const existingKeys = new Set(existing.map((row) => row.character_key));
+
+  for (const guest of joinedGuests) {
+    if (existingKeys.has(guest.character_key)) {
+      continue;
+    }
+    await env.DB.prepare(
+      `INSERT INTO user_companions (
+         id, app_key, show_key, user_id, character_key, source_session_id,
+         unlock_status, relationship_state, snapshot, last_story_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(user_id, show_key, character_key) DO UPDATE SET
+         unlock_status = excluded.unlock_status,
+         relationship_state = CASE
+           WHEN user_companions.relationship_state = 'love_object' THEN user_companions.relationship_state
+           ELSE excluded.relationship_state
+         END,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        show.app_key,
+        show.show_key,
+        user.id,
+        guest.character_key,
+        "admin_bootstrap",
+        "unlocked",
+        "love_object",
+        JSON.stringify(serializeCharacter(guest)),
+      )
+      .run();
+  }
 }
 
 async function unlockCompanion(
@@ -3373,6 +3510,9 @@ async function unlockCompanion(
     .first<UserCompanionRow>();
   const companionId = existing?.id ?? crypto.randomUUID();
 
+  const nextRelationshipState = existing?.relationship_state === "love_object"
+    ? "love_object"
+    : "date_object";
   await env.DB.prepare(
     `INSERT INTO user_companions (
        id, app_key, show_key, user_id, character_key, source_session_id,
@@ -3382,7 +3522,7 @@ async function unlockCompanion(
      ON CONFLICT(user_id, show_key, character_key) DO UPDATE SET
        source_session_id = excluded.source_session_id,
        unlock_status = excluded.unlock_status,
-       relationship_state = user_companions.relationship_state,
+       relationship_state = excluded.relationship_state,
        snapshot = excluded.snapshot,
        updated_at = CURRENT_TIMESTAMP`,
   )
@@ -3394,7 +3534,7 @@ async function unlockCompanion(
       input.selectedCharacter.character_key,
       input.session.id,
       "unlocked",
-      "unlocked",
+      nextRelationshipState,
       input.selectedCharacter.snapshot,
     )
     .run();
@@ -3409,14 +3549,15 @@ async function requireCompanion(
   companionId: string,
   user: UserRecord,
 ): Promise<UserCompanionRow> {
+  const isAdmin = isAdminEmail(env, user.email);
   const companion = await env.DB.prepare(
     `SELECT id, app_key, show_key, user_id, character_key, source_session_id, unlock_status,
             relationship_state, story_turn_count, last_story_at, snapshot, created_at, updated_at
      FROM user_companions
-     WHERE id = ? AND user_id = ? AND unlock_status = ?
+     WHERE id = ? AND user_id = ? AND (unlock_status = ? OR ? = 1)
      LIMIT 1`,
   )
-    .bind(companionId, user.id, "unlocked")
+    .bind(companionId, user.id, "unlocked", isAdmin ? 1 : 0)
     .first<UserCompanionRow>();
 
   if (!companion) {
@@ -3435,13 +3576,14 @@ async function getCompanionStory(env: ShowEngineEnv, companionId: string, user: 
   ]);
   const recentTurns = await getCompanionStoryTurns(env, companion, user);
   const freeLimit = readFreeCompanionStoryTurns(show);
+  const isAdmin = isAdminEmail(env, user.email);
 
   return {
     companion: serializeCompanion(companion),
     currentTurn: turn ? serializeCompanionStoryTurn(turn) : null,
     entitlement,
     freeTurnLimit: freeLimit,
-    paywallRequired: !entitlement.active && companion.story_turn_count >= freeLimit && !turn,
+    paywallRequired: !isAdmin && !entitlement.active && companion.story_turn_count >= freeLimit && !turn,
     recentTurns: recentTurns.map(serializeCompanionStoryTurn),
     show: serializeShow(show),
   };
@@ -3463,9 +3605,11 @@ async function answerCompanionStoryTurn(
   const show = await requireShow(env, companion.show_key);
   const entitlement = await getEntitlement(env, user, show);
   const freeLimit = readFreeCompanionStoryTurns(show);
+  const isAdmin = isAdminEmail(env, user.email);
   if (shouldRequirePlatformPass({
     activeEntitlement: entitlement.active,
     freeTurnLimit: freeLimit,
+    isAdmin,
     storyTurnCount: companion.story_turn_count,
   })) {
     throw jsonResponse({ error: "platform_pass_required", freeTurnLimit: freeLimit, paywallRequired: true }, { status: 402 });
@@ -3498,17 +3642,16 @@ async function answerCompanionStoryTurn(
     .run();
 
   const nextCount = companion.story_turn_count + 1;
-  const relationshipState = nextCount >= 2 ? "warming_up" : "unlocked";
   await env.DB.prepare(
     `UPDATE user_companions
-     SET story_turn_count = ?, relationship_state = ?, last_story_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     SET story_turn_count = ?, last_story_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
      WHERE id = ? AND user_id = ?`,
   )
-    .bind(nextCount, relationshipState, companion.id, user.id)
+    .bind(nextCount, companion.id, user.id)
     .run();
 
   const updatedCompanion = await requireCompanion(env, companion.id, user);
-  if (entitlement.active || nextCount < freeLimit) {
+  if (isAdmin || entitlement.active || nextCount < freeLimit) {
     await createCompanionStoryTurn(env, show, updatedCompanion, user);
   }
 
@@ -3530,6 +3673,7 @@ async function ensureCompanionStoryTurn(
   if (shouldRequirePlatformPass({
     activeEntitlement: entitlement.active,
     freeTurnLimit: readFreeCompanionStoryTurns(show),
+    isAdmin: isAdminEmail(env, user.email),
     storyTurnCount: companion.story_turn_count,
   })) {
     return null;
@@ -3576,12 +3720,16 @@ async function createChapterTwoDateSession(
   }
 
   const user = await ensureUserByEmail(env, email);
+  const isAdmin = isAdminEmail(env, user.email);
   const [show, companion] = await Promise.all([
     requireShow(env, showKey),
     requireCompanion(env, companionId, user),
   ]);
   if (companion.show_key !== show.show_key || companion.app_key !== show.app_key) {
     throw new Response("companion_not_found", { status: 404 });
+  }
+  if (!canEnterChapterTwo({ isAdmin, relationshipState: companion.relationship_state })) {
+    throw new Response("chapter_two_locked", { status: 403 });
   }
 
   const steps = chapterTwoDateSteps(location.locationKey);
@@ -3669,7 +3817,10 @@ async function answerChapterTwoDateTurn(
     throw new Response("chapter_two_turn_already_answered", { status: 409 });
   }
 
-  const companion = await requireCompanion(env, session.companion_id, user);
+  const [companion, show] = await Promise.all([
+    requireCompanion(env, session.companion_id, user),
+    requireShow(env, showKey),
+  ]);
   const options = readChapterTwoDateOptions(turn.options);
   const selectedOptionId = normalizeShortText(body.selectedOptionId, "", 120);
   const selectedOption = options.find((option) => option.id === selectedOptionId) ?? null;
@@ -3679,11 +3830,17 @@ async function answerChapterTwoDateTurn(
   }
 
   const answerText = [selectedOption?.preview, freeText].filter(Boolean).join(" ");
-  const responseText = chapterTwoDateResponseLine({
+  const responseText = await generateChapterTwoDateResponseLine(env, {
     companionName: companionNameFromSnapshot(companion.snapshot),
+    companion,
+    answerText,
     freeText,
     locationKey: session.location_key,
     selectedOption,
+    session,
+    show,
+    turn,
+    user,
   });
 
   await env.DB.prepare(
@@ -3704,6 +3861,13 @@ async function answerChapterTwoDateTurn(
        WHERE id = ? AND user_id = ?`,
     )
       .bind("completed", "completed", nextTurnCount, session.id, user.id)
+      .run();
+    await env.DB.prepare(
+      `UPDATE user_companions
+       SET relationship_state = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_id = ?`,
+    )
+      .bind("love_object", companion.id, user.id)
       .run();
   } else {
     const nextStep = steps.find((step) => step.stepKey === nextStepKey);
@@ -3845,6 +4009,76 @@ function readChapterTwoDateOptions(value: string): ChapterTwoDateOption[] {
       tone: typeof option.tone === "string" ? option.tone : "",
     }))
     .filter((option) => option.id && option.label && option.preview);
+}
+
+async function generateChapterTwoDateResponseLine(
+  env: ShowEngineEnv,
+  input: {
+    answerText: string;
+    companion: UserCompanionRow;
+    companionName: string;
+    freeText: string;
+    locationKey: string;
+    selectedOption: ChapterTwoDateOption | null;
+    session: ChapterTwoDateSessionRow;
+    show: ShowTemplateRow;
+    turn: ChapterTwoDateTurnRow;
+    user: UserRecord;
+  },
+): Promise<string> {
+  const fallbackText = chapterTwoDateResponseLine({
+    companionName: input.companionName,
+    freeText: input.freeText,
+    locationKey: input.locationKey,
+    selectedOption: input.selectedOption,
+  });
+  const snapshot = parseSnapshot(input.companion.snapshot) as CharacterSnapshot;
+  const guestContext = buildGuestPromptContext({
+    currentAffinity: null,
+    guestName: input.companionName,
+    snapshot,
+    stageKey: `chapter_two:${input.turn.step_key}`,
+    userInput: input.answerText,
+  });
+  const location = chapterTwoDateLocation(input.locationKey);
+
+  const result = await generateText(env, {
+    fallbackText,
+    maxOutputTokens: 120,
+    messages: [
+      {
+        content: [
+          "You write one natural spoken line for a private Chapter 2 date scene.",
+          "Use the same Guest identity, preferences, boundaries, and speaking style from the structured context.",
+          "No narration, no speaker prefix, no parentheses, no stage directions.",
+          "PG-13, emotionally specific, and never insulting or coercive.",
+        ].join(" "),
+        role: "system",
+      },
+      {
+        content: [
+          guestContext,
+          `Date location: ${location?.title ?? input.locationKey} - ${location?.summary ?? ""}`,
+          `Date prompt: ${input.turn.prompt}`,
+          `Selected move: ${input.selectedOption?.label ?? "free text"} / ${input.selectedOption?.preview ?? "none"}`,
+          "Write one spoken reply under 44 words. React to the user's move and let the relationship feel more specific.",
+        ].join("\n"),
+        role: "user",
+      },
+    ],
+    metadata: {
+      appKey: input.show.app_key,
+      purpose: "chapter_two_date_reply",
+      sessionId: input.session.id,
+      showKey: input.show.show_key,
+      stageKey: input.turn.step_key,
+      userId: input.user.id,
+    },
+    route: "cheap-dialogue",
+    temperature: 0.72,
+  });
+
+  return sanitizeGeneratedLine(normalizeShortText(result.text, fallbackText, 360), fallbackText, input.companionName);
 }
 
 async function getCompanionStoryTurns(
@@ -4090,18 +4324,17 @@ async function judgeTurnSemantics(
   const guestContext = guests.map((guest) => {
     const snapshot = parseSnapshot(guest.snapshot) as CharacterSnapshot;
     return {
-      boundaries: snapshot.boundaries,
       characterKey: guest.character_key,
       currentAffinity: guest.affinity_score,
-      dealbreakerSignals: asStringArray(snapshot.dealbreakerSignals),
-      goal: snapshot.goal,
-      hiddenPreferences: snapshot.hiddenPreferences,
       lightState: guest.light_state,
       name: guest.name,
-      negativeSignals: asStringArray(snapshot.negativeSignals),
-      personality: snapshot.personality,
-      positiveSignals: asStringArray(snapshot.positiveSignals),
-      speakingStyle: snapshot.speakingStyle,
+      promptContext: buildGuestPromptContext({
+        currentAffinity: guest.affinity_score,
+        guestName: guest.name,
+        snapshot,
+        stageKey: input.turn.stage_key,
+        userInput: input.answerText,
+      }),
     };
   });
 
@@ -4298,7 +4531,17 @@ async function generateShowLine(
   },
 ): Promise<string> {
   const fallbackText = fallbackShowLine(input);
-  const selectedSnapshot = input.selectedCharacter ? parseSnapshot(input.selectedCharacter.snapshot) : null;
+  const selectedSnapshot = input.selectedCharacter ? parseSnapshot(input.selectedCharacter.snapshot) as CharacterSnapshot : null;
+  const selectedGuestContext = input.selectedCharacter && selectedSnapshot
+    ? buildGuestPromptContext({
+      currentAffinity: input.nextAffinity,
+      guestName: input.selectedCharacter.name,
+      snapshot: selectedSnapshot,
+      stageKey: input.stage.stage_key,
+      userBackground: sessionIdentitySummary(input.session.user_profile),
+      userInput: input.content,
+    })
+    : "host only";
   const messages: LlmMessage[] = [
     {
       content: [
@@ -4322,7 +4565,7 @@ async function generateShowLine(
       `Role to write: ${input.role}`,
       `User message: ${input.content}`,
       `Selected character: ${input.selectedCharacter?.name ?? "none"}`,
-      `Character snapshot: ${selectedSnapshot ? JSON.stringify(selectedSnapshot) : "host only"}`,
+      `Guest context:\n${selectedGuestContext}`,
       `Affinity score: ${input.nextAffinity}`,
       input.role === "character"
         ? "Write a single spoken guest reply under 45 words. React to the user's latest message and, when natural, ask one grounded follow-up question."
@@ -5318,6 +5561,14 @@ async function generateGuestQuestion(
     .slice(-4)
     .map((m) => `${m.speaker_name}: ${m.content}`)
     .join("\n");
+  const guestContext = buildGuestPromptContext({
+    currentAffinity: input.guest.affinity_score,
+    guestName: input.guest.name,
+    recentConversation: history || undefined,
+    snapshot,
+    stageKey: input.stageKey,
+    userBackground: profileSummary,
+  });
   const fallbackText = `${input.guest.name}: What is something about you that a first impression usually gets wrong?`;
 
   const result = await generateText(env, {
@@ -5326,15 +5577,8 @@ async function generateGuestQuestion(
     messages: [
       {
         content: [
-          `You are ${input.guest.name}, a guest on a live dating show.`,
-          `Your personality: ${snapshot.personality}`,
-          `Your goal: ${snapshot.goal}`,
-          `Speaking style: ${snapshot.speakingStyle}`,
-          `Hidden preferences: ${snapshot.hiddenPreferences}`,
-          "",
-          `The contestant's background: ${profileSummary}`,
-          "",
-          `Recent conversation:\n${history || "(none yet)"}`,
+          "You are a guest on a live dating show.",
+          guestContext,
           "",
           "Ask ONE natural, specific question directly to the contestant.",
           `Start with "${input.guest.name}:" — under 40 words, first person.`,
@@ -5375,6 +5619,14 @@ async function generateGuestAnswer(
 ): Promise<string> {
   const snapshot = parseSnapshot(input.guest.snapshot) as CharacterSnapshot;
   const profileSummary = sessionIdentitySummary(input.session.user_profile);
+  const guestContext = buildGuestPromptContext({
+    currentAffinity: input.guest.affinity_score,
+    guestName: input.guest.name,
+    snapshot,
+    stageKey: input.stageKey,
+    userBackground: profileSummary,
+    userInput: input.userQuestion,
+  });
   const fallbackText = `${input.guest.name}: That is a fair question. Let me think about it for a moment.`;
 
   const result = await generateText(env, {
@@ -5383,16 +5635,8 @@ async function generateGuestAnswer(
     messages: [
       {
         content: [
-          `You are ${input.guest.name}, a guest on a live dating show.`,
-          `Your personality: ${snapshot.personality}`,
-          `Your goal: ${snapshot.goal}`,
-          `Speaking style: ${snapshot.speakingStyle}`,
-          `Hidden preferences: ${snapshot.hiddenPreferences}`,
-          `Boundaries: ${snapshot.boundaries}`,
-          `Current affinity: ${input.guest.affinity_score}`,
-          "",
-          `Contestant background: ${profileSummary}`,
-          "",
+          "You are a guest on a live dating show.",
+          guestContext,
           `The contestant asked you: "${input.userQuestion}"`,
           "",
           `Answer in character — under 50 words, first person. Start with "${input.guest.name}:".`,
@@ -5435,6 +5679,14 @@ async function generateCharacterReactionLine(
 ): Promise<string> {
   const snapshot = parseSnapshot(input.guest.snapshot) as CharacterSnapshot;
   const fallbackText = fallbackCharacterReactionLine(input.guest.name, input.outcome);
+  const guestContext = buildGuestPromptContext({
+    currentAffinity: input.outcome?.nextAffinity ?? input.guest.affinity_score,
+    guestName: input.guest.name,
+    snapshot,
+    stageKey: input.stageKey,
+    userBackground: sessionIdentitySummary(input.session.user_profile),
+    userInput: input.answerText,
+  });
   const result = await generateText(env, {
     fallbackText,
     maxOutputTokens: 120,
@@ -5451,17 +5703,9 @@ async function generateCharacterReactionLine(
       },
       {
         content: [
-          `Guest: ${input.guest.name}`,
-          `Personality: ${snapshot.personality}`,
-          `Goal: ${snapshot.goal}`,
-          `Boundaries: ${snapshot.boundaries}`,
-          `Hidden preferences: ${snapshot.hiddenPreferences}`,
-          `Speaking style: ${snapshot.speakingStyle}`,
-          `Stage: ${input.stageKey}`,
-          `Current affinity after judgment: ${input.outcome?.nextAffinity ?? input.guest.affinity_score}`,
+          guestContext,
           `Light state after judgment: ${input.outcome?.nextLightState ?? input.guest.light_state}`,
           `Why their state changed: ${input.outcome?.reason ?? "The answer did not move them much."}`,
-          `User answer: ${input.answerText}`,
           "Write one spoken reaction under 36 words. If positive, show what landed. If cautious, name the concern kindly. If light is off, make the boundary clear.",
         ].join("\n"),
         role: "user",

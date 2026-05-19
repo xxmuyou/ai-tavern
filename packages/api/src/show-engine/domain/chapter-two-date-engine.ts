@@ -147,14 +147,25 @@ export function nextChapterTwoDateStepKey(steps: ChapterTwoDateStep[], currentSt
 
 export function canStartChapterTwoDate(input: {
   companionId: string;
+  isAdmin?: boolean;
   showKey: string;
-  unlockedCompanions: Array<{ id: string; showKey: string; unlockStatus: string }>;
+  unlockedCompanions: Array<{ id: string; showKey: string; unlockStatus: string; relationshipState?: string }>;
 }): boolean {
-  return input.unlockedCompanions.some((companion) =>
-    companion.id === input.companionId &&
-    companion.showKey === input.showKey &&
-    companion.unlockStatus === "unlocked"
+  const companion = input.unlockedCompanions.find((entry) =>
+    entry.id === input.companionId &&
+    entry.showKey === input.showKey,
   );
+  if (!companion) {
+    return false;
+  }
+  if (input.isAdmin) {
+    return true;
+  }
+  if (companion.unlockStatus !== "unlocked") {
+    return false;
+  }
+  const state = companion.relationshipState ?? "regular_friend";
+  return state === "date_object" || state === "love_object";
 }
 
 export function chapterTwoDateResponseLine(input: {

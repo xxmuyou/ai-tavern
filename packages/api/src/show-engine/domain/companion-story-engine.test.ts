@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canEnterChapterThree,
+  canEnterChapterTwo,
   companionResponseLine,
   companionStoryDefinition,
+  normalizeRelationshipState,
   readCompanionStoryOptions,
   shouldRequirePlatformPass,
 } from "./companion-story-engine";
@@ -20,6 +23,17 @@ describe("companion story engine", () => {
     expect(shouldRequirePlatformPass({ activeEntitlement: false, freeTurnLimit: 2, storyTurnCount: 2 })).toBe(true);
     expect(shouldRequirePlatformPass({ activeEntitlement: false, freeTurnLimit: 2, storyTurnCount: 1 })).toBe(false);
     expect(shouldRequirePlatformPass({ activeEntitlement: true, freeTurnLimit: 2, storyTurnCount: 8 })).toBe(false);
+    expect(shouldRequirePlatformPass({ activeEntitlement: false, freeTurnLimit: 2, isAdmin: true, storyTurnCount: 8 })).toBe(false);
+  });
+
+  it("normalizes and gates companion relationship states by chapter", () => {
+    expect(normalizeRelationshipState("unlocked")).toBe("regular_friend");
+    expect(canEnterChapterTwo({ relationshipState: "regular_friend" })).toBe(false);
+    expect(canEnterChapterTwo({ relationshipState: "date_object" })).toBe(true);
+    expect(canEnterChapterTwo({ relationshipState: "love_object" })).toBe(true);
+    expect(canEnterChapterTwo({ isAdmin: true, relationshipState: "regular_friend" })).toBe(true);
+    expect(canEnterChapterThree({ relationshipState: "date_object" })).toBe(false);
+    expect(canEnterChapterThree({ relationshipState: "love_object" })).toBe(true);
   });
 
   it("serializes story options and response lines without storage dependencies", () => {

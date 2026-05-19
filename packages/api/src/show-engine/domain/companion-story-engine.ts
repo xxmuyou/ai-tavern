@@ -76,7 +76,48 @@ export function readCompanionStoryOptions(value: string): CompanionStoryOption[]
 export function shouldRequirePlatformPass(input: {
   activeEntitlement: boolean;
   freeTurnLimit: number;
+  isAdmin?: boolean;
   storyTurnCount: number;
 }): boolean {
+  if (input.isAdmin) {
+    return false;
+  }
   return !input.activeEntitlement && input.storyTurnCount >= input.freeTurnLimit;
+}
+
+export type RelationshipState = "regular_friend" | "date_object" | "love_object";
+
+export const RELATIONSHIP_STATES: readonly RelationshipState[] = [
+  "regular_friend",
+  "date_object",
+  "love_object",
+] as const;
+
+export function isRelationshipState(value: unknown): value is RelationshipState {
+  return typeof value === "string" && (RELATIONSHIP_STATES as readonly string[]).includes(value);
+}
+
+export function normalizeRelationshipState(value: unknown): RelationshipState {
+  return isRelationshipState(value) ? value : "regular_friend";
+}
+
+export function canEnterChapterTwo(input: {
+  isAdmin?: boolean;
+  relationshipState: RelationshipState | string | null | undefined;
+}): boolean {
+  if (input.isAdmin) {
+    return true;
+  }
+  const state = normalizeRelationshipState(input.relationshipState);
+  return state === "date_object" || state === "love_object";
+}
+
+export function canEnterChapterThree(input: {
+  isAdmin?: boolean;
+  relationshipState: RelationshipState | string | null | undefined;
+}): boolean {
+  if (input.isAdmin) {
+    return true;
+  }
+  return normalizeRelationshipState(input.relationshipState) === "love_object";
 }

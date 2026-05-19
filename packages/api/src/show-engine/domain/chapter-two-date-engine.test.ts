@@ -33,16 +33,31 @@ describe("chapter two date engine", () => {
     expect(nextChapterTwoDateStepKey(steps, "closing-signal")).toBeNull();
   });
 
-  it("only allows unlocked companions from the same show to start chapter two", () => {
+  it("only allows date-or-love companions from the same show to start chapter two", () => {
     const unlockedCompanions = [
-      { id: "companion-1", showKey: "dating-heart-signal", unlockStatus: "unlocked" },
-      { id: "companion-2", showKey: "dating-heart-signal", unlockStatus: "locked" },
-      { id: "companion-3", showKey: "other-show", unlockStatus: "unlocked" },
+      { id: "companion-1", relationshipState: "date_object", showKey: "dating-heart-signal", unlockStatus: "unlocked" },
+      { id: "companion-2", relationshipState: "regular_friend", showKey: "dating-heart-signal", unlockStatus: "unlocked" },
+      { id: "companion-3", relationshipState: "love_object", showKey: "other-show", unlockStatus: "unlocked" },
+      { id: "companion-4", relationshipState: "date_object", showKey: "dating-heart-signal", unlockStatus: "locked" },
     ];
 
     expect(canStartChapterTwoDate({ companionId: "companion-1", showKey: "dating-heart-signal", unlockedCompanions })).toBe(true);
     expect(canStartChapterTwoDate({ companionId: "companion-2", showKey: "dating-heart-signal", unlockedCompanions })).toBe(false);
     expect(canStartChapterTwoDate({ companionId: "companion-3", showKey: "dating-heart-signal", unlockedCompanions })).toBe(false);
+    expect(canStartChapterTwoDate({ companionId: "companion-4", showKey: "dating-heart-signal", unlockedCompanions })).toBe(false);
     expect(canStartChapterTwoDate({ companionId: "missing", showKey: "dating-heart-signal", unlockedCompanions })).toBe(false);
+  });
+
+  it("lets admins start chapter two for any companion row in the show", () => {
+    const unlockedCompanions = [
+      { id: "companion-1", relationshipState: "regular_friend", showKey: "dating-heart-signal", unlockStatus: "locked" },
+    ];
+
+    expect(canStartChapterTwoDate({
+      companionId: "companion-1",
+      isAdmin: true,
+      showKey: "dating-heart-signal",
+      unlockedCompanions,
+    })).toBe(true);
   });
 });

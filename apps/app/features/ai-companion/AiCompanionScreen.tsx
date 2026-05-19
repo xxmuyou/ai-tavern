@@ -8,6 +8,8 @@ import {
   type AsyncState,
   type ChapterTwoDateLocation,
   type ChapterTwoDateSessionPayload,
+  type GuestCharacterPackage,
+  type GuestCharacterPackagePayload,
   type ShowGuest,
   type ShowSessionPayload,
   type ShowWorkspacePayload,
@@ -17,8 +19,12 @@ import {
   type WorkspaceGuest,
   answerChapterTwoDateTurn,
   answerShowTurnStream,
+  canEnterChapterThreeForCompanion,
+  canEnterChapterTwoForCompanion,
   createChapterTwoDateSession,
   createChapterOneSession,
+  createShowCharacter,
+  fetchShowCharacterPackage,
   fetchChapterTwoDateSession,
   fetchChapterTwoLocations,
   fetchShowCharacters,
@@ -29,6 +35,7 @@ import {
   objectUrl,
   previewShowSpeech,
   startCheckout as createCheckout,
+  updateShowCharacterPackage,
   uploadSystemAsset,
 } from '@/api/companion-client';
 import { useAuthEmail } from '@/hooks/use-auth-email';
@@ -40,6 +47,31 @@ type PendingAction =
   | { type: 'chapters' }
   | { type: 'price' }
   | { type: 'workspace' };
+type GuestEditorTarget =
+  | { mode: 'create' }
+  | { characterKey: string; mode: 'edit' };
+type GuestEditorForm = {
+  ageRange: string;
+  blowUpSignals: string;
+  boundaries: string;
+  cityOrLifestyle: string;
+  dealbreakerSignals: string;
+  gender: 'female' | 'male';
+  goal: string;
+  hardPreferenceSignals: string;
+  hiddenPreferences: string;
+  hobbies: string;
+  initialAffinity: string;
+  matchThreshold: string;
+  name: string;
+  negativeSignals: string;
+  occupation: string;
+  personality: string;
+  positiveSignals: string;
+  relationshipToUser: string;
+  softPreferenceSignals: string;
+  speakingStyle: string;
+};
 
 const DEFAULT_CHAPTER_ONE_SLOT_COUNT = 5;
 
@@ -91,6 +123,9 @@ export default function AiCompanionHome() {
   const [guestStreamingLines, setGuestStreamingLines] = useState<Record<string, string>>({});
   const [turnSubmitting, setTurnSubmitting] = useState(false);
   const [chapterTwoSubmitting, setChapterTwoSubmitting] = useState(false);
+  const [guestEditorTarget, setGuestEditorTarget] = useState<GuestEditorTarget | null>(null);
+  const [guestEditorPayload, setGuestEditorPayload] = useState<AsyncState<GuestCharacterPackagePayload>>({ status: 'idle' });
+  const [guestEditorSaving, setGuestEditorSaving] = useState(false);
 
   const guests = useMemo(
     () => library.status === 'ready' ? library.data.characters.filter((guest) => guest.role === 'guest') : [],
@@ -126,6 +161,13 @@ export default function AiCompanionHome() {
   );
 
   const unlockedCompanions = workspace.status === 'ready' ? workspace.data.companions : [];
+  const isAdmin = workspace.status === 'ready' ? Boolean(workspace.data.admin?.isAdmin) : false;
+  const chapterTwoEligibleCompanions = useMemo(
+    () => unlockedCompanions.filter((companion) => canEnterChapterTwoForCompanion(companion, isAdmin)),
+    [unlockedCompanions, isAdmin],
+  );
+  const chapterTwoUnlocked = isAdmin || chapterTwoEligibleCompanions.length > 0;
+  const chapterThreeUnlocked = isAdmin || unlockedCompanions.some((companion) => canEnterChapterThreeForCompanion(companion, isAdmin));
 
   const chapterOneSlotCount = workspace.status === 'ready'
     ? clampSlotCount(workspace.data.chapterOne?.slotCount)
@@ -263,13 +305,62 @@ export default function AiCompanionHome() {
     return true;
   }, [openSignIn, signedIn]);
 
+  const openGuestCreator = useCallback(() => {
+    if (requireSignIn({ type: 'workspace' })) {
+      return;
+    }
+
+    setGuestEditorTarget({ mode: 'create' });
+    setGuestEditorPayload({ status: 'ready', data: emptyGuestPackagePayload() });
+  }, [requireSignIn]);
+
+  const openGuestEditor = useCallback(async (characterKey: string) => {
+    if (requireSignIn({ type: 'workspace' })) {
+      return;
+    }
+
+    setGuestEditorTarget({ characterKey, mode: 'edit' });
+    setGuestEditorPayload({ status: 'loading' });
+    try {
+      setGuestEditorPayload({ status: 'ready', data: await fetchShowCharacterPackage(characterKey, email) });
+    } catch (error) {
+      setGuestEditorPayload({ status: 'error', message: String(error) });
+    }
+  }, [email, requireSignIn]);
+
+  const closeGuestEditor = useCallback(() => {
+    setGuestEditorTarget(null);
+    setGuestEditorPayload({ status: 'idle' });
+  }, []);
+
+  const saveGuestPackage = useCallback(async (characterPackage: GuestCharacterPackage) => {
+    if (!email || !guestEditorTarget) {
+      return;
+    }
+
+    setGuestEditorSaving(true);
+    try {
+      const payload = guestEditorTarget.mode === 'create'
+        ? await createShowCharacter({ characterPackage, email })
+        : await updateShowCharacterPackage(guestEditorTarget.characterKey, { characterPackage, email });
+      setGuestEditorPayload({ status: 'ready', data: payload });
+      setNotice(`${payload.character.name} saved.`);
+      await Promise.all([loadLibrary(email), loadWorkspace(email)]);
+      closeGuestEditor();
+    } catch (error) {
+      setNotice(String(error));
+    } finally {
+      setGuestEditorSaving(false);
+    }
+  }, [closeGuestEditor, email, guestEditorTarget, loadLibrary, loadWorkspace]);
+
   useEffect(() => {
     if (workspace.status !== 'ready' || selectedChapterTwoCompanionId) {
       return;
     }
 
-    setSelectedChapterTwoCompanionId(workspace.data.companions[0]?.id ?? '');
-  }, [selectedChapterTwoCompanionId, workspace]);
+    setSelectedChapterTwoCompanionId(chapterTwoEligibleCompanions[0]?.id ?? '');
+  }, [chapterTwoEligibleCompanions, selectedChapterTwoCompanionId, workspace.status]);
 
   const confirmSignIn = useCallback(async () => {
     const normalized = draftEmail.trim().toLowerCase();
@@ -376,8 +467,8 @@ export default function AiCompanionHome() {
 
     setMode('chapter-two');
     setChapterTwoSession({ status: 'idle' });
-    setSelectedChapterTwoCompanionId((current) => current || unlockedCompanions[0]?.id || '');
-  }, [email, loadWorkspace, unlockedCompanions, workspace.status]);
+    setSelectedChapterTwoCompanionId((current) => current || chapterTwoEligibleCompanions[0]?.id || '');
+  }, [chapterTwoEligibleCompanions, email, loadWorkspace, workspace.status]);
 
   const removeChapterGuest = useCallback((characterKey: string) => {
     setSelectedGuestKeys((current) => current.filter((key) => key !== characterKey));
@@ -614,6 +705,9 @@ export default function AiCompanionHome() {
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.page}>
         {mode === 'workspace' ? (
           <WorkspaceView
+            isAdmin={isAdmin}
+            onCreateGuest={openGuestCreator}
+            onEditGuest={openGuestEditor}
             onMore={openHome}
             onRefresh={() => void loadWorkspace(email)}
             onReplaceSystemAsset={replaceSystemAsset}
@@ -643,7 +737,7 @@ export default function AiCompanionHome() {
           />
         ) : mode === 'chapter-two' ? (
           <ChapterTwoView
-            companions={unlockedCompanions}
+            companions={chapterTwoEligibleCompanions}
             compact={compact}
             locationState={chapterTwoLocations}
             onBack={openHome}
@@ -662,10 +756,13 @@ export default function AiCompanionHome() {
           <HomeView
             communityGuests={communityGuests}
             compact={compact}
+            isAdmin={isAdmin}
             joiningKey={joiningKey}
             library={library}
             notice={notice}
             officialGuests={officialGuests}
+            onCreateGuest={openGuestCreator}
+            onEditGuest={openGuestEditor}
             onJoin={joinGuest}
             onRefresh={() => void loadLibrary(email)}
             onStart={openChapters}
@@ -676,9 +773,15 @@ export default function AiCompanionHome() {
 
       {chapterModalOpen ? (
         <ChapterModal
-          chapterTwoUnlocked={unlockedCompanions.length > 0}
+          chapterThreeUnlocked={chapterThreeUnlocked}
+          chapterTwoUnlocked={chapterTwoUnlocked}
+          isAdmin={isAdmin}
           onClose={() => setChapterModalOpen(false)}
           onEnterChapterOne={enterChapterOne}
+          onEnterChapterThree={() => {
+            setNotice('Chapter 3 is coming soon. Your bond is ready when the chapter opens.');
+            setChapterModalOpen(false);
+          }}
           onEnterChapterTwo={enterChapterTwo}
         />
       ) : null}
@@ -692,6 +795,15 @@ export default function AiCompanionHome() {
           }}
           onSubmit={confirmSignIn}
           signingIn={signingIn}
+        />
+      ) : null}
+      {guestEditorTarget ? (
+        <GuestEditorModal
+          isSaving={guestEditorSaving}
+          mode={guestEditorTarget.mode}
+          onClose={closeGuestEditor}
+          onSubmit={saveGuestPackage}
+          state={guestEditorPayload}
         />
       ) : null}
     </View>
@@ -768,10 +880,13 @@ function TopbarButton({ active, label, onPress }: { active?: boolean; label: str
 function HomeView({
   communityGuests,
   compact,
+  isAdmin,
   joiningKey,
   library,
   notice,
   officialGuests,
+  onCreateGuest,
+  onEditGuest,
   onJoin,
   onRefresh,
   onStart,
@@ -779,10 +894,13 @@ function HomeView({
 }: {
   communityGuests: ShowGuest[];
   compact: boolean;
+  isAdmin: boolean;
   joiningKey: string | null;
   library: AsyncState<GuestLibrary>;
   notice: string | null;
   officialGuests: ShowGuest[];
+  onCreateGuest: () => void;
+  onEditGuest: (characterKey: string) => void;
   onJoin: (characterKey: string) => void;
   onRefresh: () => void;
   onStart: () => void;
@@ -804,6 +922,9 @@ function HomeView({
             <Pressable accessibilityRole="button" onPress={onRefresh} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>Refresh</Text>
             </Pressable>
+            <Pressable accessibilityRole="button" onPress={onCreateGuest} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>Create Guest</Text>
+            </Pressable>
           </View>
           {notice ? <Text selectable style={styles.statusLine}>{notice}</Text> : null}
         </View>
@@ -817,7 +938,9 @@ function HomeView({
       <GuestSection
         emptyBody={library.status === 'error' ? library.message : 'System Guests will appear after the API responds.'}
         guests={officialGuests}
+        isAdmin={isAdmin}
         joiningKey={joiningKey}
+        onEdit={onEditGuest}
         onJoin={onJoin}
         title="System hot Guests"
         workspaceGuestKeys={workspaceGuestKeys}
@@ -826,7 +949,9 @@ function HomeView({
       <GuestSection
         emptyBody="Community Guests will appear here after published characters are available."
         guests={communityGuests}
+        isAdmin={isAdmin}
         joiningKey={joiningKey}
+        onEdit={onEditGuest}
         onJoin={onJoin}
         title="Community hot Guests"
         workspaceGuestKeys={workspaceGuestKeys}
@@ -838,14 +963,18 @@ function HomeView({
 function GuestSection({
   emptyBody,
   guests,
+  isAdmin,
   joiningKey,
+  onEdit,
   onJoin,
   title,
   workspaceGuestKeys,
 }: {
   emptyBody: string;
   guests: ShowGuest[];
+  isAdmin: boolean;
   joiningKey: string | null;
+  onEdit: (characterKey: string) => void;
   onJoin: (characterKey: string) => void;
   title: string;
   workspaceGuestKeys: Set<string>;
@@ -859,9 +988,11 @@ function GuestSection({
         {guests.length ? guests.map((guest) => (
           <GuestCard
             added={workspaceGuestKeys.has(guest.characterKey)}
+            editable={isAdmin}
             guest={guest}
             joining={joiningKey === guest.characterKey}
             key={guest.characterKey}
+            onEdit={() => onEdit(guest.characterKey)}
             onJoin={() => onJoin(guest.characterKey)}
           />
         )) : <EmptyState title="No Guests yet" body={emptyBody} />}
@@ -872,13 +1003,17 @@ function GuestSection({
 
 function GuestCard({
   added,
+  editable,
   guest,
   joining,
+  onEdit,
   onJoin,
 }: {
   added: boolean;
+  editable: boolean;
   guest: ShowGuest;
   joining: boolean;
+  onEdit: () => void;
   onJoin: () => void;
 }) {
   return (
@@ -887,6 +1022,11 @@ function GuestCard({
       <Text numberOfLines={1} style={styles.characterName}>{guest.name}</Text>
       <Text numberOfLines={2} style={styles.characterTraits}>{guestDefinition(guest)}</Text>
       <Text numberOfLines={1} style={styles.characterMeta}>{guestPublisher(guest)}</Text>
+      {editable ? (
+        <Pressable accessibilityRole="button" onPress={onEdit} style={styles.secondaryButton}>
+          <Text style={styles.secondaryButtonText}>Edit Prompt</Text>
+        </Pressable>
+      ) : null}
       <Pressable
         accessibilityRole="button"
         disabled={added || joining}
@@ -901,11 +1041,17 @@ function GuestCard({
 }
 
 function WorkspaceView({
+  isAdmin,
+  onCreateGuest,
+  onEditGuest,
   onMore,
   onRefresh,
   onReplaceSystemAsset,
   workspace,
 }: {
+  isAdmin: boolean;
+  onCreateGuest: () => void;
+  onEditGuest: (characterKey: string) => void;
   onMore: () => void;
   onRefresh: () => void;
   onReplaceSystemAsset: (asset: SystemAsset) => void;
@@ -938,12 +1084,15 @@ function WorkspaceView({
             <Pressable accessibilityRole="button" onPress={onRefresh} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>Refresh</Text>
             </Pressable>
+            <Pressable accessibilityRole="button" onPress={onCreateGuest} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>Create Guest</Text>
+            </Pressable>
           </View>
         </View>
       </View>
 
-      <WorkspaceGuestSection guests={joinedGuests} title="Joined Guest assets" />
-      <WorkspaceGuestSection guests={userGuests} title="Created Guests" />
+      <WorkspaceGuestSection editable={isAdmin} guests={joinedGuests} onEdit={onEditGuest} title="Joined Guest assets" />
+      <WorkspaceGuestSection editable guests={userGuests} onEdit={onEditGuest} title="Created Guests" />
       {workspace.data.admin?.isAdmin ? (
         <SystemAssetsSection
           assets={workspace.data.admin.systemAssets}
@@ -952,14 +1101,14 @@ function WorkspaceView({
       ) : null}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Unlocked companions</Text>
+        <Text style={styles.sectionTitle}>Relationship status</Text>
         <View style={styles.rows}>
           {workspace.data.companions.length ? workspace.data.companions.map((companion) => (
             <View key={companion.id} style={styles.dataRow}>
               <Text style={styles.rowTitle}>{companion.name}</Text>
-              <Text style={styles.rowMeta}>{companion.unlockStatus} / {companion.storyTurnCount} story turns</Text>
+              <Text style={styles.rowMeta}>{companion.relationshipState} / {companion.unlockStatus} / {companion.storyTurnCount} story turns</Text>
             </View>
-          )) : <EmptyState title="No companions unlocked" body="Chapter outcomes will add continuing companions here." />}
+          )) : <EmptyState title="No relationships yet" body="Join a guest or complete Chapter 1 to start a relationship path." />}
         </View>
       </View>
 
@@ -978,7 +1127,17 @@ function WorkspaceView({
   );
 }
 
-function WorkspaceGuestSection({ guests, title }: { guests: Array<ShowGuest | WorkspaceGuest>; title: string }) {
+function WorkspaceGuestSection({
+  editable,
+  guests,
+  onEdit,
+  title,
+}: {
+  editable: boolean;
+  guests: Array<ShowGuest | WorkspaceGuest>;
+  onEdit: (characterKey: string) => void;
+  title: string;
+}) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -989,6 +1148,11 @@ function WorkspaceGuestSection({ guests, title }: { guests: Array<ShowGuest | Wo
             <Text numberOfLines={1} style={styles.characterName}>{guest.name}</Text>
             <Text numberOfLines={2} style={styles.characterTraits}>{guestDefinition(guest)}</Text>
             <Text numberOfLines={1} style={styles.characterMeta}>{guestPublisher(guest)}</Text>
+            {editable ? (
+              <Pressable accessibilityRole="button" onPress={() => onEdit(guest.characterKey)} style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>Edit Prompt</Text>
+              </Pressable>
+            ) : null}
           </View>
         )) : <EmptyState title="Nothing here yet" body="Use More Guests to add characters from the homepage gallery." />}
       </View>
@@ -2222,7 +2386,7 @@ function ChapterTwoView({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Unlocked companion</Text>
+        <Text style={styles.sectionTitle}>Date-ready companion</Text>
         {companions.length ? (
           <View style={styles.galleryGrid}>
             {companions.map((companion) => (
@@ -2279,21 +2443,27 @@ function ChapterTwoView({
 }
 
 function ChapterModal({
+  chapterThreeUnlocked,
   chapterTwoUnlocked,
+  isAdmin,
   onClose,
   onEnterChapterOne,
+  onEnterChapterThree,
   onEnterChapterTwo,
 }: {
+  chapterThreeUnlocked: boolean;
   chapterTwoUnlocked: boolean;
+  isAdmin: boolean;
   onClose: () => void;
   onEnterChapterOne: () => void;
+  onEnterChapterThree: () => void;
   onEnterChapterTwo: () => void;
 }) {
   return (
     <View style={styles.modalBackdrop}>
       <View style={styles.chapterPanel}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.modalTitle}>Choose a chapter</Text>
+          <Text style={styles.modalTitle}>{isAdmin ? 'Choose a chapter (admin)' : 'Choose a chapter'}</Text>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.linkButton}>
             <Text style={styles.linkButtonText}>Close</Text>
           </Pressable>
@@ -2301,7 +2471,12 @@ function ChapterModal({
         <View style={styles.chapterGrid}>
           <ChapterCard index="1" locked={false} onPress={onEnterChapterOne} title="Heart Signal Live" />
           <ChapterCard index="2" locked={!chapterTwoUnlocked} onPress={onEnterChapterTwo} title="Date Scene" />
-          <ChapterCard index="3" locked title="Solo Story" />
+          <ChapterCard
+            index="3"
+            locked={!chapterThreeUnlocked}
+            onPress={chapterThreeUnlocked ? onEnterChapterThree : undefined}
+            title="Solo Story"
+          />
         </View>
       </View>
     </View>
@@ -2333,6 +2508,127 @@ function ChapterCard({
         style={[styles.characterCardAction, locked && styles.disabledAction]}>
         <Text style={styles.characterCardActionText}>{locked ? 'Locked' : 'Enter'}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function GuestEditorModal({
+  isSaving,
+  mode,
+  onClose,
+  onSubmit,
+  state,
+}: {
+  isSaving: boolean;
+  mode: GuestEditorTarget['mode'];
+  onClose: () => void;
+  onSubmit: (characterPackage: GuestCharacterPackage) => void;
+  state: AsyncState<GuestCharacterPackagePayload>;
+}) {
+  const payload = state.status === 'ready' ? state.data : null;
+  const [form, setForm] = useState<GuestEditorForm>(() => packageToEditorForm(payload?.characterPackage ?? emptyGuestPackage()));
+
+  useEffect(() => {
+    if (payload) {
+      setForm(packageToEditorForm(payload.characterPackage));
+    }
+  }, [payload]);
+
+  const update = useCallback((key: keyof GuestEditorForm, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  }, []);
+  const basePackage = payload?.characterPackage ?? emptyGuestPackage();
+  const canSave = Boolean(form.name.trim()) && !isSaving && state.status === 'ready';
+
+  return (
+    <View style={styles.modalBackdrop}>
+      <Animated.View entering={FadeInDown.duration(180)} exiting={FadeOut.duration(140)} style={styles.guestEditorPanel}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.eyebrow}>Guest prompt</Text>
+            <Text style={styles.modalTitle}>{mode === 'create' ? 'Create Guest' : `Edit ${form.name || 'Guest'}`}</Text>
+          </View>
+          <Pressable accessibilityRole="button" onPress={onClose} style={styles.linkButton}>
+            <Text style={styles.linkButtonText}>Close</Text>
+          </Pressable>
+        </View>
+
+        {state.status === 'loading' ? (
+          <EmptyState title="Loading Guest" body="Fetching structured prompt fields." />
+        ) : state.status === 'error' ? (
+          <EmptyState title="Guest unavailable" body={state.message} />
+        ) : (
+          <ScrollView contentContainerStyle={styles.editorScrollContent} nestedScrollEnabled showsVerticalScrollIndicator>
+            <View style={styles.formGrid}>
+              <EditorInput label="Name" onChangeText={(value) => update('name', value)} value={form.name} />
+              <EditorInput label="Gender" onChangeText={(value) => update('gender', value === 'male' ? 'male' : 'female')} value={form.gender} />
+              <EditorInput label="Age range" onChangeText={(value) => update('ageRange', value)} value={form.ageRange} />
+              <EditorInput label="Occupation" onChangeText={(value) => update('occupation', value)} value={form.occupation} />
+              <EditorInput label="City / lifestyle" onChangeText={(value) => update('cityOrLifestyle', value)} value={form.cityOrLifestyle} />
+              <EditorInput label="Hobbies" onChangeText={(value) => update('hobbies', value)} value={form.hobbies} />
+            </View>
+
+            <View style={styles.formGrid}>
+              <EditorInput label="Personality" multiline onChangeText={(value) => update('personality', value)} value={form.personality} />
+              <EditorInput label="Speaking style" multiline onChangeText={(value) => update('speakingStyle', value)} value={form.speakingStyle} />
+              <EditorInput label="Relationship role" multiline onChangeText={(value) => update('relationshipToUser', value)} value={form.relationshipToUser} />
+              <EditorInput label="Goal" multiline onChangeText={(value) => update('goal', value)} value={form.goal} />
+              <EditorInput label="Boundaries" multiline onChangeText={(value) => update('boundaries', value)} value={form.boundaries} />
+              <EditorInput label="Hidden preferences" multiline onChangeText={(value) => update('hiddenPreferences', value)} value={form.hiddenPreferences} />
+            </View>
+
+            <View style={styles.formGrid}>
+              <EditorInput label="Positive signals" onChangeText={(value) => update('positiveSignals', value)} value={form.positiveSignals} />
+              <EditorInput label="Negative signals" onChangeText={(value) => update('negativeSignals', value)} value={form.negativeSignals} />
+              <EditorInput label="Dealbreaker signals" onChangeText={(value) => update('dealbreakerSignals', value)} value={form.dealbreakerSignals} />
+              <EditorInput label="Strong attraction signals" onChangeText={(value) => update('blowUpSignals', value)} value={form.blowUpSignals} />
+              <EditorInput label="Hard preference signals" onChangeText={(value) => update('hardPreferenceSignals', value)} value={form.hardPreferenceSignals} />
+              <EditorInput label="Soft preference signals" onChangeText={(value) => update('softPreferenceSignals', value)} value={form.softPreferenceSignals} />
+              <EditorInput label="Initial affinity" onChangeText={(value) => update('initialAffinity', value)} value={form.initialAffinity} />
+              <EditorInput label="Match threshold" onChangeText={(value) => update('matchThreshold', value)} value={form.matchThreshold} />
+            </View>
+          </ScrollView>
+        )}
+
+        <View style={styles.modalFooterActions}>
+          <Pressable accessibilityRole="button" onPress={onClose} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!canSave}
+            onPress={() => onSubmit(editorFormToPackage(form, basePackage))}
+            style={[styles.primaryButton, !canSave && styles.disabledAction]}>
+            <Text style={styles.primaryButtonText}>{isSaving ? 'Saving...' : 'Save Guest'}</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+function EditorInput({
+  label,
+  multiline,
+  onChangeText,
+  value,
+}: {
+  label: string;
+  multiline?: boolean;
+  onChangeText: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <View style={[styles.inputGroup, multiline && styles.editorInputWide]}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <TextInput
+        autoCapitalize="none"
+        multiline={multiline}
+        onChangeText={onChangeText}
+        placeholderTextColor="#8290A3"
+        style={[styles.input, multiline && styles.editorTextArea]}
+        value={value}
+      />
     </View>
   );
 }
@@ -2458,6 +2754,179 @@ function clampSlotCount(value: number | undefined): number {
   }
 
   return Math.min(DEFAULT_CHAPTER_ONE_SLOT_COUNT, Math.max(1, Math.round(parsed)));
+}
+
+function emptyGuestPackagePayload(): GuestCharacterPackagePayload {
+  const characterPackage = emptyGuestPackage();
+  return {
+    character: {
+      ageRange: '',
+      avatarObjectKey: null,
+      characterKey: '',
+      cityOrLifestyle: '',
+      gender: 'female',
+      hobbies: [],
+      id: '',
+      name: '',
+      occupationTag: '',
+      personalityKeywords: [],
+      portraitObjectKey: null,
+      preferences: [],
+      role: 'guest',
+      source: 'user',
+      statusLabel: 'draft',
+      visibility: 'private',
+      visualStateObjectKey: null,
+    },
+    characterPackage,
+    visualStateObjectKey: null,
+  };
+}
+
+function emptyGuestPackage(): GuestCharacterPackage {
+  return {
+    assets: {
+      avatarObjectKey: null,
+      galleryObjectKeys: [],
+      portraitObjectKey: null,
+      visualStates: {},
+    },
+    identity: {
+      ageRange: '',
+      cityOrLifestyle: '',
+      gender: 'female',
+      hobbies: [],
+      name: '',
+      occupation: '',
+    },
+    matchRules: {
+      blowUpSignals: ['honesty'],
+      dealbreakerSignals: ['aggression'],
+      hardPreferenceSignals: [],
+      initialAffinity: 50,
+      matchThreshold: 75,
+      negativeSignals: ['avoidance'],
+      positiveSignals: ['honesty', 'kindness'],
+      softPreferenceSignals: ['warmth'],
+    },
+    persona: {
+      boundaries: 'Avoid disrespect, coercion, cruelty, and explicit sexual pressure.',
+      goal: 'Discover whether the contestant matches this Guest values and emotional style.',
+      hiddenPreferences: 'honest communication, emotional maturity, specific answers',
+      personality: 'warm, curious, emotionally present',
+      relationshipToUser: 'A dating-show guest deciding whether to turn their light brighter for the contestant.',
+      speakingStyle: 'natural, concise, specific',
+    },
+    publicProfile: {
+      personalityKeywords: ['warm', 'curious'],
+      preferences: ['honest communication'],
+      visibility: 'private',
+    },
+    stateModel: {
+      coefficients: {},
+      runtimeDefaults: {
+        action: 'idle',
+        curiosity: 50,
+        energy: 50,
+        expression: 'neutral',
+        intimacy: 0,
+        mood: 'neutral',
+      },
+    },
+  };
+}
+
+function packageToEditorForm(characterPackage: GuestCharacterPackage): GuestEditorForm {
+  return {
+    ageRange: characterPackage.identity.ageRange ?? '',
+    blowUpSignals: joinList(characterPackage.matchRules.blowUpSignals),
+    boundaries: characterPackage.persona.boundaries,
+    cityOrLifestyle: characterPackage.identity.cityOrLifestyle ?? '',
+    dealbreakerSignals: joinList(characterPackage.matchRules.dealbreakerSignals),
+    gender: characterPackage.identity.gender === 'male' ? 'male' : 'female',
+    goal: characterPackage.persona.goal,
+    hardPreferenceSignals: joinList(characterPackage.matchRules.hardPreferenceSignals),
+    hiddenPreferences: characterPackage.persona.hiddenPreferences,
+    hobbies: joinList(characterPackage.identity.hobbies),
+    initialAffinity: String(characterPackage.matchRules.initialAffinity),
+    matchThreshold: String(characterPackage.matchRules.matchThreshold),
+    name: characterPackage.identity.name,
+    negativeSignals: joinList(characterPackage.matchRules.negativeSignals),
+    occupation: characterPackage.identity.occupation ?? '',
+    personality: characterPackage.persona.personality,
+    positiveSignals: joinList(characterPackage.matchRules.positiveSignals),
+    relationshipToUser: characterPackage.persona.relationshipToUser,
+    softPreferenceSignals: joinList(characterPackage.matchRules.softPreferenceSignals),
+    speakingStyle: characterPackage.persona.speakingStyle,
+  };
+}
+
+function editorFormToPackage(form: GuestEditorForm, basePackage: GuestCharacterPackage): GuestCharacterPackage {
+  const hobbies = splitList(form.hobbies);
+  const personalityKeywords = splitList(form.personality).slice(0, 8);
+  const preferences = splitList(form.hiddenPreferences).slice(0, 8);
+  return {
+    ...basePackage,
+    identity: {
+      ...basePackage.identity,
+      ageRange: form.ageRange.trim(),
+      cityOrLifestyle: form.cityOrLifestyle.trim(),
+      gender: form.gender,
+      hobbies,
+      name: form.name.trim(),
+      occupation: form.occupation.trim(),
+    },
+    matchRules: {
+      ...basePackage.matchRules,
+      blowUpSignals: splitList(form.blowUpSignals),
+      dealbreakerSignals: splitList(form.dealbreakerSignals),
+      hardPreferenceSignals: splitList(form.hardPreferenceSignals),
+      initialAffinity: clampNumber(form.initialAffinity, 0, 100, 50),
+      matchThreshold: clampNumber(form.matchThreshold, 0, 100, 75),
+      negativeSignals: splitList(form.negativeSignals),
+      positiveSignals: splitList(form.positiveSignals),
+      softPreferenceSignals: splitList(form.softPreferenceSignals),
+    },
+    persona: {
+      ...basePackage.persona,
+      boundaries: form.boundaries.trim(),
+      goal: form.goal.trim(),
+      hiddenPreferences: form.hiddenPreferences.trim(),
+      personality: form.personality.trim(),
+      relationshipToUser: form.relationshipToUser.trim(),
+      speakingStyle: form.speakingStyle.trim(),
+    },
+    publicProfile: {
+      ...basePackage.publicProfile,
+      ageRange: form.ageRange.trim(),
+      cityOrLifestyle: form.cityOrLifestyle.trim(),
+      hobbies,
+      occupationTag: form.occupation.trim(),
+      personalityKeywords,
+      preferences,
+    },
+  };
+}
+
+function splitList(value: string): string[] {
+  return value
+    .split(/[,，\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 16);
+}
+
+function joinList(value: string[] | undefined): string {
+  return (value ?? []).join(', ');
+}
+
+function clampNumber(value: string, min: number, max: number, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
 function pickImageFile(): Promise<(Blob & { name?: string; type?: string }) | null> {
@@ -2857,6 +3326,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
+  editorInputWide: {
+    flexBasis: 320,
+  },
+  editorScrollContent: {
+    gap: 16,
+    paddingBottom: 8,
+  },
+  editorTextArea: {
+    minHeight: 92,
+    textAlignVertical: 'top',
+  },
   eyebrow: {
     color: colors.muted,
     fontSize: 12,
@@ -2960,6 +3440,17 @@ const styles = StyleSheet.create({
     maxHeight: '86%',
     maxWidth: 780,
     padding: 14,
+    width: '100%',
+  },
+  guestEditorPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 14,
+    maxHeight: '90%',
+    maxWidth: 980,
+    padding: 16,
     width: '100%',
   },
   historyPanel: {
