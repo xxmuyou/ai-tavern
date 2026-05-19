@@ -10,6 +10,16 @@ import {
 import { ensureUserByEmail, normalizeEmail, PLATFORM_APP_KEY, type UserRecord } from "./identity";
 import { generateText, type LlmMessage } from "./llm";
 import {
+  chapterTwoDateLocation,
+  chapterTwoDateResponseLine,
+  chapterTwoDateSteps,
+  listChapterTwoDateLocations,
+  nextChapterTwoDateStepKey,
+  renderChapterTwoDatePrompt,
+  type ChapterTwoDateOption,
+  type ChapterTwoDateStep,
+} from "./show-engine/domain/chapter-two-date-engine";
+import {
   characterDefinitionToSnapshot,
   toCharacterDefinition,
 } from "./show-engine/domain/character-definition";
@@ -110,6 +120,18 @@ type TurnAnswerOptions = {
 
 type CompanionStoryAnswerRequest = {
   email?: string;
+type ChapterTwoDateCreateRequest = {
+  companionId?: string;
+  email?: string;
+  locationKey?: string;
+};
+
+type ChapterTwoDateAnswerRequest = {
+  email?: string;
+  freeText?: string;
+  selectedOptionId?: string;
+};
+
   freeText?: string;
   selectedOptionId?: string;
 };
@@ -388,6 +410,35 @@ type CompanionStoryTurnRow = {
   scene_title: string;
   selected_option_id: string | null;
   status: "awaiting_user" | "answered";
+type ChapterTwoDateSessionRow = {
+  app_key: string;
+  character_key: string;
+  companion_id: string;
+  created_at: string;
+  current_step_key: string;
+  id: string;
+  location_key: string;
+  show_key: string;
+  status: "active" | "completed";
+  turn_count: number;
+  updated_at: string;
+  user_id: string;
+};
+
+type ChapterTwoDateTurnRow = {
+  answer_text: string | null;
+  created_at: string;
+  id: string;
+  options: string;
+  prompt: string;
+  response_text: string | null;
+  selected_option_id: string | null;
+  status: "awaiting_user" | "answered";
+  step_key: string;
+  turn_index: number;
+  updated_at: string;
+};
+
   turn_index: number;
   updated_at: string;
 };
@@ -582,6 +633,36 @@ async function handleShowScopedRequest(
 
   if (restPath === "/characters" && request.method === "POST") {
     const body = await readJson<CreateCharacterRequest>(request);
+  if (restPath === "/chapter-two/locations" && request.method === "GET") {
+    return jsonResponse({ locations: listChapterTwoDateLocations() });
+  }
+
+  if (restPath === "/chapter-two/sessions" && request.method === "POST") {
+    const body = await readJson<ChapterTwoDateCreateRequest>(request);
+    body.email = await requireAuthEmail(env, request, body.email);
+    return jsonResponse(await createChapterTwoDateSession(env, showKey, body), { status: 201 });
+  }
+
+  const chapterTwoSessionMatch = restPath.match(/^\/chapter-two\/sessions\/([^/]+)(?:\/turns\/([^/]+)\/answer)?$/);
+  if (chapterTwoSessionMatch) {
+    const sessionId = decodeURIComponent(chapterTwoSessionMatch[1] ?? "");
+    const turnId = chapterTwoSessionMatch[2] ? decodeURIComponent(chapterTwoSessionMatch[2]) : null;
+
+    if (!turnId && request.method === "GET") {
+      const url = new URL(request.url);
+      const user = await requireAuthUser(env, request, url.searchParams.get("email"));
+      return jsonResponse(await getChapterTwoDateSessionPayload(env, showKey, sessionId, user));
+    }
+
+    if (turnId && request.method === "POST") {
+      const body = await readJson<ChapterTwoDateAnswerRequest>(request);
+      body.email = await requireAuthEmail(env, request, body.email);
+      return jsonResponse(await answerChapterTwoDateTurn(env, showKey, sessionId, turnId, body));
+    }
+
+    return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+  }
+
     body.email = await requireAuthEmail(env, request, body.email);
     return jsonResponse(await createUserCharacter(env, showKey, body), { status: 201 });
   }
@@ -3464,6 +3545,298 @@ async function getCurrentCompanionStoryTurn(
 ): Promise<CompanionStoryTurnRow | null> {
   return env.DB.prepare(
     `SELECT id, turn_index, scene_title, prompt, options, selected_option_id,
+async function createChapterTwoDateSession(
+  env: ShowEngineEnv,
+  showKey: string,
+  body: ChapterTwoDateCreateRequest,
+) {
+  const email = normalizeEmail(body.email);
+  const companionId = normalizeShortText(body.companionId, "", 120);
+  const locationKey = normalizeCharacterKeyValue(body.locationKey);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+  if (!companionId) {
+    throw new Response("companion_required", { status: 400 });
+  }
+
+  const location = chapterTwoDateLocation(locationKey);
+  if (!location) {
+    throw new Response("date_location_not_found", { status: 404 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const [show, companion] = await Promise.all([
+    requireShow(env, showKey),
+    requireCompanion(env, companionId, user),
+  ]);
+  if (companion.show_key !== show.show_key || companion.app_key !== show.app_key) {
+    throw new Response("companion_not_found", { status: 404 });
+  }
+
+  const steps = chapterTwoDateSteps(location.locationKey);
+  const firstStep = steps[0];
+  if (!firstStep) {
+    throw new Response("chapter_two_steps_missing", { status: 500 });
+  }
+
+  const sessionId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO chapter_two_date_sessions (
+       id, app_key, show_key, user_id, companion_id, character_key, location_key, status, current_step_key
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+  )
+    .bind(
+      sessionId,
+      show.app_key,
+      show.show_key,
+      user.id,
+      companion.id,
+      companion.character_key,
+      location.locationKey,
+      firstStep.stepKey,
+    )
+    .run();
+
+  await createChapterTwoDateTurn(env, {
+    companion,
+    locationKey: location.locationKey,
+    sessionId,
+    show,
+    step: firstStep,
+    turnIndex: 1,
+    user,
+  });
+
+  return getChapterTwoDateSessionPayload(env, showKey, sessionId, user);
+}
+
+async function getChapterTwoDateSessionPayload(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  user: UserRecord,
+) {
+  const session = await requireChapterTwoDateSession(env, showKey, sessionId, user);
+  const [companion, turns] = await Promise.all([
+    requireCompanion(env, session.companion_id, user),
+    getChapterTwoDateTurns(env, session, user),
+  ]);
+  const location = chapterTwoDateLocation(session.location_key);
+  const currentTurn = turns.find((turn) => turn.status === "awaiting_user") ?? null;
+
+  return {
+    companion: serializeCompanion(companion),
+    currentTurn: currentTurn ? serializeChapterTwoDateTurn(currentTurn) : null,
+    location,
+    session: serializeChapterTwoDateSession(session),
+    turns: turns.map(serializeChapterTwoDateTurn),
+  };
+}
+
+async function answerChapterTwoDateTurn(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  turnId: string,
+  body: ChapterTwoDateAnswerRequest,
+) {
+  const email = normalizeEmail(body.email);
+  if (!email) {
+    throw new Response("email_required", { status: 400 });
+  }
+
+  const user = await ensureUserByEmail(env, email);
+  const [session, turn] = await Promise.all([
+    requireChapterTwoDateSession(env, showKey, sessionId, user),
+    requireChapterTwoDateTurn(env, sessionId, turnId, user),
+  ]);
+  if (session.status !== "active") {
+    throw new Response("chapter_two_session_completed", { status: 409 });
+  }
+  if (turn.status !== "awaiting_user") {
+    throw new Response("chapter_two_turn_already_answered", { status: 409 });
+  }
+
+  const companion = await requireCompanion(env, session.companion_id, user);
+  const options = readChapterTwoDateOptions(turn.options);
+  const selectedOptionId = normalizeShortText(body.selectedOptionId, "", 120);
+  const selectedOption = options.find((option) => option.id === selectedOptionId) ?? null;
+  const freeText = normalizeShortText(body.freeText, "", 1200);
+  if (!selectedOption && !freeText) {
+    throw new Response("answer_required", { status: 400 });
+  }
+
+  const answerText = [selectedOption?.preview, freeText].filter(Boolean).join(" ");
+  const responseText = chapterTwoDateResponseLine({
+    companionName: companionNameFromSnapshot(companion.snapshot),
+    freeText,
+    locationKey: session.location_key,
+    selectedOption,
+  });
+
+  await env.DB.prepare(
+    `UPDATE chapter_two_date_turns
+     SET selected_option_id = ?, answer_text = ?, response_text = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ? AND session_id = ? AND user_id = ?`,
+  )
+    .bind(selectedOption?.id ?? null, answerText, responseText, "answered", turn.id, session.id, user.id)
+    .run();
+
+  const steps = chapterTwoDateSteps(session.location_key);
+  const nextStepKey = nextChapterTwoDateStepKey(steps, turn.step_key);
+  const nextTurnCount = session.turn_count + 1;
+  if (!nextStepKey) {
+    await env.DB.prepare(
+      `UPDATE chapter_two_date_sessions
+       SET status = ?, current_step_key = ?, turn_count = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_id = ?`,
+    )
+      .bind("completed", "completed", nextTurnCount, session.id, user.id)
+      .run();
+  } else {
+    const nextStep = steps.find((step) => step.stepKey === nextStepKey);
+    if (!nextStep) {
+      throw new Response("chapter_two_step_not_found", { status: 500 });
+    }
+    await env.DB.prepare(
+      `UPDATE chapter_two_date_sessions
+       SET current_step_key = ?, turn_count = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ? AND user_id = ?`,
+    )
+      .bind(nextStep.stepKey, nextTurnCount, session.id, user.id)
+      .run();
+
+    await createChapterTwoDateTurn(env, {
+      companion,
+      locationKey: session.location_key,
+      sessionId: session.id,
+      show: await requireShow(env, showKey),
+      step: nextStep,
+      turnIndex: nextTurnCount + 1,
+      user,
+    });
+  }
+
+  return getChapterTwoDateSessionPayload(env, showKey, session.id, user);
+}
+
+async function createChapterTwoDateTurn(
+  env: ShowEngineEnv,
+  input: {
+    companion: UserCompanionRow;
+    locationKey: string;
+    sessionId: string;
+    show: ShowTemplateRow;
+    step: ChapterTwoDateStep;
+    turnIndex: number;
+    user: UserRecord;
+  },
+): Promise<ChapterTwoDateTurnRow> {
+  const turnId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO chapter_two_date_turns (
+       id, session_id, app_key, show_key, user_id, companion_id, character_key,
+       location_key, step_key, turn_index, prompt, options
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      turnId,
+      input.sessionId,
+      input.show.app_key,
+      input.show.show_key,
+      input.user.id,
+      input.companion.id,
+      input.companion.character_key,
+      input.locationKey,
+      input.step.stepKey,
+      input.turnIndex,
+      renderChapterTwoDatePrompt(input.step, companionNameFromSnapshot(input.companion.snapshot)),
+      JSON.stringify(input.step.options),
+    )
+    .run();
+
+  return requireChapterTwoDateTurn(env, input.sessionId, turnId, input.user);
+}
+
+async function requireChapterTwoDateSession(
+  env: ShowEngineEnv,
+  showKey: string,
+  sessionId: string,
+  user: UserRecord,
+): Promise<ChapterTwoDateSessionRow> {
+  const session = await env.DB.prepare(
+    `SELECT id, app_key, show_key, user_id, companion_id, character_key, location_key,
+            status, current_step_key, turn_count, created_at, updated_at
+     FROM chapter_two_date_sessions
+     WHERE id = ? AND show_key = ? AND user_id = ?
+     LIMIT 1`,
+  )
+    .bind(sessionId, showKey, user.id)
+    .first<ChapterTwoDateSessionRow>();
+
+  if (!session) {
+    throw new Response("chapter_two_session_not_found", { status: 404 });
+  }
+
+  return session;
+}
+
+async function requireChapterTwoDateTurn(
+  env: ShowEngineEnv,
+  sessionId: string,
+  turnId: string,
+  user: UserRecord,
+): Promise<ChapterTwoDateTurnRow> {
+  const turn = await env.DB.prepare(
+    `SELECT id, step_key, turn_index, prompt, options, selected_option_id,
+            answer_text, response_text, status, created_at, updated_at
+     FROM chapter_two_date_turns
+     WHERE id = ? AND session_id = ? AND user_id = ?
+     LIMIT 1`,
+  )
+    .bind(turnId, sessionId, user.id)
+    .first<ChapterTwoDateTurnRow>();
+
+  if (!turn) {
+    throw new Response("chapter_two_turn_not_found", { status: 404 });
+  }
+
+  return turn;
+}
+
+async function getChapterTwoDateTurns(
+  env: ShowEngineEnv,
+  session: ChapterTwoDateSessionRow,
+  user: UserRecord,
+): Promise<ChapterTwoDateTurnRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, step_key, turn_index, prompt, options, selected_option_id,
+            answer_text, response_text, status, created_at, updated_at
+     FROM chapter_two_date_turns
+     WHERE session_id = ? AND user_id = ?
+     ORDER BY turn_index ASC
+     LIMIT 20`,
+  )
+    .bind(session.id, user.id)
+    .all<ChapterTwoDateTurnRow>();
+
+  return results;
+}
+
+function readChapterTwoDateOptions(value: string): ChapterTwoDateOption[] {
+  return readJsonArray<Record<string, unknown>>(value)
+    .map((option) => ({
+      id: typeof option.id === "string" ? option.id : "",
+      label: typeof option.label === "string" ? option.label : "",
+      preview: typeof option.preview === "string" ? option.preview : "",
+      tone: typeof option.tone === "string" ? option.tone : "",
+    }))
+    .filter((option) => option.id && option.label && option.preview);
+}
+
             answer_text, response_text, status, created_at, updated_at
      FROM companion_story_turns
      WHERE companion_id = ? AND user_id = ? AND status = ?
@@ -4193,6 +4566,36 @@ function serializeSessionGuest(row: SessionCharacterRow) {
     },
   };
 }
+function serializeChapterTwoDateSession(row: ChapterTwoDateSessionRow) {
+  return {
+    characterKey: row.character_key,
+    companionId: row.companion_id,
+    currentStepKey: row.current_step_key,
+    id: row.id,
+    locationKey: row.location_key,
+    showKey: row.show_key,
+    status: row.status,
+    turnCount: row.turn_count,
+    updatedAt: row.updated_at,
+  };
+}
+
+function serializeChapterTwoDateTurn(row: ChapterTwoDateTurnRow) {
+  return {
+    answerText: row.answer_text,
+    createdAt: row.created_at,
+    id: row.id,
+    options: readChapterTwoDateOptions(row.options),
+    prompt: row.prompt,
+    responseText: row.response_text,
+    selectedOptionId: row.selected_option_id,
+    status: row.status,
+    stepKey: row.step_key,
+    turnIndex: row.turn_index,
+    updatedAt: row.updated_at,
+  };
+}
+
 
 function serializeSession(row: ShowSessionRow) {
   return {

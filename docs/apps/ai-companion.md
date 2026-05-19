@@ -31,7 +31,8 @@ Character and host assets should move toward transparent-background PNG/WebP for
 5. Casting asks only for avatar, age range, occupation, and hobbies.
 6. The opening story uses a dating-show frame to introduce and test chemistry with Guests.
 7. A successful final choice unlocks the selected character as a companion.
-8. The unlocked companion appears in Workspace and can continue into solo story turns.
+8. The unlocked companion appears in Workspace and can enter Chapter 2 date scenes.
+9. Chapter 2 lets the user choose one unlocked companion and a date location before starting the next playable story.
 
 The user should not be asked to self-label personality at the start. Personality tags are discovered through answers and story events.
 
@@ -88,13 +89,32 @@ In scope:
 
 - AI Companion homepage and gallery.
 - Opening dating-show story as chapter one.
+- Chapter 2 date scenes for unlocked companions.
 - Companion unlock and solo story continuation.
 - Workspace and Creative Workshop.
 - Community publishing for user-created Guests.
+
+## Chapter 2
+
+Chapter 2 is an unlocked-companion date chapter. It must not extend or mutate the Chapter 1 dating-show stage flow.
+
+Entry rules:
+
+- The user must be signed in.
+- The user must have at least one companion in `user_companions` with `unlock_status = unlocked`.
+- The user chooses one unlocked companion for the date.
+- The user chooses one preset location: Cafe, Cinema, or Bar.
+
+Content direction:
+
+- Cafe is quiet, emotionally grounded, and focused on daily-life intimacy.
+- Cinema is playful, attentive, and focused on shared reactions.
+- Bar is direct, low-light, and focused on romantic tension with clear boundaries.
+
+Chapter 2 uses placeholder location images until final art is available.
 
 Out of scope for the current product direction:
 
 - A generic TV show platform.
 - Multiple show formats such as singing, debate, auditions, or talk shows.
 - User-facing model/provider controls.
-- Full moderation workflow for community publishing.
