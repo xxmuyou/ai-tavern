@@ -26,7 +26,7 @@
 |---|------|------|------|------|------|
 | 001 | [清理 multi-app 抽象与 .orig 备份](./spec-001-cleanup-multi-app.md) | 删除 | — | 1-2 天 | 待办（详细） |
 | 003 | [D1 schema reset（清库重建 v1 结构）](./spec-003-d1-schema-reset.md) | 重建 | 001 | 2-3 天 | 待办（详细） |
-| 007 | scenes 模块新建 | 新建 | 003 | 2-3 天 | 待办（stub，提前） |
+| 007 | [scenes 模块新建](./spec-007-scenes-module.md) | 新建 | 003 | 2-3 天 | 待办（详细） |
 | 004 | companions 角色卡简化（15+ → 6 字段，7 维度对齐） | 改写 | 003 | 2-3 天 | 待办（stub） |
 | 005 | relationships 模块拆出 | 重构 | 003, 004 | 1-2 天 | 待办（stub） |
 | 002 | [LLM 多供应商抽象层](./spec-002-llm-multi-provider.md) | 重写 | 001, 003 | 3-5 天 | 待办（详细） |

@@ -2,6 +2,7 @@ import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { jsonResponse, notFound, readJson } from "./http";
+import { handleScenesRequest } from "./scenes";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
 export { GameRoom } from "./room";
 
@@ -14,7 +15,6 @@ type UploadMetadata = {
 // Each prefix is reintroduced by a later spec on top of the v1 schema:
 //   /billing/*          -> spec-010 (Stripe + quota)
 //   /companions/*       -> spec-004 / spec-005 (companions + relationships)
-//   /scenes/*           -> spec-007 (scenes module)
 //   /chat/*             -> spec-006 (chat rewrite)
 //   /events/*           -> spec-008 (events module)
 //   /show/*             -> deprecated entirely (chapter-based gameplay retired)
@@ -23,7 +23,6 @@ type UploadMetadata = {
 const RETIRED_PREFIXES: ReadonlyArray<string> = [
   "/billing/",
   "/companions/",
-  "/scenes/",
   "/chat/",
   "/events/",
   "/show/",
@@ -53,6 +52,11 @@ export default {
       const authResponse = await handleAuthRequest(request, env, pathname);
       if (authResponse) {
         return withCors(request, env, authResponse);
+      }
+
+      const scenesResponse = await handleScenesRequest(request, env, pathname);
+      if (scenesResponse) {
+        return withCors(request, env, scenesResponse);
       }
 
       if (isRetiredPath(pathname)) {
