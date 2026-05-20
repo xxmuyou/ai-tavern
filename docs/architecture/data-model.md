@@ -1,0 +1,471 @@
+# 数据模型
+
+> 本文档定义 D1 表结构、KV / R2 用法、表之间的关系。架构总览见 [`overview.md`](./overview.md)，API 端点见 [`api.md`](./api.md)。
+>
+> **关于"暂定"标注：** 字段类型与约束按 v1 合理设计，实施时会通过 migration 落地。
+
+---
+
+## 1. 存储分层
+
+| 存储 | 用途 |
+|------|------|
+| **D1**（SQLite） | 用户、角色卡、场景、对话历史、关系数值、订阅、配置、日志 |
+| **R2** | 角色立绘、场景插图、用户上传素材 |
+| **KV** | 每日配额计数器、轻量缓存（如场景列表的内存化结果） |
+| **Durable Objects** | v1 不主用（仅在引入群聊时启用） |
+| **Queues** | 异步任务（对话历史摘要、邮件通知、清理 job） |
+
+## 2. D1 表清单
+
+| 表 | 用途 |
+|----|------|
+| `users` | 用户账户 |
+| `user_identities` | 第三方身份绑定（Google / Apple / Email） |
+| `sessions` | 登录会话（JWT 替代方案 / 黑名单） |
+| `companions` | 角色卡（official + user-created 统一表，用 `source` 区分） |
+| `scenes` | 场景定义（仅 official，用户不能自创场景） |
+| `relationships` | 用户 ↔ companion 的关系数值（7 维度） |
+| `threads` | 对话 thread（每对 user-companion 一条） |
+| `messages` | 对话消息（流水） |
+| `events` | 事件触发记录 |
+| `subscriptions` | Stripe 订阅状态 |
+| `usage_log` | 配额计量与统计（补充 KV 计数器，用于审计 / 分析） |
+| `llm_logs` | LLM 调用日志（调试 / 计费 / 报警） |
+| `llm_config` | admin 配置：task ↔ provider/model 映射 |
+| `admin_users` | admin 邮箱白名单（继承 `admin@aiappsbox.com` 设计） |
+
+---
+
+## 3. 表设计详细
+
+### 3.1 `users`
+
+```sql
+CREATE TABLE users (
+  id            TEXT PRIMARY KEY,              -- UUIDv7
+  email         TEXT UNIQUE NOT NULL,
+  email_verified BOOLEAN DEFAULT FALSE,
+  display_name  TEXT,
+  locale        TEXT DEFAULT 'en-US',          -- v1 仅 en-US，留字段给 v2
+  created_at    INTEGER NOT NULL,              -- unix epoch (ms)
+  last_seen_at  INTEGER NOT NULL,
+  status        TEXT DEFAULT 'active'          -- active / suspended / deleted
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_last_seen ON users(last_seen_at);
+```
+
+### 3.1.1 `user_identities`
+
+第三方登录身份绑定。一个 `users` 可以绑多个身份（Google + Apple + Email 都能登同一账号）。
+
+```sql
+CREATE TABLE user_identities (
+  id               TEXT PRIMARY KEY,           -- UUIDv7
+  user_id          TEXT NOT NULL REFERENCES users(id),
+  provider         TEXT NOT NULL,              -- 'google' / 'apple' / 'email'
+  provider_subject TEXT NOT NULL,              -- provider 的稳定 ID（Google `sub`, Apple `sub`, email 时填 email）
+  provider_email   TEXT,                       -- provider 当时提供的 email（可能与 users.email 不同）
+  created_at       INTEGER NOT NULL,
+  UNIQUE (provider, provider_subject)
+);
+
+CREATE INDEX idx_identities_user ON user_identities(user_id);
+```
+
+**自动合并逻辑：** 登录时若 `provider_email` 与已有 `users.email` 匹配，提示用户"已有账号，是否合并？"（v1 自动合并 *(暂定)*；可改成需用户确认）。
+
+### 3.2 `sessions`
+
+```sql
+CREATE TABLE sessions (
+  id            TEXT PRIMARY KEY,              -- session ID
+  user_id       TEXT NOT NULL REFERENCES users(id),
+  jwt_jti       TEXT UNIQUE,                   -- JWT ID 用于撤销
+  created_at    INTEGER NOT NULL,
+  expires_at    INTEGER NOT NULL,
+  revoked_at    INTEGER                        -- 主动撤销时间
+);
+
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+CREATE INDEX idx_sessions_expires ON sessions(expires_at);
+```
+
+**说明：** v1 用 JWT 直接验证，但保留 sessions 表以便后续支持登出 / 撤销。
+
+### 3.3 `companions`
+
+```sql
+CREATE TABLE companions (
+  id                TEXT PRIMARY KEY,           -- UUIDv7
+  source            TEXT NOT NULL,              -- 'official' / 'user'
+  created_by        TEXT REFERENCES users(id),  -- user 自创时填，official 为 NULL
+  is_active         BOOLEAN DEFAULT TRUE,       -- 软删除标记
+  name              TEXT NOT NULL,
+  appearance        TEXT,                       -- 外貌描述（注入 prompt）
+  personality       TEXT,                       -- 性格描述
+  background        TEXT,                       -- 背景故事
+  speech_style      TEXT,                       -- 说话风格
+  relationship_role TEXT,                       -- colleague/neighbor/friend/crush/stranger/family
+  preferred_scenes  TEXT,                       -- JSON array of scene_id
+  art_url           TEXT,                       -- R2 上的立绘 URL
+  initial_dims      TEXT,                       -- JSON of {closeness:n, trust:n, ...} 起始数值
+  created_at        INTEGER NOT NULL,
+  updated_at        INTEGER NOT NULL
+);
+
+CREATE INDEX idx_companions_source ON companions(source);
+CREATE INDEX idx_companions_owner ON companions(created_by);
+CREATE INDEX idx_companions_active ON companions(is_active);
+```
+
+**约束：**
+- official 角色 `created_by IS NULL`
+- user 角色 `created_by IS NOT NULL`
+- 一个 user 最多创建 3 个 active companion（免费）/ 不限（订阅）—— 应用层校验
+
+### 3.4 `scenes`
+
+```sql
+CREATE TABLE scenes (
+  id                TEXT PRIMARY KEY,           -- 如 'pier_coffee_shop'
+  name              TEXT NOT NULL,              -- 'Pier Coffee Shop'
+  mood              TEXT NOT NULL,              -- 注入 prompt 的氛围描述
+  tags              TEXT,                       -- JSON array (cafe/office/...)
+  possible_events   TEXT,                       -- JSON array of event_type_id
+  default_companions TEXT,                      -- JSON array of companion_id (官方偏好出现的角色)
+  unlock_condition  TEXT,                       -- JSON: { "min_relationship": {"companion_id": "xx", "dim": "romance", "value": 50} } 或 NULL
+  art_url           TEXT,                       -- R2 上的场景插图
+  display_order     INTEGER DEFAULT 0,
+  is_active         BOOLEAN DEFAULT TRUE,
+  created_at        INTEGER NOT NULL
+);
+
+CREATE INDEX idx_scenes_active ON scenes(is_active);
+CREATE INDEX idx_scenes_order ON scenes(display_order);
+```
+
+**注：** 场景由产品方预写，用户不能创建。
+
+### 3.5 `relationships`
+
+每对（user, companion）一条记录，存当前 7 维度数值。
+
+```sql
+CREATE TABLE relationships (
+  user_id        TEXT NOT NULL REFERENCES users(id),
+  companion_id   TEXT NOT NULL REFERENCES companions(id),
+  closeness      INTEGER DEFAULT 0,             -- 0-100
+  trust          INTEGER DEFAULT 0,
+  romance        INTEGER DEFAULT 0,
+  friendship     INTEGER DEFAULT 0,
+  hostility      INTEGER DEFAULT 0,
+  tension        INTEGER DEFAULT 0,
+  distance       INTEGER DEFAULT 0,
+  level_label    TEXT,                          -- 'Stranger' / 'Friend' / 'Lover' / 'Hostile' / ... （由维度组合实时算或缓存）
+  first_met_at   INTEGER NOT NULL,
+  last_interaction_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, companion_id)
+);
+
+CREATE INDEX idx_relationships_companion ON relationships(companion_id);
+CREATE INDEX idx_relationships_last_interaction ON relationships(last_interaction_at);
+```
+
+**说明：**
+- 维度范围全部 0-100（用 `CHECK` 约束在 application 层强制）
+- `level_label` 可以每次更新数值时一并算出来存（避免读时计算）
+- `first_met_at` 是用户第一次与该角色互动的时间（用于"认识 X 天"提示）
+
+### 3.6 `threads`
+
+每对 (user, companion) 一条对话 thread。
+
+```sql
+CREATE TABLE threads (
+  id             TEXT PRIMARY KEY,              -- UUIDv7
+  user_id        TEXT NOT NULL REFERENCES users(id),
+  companion_id   TEXT NOT NULL REFERENCES companions(id),
+  scene_context  TEXT,                          -- JSON: 当前所在场景上下文（最后一次互动时的）
+  summary        TEXT,                          -- 老消息的 LLM 摘要（异步生成）
+  summary_until_message_id TEXT,                -- 摘要覆盖到哪条消息
+  message_count  INTEGER DEFAULT 0,
+  created_at     INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL,
+  UNIQUE (user_id, companion_id)
+);
+
+CREATE INDEX idx_threads_user ON threads(user_id);
+CREATE INDEX idx_threads_updated ON threads(updated_at);
+```
+
+### 3.7 `messages`
+
+```sql
+CREATE TABLE messages (
+  id             TEXT PRIMARY KEY,              -- UUIDv7
+  thread_id      TEXT NOT NULL REFERENCES threads(id),
+  role           TEXT NOT NULL,                 -- 'user' / 'companion' / 'system'
+  content        TEXT NOT NULL,
+  scene_id       TEXT,                          -- 此消息发生时所在场景
+  signals        TEXT,                          -- companion 回应时附带的 JSON 信号 (closeness:+1, romance:+1, ...)
+  emotion        TEXT,                          -- companion 的情绪标签
+  llm_provider   TEXT,                          -- 用了哪家供应商
+  llm_model      TEXT,
+  token_input    INTEGER,                       -- 此消息消耗的 input tokens
+  token_output   INTEGER,
+  created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_messages_thread ON messages(thread_id, created_at);
+CREATE INDEX idx_messages_created ON messages(created_at);
+```
+
+**说明：**
+- `signals` 仅在 role='companion' 时填
+- 老消息不删除（用于审计 / 用户复看），但 prompt 注入只用最近 N 条 + 摘要
+
+### 3.8 `events`
+
+事件触发与处理记录。
+
+```sql
+CREATE TABLE events (
+  id             TEXT PRIMARY KEY,              -- UUIDv7
+  user_id        TEXT NOT NULL REFERENCES users(id),
+  companion_id   TEXT NOT NULL REFERENCES companions(id),
+  scene_id       TEXT NOT NULL REFERENCES scenes(id),
+  event_type     TEXT NOT NULL,                 -- 'daily_encounter' / 'invitation' / 'conflict' / 'gift' / 'confession' / 'milestone'
+  payload        TEXT,                          -- JSON: 事件的具体内容（AI 生成的描述、选项等）
+  status         TEXT DEFAULT 'pending',        -- pending / resolved / dismissed
+  resolution     TEXT,                          -- JSON: 用户选择的选项 + 后果
+  created_at     INTEGER NOT NULL,
+  resolved_at    INTEGER
+);
+
+CREATE INDEX idx_events_user_companion ON events(user_id, companion_id);
+CREATE INDEX idx_events_status ON events(status);
+CREATE INDEX idx_events_type ON events(event_type);
+```
+
+**说明：**
+- 每种 `event_type` 对每个 companion 有冷却时间（应用层管理）
+- 同一时间一个 (user, companion) 最多一个 pending 事件
+
+### 3.9 `subscriptions`
+
+```sql
+CREATE TABLE subscriptions (
+  id                   TEXT PRIMARY KEY,        -- Stripe subscription ID
+  user_id              TEXT NOT NULL REFERENCES users(id),
+  stripe_customer_id   TEXT NOT NULL,
+  status               TEXT NOT NULL,           -- active / past_due / canceled / unpaid
+  price_id             TEXT NOT NULL,           -- Stripe price ID
+  current_period_start INTEGER NOT NULL,
+  current_period_end   INTEGER NOT NULL,        -- 续费后会更新
+  cancel_at_period_end BOOLEAN DEFAULT FALSE,
+  canceled_at          INTEGER,
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL
+);
+
+CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
+CREATE INDEX idx_subscriptions_status ON subscriptions(status);
+CREATE INDEX idx_subscriptions_period_end ON subscriptions(current_period_end);
+```
+
+**判断订阅有效：** `status = 'active' AND current_period_end > now()`
+
+### 3.10 `usage_log`
+
+D1 上的使用日志（KV 是热路径计数器，D1 是冷数据审计）。
+
+```sql
+CREATE TABLE usage_log (
+  id             TEXT PRIMARY KEY,              -- UUIDv7
+  user_id        TEXT NOT NULL REFERENCES users(id),
+  date_utc       TEXT NOT NULL,                 -- YYYY-MM-DD
+  message_count  INTEGER DEFAULT 0,             -- 当日发出消息数
+  event_count    INTEGER DEFAULT 0,
+  llm_cost_usd   REAL DEFAULT 0,                -- 当日 LLM 总成本
+  created_at     INTEGER NOT NULL,
+  UNIQUE (user_id, date_utc)
+);
+
+CREATE INDEX idx_usage_user_date ON usage_log(user_id, date_utc);
+```
+
+**写入策略：** 每次 LLM 调用完成后异步更新此表（Queues 任务，避免阻塞响应）。
+
+### 3.11 `llm_logs`
+
+```sql
+CREATE TABLE llm_logs (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT REFERENCES users(id),
+  task           TEXT NOT NULL,                 -- chat / signal / summary / character-assist
+  provider       TEXT NOT NULL,                 -- deepseek / openai / anthropic / doubao / cloudflare
+  model          TEXT NOT NULL,
+  status         TEXT NOT NULL,                 -- success / fallback / error
+  latency_ms     INTEGER,
+  token_input    INTEGER,
+  token_output   INTEGER,
+  cost_usd       REAL,
+  error_code     TEXT,
+  error_message  TEXT,
+  created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_llm_logs_user ON llm_logs(user_id, created_at);
+CREATE INDEX idx_llm_logs_status ON llm_logs(status);
+CREATE INDEX idx_llm_logs_provider ON llm_logs(provider, created_at);
+```
+
+**容量考虑：** 高频写入。可以定期归档（30 天前的 log 移到 R2）。
+
+### 3.12 `llm_config`
+
+admin 配置 task ↔ provider/model 的映射。
+
+```sql
+CREATE TABLE llm_config (
+  task           TEXT PRIMARY KEY,              -- 'chat' / 'signal' / 'summary' / 'character-assist'
+  provider       TEXT NOT NULL,
+  model          TEXT NOT NULL,
+  fallback_provider TEXT,
+  fallback_model TEXT,
+  updated_at     INTEGER NOT NULL,
+  updated_by     TEXT REFERENCES users(id)
+);
+```
+
+**初始数据（migration seed）：**
+
+```sql
+INSERT INTO llm_config VALUES
+  ('chat',             'deepseek',   'deepseek-chat',                'openai',     'gpt-4o-mini', ...),
+  ('signal',           'deepseek',   'deepseek-chat',                NULL,         NULL,          ...),
+  ('summary',          'cloudflare', '@cf/meta/llama-3.1-8b-instruct', 'deepseek', 'deepseek-chat', ...),
+  ('character-assist', 'deepseek',   'deepseek-chat',                NULL,         NULL,          ...);
+```
+
+### 3.13 `admin_users`
+
+```sql
+CREATE TABLE admin_users (
+  user_id        TEXT PRIMARY KEY REFERENCES users(id),
+  role           TEXT NOT NULL DEFAULT 'admin', -- 未来可扩展 'support' / 'content'
+  granted_at     INTEGER NOT NULL,
+  granted_by     TEXT REFERENCES users(id)
+);
+```
+
+**初始数据：** 在第一次 `admin@aiappsbox.com` 注册时 migration 自动插入。
+
+---
+
+## 4. KV 命名空间
+
+| Key 模式 | 值 | TTL | 用途 |
+|---------|----|----|------|
+| `quota:{user_id}:{YYYY-MM-DD}` | `{messages: int, events: int}` | 7 天 | 当日配额计数（atomic increment） |
+| `cache:scenes:list` | JSON 全部活动场景列表 | 1 小时 | 主界面场景列表缓存（场景很少变） |
+| `cache:companions:official` | JSON 全部官方角色 | 1 小时 | 官方角色列表缓存 |
+| `rate:{user_id}:{minute}` | int | 5 分钟 | 速率限制（10 条/分钟） |
+| `oauth:state:{state_id}` | 临时 OAuth state | 10 分钟 | 未来引入 OAuth 时用 |
+
+---
+
+## 5. R2 桶结构
+
+```
+xtbit-assets/
+├── companions/
+│   ├── official/{companion_id}.png   ← 官方角色立绘
+│   └── user/{user_id}/{companion_id}.png ← 用户上传角色头像（可选）
+├── scenes/
+│   └── {scene_id}.png                ← 场景插图（横幅 1200×800）
+└── llm-logs-archive/
+    └── {YYYY-MM}/{batch_id}.jsonl.gz ← llm_logs 归档（30 天前）
+```
+
+**权限：**
+- `companions/official/*`、`scenes/*` 公开可读（前端直接 URL 引用）
+- `companions/user/*` 只有 owner 可访问（通过 Worker 签发 signed URL）
+- `llm-logs-archive/*` 完全私有
+
+---
+
+## 6. 索引与查询模式（关键热路径）
+
+| 查询场景 | 主表 + 索引 |
+|---------|-----------|
+| 用户登录查邮箱 | `users.email`（唯一索引） |
+| 用户场景列表 | `scenes` + KV cache |
+| 用户角色列表（官方 + 自创） | `companions` where `source='official' OR created_by=user_id` |
+| 用户与某角色的对话历史 | `messages` where `thread_id=X` order by `created_at` desc limit 20 |
+| 用户与某角色的关系数值 | `relationships`（主键 `user_id + companion_id`） |
+| 用户订阅校验 | `subscriptions` where `user_id=X AND status='active' AND current_period_end > now()` |
+| admin 看板：日成本 | `llm_logs` group by date |
+
+---
+
+## 7. Migration 策略
+
+`packages/api/migrations/` 下，按编号 + 描述命名：
+
+```
+0001_initial_schema.sql        ← 全部基础表
+0002_seed_admin_user.sql       ← 插入 admin@aiappsbox.com
+0003_seed_llm_config.sql       ← 插入默认 LLM 配置
+0004_seed_scenes_v1.sql        ← 插入 v1 8-10 个场景定义
+0005_seed_official_companions_v1.sql ← 插入 v1 8-10 个官方角色
+...
+```
+
+**运行方式：**
+```bash
+pnpm cf:d1:migrate:dev    # dev 环境
+pnpm cf:d1:migrate:prod   # prod 环境（需要 admin 确认）
+```
+
+**回滚策略：** D1 不支持自动回滚。每个 migration 包含 `-- ROLLBACK:` 注释段，需手动执行。
+
+---
+
+## 8. 数据生命周期
+
+| 数据 | 生命周期 |
+|------|---------|
+| `users` | 永久保留；用户删除账号 → 标记 `status='deleted'`（保留 30 天供恢复，之后真正删除及关联数据） |
+| `messages` | 永久保留（核心产品价值） |
+| `events` | 永久保留 |
+| `usage_log` | 永久保留（合规审计 / 财务） |
+| `llm_logs` | 30 天后归档到 R2，原表清理 |
+| `sessions` | 过期自动清理（cron job） |
+| KV `quota:*` | TTL 7 天自动清理 |
+
+---
+
+## 9. 与现有代码的关系
+
+| 现有 | 对照 |
+|------|------|
+| `packages/api/migrations/` | 重新规划编号；保留现有 D1 schema 中"还有用"的部分（如 auth 相关） |
+| 现有 `companion-engine.ts` 的 dimensions 系统 | 数据模型对应 §3.5 `relationships` 表（维度名重新对齐） |
+| 现有 character cards | 数据模型对应 §3.3 `companions` 表（字段简化 + `source` 区分） |
+| 现有 show-engine 的 chapter/scene state | 拆为 §3.6 `threads` + §3.7 `messages` + §3.8 `events`，去掉章节概念 |
+
+具体迁移路径在 `specs/` 里分步定义。
+
+---
+
+## 10. 待最终敲定
+
+- [ ] 维度数值是否允许超过 100（事件触发可能 +5，是否硬限 100）
+- [ ] `messages.content` 是否要加密存储（敏感对话 / 用户隐私）
+- [ ] 用户删号后数据保留时长（30 天合规？）
+- [ ] `llm_logs` 归档触发时机（按时间 cron / 按表大小 / 按数量）
+- [ ] 是否在 `users` 表加 `country` 字段（未来需要按区域计税 / 合规）

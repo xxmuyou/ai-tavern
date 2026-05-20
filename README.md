@@ -1,45 +1,58 @@
 # xtbit-apps
 
-Cloudflare-first Expo application workspace for Web, Android, and iOS.
+> **AI Companion** — 现代都市互动陪伴 RPG。Cloudflare 全栈 + Expo 三端（Web / iOS / Android）。
 
-## Stack
+## 文档入口
 
-- `apps/app`: Expo Router app for Web, Android, and iOS.
-- `packages/api`: Cloudflare Worker API with R2, D1, KV, Queues, and Durable Objects bindings.
-- `packages/shared`: shared constants and TypeScript types.
-- `infra/cloudflare`: Wrangler configuration and Cloudflare deployment source of truth.
-- `docs/cloud`: Cloudflare/AWS responsibility boundary and permission request notes.
+完整项目文档：**[`docs/README.md`](./docs/README.md)**
 
-## Local setup
+- [产品愿景](./docs/product/vision.md)
+- [玩法机制](./docs/product/gameplay.md)
+- [v1 内容清单](./docs/product/content.md)
+- [付费设计](./docs/product/monetization.md)
+- [架构总览](./docs/architecture/overview.md)
+- [数据模型](./docs/architecture/data-model.md)
+- [API 端点](./docs/architecture/api.md)
+- [LLM 集成](./docs/architecture/llm.md)
+- [环境配置](./docs/ops/environments.md)
+- [部署流程](./docs/ops/deployment.md)
+- [密钥管理](./docs/ops/secrets.md)
 
-All local development for this repo runs on Linux from:
+> 旧文档（2026-05 之前）归档在 [`docs/_archive/2026-05/`](./docs/_archive/2026-05/)，仅供历史查考。
+
+## 仓库结构
+
+| 路径 | 说明 |
+|------|------|
+| `apps/app/` | Expo 三端 app（Web + iOS + Android） |
+| `packages/api/` | Cloudflare Workers API |
+| `packages/shared/` | 共享类型与常量 |
+| `infra/cloudflare/` | Wrangler 配置 |
+| `scripts/` | 开发与部署脚本 |
+| `docs/` | 项目文档（权威） |
+
+## 本地开发
+
+详见 [`docs/ops/environments.md`](./docs/ops/environments.md)。
+
+**前置：** WSL（Linux 子系统）+ Node.js >= 22 + pnpm。
 
 ```bash
-cd /home/pgx123/private/xtbit/publisher-apps/xtbit-apps
+pnpm install
+pnpm dev          # 同时启动 API (8787) 与 App (8081)
+pnpm typecheck
+pnpm test
 ```
 
-Use native Linux Node.js `>=22`; do not run project commands from Windows PowerShell or CMD.
+## 部署
+
+详见 [`docs/ops/deployment.md`](./docs/ops/deployment.md)。
 
 ```bash
-npm install
-npm run cf:types
-npm run typecheck
+pnpm deploy:api:dev    # API 到 dev
+pnpm deploy:web:dev    # Web 到 dev
 ```
 
-Run the API:
+## 状态
 
-```bash
-npm run dev:api
-```
-
-Run the Expo web app:
-
-```bash
-npm run dev:app
-```
-
-The app defaults to `http://127.0.0.1:8787` for local API calls. Override it with `EXPO_PUBLIC_API_BASE_URL`.
-
-## Cloud posture
-
-Cloudflare is the primary runtime and data plane. AWS is reserved for backup, archive, and future heavy compute escape hatches. See [docs/cloud/permissions.md](docs/cloud/permissions.md) and [docs/cloud/architecture.md](docs/cloud/architecture.md).
+🚧 项目在 2026-05 进入重新规划阶段，正在按 [`docs/specs/`](./docs/specs/) 中的 spec 推进 v1 实现。

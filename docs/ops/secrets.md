@@ -1,0 +1,241 @@
+# 密钥管理
+
+> 本文档定义所有 secret / API key 的清单、来源、存储位置、轮换流程。环境总览见 [`environments.md`](./environments.md)，部署见 [`deployment.md`](./deployment.md)。
+>
+> **核心原则：** 任何 secret **不进 git**。所有 secret 通过 Wrangler / EAS / 1Password（或团队选定的工具）注入运行时。
+
+---
+
+## 1. Secret 全清单
+
+| 名称 | 用途 | 来源 | 注入位置 | dev / prod 是否独立 |
+|------|------|------|----------|-------------------|
+| `DEEPSEEK_API_KEY` | DeepSeek LLM 调用 | platform.deepseek.com | Wrangler secret | 独立 |
+| `OPENAI_API_KEY` | OpenAI LLM（fallback / 备选） | platform.openai.com | Wrangler secret | 独立 |
+| `ANTHROPIC_API_KEY` | Anthropic Claude（备选） | console.anthropic.com | Wrangler secret | 独立 |
+| `DOUBAO_API_KEY` | 豆包 / 火山引擎（备选 / 未来中文版） | volcengine.com | Wrangler secret | 独立 |
+| `CLOUDFLARE_AI_TOKEN` | Workers AI（摘要任务） | Cloudflare Dashboard | Wrangler secret | 独立（或同账户共享） |
+| `STRIPE_SECRET_KEY` | Stripe 服务端 API（创建 Checkout 等） | stripe.com（test/live） | Wrangler secret | **强制独立**（test vs live） |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook 签名验证 | Stripe webhook endpoint 创建后获取 | Wrangler secret | 独立 |
+| `STRIPE_PUBLISHABLE_KEY` | 前端用的 Stripe key | stripe.com | wrangler.jsonc `vars`（公开） | 独立 |
+| `JWT_SIGNING_KEY` | 签发 JWT（HS256 或 RS256 私钥） | 本地生成（`openssl rand`） | Wrangler secret | 独立 |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google Sign-In | console.cloud.google.com | wrangler.jsonc `vars`（公开） | 独立 |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth 服务端 | console.cloud.google.com | Wrangler secret | 独立 |
+| `APPLE_SIGNIN_TEAM_ID` | Apple 开发者团队 ID | developer.apple.com | wrangler.jsonc `vars`（公开） | 通常共享（一个团队） |
+| `APPLE_SIGNIN_KEY_ID` | Apple Sign-In key ID | developer.apple.com | wrangler.jsonc `vars` | 独立或共享 |
+| `APPLE_SIGNIN_PRIVATE_KEY` | Apple Sign-In `.p8` 私钥内容 | developer.apple.com 下载 | Wrangler secret（base64 编码） | 独立或共享 |
+| `APPLE_SIGNIN_BUNDLE_ID` | iOS bundle id | App Store Connect | wrangler.jsonc `vars` | 独立或共享 |
+| `EMAIL_PROVIDER_API_KEY` | Magic Link 邮件发送（如 Resend / Mailgun） | provider | Wrangler secret | 独立 |
+| `EMAIL_FROM_ADDRESS` | 发件邮箱（如 `no-reply@aiappsbox.com`） | 团队邮箱配置 | wrangler.jsonc `vars` | 通常共享 |
+| `SUPPORT_EMAIL` | 用户支持邮箱（退款、客诉） | 团队邮箱 | wrangler.jsonc `vars` + 前端 | 共享 |
+| `ADMIN_INIT_EMAIL` | 首次部署 seed admin 用户的邮箱 | 团队约定（`admin@aiappsbox.com`） | wrangler.jsonc `vars` | 共享 |
+
+---
+
+## 2. 注入方式
+
+### 2.1 Wrangler secret（Workers 后端）
+
+```bash
+# 设置（交互式输入避免命令行回显）
+pnpm wrangler secret put DEEPSEEK_API_KEY --env dev
+pnpm wrangler secret put DEEPSEEK_API_KEY --env prod
+
+# 查看（仅列表，不显示值）
+pnpm wrangler secret list --env dev
+
+# 删除
+pnpm wrangler secret delete DEEPSEEK_API_KEY --env dev
+```
+
+### 2.2 wrangler.jsonc vars（公开非 secret）
+
+公开值（如 `STRIPE_PUBLISHABLE_KEY` 是给前端的）可以直接写：
+
+```jsonc
+{
+  "env": {
+    "dev": {
+      "vars": {
+        "ENVIRONMENT": "dev",
+        "STRIPE_PUBLISHABLE_KEY": "pk_test_xxx",
+        "SUPPORT_EMAIL": "support@aiappsbox.com",
+        "GOOGLE_OAUTH_CLIENT_ID": "...apps.googleusercontent.com"
+      }
+    }
+  }
+}
+```
+
+**注意：** 即使是 publishable key，也建议 dev / prod 用不同的（隔离测试环境）。
+
+### 2.3 EAS secrets（移动端 build 时注入）
+
+```bash
+# 前端 build 时需要的（如 EXPO_PUBLIC_API_URL 不算 secret，但 sensitive build settings 算）
+eas secret:create --scope project --name SENTRY_DSN --value "..."
+```
+
+**注意：** Expo 中以 `EXPO_PUBLIC_` 开头的环境变量会**打包进 client bundle**——绝不能放真正的 secret。仅 API base URL 等公开值用 `EXPO_PUBLIC_*`。
+
+### 2.4 GitHub Actions secrets（v1.x CI 用）
+
+在 GitHub 仓库 Settings > Secrets 添加：
+- `CLOUDFLARE_API_TOKEN`（仅给 dev 部署用，scope 受限）
+- `CLOUDFLARE_ACCOUNT_ID`
+
+**prod 部署不进 CI** → 不放 prod secret 在 GitHub。
+
+### 2.5 本地开发 (.env.local)
+
+```bash
+# apps/app/.env.local (git ignored)
+EXPO_PUBLIC_API_URL=http://localhost:8787
+
+# packages/api/.dev.vars (git ignored, Wrangler 本地约定)
+DEEPSEEK_API_KEY=sk-...
+STRIPE_SECRET_KEY=sk_test_...
+JWT_SIGNING_KEY=...
+```
+
+`.dev.vars` 是 Wrangler 本地开发约定文件，模拟 secrets。
+
+---
+
+## 3. Secret 轮换流程
+
+### 3.1 LLM API key（DeepSeek / OpenAI / 其他）
+
+```bash
+# 1. 在 provider 后台创建新 key
+# 2. 注入新 key（不删旧 key）
+pnpm wrangler secret put DEEPSEEK_API_KEY --env prod   # 输入新值
+
+# 3. 部署一次
+pnpm deploy:api:prod
+
+# 4. 监测 24 小时（确保新 key 工作）
+# 5. 在 provider 后台撤销旧 key
+```
+
+### 3.2 Stripe key
+
+**注意：rotate Stripe live key 需要联系 Stripe 支持**（live key 不支持自助删除，只能 deactivate）。
+
+- test mode key 可随时换
+- live mode key 一旦下发，**视为长期持久**，仅在泄露时联系 Stripe rotate
+
+### 3.3 JWT signing key
+
+```bash
+# 1. 生成新 key
+openssl rand -base64 64
+
+# 2. 配置双 key 期（v1.x 实现支持）：
+#    - JWT_SIGNING_KEY_OLD（验证旧 token）
+#    - JWT_SIGNING_KEY_NEW（签发新 token）
+
+# 3. 部署 → 监控 30 天（覆盖大部分用户的 JWT 过期）
+# 4. 移除 OLD key
+```
+
+**v1 暂时不做双 key**（不轮换）。出问题时一次性切换 + 强制所有用户重新登录。
+
+### 3.4 OAuth client secret
+
+- Google / Apple 控制台都可创建新 secret
+- 同 LLM key 流程：旧新共存，部署，撤销旧
+
+---
+
+## 4. 安全约束
+
+### 4.1 不能进 git 的文件
+
+`.gitignore` 必须包含：
+```
+.env
+.env.*
+!.env.example
+.dev.vars
+*.p8
+*.pem
+*-private.json
+secrets/
+```
+
+### 4.2 提交前检查
+
+预提交 hook（v1.x 加 husky / lefthook）扫描：
+- 任何 `sk_live_...` / `sk_test_...` / `sk-...` 模式
+- 任何长度 32+ 的高熵字符串
+
+### 4.3 团队分发
+
+- secret 不要发邮件 / 微信 / Slack
+- 用 1Password / Bitwarden 共享 vault
+- prod secret 仅 admin 持有
+- 新人入职：仅给 dev secrets，prod 按需逐项授权
+
+### 4.4 误提交应急
+
+如果 secret 被误推到 git：
+
+1. 立刻在 provider 后台撤销该 key
+2. 创建新 key 注入
+3. 部署
+4. 用 `git filter-repo` 或 GitHub support 清除历史
+5. 强制 force-push 到所有分支（如未公开）
+6. 通知团队 reclone
+
+---
+
+## 5. 待获取 / 待配置（v1 上线前 checklist）
+
+### 5.1 LLM
+- [ ] DeepSeek API key（dev + prod）
+- [ ] OpenAI API key（fallback，dev + prod）
+- [ ] （可选）Anthropic / Doubao key
+
+### 5.2 Stripe
+- [ ] Stripe 账户注册
+- [ ] Stripe test secret + publishable key（dev）
+- [ ] Stripe live secret + publishable key（prod）
+- [ ] 创建 Product `AI Companion Subscription`（dev + prod）
+- [ ] 创建 Price `$9.99/month`，记录 ID（dev + prod）
+- [ ] webhook endpoint + signing secret（dev + prod）
+
+### 5.3 OAuth
+- [ ] Google Cloud project 创建
+- [ ] OAuth consent screen 配置
+- [ ] Google OAuth client ID + secret（web + Android + iOS 各一套）
+- [ ] Apple Developer 账户
+- [ ] Apple Sign-In service ID + key（.p8 文件）
+
+### 5.4 Email
+- [ ] 邮件发送服务选择（推荐 Resend，CF Workers 友好）
+- [ ] 域名 SPF / DKIM / DMARC 配置
+- [ ] `no-reply@aiappsbox.com` 发件邮箱
+- [ ] 支持邮箱（**用户待填写**，用于退款 / 客诉）
+
+### 5.5 域名
+- [x] `aiappsbox.com` 已注册并接管在 Cloudflare
+- [ ] 各子域 custom domain 路由配置（`api.` / `dev-api.` / `dev.` → Worker / Pages）
+- [ ] SSL 自动签发验证（CF 自动，部署时检查）
+
+### 5.6 移动端
+- [ ] Apple Developer 个人 / 公司账户
+- [ ] App Store Connect app 注册
+- [ ] Google Play Console 账户
+- [ ] Google Play app 注册
+- [ ] EAS 项目配置 + credentials
+
+---
+
+## 6. 待最终敲定
+
+- [ ] 团队 secret 共享工具（1Password / Bitwarden / 其他）
+- [ ] 支持邮箱地址（退款 / 客诉，用户提供）
+- [ ] DKIM / DMARC 配置策略（防止退款邮件被识别为垃圾）
+- [ ] secret 误提交检测工具（gitleaks vs 自建 hook）
+- [ ] 是否引入 Cloudflare Secrets Store（v1.x 统一管理）
