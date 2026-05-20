@@ -131,7 +131,8 @@ describe("companions module", () => {
     const body = (await response?.json()) as {
       relationship: { dimensions: Record<string, number>; level: string | null };
     };
-    expect(body.relationship.level).toBeNull();
+    // spec-005: zero dimensions resolve to "Stranger" via computeLevel
+    expect(body.relationship.level).toBe("Stranger");
     expect(body.relationship.dimensions).toEqual({
       closeness: 0,
       distance: 0,

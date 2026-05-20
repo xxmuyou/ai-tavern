@@ -1,6 +1,7 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
+import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
 
 const MAX_FREE_USER_COMPANIONS = 3;
 const NAME_MAX = 80;
@@ -54,16 +55,6 @@ type CompanionListItem = {
   preferred_scenes: string[];
   current_level: string | null;
   last_interaction_at: number | null;
-};
-
-const ZERO_DIMS = {
-  closeness: 0,
-  distance: 0,
-  friendship: 0,
-  hostility: 0,
-  romance: 0,
-  tension: 0,
-  trust: 0,
 };
 
 export async function handleCompanionsRequest(
@@ -179,6 +170,18 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
   }
 
   const relationship = await loadRelationship(env, user.id, companionId);
+  const dimensions = relationship
+    ? {
+        closeness: relationship.closeness,
+        distance: relationship.distance,
+        friendship: relationship.friendship,
+        hostility: relationship.hostility,
+        romance: relationship.romance,
+        tension: relationship.tension,
+        trust: relationship.trust,
+      }
+    : { ...ZERO_DIMENSIONS };
+
   const body = {
     appearance: row.appearance,
     art_url: row.art_url,
@@ -188,20 +191,10 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     personality: row.personality,
     preferred_scenes: parseStringArray(row.preferred_scenes),
     relationship: {
-      dimensions: relationship
-        ? {
-            closeness: relationship.closeness,
-            distance: relationship.distance,
-            friendship: relationship.friendship,
-            hostility: relationship.hostility,
-            romance: relationship.romance,
-            tension: relationship.tension,
-            trust: relationship.trust,
-          }
-        : { ...ZERO_DIMS },
+      dimensions,
       first_met_at: relationship?.first_met_at ?? null,
       last_interaction_at: relationship?.last_interaction_at ?? null,
-      level: relationship?.level_label ?? null,
+      level: computeLevel(dimensions),
     },
     relationship_role: row.relationship_role,
     source: row.source,

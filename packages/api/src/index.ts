@@ -3,6 +3,7 @@ import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleCompanionsRequest } from "./companions";
 import { jsonResponse, notFound, readJson } from "./http";
+import { handleRelationshipsRequest } from "./relationships";
 import { handleScenesRequest } from "./scenes";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
 export { GameRoom } from "./room";
@@ -61,6 +62,11 @@ export default {
       const companionsResponse = await handleCompanionsRequest(request, env, pathname);
       if (companionsResponse) {
         return withCors(request, env, companionsResponse);
+      }
+
+      const relationshipsResponse = await handleRelationshipsRequest(request, env, pathname);
+      if (relationshipsResponse) {
+        return withCors(request, env, relationshipsResponse);
       }
 
       if (isRetiredPath(pathname)) {
