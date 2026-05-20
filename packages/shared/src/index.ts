@@ -17,14 +17,6 @@ export type HealthResponse = {
   environment: string;
 };
 
-export type AppStatus = "active" | "hidden" | "retired";
-
-export type AppRegistryEntry = {
-  appKey: string;
-  name: string;
-  status: AppStatus;
-};
-
 export type RoomSnapshot = {
   roomId: string;
   eventCount: number;

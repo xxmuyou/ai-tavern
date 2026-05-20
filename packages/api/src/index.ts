@@ -1,6 +1,5 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
-import { handleAppsRequest } from "./apps";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
 import { handleCompanionEngineRequest } from "./companion-engine";
@@ -57,11 +56,6 @@ export default {
       const llmAdminResponse = await handleLlmAdminRequest(request, env, pathname);
       if (llmAdminResponse) {
         return withCors(request, env, llmAdminResponse);
-      }
-
-      const appsResponse = await handleAppsRequest(request, env, pathname);
-      if (appsResponse) {
-        return withCors(request, env, appsResponse);
       }
 
       if (pathname === "/health" && request.method === "GET") {
