@@ -41,7 +41,7 @@ const tasks = {
       cwd: "apps/app",
       envFile: ".env.dev",
       env: {
-        EXPO_PUBLIC_API_BASE_URL: "https://dev.aiappsbox.com/api",
+        EXPO_PUBLIC_API_URL: "https://dev.aiappsbox.com/api",
       },
     }),
   "app:web": () => runNpx(["expo", "start", "--web"], { cwd: "apps/app", envFile: ".env.dev" }),
