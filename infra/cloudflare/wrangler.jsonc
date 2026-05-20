@@ -40,7 +40,7 @@
     {
       "binding": "DB",
       "database_name": "xtbit-apps-dev",
-      "database_id": "baffe629-fa09-4d13-b172-6ddb09e621b9",
+      "database_id": "e3c49f74-c337-4b49-8c78-88c01a908c64",
       "migrations_dir": "../../packages/api/migrations"
     }
   ],

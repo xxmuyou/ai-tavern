@@ -9,18 +9,22 @@ const tasks = {
   "api:cf-types": () =>
     runNpx(["wrangler", "types", "--config", "../../infra/cloudflare/wrangler.jsonc", "src/worker-configuration.d.ts"], {
       cwd: "packages/api",
+      envFile: ".env.dev",
     }),
   "api:d1-migrate-dev": () =>
     runNpx(["wrangler", "d1", "migrations", "apply", "xtbit-apps-dev", "--remote", "--config", "../../infra/cloudflare/wrangler.jsonc"], {
       cwd: "packages/api",
+      envFile: ".env.dev",
     }),
   "api:d1-migrate-local": () =>
     runNpx(["wrangler", "d1", "migrations", "apply", "xtbit-apps-dev", "--local", "--config", "../../infra/cloudflare/wrangler.jsonc"], {
       cwd: "packages/api",
+      envFile: ".env.dev",
     }),
   "api:d1-migrate-prod": () =>
     runNpx(["wrangler", "d1", "migrations", "apply", "xtbit-apps-prod", "--remote", "--config", "../../infra/cloudflare/wrangler.jsonc"], {
       cwd: "packages/api",
+      envFile: ".env.prod",
     }),
   "api:deploy-dev": () =>
     runNpx(["wrangler", "deploy", "--config", "../../infra/cloudflare/wrangler.jsonc", "--env="], {
