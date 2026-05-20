@@ -1,14 +1,7 @@
-export const PLATFORM_APP_KEY = "platform";
-
 export type UserRecord = {
   email: string;
   id: string;
 };
-
-export function normalizeAppKey(value: string | null | undefined): string {
-  const normalized = value?.trim().toLowerCase();
-  return normalized && /^[a-z0-9-]{1,64}$/.test(normalized) ? normalized : PLATFORM_APP_KEY;
-}
 
 export function normalizeEmail(value: string | null | undefined): string | undefined {
   const normalized = value?.trim().toLowerCase();
@@ -39,11 +32,12 @@ export async function ensureUserByEmail(
   }
 
   const userId = preferredUserId ?? crypto.randomUUID();
+  const now = Date.now();
   await env.DB.prepare(
-    `INSERT OR IGNORE INTO users (id, email, updated_at)
-     VALUES (?, ?, CURRENT_TIMESTAMP)`,
+    `INSERT OR IGNORE INTO users (id, email, created_at, last_seen_at)
+     VALUES (?, ?, ?, ?)`,
   )
-    .bind(userId, email)
+    .bind(userId, email, now, now)
     .run();
 
   const created = await env.DB.prepare("SELECT id, email FROM users WHERE email = ?")

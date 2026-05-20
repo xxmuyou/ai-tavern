@@ -1,18 +1,35 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
 import { handleAuthRequest, requireAdminUser } from "./auth";
-import { handleBillingRequest } from "./billing";
-import { handleCompanionEngineRequest } from "./companion-engine";
 import { jsonResponse, notFound, readJson } from "./http";
-import { handleLlmAdminRequest } from "./llm/admin";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
-import { handleShowRequest } from "./show-engine";
 export { GameRoom } from "./room";
 
 type UploadMetadata = {
   contentType?: string;
   sizeBytes?: number;
 };
+
+// Endpoints removed by spec-003 (D1 schema reset).
+// Each prefix is reintroduced by a later spec on top of the v1 schema:
+//   /billing/*          -> spec-010 (Stripe + quota)
+//   /companions/*       -> spec-004 / spec-005 (companions + relationships)
+//   /scenes/*           -> spec-007 (scenes module)
+//   /chat/*             -> spec-006 (chat rewrite)
+//   /events/*           -> spec-008 (events module)
+//   /show/*             -> deprecated entirely (chapter-based gameplay retired)
+//   /companion/*        -> deprecated entirely (replaced by /companions and /chat)
+//   /admin/llm/*        -> spec-002 / spec-011 (LLM router + admin console)
+const RETIRED_PREFIXES: ReadonlyArray<string> = [
+  "/billing/",
+  "/companions/",
+  "/scenes/",
+  "/chat/",
+  "/events/",
+  "/show/",
+  "/companion/",
+  "/admin/llm/",
+];
 
 export default {
   async fetch(request, env, ctx): Promise<Response> {
@@ -38,24 +55,13 @@ export default {
         return withCors(request, env, authResponse);
       }
 
-      const billingResponse = await handleBillingRequest(request, env, pathname);
-      if (billingResponse) {
-        return withCors(request, env, billingResponse);
-      }
-
-      const companionResponse = await handleCompanionEngineRequest(request, env, pathname);
-      if (companionResponse) {
-        return withCors(request, env, companionResponse);
-      }
-
-      const showResponse = await handleShowRequest(request, env, pathname);
-      if (showResponse) {
-        return withCors(request, env, showResponse);
-      }
-
-      const llmAdminResponse = await handleLlmAdminRequest(request, env, pathname);
-      if (llmAdminResponse) {
-        return withCors(request, env, llmAdminResponse);
+      if (isRetiredPath(pathname)) {
+        return jsonCorsResponse(
+          request,
+          env,
+          { error: "endpoint_retired", message: "This endpoint was removed by the v1 redesign and will be reintroduced by a later spec." },
+          { status: 410 },
+        );
       }
 
       if (pathname === "/health" && request.method === "GET") {
@@ -137,6 +143,10 @@ function normalizeApiPath(pathname: string): string {
   }
 
   return pathname;
+}
+
+function isRetiredPath(pathname: string): boolean {
+  return RETIRED_PREFIXES.some((prefix) => pathname === prefix.slice(0, -1) || pathname.startsWith(prefix));
 }
 
 async function handleObjectRequest(
