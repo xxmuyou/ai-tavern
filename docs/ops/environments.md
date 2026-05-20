@@ -30,7 +30,7 @@
 - **WSL（Windows Subsystem for Linux）**（本项目强制：用户偏好/历史决策；不在 PowerShell / CMD 中开发）
 - Node.js >= 22
 - pnpm >= 9
-- Cloudflare Wrangler CLI（`npm i -g wrangler`）
+- Cloudflare Wrangler CLI（`pnpm add -g wrangler`，或通过 workspace 依赖间接调用）
 
 ### 2.2 环境文件
 

@@ -14,8 +14,8 @@ Useful commands:
 Run these from Linux at `/home/pgx123/private/xtbit/publisher-apps/xtbit-apps`:
 
 ```bash
-npm run cf:types
-npm run dev:api
-npm run cf:d1:migrate:local
-npm run deploy:api:dev
+pnpm cf:types
+pnpm dev:api
+pnpm cf:d1:migrate:local
+pnpm deploy:api:dev
 ```

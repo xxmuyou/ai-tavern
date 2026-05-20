@@ -1,0 +1,20 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true
+
+# Native build scripts that must run for the package to work.
+# - workerd: required by wrangler dev (extracts the local Workers runtime binary)
+# - esbuild: required by vitest / Wrangler bundling
+# - sharp: image processing used by Expo
+# - unrs-resolver: native module resolver used by some transitive deps
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - workerd

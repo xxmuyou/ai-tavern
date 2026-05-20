@@ -50,7 +50,7 @@ await stopChildren();
 process.exit(1);
 
 function startProcess(label, args) {
-  const child = spawn("npm", args, {
+  const child = spawn("pnpm", args, {
     cwd: repoRoot,
     env: process.env,
     shell: false,
