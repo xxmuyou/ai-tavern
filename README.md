@@ -12,13 +12,13 @@ Cloudflare-first Expo application workspace for Web, Android, and iOS.
 
 ## Local setup
 
-All local development for this repo runs inside Ubuntu WSL2 from:
+All local development for this repo runs on Linux from:
 
 ```bash
 cd /home/pgx123/private/xtbit/publisher-apps/xtbit-apps
 ```
 
-Use native Linux Node.js `>=22`; do not run project commands from Windows PowerShell, CMD, or the `/mnt/c/...` working copy.
+Use native Linux Node.js `>=22`; do not run project commands from Windows PowerShell or CMD.
 
 ```bash
 npm install

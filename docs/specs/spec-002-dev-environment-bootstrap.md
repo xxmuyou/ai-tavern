@@ -15,7 +15,7 @@ Global project infrastructure. This applies to every app that will later use `/a
 - Worker code accepts both local paths like `/health` and domain-routed paths like `/api/health`.
 - Real dev/prod D1 and KV IDs are written into Wrangler config.
 - Workers.dev public trigger is disabled for this project.
-- Dev scripts run from Ubuntu WSL and fail fast outside WSL to avoid mixing Windows and Linux toolchains.
+- Dev scripts run on Linux.
 
 ## Expected future behavior
 
@@ -43,8 +43,8 @@ No schema changes beyond applying existing migrations to dev D1.
 - Run typecheck and lint.
 - Export Expo Web.
 - Smoke test Worker locally.
-- Run `npm run cf:secrets:dev` with an empty ignored tmp template inside Ubuntu WSL to confirm the script does not upload blank secrets.
-- Run representative root commands through `npm run ...` inside Ubuntu WSL.
+- Run `npm run cf:secrets:dev` with an empty ignored tmp template on Linux to confirm the script does not upload blank secrets.
+- Run representative root commands through `npm run ...` on Linux.
 
 ## Dev validation
 

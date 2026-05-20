@@ -11,7 +11,7 @@ Before production deploys, replace placeholder resource IDs with real values:
 
 Useful commands:
 
-Run these from Ubuntu WSL at `/home/pgx123/private/xtbit/publisher-apps/xtbit-apps`:
+Run these from Linux at `/home/pgx123/private/xtbit/publisher-apps/xtbit-apps`:
 
 ```bash
 npm run cf:types

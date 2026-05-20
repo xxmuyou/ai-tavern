@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "typecheck": "node ../../scripts/ensure-wsl.mjs && tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "~5.9.2"

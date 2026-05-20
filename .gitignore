@@ -15,4 +15,5 @@ coverage/
 worker-configuration.d.ts
 *.orig
 *.rej
+tmux-*.log
 .claude/

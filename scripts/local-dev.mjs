@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import "./ensure-wsl.mjs";
 import { spawn } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";

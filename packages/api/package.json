@@ -11,7 +11,7 @@
     "d1:migrate:local": "node ../../scripts/tasks/run.mjs api:d1-migrate-local",
     "d1:migrate:dev": "node ../../scripts/tasks/run.mjs api:d1-migrate-dev",
     "d1:migrate:prod": "node ../../scripts/tasks/run.mjs api:d1-migrate-prod",
-    "test": "node ../../scripts/ensure-wsl.mjs && vitest run",
+    "test": "vitest run",
     "typecheck": "node ../../scripts/tasks/run.mjs api:typecheck"
   },
   "dependencies": {

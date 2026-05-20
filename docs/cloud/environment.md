@@ -10,13 +10,13 @@ The repo uses exactly three env files:
 
 The variable names should stay the same across all three files. Only the values differ by environment.
 
-Local development is Ubuntu WSL2 only. Use the Linux filesystem working copy:
+Local development runs on Linux. Use the repo working copy:
 
 ```bash
 cd /home/pgx123/private/xtbit/publisher-apps/xtbit-apps
 ```
 
-Do not run project npm commands from Windows PowerShell, CMD, or the old `/mnt/c/...` path.
+Do not run project npm commands from Windows PowerShell or CMD.
 
 Create local files from the template:
 
@@ -35,9 +35,9 @@ Set `EXPO_PUBLIC_API_BASE_URL` when the API is not running at the default local 
 EXPO_PUBLIC_API_BASE_URL="http://127.0.0.1:8787" npm run dev:app
 ```
 
-## WSL scripts
+## Local scripts
 
-Team commands should be run through `npm run ...` from the repo root inside Ubuntu WSL. Project task wrappers intentionally fail fast outside WSL so local tools do not mix Windows and Linux Node dependencies.
+Team commands should be run through `npm run ...` from the repo root on Linux.
 
 Important shared commands:
 
@@ -74,7 +74,7 @@ It keeps both services attached to the terminal. Keep that terminal open. Press 
 
 ## Cloudflare secrets
 
-Use the ignored local `.env.dev` file for local process env. Use the ignored local tmp secrets file for uploading dev Worker secrets. Do not commit `.dev.vars`, `.env.dev`, `.env.prod`, or anything under `tmp/`. The upload command runs through Node inside Ubuntu WSL.
+Use the ignored local `.env.dev` file for local process env. Use the ignored local tmp secrets file for uploading dev Worker secrets. Do not commit `.dev.vars`, `.env.dev`, `.env.prod`, or anything under `tmp/`. The upload command runs through Node on Linux.
 
 ```bash
 nano ./tmp/cloudflare-dev-secrets.env
