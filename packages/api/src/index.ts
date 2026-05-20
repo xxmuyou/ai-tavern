@@ -1,6 +1,7 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
 import { handleAuthRequest, requireAdminUser } from "./auth";
+import { handleCompanionsRequest } from "./companions";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleScenesRequest } from "./scenes";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
@@ -14,7 +15,6 @@ type UploadMetadata = {
 // Endpoints removed by spec-003 (D1 schema reset).
 // Each prefix is reintroduced by a later spec on top of the v1 schema:
 //   /billing/*          -> spec-010 (Stripe + quota)
-//   /companions/*       -> spec-004 / spec-005 (companions + relationships)
 //   /chat/*             -> spec-006 (chat rewrite)
 //   /events/*           -> spec-008 (events module)
 //   /show/*             -> deprecated entirely (chapter-based gameplay retired)
@@ -22,7 +22,6 @@ type UploadMetadata = {
 //   /admin/llm/*        -> spec-002 / spec-011 (LLM router + admin console)
 const RETIRED_PREFIXES: ReadonlyArray<string> = [
   "/billing/",
-  "/companions/",
   "/chat/",
   "/events/",
   "/show/",
@@ -57,6 +56,11 @@ export default {
       const scenesResponse = await handleScenesRequest(request, env, pathname);
       if (scenesResponse) {
         return withCors(request, env, scenesResponse);
+      }
+
+      const companionsResponse = await handleCompanionsRequest(request, env, pathname);
+      if (companionsResponse) {
+        return withCors(request, env, companionsResponse);
       }
 
       if (isRetiredPath(pathname)) {
