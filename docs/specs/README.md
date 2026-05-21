@@ -31,7 +31,7 @@
 | 005 | [relationships 模块拆出](./spec-005-relationships-module.md) | 重构 | 003, 004 | 1-2 天 | 待办（详细） |
 | 002 | [LLM 多供应商抽象层](./spec-002-llm-multi-provider.md) | 重写 | 001, 003 | 3-5 天 | 待办（详细） |
 | 006 | [chat 重写（去掉章节制，场景内自由对话）](./spec-006-chat-rewrite.md) | 重写 | 002, 003, 005, 007 | 5-7 天 | 待办（详细） |
-| 008 | events 模块新建 | 新建 | 003, 007 | 3-5 天 | 待办（stub） |
+| 008 | [events 模块新建](./spec-008-events-module.md) | 新建 | 003, 005, 006, 007 | 3-5 天 | 待办（详细） |
 | 009 | OIDC 集成（Google + Apple + Email Magic Link） | 新建 | 003 | 5-7 天 | 待办（stub） |
 | 010 | Stripe billing + 配额计量（KV） | 新建 | 003, 009 | 5-7 天 | 待办（stub） |
 | 011 | admin 端点（LLM 配置 + 测试） | 新建 | 002 | 2 天 | 待办（stub） |
