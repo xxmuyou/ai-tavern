@@ -24,9 +24,10 @@
 | `APPLE_SIGNIN_TEAM_ID` | Apple 开发者团队 ID | developer.apple.com | wrangler.jsonc `vars`（公开） | 通常共享（一个团队） |
 | `APPLE_SIGNIN_KEY_ID` | Apple Sign-In key ID | developer.apple.com | wrangler.jsonc `vars` | 独立或共享 |
 | `APPLE_SIGNIN_PRIVATE_KEY` | Apple Sign-In `.p8` 私钥内容 | developer.apple.com 下载 | Wrangler secret（base64 编码） | 独立或共享 |
-| `APPLE_SIGNIN_BUNDLE_ID` | iOS bundle id | App Store Connect | wrangler.jsonc `vars` | 独立或共享 |
-| `EMAIL_PROVIDER_API_KEY` | Magic Link 邮件发送（如 Resend / Mailgun） | provider | Wrangler secret | 独立 |
+| `APPLE_SIGNIN_CLIENT_ID` | Apple Sign-In client/service id | App Store Connect / Apple Developer | wrangler.jsonc `vars` | 独立或共享 |
+| `EMAIL_PROVIDER_API_KEY` | Magic Link 邮件发送（Resend） | resend.com | Wrangler secret | 独立 |
 | `EMAIL_FROM_ADDRESS` | 发件邮箱（如 `no-reply@aiappsbox.com`） | 团队邮箱配置 | wrangler.jsonc `vars` | 通常共享 |
+| `AUTH_SUCCESS_URL` | OAuth / Magic Link 成功后的 Web 回调页 | app 域名 | wrangler.jsonc `vars` | 独立 |
 | `SUPPORT_EMAIL` | 用户支持邮箱（退款、客诉） | 团队邮箱 | wrangler.jsonc `vars` + 前端 | 共享 |
 | `ADMIN_INIT_EMAIL` | 首次部署 seed admin 用户的邮箱 | 团队约定（`admin@aiappsbox.com`） | wrangler.jsonc `vars` | 共享 |
 

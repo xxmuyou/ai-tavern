@@ -130,8 +130,8 @@ pnpm deploy:web:dev    # Web 到 dev (Cloudflare Pages)
 - API: `aiappsbox.com/api/*`
 - Web: `aiappsbox.com`
 - Stripe webhook: `https://aiappsbox.com/api/billing/webhook`
-- Apple Sign-In return URL: `https://aiappsbox.com/auth/oidc/apple/callback`
-- Google OAuth redirect URI: `https://aiappsbox.com/auth/oidc/google/callback`
+- Google OAuth redirect URI: `https://aiappsbox.com/api/auth/oidc/google/callback`
+- Apple Sign-In return URL: `https://aiappsbox.com/api/auth/oidc/apple/callback`（spec-009 只预留 provider contract）
 
 ### 4.2 资源创建顺序
 

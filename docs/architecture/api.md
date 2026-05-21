@@ -70,9 +70,9 @@ data: {"message_id": "...", "usage": {...}}
 
 | 方式 | 平台 | 优先级 | 说明 |
 |------|------|--------|------|
-| **Google Sign-In (OIDC)** | Web / Android / iOS | 主推 | 海外用户普及度最高 |
-| **Apple Sign-In (OIDC)** | iOS / Web | iOS 强制 | App Store 规定：如提供第三方登录，必须同时提供 Apple Sign-In |
-| **Email Magic Link** | Web / 移动 | 备选 | 无密码邮件登录，给不想用社交账号的用户 |
+| **Google Sign-In (OIDC)** | Web | 主推 | spec-009 第一版落地 |
+| **Email Magic Link** | Web | 备选 | Resend 发送，无密码登录 |
+| **Apple Sign-In (OIDC)** | iOS / Web | 预留 | spec-009 只定义 provider contract，完整实现跟移动端一起补 |
 
 **不做：** 用户名/密码（v1 不引入密码管理）、验证码 6 位数邮件（用 Magic Link 替代，更现代且可点跳转）。
 
@@ -87,12 +87,12 @@ data: {"message_id": "...", "usage": {...}}
 发起 OIDC 登录（302 重定向到 provider 授权页）。
 
 ```
-provider: 'google' | 'apple'
+provider: 'google'   // apple 在 spec-009 只预留接口
 Query: ?redirect=<回调到 app 的路径>
 Response: 302 Location: https://accounts.google.com/o/oauth2/v2/auth?...
 ```
 
-服务端在 KV `oauth:state:{state_id}` 存 10 分钟的 state，防 CSRF。
+服务端在 KV `oauth:state:{state_id}` 存 10 分钟的 state，防 CSRF。`redirect` 只允许同源相对路径或 `ALLOWED_ORIGINS` 内 URL，否则回落到 `AUTH_SUCCESS_URL`。
 
 ### `GET /auth/oidc/{provider}/callback`
 
@@ -103,10 +103,10 @@ Query: ?code=...&state=...
 后端：
   1. 校验 state（KV 查找 + 删除）
   2. 用 code 换取 id_token
-  3. 验证 id_token 签名
+  3. 验证 id_token 签名 / issuer / audience / expiration
   4. 取 email + sub，在 users 表 upsert（新用户创建，已存在则合并）
-  5. 签发 JWT
-  6. 302 重定向到 app 的成功页（或返回 deep link `xtbit://auth/callback?token=...`）
+  5. 创建 sessions 记录并签发含 jti 的 JWT
+  6. 302 重定向到 Web 成功页，token 放在 URL fragment 中
 ```
 
 ### 2.2 Email Magic Link
@@ -121,7 +121,8 @@ Query: ?code=...&state=...
 { "ok": true, "expires_in": 900 }   // 15 分钟
 ```
 
-服务端生成一次性 token，发邮件，邮件正文含 `https://aiappsbox.com/auth/email/verify?token=...`。
+服务端生成一次性 token，发邮件，邮件正文含 `https://aiappsbox.com/api/auth/email/verify?token=...`。
+token 只以 SHA-256 hash 存入 KV `magic:{hash}`，TTL 15 分钟，一次性使用。邮件 provider v1 使用 Resend。
 
 ### `GET /auth/email/verify`
 
@@ -129,10 +130,10 @@ Query: ?code=...&state=...
 Query: ?token=...
 
 后端：
-  1. 校验 token（一次性使用，存 D1 短期表或 KV）
+  1. 校验 token（一次性使用，存 KV hash）
   2. 在 users 表 upsert
-  3. 签发 JWT
-  4. 302 重定向到 app
+  3. 创建 sessions 记录并签发含 jti 的 JWT
+  4. 302 重定向到 Web 成功页，token 放在 URL fragment 中
 ```
 
 ### 2.3 通用
@@ -143,6 +144,8 @@ Query: ?token=...
 // Header: Authorization
 // Response 200: { "ok": true }
 ```
+
+服务端将当前 JWT 的 `jti` 对应 `sessions.revoked_at` 置为当前时间；之后该 token 不再通过鉴权。
 
 ### `GET /auth/me`
 
@@ -610,8 +613,8 @@ D1 连通性诊断（仅 admin / 内部）。
 ## 13. 待最终敲定
 
 - [ ] Google OAuth client ID / secret 获取（dev + prod 各一套，存 wrangler）
-- [ ] Apple Sign-In key / team id / bundle id（dev + prod）
-- [ ] Email Magic Link 邮件发送服务（Mailgun / Resend / Cloudflare Email Workers？）
+- [ ] Apple Sign-In key / team id / client id（dev + prod，spec-009 只预留）
+- [ ] Email Magic Link 邮件发送服务（spec-009 选择 Resend）
 - [ ] JWT 时长（30 天 vs 7 天 + refresh token）
 - [ ] WebSocket 是否替代 SSE 做对话流（v1 用 SSE 简单，v2 看需要）
 - [ ] `/companions/assist` 是否计入用户配额（一次辅助生成 ≈ 0.5 对话条）
