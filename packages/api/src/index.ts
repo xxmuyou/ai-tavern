@@ -1,6 +1,7 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
 import { handleAuthRequest, requireAdminUser } from "./auth";
+import { handleChatRequest } from "./chat";
 import { handleCompanionsRequest } from "./companions";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleRelationshipsRequest } from "./relationships";
@@ -16,14 +17,12 @@ type UploadMetadata = {
 // Endpoints removed by spec-003 (D1 schema reset).
 // Each prefix is reintroduced by a later spec on top of the v1 schema:
 //   /billing/*          -> spec-010 (Stripe + quota)
-//   /chat/*             -> spec-006 (chat rewrite)
 //   /events/*           -> spec-008 (events module)
 //   /show/*             -> deprecated entirely (chapter-based gameplay retired)
 //   /companion/*        -> deprecated entirely (replaced by /companions and /chat)
 //   /admin/llm/*        -> spec-002 / spec-011 (LLM router + admin console)
 const RETIRED_PREFIXES: ReadonlyArray<string> = [
   "/billing/",
-  "/chat/",
   "/events/",
   "/show/",
   "/companion/",
@@ -67,6 +66,11 @@ export default {
       const relationshipsResponse = await handleRelationshipsRequest(request, env, pathname);
       if (relationshipsResponse) {
         return withCors(request, env, relationshipsResponse);
+      }
+
+      const chatResponse = await handleChatRequest(request, env, ctx, pathname);
+      if (chatResponse) {
+        return withCors(request, env, chatResponse);
       }
 
       if (isRetiredPath(pathname)) {
