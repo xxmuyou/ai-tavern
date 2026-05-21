@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { handleAuthRequest } from "../auth";
+import { createSessionsStore, type SessionsStore } from "../auth/test-fixtures";
 import { handleCompanionsRequest } from "./index";
 
 type CompanionRow = {
@@ -457,13 +458,14 @@ function createEnv(fixtures: Fixtures): Env {
   for (const c of fixtures.companions) companions.set(c.id, { ...c });
 
   const relationships = fixtures.relationships.map((r) => ({ ...r }));
+  const sessionsStore = createSessionsStore();
 
   return {
     APP_ENV: "dev",
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
-        return buildStatement(sql, companions, relationships, users);
+        return buildStatement(sql, companions, relationships, users, sessionsStore);
       },
     },
   } as unknown as Env;
@@ -474,15 +476,24 @@ function buildStatement(
   companions: Map<string, CompanionRow>,
   relationships: RelationshipFixture[],
   users: Map<string, { id: string; email: string }>,
+  sessionsStore: SessionsStore,
 ) {
   const exec = (values: unknown[]) => ({
     async all<T>(): Promise<{ results: T[] }> {
       return { results: queryAll<T>(sql, values, companions, relationships) };
     },
     async first<T>(): Promise<T | null> {
+      const sessionResult = sessionsStore.handle(sql, values);
+      if (sessionResult?.kind === "first") {
+        return sessionResult.result as unknown as T | null;
+      }
       return queryFirst<T>(sql, values, companions, relationships, users);
     },
     async run() {
+      const sessionResult = sessionsStore.handle(sql, values);
+      if (sessionResult?.kind === "run") {
+        return sessionResult.result;
+      }
       mutate(sql, values, companions, users);
       return { meta: { changes: 1 } };
     },

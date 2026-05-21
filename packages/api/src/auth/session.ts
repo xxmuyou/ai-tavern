@@ -1,44 +1,96 @@
-import { normalizeEmail } from "../identity";
-import { DEV_FALLBACK_SECRET, authError, isDevRuntime } from "./types";
-import type { AuthEnv, AuthPayload } from "./types";
+import { SignJWT, jwtVerify } from "jose";
 
-export async function signAuthToken(env: AuthEnv, payload: AuthPayload): Promise<string> {
-  const header = base64UrlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const body = base64UrlEncode(JSON.stringify(payload));
-  const data = `${header}.${body}`;
-  const signature = await hmacSha256(env, data);
+import { findUserById, normalizeEmail, type UserRecord } from "../identity";
+import {
+  DEFAULT_SESSION_TTL_SECONDS,
+  DEV_FALLBACK_SECRET,
+  authError,
+  isDevRuntime,
+} from "./types";
+import type { AuthEnv, AuthPayload, SessionResponse } from "./types";
 
-  return `${data}.${signature}`;
+type SignSessionInput = {
+  userId: string;
+  email: string;
+  ttlSeconds?: number;
+  now?: number;
+};
+
+export async function signSession(env: AuthEnv, input: SignSessionInput): Promise<SessionResponse> {
+  const issuedAt = Math.floor((input.now ?? Date.now()) / 1000);
+  const ttlSeconds = input.ttlSeconds ?? DEFAULT_SESSION_TTL_SECONDS;
+  const expiresAt = issuedAt + ttlSeconds;
+  const sessionId = crypto.randomUUID();
+  const jti = crypto.randomUUID();
+
+  await env.DB.prepare(
+    `INSERT INTO sessions (id, user_id, jwt_jti, created_at, expires_at, revoked_at)
+     VALUES (?, ?, ?, ?, ?, NULL)`,
+  )
+    .bind(sessionId, input.userId, jti, issuedAt * 1000, expiresAt * 1000)
+    .run();
+
+  const secret = encodeSecret(readSigningSecret(env));
+  const token = await new SignJWT({ email: input.email, jti })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(input.userId)
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(expiresAt)
+    .sign(secret);
+
+  return {
+    token,
+    expiresAt: new Date(expiresAt * 1000).toISOString(),
+    email: input.email,
+    user: { id: input.userId, email: input.email },
+  };
 }
 
-export async function verifyAuthToken(env: AuthEnv, token: string): Promise<AuthPayload | null> {
-  const parts = token.split(".");
-  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+export async function verifyAuthToken(env: AuthEnv, token: string): Promise<AuthPayload> {
+  const secret = encodeSecret(readSigningSecret(env));
+  let payload: Record<string, unknown>;
+  try {
+    const verified = await jwtVerify(token, secret, { algorithms: ["HS256"] });
+    payload = verified.payload as Record<string, unknown>;
+  } catch {
     throw authError("invalid_token", 401);
   }
 
-  const [header, body, signature] = parts as [string, string, string];
-  const key = await importHmacKey(readAuthSecret(env));
-  const valid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    base64UrlToBytes(signature),
-    new TextEncoder().encode(`${header}.${body}`),
-  );
-  if (!valid) {
+  const normalized = parsePayload(payload);
+  if (!normalized) {
     throw authError("invalid_token", 401);
   }
 
-  const payload = parsePayload(body);
-  if (!payload) {
-    throw authError("invalid_token", 401);
-  }
-
-  if (payload.exp <= Math.floor(Date.now() / 1000)) {
+  if (normalized.exp <= Math.floor(Date.now() / 1000)) {
     throw authError("token_expired", 401);
   }
 
-  return payload;
+  const session = await env.DB.prepare(
+    `SELECT id, user_id, jwt_jti, expires_at, revoked_at FROM sessions
+     WHERE jwt_jti = ? AND user_id = ?`,
+  )
+    .bind(normalized.jti, normalized.sub)
+    .first<{
+      id: string;
+      user_id: string;
+      jwt_jti: string;
+      expires_at: number;
+      revoked_at: number | null;
+    }>();
+
+  if (!session) {
+    throw authError("invalid_token", 401);
+  }
+
+  if (session.revoked_at !== null) {
+    throw authError("session_revoked", 401);
+  }
+
+  if (session.expires_at <= Date.now()) {
+    throw authError("token_expired", 401);
+  }
+
+  return normalized;
 }
 
 export async function verifyRequestAuth(env: AuthEnv, request: Request): Promise<AuthPayload | null> {
@@ -51,26 +103,29 @@ export async function verifyRequestAuth(env: AuthEnv, request: Request): Promise
   return verifyAuthToken(env, token);
 }
 
-async function hmacSha256(env: AuthEnv, data: string): Promise<string> {
-  const key = await importHmacKey(readAuthSecret(env));
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
-  return base64UrlEncodeBytes(new Uint8Array(signature));
+export async function loadUserFromAuth(env: AuthEnv, payload: AuthPayload): Promise<UserRecord> {
+  const user = await findUserById(env, payload.sub);
+  if (!user) {
+    throw authError("invalid_token", 401);
+  }
+  return user;
 }
 
-async function importHmacKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { hash: "SHA-256", name: "HMAC" },
-    false,
-    ["sign", "verify"],
-  );
+export async function revokeSession(env: AuthEnv, jti: string, now: number = Date.now()): Promise<void> {
+  await env.DB.prepare(`UPDATE sessions SET revoked_at = ? WHERE jwt_jti = ? AND revoked_at IS NULL`)
+    .bind(now, jti)
+    .run();
 }
 
-function readAuthSecret(env: AuthEnv): string {
-  const configured = env.AUTH_TOKEN_SECRET?.trim();
-  if (configured) {
-    return configured;
+function readSigningSecret(env: AuthEnv): string {
+  const primary = env.JWT_SIGNING_KEY?.trim();
+  if (primary) {
+    return primary;
+  }
+
+  const legacy = env.AUTH_TOKEN_SECRET?.trim();
+  if (legacy) {
+    return legacy;
   }
 
   if (isDevRuntime(env)) {
@@ -80,46 +135,20 @@ function readAuthSecret(env: AuthEnv): string {
   throw authError("auth_secret_missing", 500);
 }
 
-function parsePayload(value: string): AuthPayload | null {
-  try {
-    const parsed = JSON.parse(new TextDecoder().decode(base64UrlToBytes(value))) as Partial<AuthPayload>;
-    const email = normalizeEmail(parsed.email);
-    if (!email || typeof parsed.sub !== "string" || typeof parsed.exp !== "number" || typeof parsed.iat !== "number") {
-      return null;
-    }
+function encodeSecret(secret: string): Uint8Array {
+  return new TextEncoder().encode(secret);
+}
 
-    return {
-      email,
-      exp: parsed.exp,
-      iat: parsed.iat,
-      sub: parsed.sub,
-    };
-  } catch {
+function parsePayload(payload: Record<string, unknown>): AuthPayload | null {
+  const email = normalizeEmail(payload.email as string | undefined);
+  const sub = payload.sub;
+  const jti = payload.jti;
+  const iat = payload.iat;
+  const exp = payload.exp;
+
+  if (!email || typeof sub !== "string" || typeof jti !== "string" || typeof iat !== "number" || typeof exp !== "number") {
     return null;
   }
-}
 
-function base64UrlEncode(value: string): string {
-  return base64UrlEncodeBytes(new TextEncoder().encode(value));
-}
-
-function base64UrlEncodeBytes(value: Uint8Array): string {
-  let binary = "";
-  for (const byte of value) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function base64UrlToBytes(value: string): Uint8Array {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-
-  return bytes;
+  return { sub, email, jti, iat, exp };
 }

@@ -1,6 +1,6 @@
 import { jsonResponse, readJson } from "../http";
 import { ensureUserByEmail, normalizeEmail } from "../identity";
-import { signAuthToken } from "./session";
+import { signSession } from "./session";
 import { DEFAULT_DEV_TOKEN_TTL_SECONDS, isDevRuntime } from "./types";
 import type { AuthEnv } from "./types";
 
@@ -24,21 +24,13 @@ export async function handleDevSession(request: Request, env: Env): Promise<Resp
   }
 
   const user = await ensureUserByEmail(env, email);
-  const issuedAt = Math.floor(Date.now() / 1000);
-  const expiresAt = issuedAt + readDevTokenTtl(env as AuthEnv);
-  const token = await signAuthToken(env as AuthEnv, {
+  const session = await signSession(env as AuthEnv, {
+    userId: user.id,
     email: user.email,
-    exp: expiresAt,
-    iat: issuedAt,
-    sub: user.id,
+    ttlSeconds: readDevTokenTtl(env as AuthEnv),
   });
 
-  return jsonResponse({
-    email: user.email,
-    expiresAt: new Date(expiresAt * 1000).toISOString(),
-    token,
-    user,
-  });
+  return jsonResponse(session);
 }
 
 function readDevTokenTtl(env: AuthEnv): number {

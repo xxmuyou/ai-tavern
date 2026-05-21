@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { handleAuthRequest, requireAuthUser } from "../auth";
+import { createSessionsStore, type SessionsStore } from "../auth/test-fixtures";
 import { handleScenesRequest } from "./index";
 
 type SceneFixture = {
@@ -251,13 +252,14 @@ function createEnv(fixtures: Fixtures): Env {
   // Pre-create users so dev-session can issue tokens deterministically.
   const users = new Map<string, { id: string; email: string }>();
   users.set("player@example.com", { email: "player@example.com", id: "user-1" });
+  const sessionsStore = createSessionsStore();
 
   return {
     APP_ENV: "dev",
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
-        return buildStatement(sql, fixtures, users);
+        return buildStatement(sql, fixtures, users, sessionsStore);
       },
     },
   } as unknown as Env;
@@ -267,15 +269,24 @@ function buildStatement(
   sql: string,
   fixtures: Fixtures,
   users: Map<string, { id: string; email: string }>,
+  sessionsStore: SessionsStore,
 ) {
   const statementFor = (values: unknown[]) => ({
     async all<T>(): Promise<{ results: T[] }> {
       return { results: queryAll<T>(sql, values, fixtures) };
     },
     async first<T>(): Promise<T | null> {
+      const sessionResult = sessionsStore.handle(sql, values);
+      if (sessionResult?.kind === "first") {
+        return sessionResult.result as unknown as T | null;
+      }
       return queryFirst<T>(sql, values, fixtures, users);
     },
     async run() {
+      const sessionResult = sessionsStore.handle(sql, values);
+      if (sessionResult?.kind === "run") {
+        return sessionResult.result;
+      }
       if (sql.includes("INSERT OR IGNORE INTO users")) {
         const [id, email] = values as [string, string];
         if (id && email && !users.has(email)) {

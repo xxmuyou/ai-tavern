@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { handleAuthRequest } from "../auth";
+import { createSessionsStore, type SessionsStore } from "../auth/test-fixtures";
 import { handleRelationshipsRequest } from "./index";
 
 type CompanionRow = {
@@ -174,13 +175,14 @@ function createEnv(fixtures: {
   for (const c of fixtures.companions) companions.set(c.id, { ...c });
 
   const relationships = fixtures.relationships.map((r) => ({ ...r }));
+  const sessionsStore = createSessionsStore();
 
   return {
     APP_ENV: "dev",
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
-        return buildStatement(sql, users, companions, relationships);
+        return buildStatement(sql, users, companions, relationships, sessionsStore);
       },
     },
   } as unknown as Env;
@@ -191,9 +193,14 @@ function buildStatement(
   users: Map<string, { id: string; email: string }>,
   companions: Map<string, CompanionRow>,
   relationships: RelationshipFixture[],
+  sessionsStore: SessionsStore,
 ) {
   const exec = (values: unknown[]) => ({
     async first<T>(): Promise<T | null> {
+      const sessionResult = sessionsStore.handle(sql, values);
+      if (sessionResult?.kind === "first") {
+        return sessionResult.result as unknown as T | null;
+      }
       if (sql.includes("FROM users")) {
         if (sql.includes("WHERE email = ?")) return (users.get(values[0] as string) ?? null) as T | null;
         if (sql.includes("WHERE id = ?")) {
@@ -214,6 +221,10 @@ function buildStatement(
       return { results: [] };
     },
     async run() {
+      const sessionResult = sessionsStore.handle(sql, values);
+      if (sessionResult?.kind === "run") {
+        return sessionResult.result;
+      }
       if (sql.includes("INSERT OR IGNORE INTO users")) {
         const [id, email] = values as [string, string];
         if (id && email && !users.has(email)) users.set(email, { email, id });

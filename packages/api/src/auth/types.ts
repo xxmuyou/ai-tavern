@@ -20,12 +20,21 @@ export type AuthEnv = Env & {
 export type IdentityProvider = "google" | "apple" | "email";
 
 export type AuthPayload = {
-  email: string;
-  exp: number;
-  iat: number;
   sub: string;
+  email: string;
+  jti: string;
+  iat: number;
+  exp: number;
 };
 
+export type SessionResponse = {
+  token: string;
+  expiresAt: string;
+  email: string;
+  user: { id: string; email: string };
+};
+
+export const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 export const DEFAULT_DEV_TOKEN_TTL_SECONDS = 60 * 60 * 8;
 export const DEV_FALLBACK_SECRET = "xtbit-local-dev-auth-token-secret";
 export const DEFAULT_ADMIN_EMAILS = ["admin@aiappsbox.com"];
