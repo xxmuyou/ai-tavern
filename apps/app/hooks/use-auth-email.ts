@@ -6,8 +6,10 @@ import {
   AUTH_TOKEN_STORAGE_KEY,
   BILLING_EMAIL_STORAGE_KEY,
   EMAIL_STORAGE_KEY,
+  applySessionFragment,
   clearStoredAuthSession,
   createDevSession,
+  logout,
   writeStoredAuthSession,
 } from '@/api/companion-client';
 
@@ -17,6 +19,19 @@ export function useAuthEmail() {
   const [token, setToken] = useState('');
 
   useEffect(() => {
+    // Consume the session fragment delivered by OAuth / magic-link callbacks.
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.includes('token=')) {
+      const session = applySessionFragment(window.location.hash);
+      if (session) {
+        setEmail(session.email);
+        setDraftEmail(session.email);
+        setToken(session.token);
+        // Remove the fragment so the token is not visible in the URL bar or history.
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        return;
+      }
+    }
+
     const storedEmail = readStoredEmail();
     setEmail(storedEmail);
     setDraftEmail(storedEmail);
@@ -32,11 +47,11 @@ export function useAuthEmail() {
     writeStoredAuthSession(session);
   }, []);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
     setEmail('');
     setDraftEmail('');
     setToken('');
-    clearStoredEmail();
+    await logout();
   }, []);
 
   return {

@@ -16,6 +16,16 @@ export type AuthSession = {
   };
 };
 
+export type MeResponse = {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  display_name: string | null;
+  linked_providers: string[];
+  subscription: { status: string; current_period_end: string | null };
+  quota: { messages_used_today: number; messages_limit_today: number };
+};
+
 export type AsyncState<T> =
   | { status: 'idle' | 'loading' }
   | { status: 'ready'; data: T }
@@ -484,6 +494,70 @@ export async function createDevSession(email: string): Promise<AuthSession> {
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   }, { skipAuth: true });
+}
+
+export function startGoogleLogin(redirectPath?: string): void {
+  const params = new URLSearchParams();
+  if (redirectPath) {
+    params.set('redirect', redirectPath);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  window.location.href = `${API_BASE_URL}/auth/oidc/google/start${query}`;
+}
+
+export async function sendMagicLink(
+  email: string,
+  redirect?: string,
+): Promise<{ ok: boolean; expires_in: number; verify_url?: string }> {
+  return requestJson<{ ok: boolean; expires_in: number; verify_url?: string }>(
+    '/auth/email/send-link',
+    {
+      body: JSON.stringify({ email, redirect }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+    { skipAuth: true },
+  );
+}
+
+export async function fetchMe(): Promise<MeResponse> {
+  return requestJson<MeResponse>('/auth/me');
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await requestJson('/auth/logout', { method: 'POST' });
+  } catch {
+    // Best-effort: clear local state even if the server-side revocation fails.
+  }
+  clearStoredAuthSession();
+}
+
+/**
+ * Parses the session fragment delivered by OAuth/magic-link callbacks.
+ * Expects the URL hash to contain token, expires_at, and email fields.
+ * Writes the session to localStorage and returns it; returns null if the
+ * hash does not contain a valid session.
+ */
+export function applySessionFragment(hash: string): AuthSession | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const token = params.get('token');
+  const expiresAt = params.get('expires_at');
+  const email = params.get('email');
+
+  if (!token || !expiresAt || !email) {
+    return null;
+  }
+
+  const session: AuthSession = {
+    email,
+    expiresAt,
+    token,
+    user: { email, id: '' },
+  };
+
+  writeStoredAuthSession(session);
+  return session;
 }
 
 export async function fetchShowCharacters(email?: string): Promise<{
