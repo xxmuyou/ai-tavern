@@ -214,3 +214,55 @@ export function createIdentitiesStore() {
 }
 
 export type IdentitiesStore = ReturnType<typeof createIdentitiesStore>;
+
+type KvEntry = { value: string; expiresAt: number | null };
+
+export type KvStore = {
+  raw: Map<string, KvEntry>;
+  asKV(): KVNamespace;
+};
+
+export function createKvStore(): KvStore {
+  const raw = new Map<string, KvEntry>();
+
+  const isExpired = (entry: KvEntry): boolean => {
+    if (entry.expiresAt === null) return false;
+    return entry.expiresAt <= Date.now();
+  };
+
+  const namespace: KVNamespace = {
+    async get(key: string, options?: KVNamespaceGetOptions<unknown> | "text" | "json") {
+      const entry = raw.get(key);
+      if (!entry || isExpired(entry)) {
+        raw.delete(key);
+        return null;
+      }
+      if (options === "json" || (typeof options === "object" && options?.type === "json")) {
+        return JSON.parse(entry.value);
+      }
+      return entry.value;
+    },
+    async put(key: string, value: string, options?: KVNamespacePutOptions) {
+      const ttl = options?.expirationTtl;
+      raw.set(key, {
+        value: typeof value === "string" ? value : String(value),
+        expiresAt: ttl ? Date.now() + ttl * 1000 : null,
+      });
+    },
+    async delete(key: string) {
+      raw.delete(key);
+    },
+    async list() {
+      return { keys: [...raw.keys()].map((name) => ({ name })), list_complete: true, cacheStatus: null };
+    },
+    async getWithMetadata() {
+      return { value: null, metadata: null, cacheStatus: null };
+    },
+  } as unknown as KVNamespace;
+
+  return {
+    raw,
+    asKV: () => namespace,
+  };
+}
+
