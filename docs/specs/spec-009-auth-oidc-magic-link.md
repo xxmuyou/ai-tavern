@@ -1,6 +1,6 @@
 # spec-009: Auth OIDC + Magic Link
 
-> **类型：** 新建  |  **依赖：** spec-003  |  **估时：** 5-7 天  |  **状态：** ⚪ todo
+> **类型：** 新建  |  **依赖：** spec-003  |  **估时：** 5-7 天  |  **状态：** ✅ done
 
 ---
 
@@ -9,6 +9,21 @@
 v1 需要真实账号体系承接后续 billing、配额、跨设备进度和 admin 权限。当前 API 只有 `/auth/dev-session`，适合 local/dev 调试，但不能作为生产登录：用户可以在旧接口里直接输入 email，服务端也没有可撤销 session、第三方身份绑定、Magic Link 一次性 token、或 `/auth/me` 这样的统一会话入口。
 
 `0001_v1_baseline.sql` 已经预留 `users`、`user_identities`、`sessions` 三张表；[`architecture/api.md §2`](../architecture/api.md#2-auth-端点) 也定义了 OIDC、Magic Link、logout、me 的方向。本 spec 把 auth 做成可维护模块，先落地 **Google OIDC + Resend Magic Link + JWT session revoke**。Apple Sign-In 在本 spec 中只定义 provider contract 和配置边界，不作为 done 阻塞项；移动端 native 深链也不纳入本 spec，先服务 Web 回调。
+
+---
+
+## 关键决策（实施前已敲定）
+
+下面 8 条是 spec 评审阶段已决断的边界，实施时不必再问：
+
+1. **旧 JWT 兼容**：一刀切。`JWT_SIGNING_KEY` 上线即生效，所有现存（`AUTH_TOKEN_SECRET` 签发、无 `jti`）token 一律 401，用户重登。代码层不留 "无 jti 即跳过 sessions 查询" 的兼容分支。
+2. **dev-session 边界**：dev-session 也走新 `session.ts` 签发——生成 `jti`、写入 `sessions` 表、`logout` 同样有效。不存在"两套签发逻辑"。
+3. **verify/callback 302 时相对 redirect**：worker 用 `AUTH_SUCCESS_URL` 的 origin 拼出完整 URL 再放进 `Location` 头。`AUTH_SUCCESS_URL` 必须是绝对 URL（启动时校验，否则 500 `auth_success_url_invalid`）。
+4. **Web callback 落点页（`/auth/success`）**：整体推迟到 spec-012。本 spec 的 verify/callback 仍按既定方案 302 到 fragment URL；落点页 404 是预期，不阻塞 spec-009 完成。
+5. **fragment 字段格式**：`token`、`expires_at`、`email` 三个字段都放 fragment。`expires_at` 用 ISO 字符串（与 session response JSON 一致），需 URL-encode。
+6. **callback 失败响应**：所有 OAuth / Magic Link 流程错误一律 302 到 `${AUTH_SUCCESS_URL}?error=<code>`，前端在落点页读 query 展示。error code 枚举固定（不暴露内部异常文本）。
+7. **dev 环境数据隔离**：不需要表名/字段前缀——wrangler 已物理隔离 dev/prod 的 D1 (`xtbit-apps-dev` vs `xtbit-apps-prod`) 与 KV namespace。
+8. **dev 白名单 + 禁注册**：独立 spec（建议 spec-013 或 spec-009.5）单独处理，不在本 spec 范围。
 
 ---
 
@@ -38,7 +53,7 @@ v1 需要真实账号体系承接后续 billing、配额、跨设备进度和 ad
 - ❌ 短码交换式 callback（`callback -> code -> token`）
 - ❌ 用户名/密码、邮件验证码、短信登录
 - ❌ 账号合并确认 UI（v1 自动按 normalized email 合并）
-- ❌ 前端完整登录 UI 重做（可做最小 Web callback/token 存储；完整 UI 留给 spec-012）
+- ❌ 前端完整登录 UI 与 Web callback 落点页 `/auth/success`（fragment 解析、token 存储、错误展示均推迟到 spec-012；本 spec 仅提供 client helper）
 - ❌ refresh token / rolling session（v1 JWT 固定 30 天）
 
 ---
@@ -138,9 +153,21 @@ type AuthPayload = {
 配置：
 
 - 主 secret：`JWT_SIGNING_KEY`
-- 迁移兼容：如果缺少 `JWT_SIGNING_KEY`，允许读取旧 `AUTH_TOKEN_SECRET`
+- 迁移兼容：如果缺少 `JWT_SIGNING_KEY`，允许读取旧 `AUTH_TOKEN_SECRET` **仅用于签发**（避免 deploy 顺序问题）；校验路径只信任新 payload shape（必须含 `jti`）
 - prod 两者都缺失时返回 500 `auth_secret_missing`
 - dev/local 两者都缺失时允许使用现有 dev fallback secret，但测试必须覆盖 prod 缺失失败
+
+**旧 token 一刀切**：
+
+- 上线即所有现存 token 失效（旧 token payload 无 `jti`，校验时 `sessions` 查不到 → 401）
+- 代码层**不留** "无 jti 即跳过 sessions 查询" 的兼容分支
+- ops 在发布前需公告用户重登；prod 当前几乎无活跃用户，影响面可接受
+
+**dev-session 统一走 session.ts**：
+
+- `/auth/dev-session` 不再独立签发，调用 `session.ts` 的统一签发函数
+- 生成 `jti`、写入 `sessions` 表（dev D1 与 prod 物理隔离，无副作用）
+- `logout` 对 dev-session 签发的 token 同样有效
 
 ### D. Identity Repository
 
@@ -170,6 +197,14 @@ async function upsertUserFromIdentity(env, input: {
 - 对 `UNIQUE(provider, provider_subject)` 冲突要再读一次，保证并发 callback 不重复创建 user
 
 `ensureUserByEmail` 可继续服务 dev fallback，但应尽量复用 repository 内部逻辑，避免两套 user 创建语义漂移。
+
+**Email normalize 规则**（所有入口必须用同一个 `normalizeEmail()` 函数）：
+
+- lowercase + trim
+- **不** 处理 plus addressing（`a+x@gmail.com` 与 `a@gmail.com` 视为不同 user）
+- **不** 去 gmail 的 `.`（`a.b@gmail.com` 与 `ab@gmail.com` 视为不同 user）
+- 选择"简单可预测"而非"用户友好"——避免 attacker 通过 alias 绕过白名单或合并意外账号
+- 现有 `packages/api/src/auth.ts` 若已有 normalize 实现，迁移到 `auth/repository.ts` 中作为唯一来源
 
 ### E. OAuth Provider Contract
 
@@ -209,16 +244,21 @@ Apple provider 本 spec 只预留：
 - `APPLE_SIGNIN_PRIVATE_KEY`
 - `APPLE_SIGNIN_CLIENT_ID`
 - provider contract 测试占位：确认未知/未配置 provider 返回 `provider_not_configured`
+- v1 `GET /auth/oidc/apple/start` 和 `/callback` 返回 `400 { "error": "provider_not_configured" }`（不是 404；让前端能识别"功能已规划但未启用"，与未知 provider 返回 `unknown_provider` 区分）
+
+**PKCE / nonce**：v1 **不使用**。理由：
+
+- Workers 是 confidential client（拿得到 `client_secret`），不是 SPA/native public client
+- 采用 authorization code flow（不是 implicit / hybrid），id_token 是通过后端直接交换得到，不会经过浏览器历史
+- `state` 已防 CSRF，code 单次使用
+- 等 spec-015 引入 native 客户端时再加 PKCE
 
 ### F. OAuth State 与 Redirect
 
 `GET /auth/oidc/google/start?redirect=...`：
 
-1. 校验 provider
-2. 规范化 redirect：
-   - 相对路径：允许，例如 `/auth/success?next=/scenes`
-   - 绝对 URL：origin 必须在 `ALLOWED_ORIGINS`
-   - 不合法时 fallback 到 `AUTH_SUCCESS_URL`，再 fallback 到 request origin `/auth/success`
+1. 校验 provider（未知/未配置 → 400 `unknown_provider` 或 `provider_not_configured`）
+2. 规范化 redirect（见下方 **redirect allowlist 规则**）；不合法时 fallback 到 `AUTH_SUCCESS_URL`
 3. 生成 state id
 4. KV 写入 `oauth:state:{state}`，TTL 600 秒：
 
@@ -234,17 +274,56 @@ Apple provider 本 spec 只预留：
 
 `GET /auth/oidc/google/callback?code=...&state=...`：
 
-1. 读取并删除 KV state；缺失或 provider 不匹配返回 400 `invalid_oauth_state`
-2. 用 code 换 token 并验证 id_token
-3. `upsertUserFromIdentity(provider='google')`
-4. 签发 app session
-5. 302 到已校验 redirect，并把 token 放到 fragment：
+1. 读取并删除 KV state；缺失/过期/provider 不匹配 → 302 错误响应 `?error=invalid_oauth_state`
+2. 用 code 换 token 并验证 id_token；任一校验失败 → 302 错误响应 `?error=invalid_oauth_token`
+3. `email_verified=false` → 302 错误响应 `?error=email_unverified`
+4. `upsertUserFromIdentity(provider='google')`
+5. 签发 app session（写 sessions 表 + 生成 jti）
+6. **302 到成功 URL**（见下方 **302 redirect 规则**）：
 
 ```text
-https://dev.aiappsbox.com/auth/success#token=...&expires_at=...&email=player%40example.com
+https://dev.xtbit-apps.pages.dev/auth/success#token=eyJ...&expires_at=2026-06-20T00%3A00%3A00.000Z&email=player%40example.com
 ```
 
-fragment 不会被浏览器发送给服务端，比 query 更适合承载 bearer token。完整前端成功页可在 spec-012 做；本 spec 只需最小 Web callback 能读取并存储 token。
+fragment 不会被浏览器发送给服务端，比 query 更适合承载 bearer token。落点页 `/auth/success` 不在本 spec 范围（spec-012 实现），fragment URL 落到 404 是预期。
+
+### F.1 redirect allowlist 规则
+
+调用方传入的 `redirect` 参数必须通过 `normalizeRedirect()` 校验，违反任一条件即 fallback 到 `AUTH_SUCCESS_URL`：
+
+| 输入形式 | 处理 |
+|---|---|
+| 相对路径（`/auth/success?next=/scenes`） | ✅ 允许 |
+| 绝对 URL，origin ∈ `ALLOWED_ORIGINS` | ✅ 允许 |
+| 绝对 URL，origin ∉ `ALLOWED_ORIGINS` | ❌ fallback |
+| 以 `//` 开头（protocol-relative，如 `//evil.com/x`） | ❌ fallback（URL parser 会判定为绝对 URL，origin 不在 allowlist 也可能漏过） |
+| 包含 CR（`\r`）/ LF（`\n`） | ❌ fallback（防 HTTP header injection） |
+| 空字符串 / 未传 | ✅ fallback 到 `AUTH_SUCCESS_URL` |
+
+### F.2 302 redirect 规则
+
+worker 不能直接把相对路径写进 `Location` 头——浏览器会基于**请求 URL（API 域）**解析，落到错的 origin（比如 dev 环境 API 在 `dev.aiappsbox.com/api`，前端在 `dev.xtbit-apps.pages.dev`）。
+
+统一处理：
+
+```ts
+const successUrl = new URL(env.AUTH_SUCCESS_URL); // 必须是绝对 URL，启动时校验
+const target = new URL(redirectPathOrUrl, successUrl); // 相对路径基于 AUTH_SUCCESS_URL.origin 展开
+target.hash = `token=${jwt}&expires_at=${encodeURIComponent(expiresIso)}&email=${encodeURIComponent(email)}`;
+return Response.redirect(target.toString(), 302);
+```
+
+**失败 302 同样基于 `AUTH_SUCCESS_URL`**：
+
+```text
+${AUTH_SUCCESS_URL}?error=invalid_oauth_state
+${AUTH_SUCCESS_URL}?error=invalid_oauth_token
+${AUTH_SUCCESS_URL}?error=email_unverified
+${AUTH_SUCCESS_URL}?error=invalid_magic_link
+${AUTH_SUCCESS_URL}?error=provider_not_configured
+```
+
+error code 是固定枚举（不暴露内部异常文本）。前端在落点页读 `?error=` 展示对应文案。
 
 ### G. Magic Link + Resend
 
@@ -270,10 +349,15 @@ dev/local dry-run response 可额外包含：
 
 实现语义：
 
-1. 标准化 email；无效则 400 `email_required`
-2. 规范化 redirect，与 OAuth 使用同一套 allowlist
-3. 生成高熵 token，计算 SHA-256 hash
-4. KV 写入 `magic:{hash}`，TTL 900 秒：
+1. 标准化 email（见 §D normalize 规则）；无效则 400 `email_required`
+2. **滥用防护**（在生成 token 之前）：
+   - 全局 IP 限频沿用 `RATE_LIMIT_PER_MINUTE`
+   - 额外 KV throttle：`magic_throttle:{sha256(email)}`，TTL 3600 秒；每发一次 increment
+   - 同一 email 1 小时内超过 3 次 → **仍返回 `{ "ok": true, "expires_in": 900 }`**（不暴露 email 是否被刷），但**不发邮件**、不写 `magic:{hash}`
+   - 这样 attacker 无法通过响应差异枚举 email 状态
+3. 规范化 redirect，与 OAuth 使用同一套 allowlist（见 §F.1）
+4. 生成高熵 token，计算 SHA-256 hash
+5. KV 写入 `magic:{hash}`，TTL 900 秒：
 
 ```json
 {
@@ -283,8 +367,8 @@ dev/local dry-run response 可额外包含：
 }
 ```
 
-5. 用 Resend `POST https://api.resend.com/emails` 发送邮件
-6. 邮件链接指向 API verify endpoint：
+6. 用 Resend `POST https://api.resend.com/emails` 发送邮件；Resend HTTP 错误 → 500 `email_send_failed`（不删 KV，用户重试 send-link 即可拿到新 token）
+7. 邮件链接指向 API verify endpoint：
 
 ```text
 https://dev.aiappsbox.com/api/auth/email/verify?token=...
@@ -292,13 +376,13 @@ https://dev.aiappsbox.com/api/auth/email/verify?token=...
 
 `GET /auth/email/verify?token=...`
 
-1. hash token，读取并删除 KV；缺失则 400 `invalid_magic_link`
+1. hash token，读取并删除 KV；缺失/过期 → 302 错误响应 `?error=invalid_magic_link`（见 §F.2）
 2. `upsertUserFromIdentity(provider='email', providerSubject=email, emailVerified=true)`
-3. 签发 app session
-4. 302 到 redirect fragment：
+3. 签发 app session（写 sessions 表 + 生成 jti）
+4. 302 到 redirect（按 §F.2 规则用 `AUTH_SUCCESS_URL.origin` 补全相对路径），fragment 字段格式与 OAuth callback 一致：
 
 ```text
-https://dev.aiappsbox.com/auth/success#token=...&expires_at=...&email=player%40example.com
+https://dev.xtbit-apps.pages.dev/auth/success#token=eyJ...&expires_at=2026-06-20T00%3A00%3A00.000Z&email=player%40example.com
 ```
 
 Resend 配置：
@@ -342,21 +426,31 @@ Response:
 }
 ```
 
-v1 允许 `subscription/quota` 先返回 deterministic free/quota 默认值；spec-010 完成后必须改为读取 `billing_*` 表和 KV，字段 shape 必须稳定。
+**v1 实现（spec-010 之前）固定返回默认值**；spec-010 完成后必须改为读取 `billing_*` 表和 KV，字段 shape 必须稳定：
+
+- `subscription`：硬编码 `{ status: "free", current_period_end: null }`
+- `quota`：硬编码 `{ messages_used_today: 0, messages_limit_today: 30 }`
+- 不读 `subscriptions` 表（v1 schema 里**没有**这张表，spec-010 才新增）
+- 不读 KV usage counter
 
 ### I. Frontend Minimal Hook
 
-本 spec 不重做登录 UI，但需要给 Web callback 留最小落点：
+本 spec **不实现登录 UI 也不实现 `/auth/success` 落点页面**——这些都属于 spec-012。本 spec 只在 `apps/app` 加 API client helper：
 
-- `apps/app/api/companion-client.ts` 增加真实 auth client 函数：
-  - `startGoogleLogin(redirect?: string): string`
-  - `sendMagicLink(email, redirect?)`
-  - `logout()`
-  - `fetchMe()`
-- `apps/app/hooks/use-auth-email.ts` 可以先改名或保留，但内部要能写入真实 session response
-- Web callback 页面或现有入口必须能读取 `location.hash` 里的 `token/expires_at/email` 并写入 localStorage
+- `apps/app/api/companion-client.ts` 增加：
+  - `startGoogleLogin(redirect?: string): string`（返回 `/auth/oidc/google/start?redirect=...` 完整 URL，调用方 `window.location.href = ...`）
+  - `sendMagicLink(email: string, redirect?: string): Promise<{ ok: true; expires_in: number; verify_url?: string }>`
+  - `logout(): Promise<void>`（带 Authorization header，成功后清 localStorage）
+  - `fetchMe(): Promise<AuthMeResponse>`
+- `apps/app/hooks/use-auth-email.ts`：保留名称，内部 `createDevSession` 改名为更通用的 `applySessionResponse(response)`，能消费 dev-session / Google callback / Magic Link verify 三方返回的统一 session response shape
 
-完整登录界面、native OAuth、深链、App Store 合规检查放到 spec-012/015。
+**明确不在本 spec 范围**：
+
+- `/auth/success` 路由/页面（fragment 解析、token 写 localStorage、错误展示）
+- 完整登录界面、native OAuth、深链、App Store 合规
+- 上述均放到 spec-012/015
+
+本 spec 实施期间，fragment URL 落到 `/auth/success` 会 404 是已知预期。手动测 Magic Link / OAuth 时，可在浏览器地址栏直接复制 fragment 里的 token 验证。
 
 ### J. Ops 与配置
 
@@ -376,7 +470,7 @@ Wrangler secrets：
 
 `.env.example` 同步列出上述变量，secret 值留空。
 
-Redirect URI：
+Redirect URI（Google Console 中需登记）：
 
 - local Google：`http://127.0.0.1:8787/auth/oidc/google/callback`
 - dev Google：`https://dev.aiappsbox.com/api/auth/oidc/google/callback`
@@ -384,21 +478,47 @@ Redirect URI：
 
 Worker 已经会 normalize `/api/*`，所以代码中路由仍匹配 `/auth/...`。
 
+`AUTH_SUCCESS_URL`（前端落点页面，必须是绝对 URL；本 spec verify/callback 用其 origin 补全相对路径）各环境示例：
+
+- local：`http://localhost:8081/auth/success`
+- dev：`https://dev.xtbit-apps.pages.dev/auth/success`（若前端迁到 `dev.aiappsbox.com`，同步更新）
+- prod：`https://aiappsbox.com/auth/success`
+
+启动时校验 `AUTH_SUCCESS_URL`：
+
+- 缺失或不是合法绝对 URL → worker 启动失败 / 任何 auth 路径返回 500 `auth_success_url_invalid`
+- 通过校验后挂在 env 上，供 §F.2 的 redirect 拼接复用
+
+**Sessions 表 cleanup**：
+
+- v1 不做定期清理；`revoked_at IS NOT NULL` 或 `expires_at < now` 的行长期保留
+- 未来如有性能需要再加 cron job（Workers Cron Trigger）
+
+**`.env.example` 同步**（实施步骤 12 的核心动作）：
+
+当前 `.env.example` 缺以下变量，必须补齐占位符（secret 留空）：
+
+- `JWT_SIGNING_KEY`
+- `GOOGLE_OAUTH_CLIENT_ID`、`GOOGLE_OAUTH_CLIENT_SECRET`
+- `EMAIL_PROVIDER_API_KEY`、`EMAIL_FROM_ADDRESS`
+- `AUTH_SUCCESS_URL`
+- `APPLE_SIGNIN_TEAM_ID`、`APPLE_SIGNIN_KEY_ID`、`APPLE_SIGNIN_CLIENT_ID`、`APPLE_SIGNIN_PRIVATE_KEY`
+
 ---
 
 ## 实施步骤
 
 1. 创建分支 `feature/spec-009-auth`
 2. 增加 `jose` 依赖，跑一次 lockfile 更新
-3. 拆 `packages/api/src/auth.ts` 为 `auth/` 目录，先保持 dev-session 与现有测试通过
-4. 实现 `session.ts`：签发 JWT、写 sessions、校验 jti、logout revoke
+3. 拆 `packages/api/src/auth.ts` 为 `auth/` 目录，先保持现有测试通过；保留 dev-session 端点但**先不动签发逻辑**
+4. 实现 `session.ts`：签发 JWT、写 sessions、校验 jti、logout revoke；**改造 `dev-session.ts` 调用 `session.ts` 统一签发**，dev-session 测试需断言返回 token 含 `jti` 且 sessions 表有对应行
 5. 实现 `repository.ts`：user + identity upsert/link，覆盖 email 合并与并发冲突
 6. 实现 `redirects.ts`：相对路径/allowed origin/default success URL
 7. 实现 `oauth.ts` + Google provider：state KV、authorize redirect、callback exchange、id_token 校验
 8. 实现 `email-link.ts`：Magic Link token hash、KV TTL、Resend 发送、dev dry-run
 9. 实现 `/auth/me`、`/auth/logout`
 10. 在 `index.ts` 保持 auth dispatch 顺序最靠前
-11. 做最小前端 client/helper，确保 Web callback 能存 token
+11. 做最小前端 client helper（`startGoogleLogin`/`sendMagicLink`/`logout`/`fetchMe` + `applySessionResponse`）；**不实现 `/auth/success` 页面**（推迟 spec-012）
 12. 更新 `.env.example`、`wrangler.jsonc`、`docs/ops/secrets.md`、`docs/architecture/api.md`
 13. 跑 typecheck/test；手动用 dev-session、Magic Link dry-run、Google OAuth dev app 验证
 
@@ -410,19 +530,26 @@ Worker 已经会 normalize `/api/*`，所以代码中路由仍匹配 `/auth/...`
 - [ ] `pnpm --filter @xtbit/api test` 通过
 - [ ] `pnpm --filter @xtbit/app typecheck` 通过（如改前端 helper）
 - [ ] dev-session：dev/local `POST /auth/dev-session` 返回 token；prod 返回 403
+- [ ] dev-session：签发的 token 也含 `jti`，`sessions` 表有对应行；`logout` 可 revoke
 - [ ] session：JWT payload 含 `sub/email/jti/iat/exp`
 - [ ] session：revoked `jti` 再访问 protected endpoint 返回 401
+- [ ] session：旧 `AUTH_TOKEN_SECRET` 签发的无 `jti` token → 401（**不留兼容分支**）
 - [ ] session：prod 缺 `JWT_SIGNING_KEY` 与 `AUTH_TOKEN_SECRET` 返回 `auth_secret_missing`
+- [ ] config：`AUTH_SUCCESS_URL` 不是合法绝对 URL → worker 启动失败 / auth 路径返回 `auth_success_url_invalid`
 - [ ] OAuth start：写入 `oauth:state:*`，302 到 Google authorize URL
-- [ ] OAuth callback：state 一次性使用，invalid/replay state 返回 400
-- [ ] OAuth callback：unverified email 不创建用户
+- [ ] OAuth callback：state 一次性使用，invalid/replay state → 302 `?error=invalid_oauth_state`
+- [ ] OAuth callback：unverified email → 302 `?error=email_unverified`，不创建用户
 - [ ] OAuth callback：同 email 新 provider 自动 link，不创建重复 user
-- [ ] redirect：非白名单 redirect fallback 到默认成功页
+- [ ] redirect allowlist：相对路径允许、`//evil.com` 拒、含 `\r\n` 拒、非 allowlist origin 拒
+- [ ] redirect 补全：worker 用 `AUTH_SUCCESS_URL.origin` 拼绝对 URL；Location 头始终是完整 URL
+- [ ] fragment 格式：`expires_at` 是 URL-encoded ISO 字符串，与 session response JSON 一致
 - [ ] Magic Link：send-link 写 KV hash，不存明文 token
-- [ ] Magic Link：Resend 失败返回可诊断错误；dev 缺 key 返回 dry-run `verify_url`
+- [ ] Magic Link：Resend 失败返回 `email_send_failed`；dev 缺 key 返回 dry-run `verify_url`
+- [ ] Magic Link：同 email 1 小时内 4 次 send-link，第 4 次仍返回 `{ ok: true }` 但**不发邮件**、不写 KV
 - [ ] Magic Link：verify 成功后删除 token、创建/link email identity、签发 session
-- [ ] Magic Link：重放 token 返回 400
-- [ ] `/auth/me`：返回 user、linked_providers、subscription、quota
+- [ ] Magic Link：重放 token → 302 `?error=invalid_magic_link`
+- [ ] Apple endpoint：`/auth/oidc/apple/start` 返回 `400 provider_not_configured`
+- [ ] `/auth/me`：返回 user、linked_providers；v1 `subscription={status:"free",...}`、`quota={used:0,limit:30}` 固定默认
 - [ ] `/auth/logout`：只 revoke 当前 session，不影响同 user 其它 session
 
 ---
@@ -431,8 +558,10 @@ Worker 已经会 normalize `/api/*`，所以代码中路由仍匹配 `/auth/...`
 
 - 代码回滚到上一提交即可恢复 dev-session-only auth
 - D1 schema 不需要新增 migration；本 spec 使用 `0001_v1_baseline.sql` 已有表
-- 若已发出 JWT，回滚后旧 token 可能无法被新旧实现同时识别；dev 阶段可清 sessions，prod 上线前必须避免半切换
-- 若 Resend 配置错误，可临时关闭 Magic Link 入口，保留 Google OIDC 与 dev-session
+- **上线即一刀切**：`JWT_SIGNING_KEY` 启用后所有旧 token（`AUTH_TOKEN_SECRET` 签发、无 `jti`）立刻 401。发布前必须公告用户重登，prod 当前几乎无活跃用户，影响面可接受
+- 回滚到旧实现时，新签发的含 `jti` token 在旧代码下仍可校验签名（jti 字段会被旧代码忽略）；但已写入 `sessions` 表的行不会自动清理，旧代码不查表所以无影响
+- 若 Resend 配置错误，可临时关闭 Magic Link 入口（让 send-link 直接返回 500 `email_provider_not_configured`），保留 Google OIDC 与 dev-session
+- 若 Google OAuth 配置错误，可让 `/auth/oidc/google/start` 返回 `provider_not_configured`，保留 dev-session 与 Magic Link
 
 ---
 
@@ -440,7 +569,7 @@ Worker 已经会 normalize `/api/*`，所以代码中路由仍匹配 `/auth/...`
 
 - spec-003：`users/user_identities/sessions` 表已存在
 - spec-010：`/auth/me` 中 subscription/quota 字段后续接入真实 billing/usage
-- spec-012：完整 Expo 登录 UI、Web callback 页面、移动端体验
+- spec-012：完整 Expo 登录 UI、`/auth/success` 落点页（fragment 解析、token 写 localStorage、错误展示）、移动端体验
 - spec-015：iOS/Android EAS、Apple Sign-In native 合规与深链
 - [`docs/architecture/api.md §2`](../architecture/api.md#2-auth-端点)
 - [`docs/ops/secrets.md §5.3-§5.4`](../ops/secrets.md#53-oauth)

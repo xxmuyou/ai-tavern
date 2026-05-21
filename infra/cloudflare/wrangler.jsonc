@@ -31,7 +31,10 @@
     "STRIPE_PRICE_PRO_MONTHLY": "",
     "STRIPE_SUCCESS_URL": "https://dev.xtbit-apps.pages.dev/?billing=success",
     "STRIPE_CANCEL_URL": "https://dev.xtbit-apps.pages.dev/?billing=cancelled",
-    "STRIPE_PORTAL_RETURN_URL": "https://dev.xtbit-apps.pages.dev/?billing=portal"
+    "STRIPE_PORTAL_RETURN_URL": "https://dev.xtbit-apps.pages.dev/?billing=portal",
+    "AUTH_SUCCESS_URL": "https://dev.xtbit-apps.pages.dev/auth/success",
+    "GOOGLE_OAUTH_CLIENT_ID": "",
+    "EMAIL_FROM_ADDRESS": "no-reply@aiappsbox.com"
   },
   "d1_databases": [
     {
@@ -100,7 +103,10 @@
         "STRIPE_PRICE_PRO_MONTHLY": "",
         "STRIPE_SUCCESS_URL": "https://aiappsbox.com/?billing=success",
         "STRIPE_CANCEL_URL": "https://aiappsbox.com/?billing=cancelled",
-        "STRIPE_PORTAL_RETURN_URL": "https://aiappsbox.com/?billing=portal"
+        "STRIPE_PORTAL_RETURN_URL": "https://aiappsbox.com/?billing=portal",
+        "AUTH_SUCCESS_URL": "https://aiappsbox.com/auth/success",
+        "GOOGLE_OAUTH_CLIENT_ID": "",
+        "EMAIL_FROM_ADDRESS": "no-reply@aiappsbox.com"
       },
       "d1_databases": [
         {
