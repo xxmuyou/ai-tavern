@@ -1,6 +1,8 @@
-export type LLMTask = "chat" | "signal" | "summary" | "character-assist";
+export const LLM_TASKS = ["chat", "signal", "summary", "character-assist"] as const;
+export type LLMTask = (typeof LLM_TASKS)[number];
 
-export type LLMProvider = "deepseek" | "openai" | "anthropic" | "doubao" | "cloudflare";
+export const LLM_PROVIDERS = ["deepseek", "openai", "anthropic", "doubao", "cloudflare"] as const;
+export type LLMProvider = (typeof LLM_PROVIDERS)[number];
 
 export type LLMRole = "system" | "user" | "assistant";
 

@@ -52,7 +52,7 @@ export async function llmCall(
   const userId = options.user_id ?? null;
 
   try {
-    const response = await invokeCall(env, request, route.primary);
+    const response = await invokeProvider(env, request, route.primary);
     void writeLLMLog(env, {
       cost_usd: response.cost_usd,
       error_code: null,
@@ -84,7 +84,7 @@ export async function llmCall(
         user_id: userId,
       });
       try {
-        const response = await invokeCall(env, request, route.fallback);
+        const response = await invokeProvider(env, request, route.fallback);
         void writeLLMLog(env, {
           cost_usd: response.cost_usd,
           error_code: null,
@@ -237,7 +237,12 @@ async function resolveRoute(env: Env, task: LLMTask): Promise<RouteResolution> {
   return route;
 }
 
-async function invokeCall(
+/**
+ * Invoke a single provider directly, bypassing `llm_config` routing and
+ * `llm_logs` writes. Used by admin "try-it" tooling (see `admin.ts`) where
+ * we want to test a provider/model combo without polluting production stats.
+ */
+export async function invokeProvider(
   env: Env,
   request: LLMRequest,
   target: { provider: LLMProvider; model: string },
