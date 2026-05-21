@@ -12,7 +12,7 @@ import type { AuthEnv } from "./types";
 const SUCCESS_URL = "https://dev.xtbit-apps.pages.dev/auth/success";
 const ALLOWED_ORIGINS = `${new URL(SUCCESS_URL).origin},https://dev.aiappsbox.com,http://localhost:8081`;
 
-function env(overrides: Partial<AuthEnv> = {}): AuthEnv {
+function env(overrides: Record<string, unknown> = {}): AuthEnv {
   return {
     APP_ENV: "dev",
     AUTH_SUCCESS_URL: SUCCESS_URL,

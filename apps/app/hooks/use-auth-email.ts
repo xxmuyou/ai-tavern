@@ -20,7 +20,7 @@ export function useAuthEmail() {
 
   useEffect(() => {
     // Consume the session fragment delivered by OAuth / magic-link callbacks.
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.includes('token=')) {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.indexOf('token=') !== -1) {
       const session = applySessionFragment(window.location.hash);
       if (session) {
         setEmail(session.email);
@@ -47,11 +47,11 @@ export function useAuthEmail() {
     writeStoredAuthSession(session);
   }, []);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(() => {
     setEmail('');
     setDraftEmail('');
     setToken('');
-    await logout();
+    logout();
   }, []);
 
   return {

@@ -364,7 +364,7 @@ function fakeResolver(provider: OAuthProvider): ProviderResolver {
 }
 
 function createEnv(
-  overrides: Partial<AuthEnv> = {},
+  overrides: Record<string, unknown> = {},
 ): AuthEnv & {
   usersStore: UsersStore;
   identitiesStore: IdentitiesStore;

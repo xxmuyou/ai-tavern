@@ -177,7 +177,7 @@ describe("POST /auth/logout", () => {
 // -----------------------------------------------------------------------------
 
 function createEnv(
-  overrides: Partial<AuthEnv> = {},
+  overrides: Record<string, unknown> = {},
 ): AuthEnv & {
   usersStore: UsersStore;
   identitiesStore: IdentitiesStore;

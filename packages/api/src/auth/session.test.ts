@@ -132,7 +132,7 @@ describe("revokeSession", () => {
   });
 });
 
-function createEnv(overrides: Partial<AuthEnv> = {}): AuthEnv & { sessionsStore: SessionsStore } {
+function createEnv(overrides: Record<string, unknown> = {}): AuthEnv & { sessionsStore: SessionsStore } {
   const sessionsStore = createSessionsStore();
   const base = {
     APP_ENV: "dev" as const,
