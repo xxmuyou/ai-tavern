@@ -1,4 +1,8 @@
 import { requireAuthUser } from "../auth";
+import { createSceneTriggeredEvent } from "../events/create";
+import { evaluateTriggersForScene } from "../events/engine";
+import { pickOpener } from "../events/openers";
+import type { EventResponseItem } from "../events/types";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 import { evaluateUnlock } from "./unlock";
@@ -8,6 +12,7 @@ type SceneRow = {
   name: string;
   mood: string;
   tags: string | null;
+  possible_events: string | null;
   default_companions: string | null;
   unlock_condition: string | null;
   art_url: string | null;
@@ -48,9 +53,9 @@ type EnterSceneResponse = {
   companions_present: Array<{
     id: string;
     name: string;
-    opener: string | null;
+    opener: string;
   }>;
-  event: null;
+  event: EventResponseItem | null;
 };
 
 export async function handleScenesRequest(
@@ -87,7 +92,7 @@ export async function handleScenesRequest(
 
 async function listScenes(env: Env, user: UserRecord): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT id, name, mood, tags, default_companions, unlock_condition, art_url, display_order
+    `SELECT id, name, mood, tags, possible_events, default_companions, unlock_condition, art_url, display_order
      FROM scenes
      WHERE is_active = 1
      ORDER BY display_order ASC, id ASC`,
@@ -118,7 +123,7 @@ async function listScenes(env: Env, user: UserRecord): Promise<Response> {
 
 async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<Response> {
   const row = await env.DB.prepare(
-    `SELECT id, name, mood, tags, default_companions, unlock_condition, art_url, display_order
+    `SELECT id, name, mood, tags, possible_events, default_companions, unlock_condition, art_url, display_order
      FROM scenes
      WHERE id = ? AND is_active = 1`,
   )
@@ -138,10 +143,39 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
   }
 
   const companions = await loadPotentialCompanions(env, user.id, row.default_companions);
+  const now = Date.now();
+  const companionsPresent = companions.map(({ id, name }) => ({
+    id,
+    name,
+    opener: pickOpener({
+      companionId: id,
+      companionName: name,
+      now,
+      sceneId: row.id,
+      sceneName: row.name,
+      userId: user.id,
+    }),
+  }));
+
+  const candidate = await evaluateTriggersForScene(
+    env,
+    user.id,
+    { id: row.id, mood: row.mood, name: row.name, possible_events: row.possible_events },
+    companions,
+    now,
+  );
+  const event = candidate
+    ? await createSceneTriggeredEvent(env, {
+        candidate,
+        now,
+        scene: { id: row.id, mood: row.mood, name: row.name },
+        userId: user.id,
+      })
+    : null;
 
   const body: EnterSceneResponse = {
-    companions_present: companions.map(({ id, name }) => ({ id, name, opener: null })),
-    event: null,
+    companions_present: companionsPresent,
+    event,
     scene: {
       art_url: row.art_url,
       id: row.id,

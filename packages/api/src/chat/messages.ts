@@ -1,7 +1,9 @@
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
+import { maybeCreateConflictEvent } from "../events/conflict";
 import { applySignals, ensureRelationship, loadRelationship } from "../relationships/engine";
+import type { DimensionValues } from "../relationships/level";
 import { ZERO_DIMENSIONS } from "../relationships/level";
 import {
   canChatWithCompanion,
@@ -121,6 +123,7 @@ export async function handlePostMessage(
   ctx.waitUntil(
     runChat({
       companionId,
+      ctx,
       env,
       firstResult,
       iterator,
@@ -150,15 +153,17 @@ type RunChatArgs = {
   userText: string;
   subscriber: boolean;
   now: number;
+  ctx: ExecutionContext;
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, narrative, userText, subscriber, now } =
+  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, narrative, userText, subscriber, now, ctx } =
     args;
 
   let replyBuffer = "";
   let call1Usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
   let companionMessageId: string | null = null;
+  let conflictSignals: Partial<DimensionValues> | null = null;
 
   const handleChunk = (chunk: LLMStreamChunk): void => {
     if (chunk.type === "text") {
@@ -222,6 +227,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
         .bind(JSON.stringify(extract.signals), extract.emotion, companionMessageId)
         .run();
       await applySignals(env, user.id, companionId, extract.signals, now);
+      conflictSignals = extract.signals;
     } catch (err) {
       // Persistence of signals failed but reply is already saved; degrade to warning.
       extract.ok = false;
@@ -239,6 +245,20 @@ async function runChat(args: RunChatArgs): Promise<void> {
     warning: extract.ok ? null : "signal_extract_failed",
   });
   sse.close();
+
+  if (conflictSignals) {
+    ctx.waitUntil(
+      maybeCreateConflictEvent({
+        companionId,
+        env,
+        narrative,
+        now,
+        sceneId: scene_id,
+        signalsDelta: conflictSignals,
+        userId: user.id,
+      }),
+    );
+  }
 
   const totalCost = extract.cost_usd; // call 1 cost is logged inside llmStream.
   void recordUsage(env, user.id, formatDateUtc(now), 1, totalCost);

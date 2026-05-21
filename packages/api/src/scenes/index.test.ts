@@ -202,14 +202,17 @@ describe("scenes module", () => {
     expect(response?.status).toBe(200);
     const body = (await response?.json()) as {
       scene: { id: string; tags: string[]; art_url: string | null };
-      companions_present: Array<{ id: string; name: string; opener: null }>;
+      companions_present: Array<{ id: string; name: string; opener: string }>;
       event: null;
     };
 
     expect(body.scene.id).toBe("home");
     expect(body.scene.tags).toEqual(["home"]);
     expect(body.scene.art_url).toBe("https://cdn/scene.png");
-    expect(body.companions_present).toEqual([{ id: "iris", name: "Iris", opener: null }]);
+    expect(body.companions_present).toHaveLength(1);
+    expect(body.companions_present[0]?.id).toBe("iris");
+    expect(body.companions_present[0]?.name).toBe("Iris");
+    expect(body.companions_present[0]?.opener).toContain("Iris");
     expect(body.event).toBeNull();
   });
 });

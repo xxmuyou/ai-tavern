@@ -3,6 +3,7 @@ import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleChatRequest } from "./chat";
 import { handleCompanionsRequest } from "./companions";
+import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleRelationshipsRequest } from "./relationships";
 import { handleScenesRequest } from "./scenes";
@@ -23,7 +24,6 @@ type UploadMetadata = {
 //   /admin/llm/*        -> spec-002 / spec-011 (LLM router + admin console)
 const RETIRED_PREFIXES: ReadonlyArray<string> = [
   "/billing/",
-  "/events/",
   "/show/",
   "/companion/",
   "/admin/llm/",
@@ -71,6 +71,11 @@ export default {
       const chatResponse = await handleChatRequest(request, env, ctx, pathname);
       if (chatResponse) {
         return withCors(request, env, chatResponse);
+      }
+
+      const eventsResponse = await handleEventsRequest(request, env, pathname);
+      if (eventsResponse) {
+        return withCors(request, env, eventsResponse);
       }
 
       if (isRetiredPath(pathname)) {
