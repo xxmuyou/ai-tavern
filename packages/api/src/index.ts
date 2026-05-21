@@ -5,6 +5,7 @@ import { handleChatRequest } from "./chat";
 import { handleCompanionsRequest } from "./companions";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
+import { handleAdminLlmRequest } from "./llm";
 import { handleRelationshipsRequest } from "./relationships";
 import { handleScenesRequest } from "./scenes";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
@@ -21,12 +22,10 @@ type UploadMetadata = {
 //   /events/*           -> spec-008 (events module)
 //   /show/*             -> deprecated entirely (chapter-based gameplay retired)
 //   /companion/*        -> deprecated entirely (replaced by /companions and /chat)
-//   /admin/llm/*        -> spec-002 / spec-011 (LLM router + admin console)
 const RETIRED_PREFIXES: ReadonlyArray<string> = [
   "/billing/",
   "/show/",
   "/companion/",
-  "/admin/llm/",
 ];
 
 export default {
@@ -51,6 +50,11 @@ export default {
       const authResponse = await handleAuthRequest(request, env, pathname);
       if (authResponse) {
         return withCors(request, env, authResponse);
+      }
+
+      const adminLlmResponse = await handleAdminLlmRequest(request, env, pathname);
+      if (adminLlmResponse) {
+        return withCors(request, env, adminLlmResponse);
       }
 
       const scenesResponse = await handleScenesRequest(request, env, pathname);
