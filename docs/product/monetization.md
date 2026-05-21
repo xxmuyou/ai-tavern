@@ -82,23 +82,23 @@
 
 - Product: `AI Companion Subscription`
 - Prices:
-  - `price_monthly_999`: $9.99 / month, recurring
-  - `price_annual_7999`: $79.99 / year, recurring（v1.x 启用）
+  - Pro Monthly: $9.99 / month, recurring（Stripe price id 写入 `STRIPE_PRICE_PRO_MONTHLY`）
+  - Pro Annual: $79.99 / year, recurring（v1.x 启用，不进 spec-010）
 
 价格 ID 配置在 `wrangler.jsonc` 的环境变量里（不写死代码）。
 
 ### 4.2 订阅流程
 
 ```
-用户在 app 内点击 "Subscribe"
+用户在 Web 端点击 "Subscribe"
   ↓
-App 调 POST /billing/checkout
+Web 调 POST /billing/checkout
   ↓
-Worker 调 Stripe Checkout Session 创建（带用户 ID + price ID）
+Worker 调 Stripe Checkout Session 创建（带 user_id、Stripe Customer、Pro Monthly price）
   ↓
 Worker 返回 Stripe Checkout URL
   ↓
-App 跳转到 Stripe Checkout 页（web 用 redirect，原生用 WebView）
+Web 跳转到 Stripe Checkout 页
   ↓
 用户完成支付
   ↓
@@ -109,14 +109,16 @@ Worker 验证签名 + 更新 D1 用户订阅状态（active / period_end）
 用户回到 app，订阅生效
 ```
 
+**移动端合规：** iOS app 内不直接引导到 Stripe Checkout；v1 先提供后端能力和 Web return URL，移动端入口与 App Store 合规路径由 spec-015 处理。
+
 ### 4.3 订阅状态校验
 
-每次 API 请求经过的中间件：
+业务模块通过 entitlement helper 判断：
 1. 从 JWT 取出 user_id
-2. 查 D1 `subscriptions` 表：
-   - `status = active` 且 `current_period_end > now()` → 订阅有效
+2. 查 D1 `billing_subscriptions`：
+   - `status IN ('active', 'trialing')` 且 `current_period_end > now()` → Pro
    - 否则按免费用户处理
-3. 每日 cron 任务：清理过期订阅状态
+3. 不要求每日 cron 清理；过期订阅只要超过 `current_period_end` 就不会被判定为 Pro
 
 ### 4.4 关键 Webhook 事件
 
@@ -125,14 +127,15 @@ Worker 验证签名 + 更新 D1 用户订阅状态（active / period_end）
 | 事件 | 处理 |
 |------|------|
 | `checkout.session.completed` | 创建/更新订阅记录 |
+| `customer.subscription.created` | 同步新订阅状态 |
 | `customer.subscription.updated` | 同步订阅状态变化（如取消、降级） |
 | `customer.subscription.deleted` | 标记订阅已终止 |
 | `invoice.payment_succeeded` | 续费成功，延长 `current_period_end` |
-| `invoice.payment_failed` | 标记订阅待处理（Stripe 自动重试 3 次） |
+| `invoice.payment_failed` | 拉取并同步 subscription 当前状态，不手动猜测权益 |
 
 ### 4.5 退款 / 取消政策
 
-- **取消订阅**：用户在 app 内点击"取消"→ Worker 调 Stripe API 取消（取消后到期前仍可用）
+- **取消订阅**：用户进入 Stripe Customer Portal 自助取消（取消后到期前仍可用）
 - **退款**：v1 不做自助退款，用户发邮件联系 → 人工处理
   - 联系邮箱：**TBD**（待填写，在 `ops/secrets.md` 或 app 内 Help 页统一引用）
   - 退款窗口：暂定订阅生效后 7 天内可全额退（v1 上线前敲定）
@@ -145,28 +148,30 @@ Worker 验证签名 + 更新 D1 用户订阅状态（active / period_end）
 KV key 设计：
 
 ```
-quota:{user_id}:{date_utc}     →  { "messages": 12, "events": 0 }
+quota:{user_id}:{date_utc}:messages → 12
 ```
 
 - 每用户每日一个 key
-- 写入时 atomic increment
-- TTL 自动清理 7 天前的 key
+- 写入时按当前 KV 读写整数递增（v1 接受小竞态）
+- TTL 约 90,000 秒，覆盖 UTC 日切换后的短时间读取
 
 ### 5.2 计量时机
 
-- **AI 对话消息**：用户发出的每条消息计 1（无论 AI 是否回应成功；AI 失败的话退还 1 条 *(暂定)*）
-- 计量与 LLM 调用解耦（先扣额度，再调用，失败退还）
+- **AI 对话消息**：用户发出的每条消息计 1
+- LLM 在打开 SSE 前失败，不扣额度
+- 主回复成功并持久化后计 1；后续信号提取失败不退额度
 
 ### 5.3 订阅用户
 
-- 跳过 KV 扣额度
-- 但仍写"使用统计"到 D1（用于产品分析、欺诈检测）
+- 不因消息数被硬阻断
+- 仍写 KV 和 `usage_log`，用于 usage 展示、成本分析和欺诈检测
+- 1000 条/日是软阈值，只记录/展示，不返回 402
 
 ## 6. 反作弊与边界
 
 ### 6.1 防滥用 *(暂定)*
 
-- 单用户每日上限：1000 条对话（即使订阅）
+- 订阅用户每日 1000 条对话为软阈值，不硬拦
 - 单分钟速率限制：10 条
 - 注册需邮箱验证（防机器人）
 
@@ -178,15 +183,15 @@ quota:{user_id}:{date_utc}     →  { "messages": 12, "events": 0 }
 
 ## 7. 与现有代码的关系
 
-- 当前 `packages/api/src/billing.ts` 是占位
+- 当前 `/billing/*` 仍是 retired prefix，spec-010 会新增 `packages/api/src/billing/`
 - 当前 `wrangler.jsonc` 第 30-33、102-105 行的 Stripe 配置是空
 - 完整实现需要：
   - Stripe SDK 接入
   - Webhook endpoint + 签名验证
-  - D1 `subscriptions` 表（见 [`data-model.md`](../architecture/data-model.md)）
+  - D1 `billing_customers` / `billing_subscriptions` / `billing_webhook_events` 表（见 [`data-model.md`](../architecture/data-model.md)）
   - KV 配额计量
-  - middleware 校验
-  - app 端订阅 UI（订阅页 + 取消页）
+  - middleware webhook bypass + auth 校验
+  - 后端 checkout/status/portal/webhook 接口
 
 具体改造任务进 `specs/`。
 
@@ -194,6 +199,6 @@ quota:{user_id}:{date_utc}     →  { "messages": 12, "events": 0 }
 
 - [ ] 免费每日消息额度：30 条？（v1 上线后用数据调）
 - [ ] 订阅价格：$9.99/月？
-- [ ] 是否上线即推 Annual？
+- [x] 是否上线即推 Annual？v1 不推，仅 Pro Monthly
 - [ ] 退款政策措辞（需要法务审）
-- [ ] 试用策略：完全无试用 vs 7 天免费试用？
+- [x] 试用策略：v1 不做免费试用

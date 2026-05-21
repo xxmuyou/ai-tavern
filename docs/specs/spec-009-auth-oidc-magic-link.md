@@ -342,7 +342,7 @@ Response:
 }
 ```
 
-v1 允许 `subscription/quota` 先按现有 `subscriptions` 和 KV 读取；若 spec-010 尚未完成，可返回 deterministic free/quota 默认值，但字段 shape 必须稳定。
+v1 允许 `subscription/quota` 先返回 deterministic free/quota 默认值；spec-010 完成后必须改为读取 `billing_*` 表和 KV，字段 shape 必须稳定。
 
 ### I. Frontend Minimal Hook
 

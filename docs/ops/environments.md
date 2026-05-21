@@ -76,7 +76,7 @@ pnpm dev    # 同时启 API:8787 + App:8081
 
 - Web: `dev.aiappsbox.com`（Cloudflare Pages 自定义域）
 - API: `dev.aiappsbox.com/api/*`（同域 `/api/*` 路由到 Worker）
-- Stripe webhook 回调: `https://dev.aiappsbox.com/api/billing/webhook`
+- Stripe webhook 回调: `https://dev.aiappsbox.com/api/billing/webhook`（统一路径；不使用旧 `/billing/stripe/webhook`）
 
 **绑定步骤：**
 1. 在 Cloudflare 注册 / 接管域名 `aiappsbox.com`
@@ -129,7 +129,7 @@ pnpm deploy:web:dev    # Web 到 dev (Cloudflare Pages)
 
 - API: `aiappsbox.com/api/*`
 - Web: `aiappsbox.com`
-- Stripe webhook: `https://aiappsbox.com/api/billing/webhook`
+- Stripe webhook: `https://aiappsbox.com/api/billing/webhook`（统一路径；不使用旧 `/billing/stripe/webhook`）
 - Google OAuth redirect URI: `https://aiappsbox.com/api/auth/oidc/google/callback`
 - Apple Sign-In return URL: `https://aiappsbox.com/api/auth/oidc/apple/callback`（spec-009 只预留 provider contract）
 

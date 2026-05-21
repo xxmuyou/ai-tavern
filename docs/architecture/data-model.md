@@ -29,7 +29,9 @@
 | `threads` | 对话 thread（每对 user-companion 一条） |
 | `messages` | 对话消息（流水） |
 | `events` | 事件触发记录 |
-| `subscriptions` | Stripe 订阅状态 |
+| `billing_customers` | 用户与 Stripe Customer 映射 |
+| `billing_subscriptions` | Stripe 订阅状态 |
+| `billing_webhook_events` | Stripe webhook 幂等与处理审计 |
 | `usage_log` | 配额计量与统计（补充 KV 计数器，用于审计 / 分析） |
 | `llm_logs` | LLM 调用日志（调试 / 计费 / 报警） |
 | `llm_config` | admin 配置：task ↔ provider/model 映射 |
@@ -254,31 +256,65 @@ CREATE INDEX idx_events_type ON events(event_type);
 - 每种 `event_type` 对每个 companion 有冷却时间（应用层管理）
 - 同一时间一个 (user, companion) 最多一个 pending 事件
 
-### 3.9 `subscriptions`
+### 3.9 `billing_customers`
 
 ```sql
-CREATE TABLE subscriptions (
+CREATE TABLE billing_customers (
+  user_id            TEXT PRIMARY KEY REFERENCES users(id),
+  stripe_customer_id TEXT NOT NULL UNIQUE,
+  email              TEXT NOT NULL,
+  livemode           INTEGER NOT NULL DEFAULT 0,
+  created_at         INTEGER NOT NULL,
+  updated_at         INTEGER NOT NULL
+);
+
+CREATE INDEX idx_billing_customers_stripe ON billing_customers(stripe_customer_id);
+```
+
+### 3.10 `billing_subscriptions`
+
+```sql
+CREATE TABLE billing_subscriptions (
   id                   TEXT PRIMARY KEY,        -- Stripe subscription ID
   user_id              TEXT NOT NULL REFERENCES users(id),
   stripe_customer_id   TEXT NOT NULL,
-  status               TEXT NOT NULL,           -- active / past_due / canceled / unpaid
-  price_id             TEXT NOT NULL,           -- Stripe price ID
+  status               TEXT NOT NULL,           -- active / trialing / past_due / canceled / unpaid
+  price_id             TEXT NOT NULL,
   current_period_start INTEGER NOT NULL,
-  current_period_end   INTEGER NOT NULL,        -- 续费后会更新
-  cancel_at_period_end BOOLEAN DEFAULT FALSE,
+  current_period_end   INTEGER NOT NULL,
+  cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
   canceled_at          INTEGER,
+  livemode             INTEGER NOT NULL DEFAULT 0,
+  raw_json             TEXT NOT NULL,
   created_at           INTEGER NOT NULL,
   updated_at           INTEGER NOT NULL
 );
 
-CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
-CREATE INDEX idx_subscriptions_status ON subscriptions(status);
-CREATE INDEX idx_subscriptions_period_end ON subscriptions(current_period_end);
+CREATE INDEX idx_billing_subscriptions_user ON billing_subscriptions(user_id);
+CREATE INDEX idx_billing_subscriptions_customer ON billing_subscriptions(stripe_customer_id);
+CREATE INDEX idx_billing_subscriptions_status ON billing_subscriptions(status);
+CREATE INDEX idx_billing_subscriptions_period_end ON billing_subscriptions(current_period_end);
 ```
 
-**判断订阅有效：** `status = 'active' AND current_period_end > now()`
+**判断 Pro 权益：** `status IN ('active', 'trialing') AND current_period_end > now()`；多条订阅时取仍有效且 `current_period_end` 最新的一条。
 
-### 3.10 `usage_log`
+### 3.11 `billing_webhook_events`
+
+```sql
+CREATE TABLE billing_webhook_events (
+  id           TEXT PRIMARY KEY,                -- Stripe event ID
+  type         TEXT NOT NULL,
+  livemode     INTEGER NOT NULL DEFAULT 0,
+  status       TEXT NOT NULL,                   -- processing / processed / failed / ignored
+  error        TEXT,
+  received_at  INTEGER NOT NULL,
+  processed_at INTEGER
+);
+
+CREATE INDEX idx_billing_webhook_events_type ON billing_webhook_events(type);
+```
+
+### 3.12 `usage_log`
 
 D1 上的使用日志（KV 是热路径计数器，D1 是冷数据审计）。
 
@@ -299,7 +335,7 @@ CREATE INDEX idx_usage_user_date ON usage_log(user_id, date_utc);
 
 **写入策略：** 每次 LLM 调用完成后异步更新此表（Queues 任务，避免阻塞响应）。
 
-### 3.11 `llm_logs`
+### 3.13 `llm_logs`
 
 ```sql
 CREATE TABLE llm_logs (
@@ -325,7 +361,7 @@ CREATE INDEX idx_llm_logs_provider ON llm_logs(provider, created_at);
 
 **容量考虑：** 高频写入。可以定期归档（30 天前的 log 移到 R2）。
 
-### 3.12 `llm_config`
+### 3.14 `llm_config`
 
 admin 配置 task ↔ provider/model 的映射。
 
@@ -351,7 +387,7 @@ INSERT INTO llm_config VALUES
   ('character-assist', 'deepseek',   'deepseek-chat',                NULL,         NULL,          ...);
 ```
 
-### 3.13 `admin_users`
+### 3.15 `admin_users`
 
 ```sql
 CREATE TABLE admin_users (
@@ -370,7 +406,7 @@ CREATE TABLE admin_users (
 
 | Key 模式 | 值 | TTL | 用途 |
 |---------|----|----|------|
-| `quota:{user_id}:{YYYY-MM-DD}` | `{messages: int, events: int}` | 7 天 | 当日配额计数（atomic increment） |
+| `quota:{user_id}:{YYYY-MM-DD}:messages` | int | 90,000 秒 | 当日消息配额计数（free 硬限制，pro 软阈值） |
 | `cache:scenes:list` | JSON 全部活动场景列表 | 1 小时 | 主界面场景列表缓存（场景很少变） |
 | `cache:companions:official` | JSON 全部官方角色 | 1 小时 | 官方角色列表缓存 |
 | `rate:{user_id}:{minute}` | int | 5 分钟 | 速率限制（10 条/分钟） |
@@ -407,7 +443,7 @@ xtbit-assets/
 | 用户角色列表（官方 + 自创） | `companions` where `source='official' OR created_by=user_id` |
 | 用户与某角色的对话历史 | `messages` where `thread_id=X` order by `created_at` desc limit 20 |
 | 用户与某角色的关系数值 | `relationships`（主键 `user_id + companion_id`） |
-| 用户订阅校验 | `subscriptions` where `user_id=X AND status='active' AND current_period_end > now()` |
+| 用户订阅校验 | `billing_subscriptions` where `user_id=X AND status IN ('active','trialing') AND current_period_end > now()` |
 | admin 看板：日成本 | `llm_logs` group by date |
 
 ---

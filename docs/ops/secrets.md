@@ -18,6 +18,10 @@
 | `STRIPE_SECRET_KEY` | Stripe 服务端 API（创建 Checkout 等） | stripe.com（test/live） | Wrangler secret | **强制独立**（test vs live） |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook 签名验证 | Stripe webhook endpoint 创建后获取 | Wrangler secret | 独立 |
 | `STRIPE_PUBLISHABLE_KEY` | 前端用的 Stripe key | stripe.com | wrangler.jsonc `vars`（公开） | 独立 |
+| `STRIPE_PRICE_PRO_MONTHLY` | Pro Monthly Stripe Price ID | Stripe Dashboard | wrangler.jsonc `vars`（公开） | 独立 |
+| `STRIPE_SUCCESS_URL` | Checkout 成功后回跳 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
+| `STRIPE_CANCEL_URL` | Checkout 取消后回跳 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
+| `STRIPE_PORTAL_RETURN_URL` | Customer Portal 返回 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
 | `JWT_SIGNING_KEY` | 签发 JWT（HS256 或 RS256 私钥） | 本地生成（`openssl rand`） | Wrangler secret | 独立 |
 | `GOOGLE_OAUTH_CLIENT_ID` | Google Sign-In | console.cloud.google.com | wrangler.jsonc `vars`（公开） | 独立 |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth 服务端 | console.cloud.google.com | Wrangler secret | 独立 |

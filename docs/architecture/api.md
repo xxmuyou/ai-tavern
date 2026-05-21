@@ -160,8 +160,18 @@ Query: ?token=...
     "created_at": ...,
     "linked_providers": ["google", "email"]
   },
-  "subscription": { "status": "active" | "free", "current_period_end": ... },
-  "quota": { "messages_used_today": 12, "messages_limit_today": 30 }
+  "subscription": {
+    "tier": "free" | "pro",
+    "status": "active" | "trialing" | "past_due" | "canceled" | "free",
+    "price_id": "...",
+    "current_period_end": ...,
+    "cancel_at_period_end": false
+  },
+  "quota": {
+    "messages_used_today": 12,
+    "messages_limit_today": 30,
+    "subscriber_soft_threshold_exceeded": false
+  }
 }
 ```
 
@@ -472,36 +482,47 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 
 ### `POST /billing/checkout`
 
-创建 Stripe Checkout Session。
+创建 Stripe Pro Monthly Checkout Session。服务端只使用 `STRIPE_PRICE_PRO_MONTHLY`，不接受客户端传任意 price。
 
 ```json
-// Request
-{ "price_id": "price_monthly_999" }
+// Request body 可以为空
+{}
 
 // Response 200
 { "checkout_url": "https://checkout.stripe.com/..." }
 ```
 
-### `GET /billing/subscription`
+### `POST /billing/portal`
 
 ```json
 // Response 200
-{
-  "status": "active" | "canceled" | "past_due" | "free",
-  "current_period_end": ...,
-  "cancel_at_period_end": false,
-  "price_id": "...",
-  "stripe_portal_url": "..."     // 用户管理订阅的 Stripe portal URL
-}
+{ "portal_url": "https://billing.stripe.com/p/session/..." }
 ```
 
-### `POST /billing/cancel`
-
-取消订阅（period_end 之前仍有效）。
+### `GET /billing/status`
 
 ```json
-// Response 200
-{ "cancel_at_period_end": true, "active_until": ... }
+{
+  "subscription": {
+    "tier": "pro",
+    "status": "active",
+    "price_id": "price_...",
+    "current_period_end": ...,
+    "cancel_at_period_end": false
+  },
+  "entitlements": {
+    "tier": "pro",
+    "message_limit_daily": null,
+    "custom_companion_limit": null,
+    "subscriber_soft_message_threshold_daily": 1000
+  },
+  "usage": {
+    "date_utc": "2026-05-21",
+    "messages_used_today": 12,
+    "message_limit_daily": null,
+    "subscriber_soft_threshold_exceeded": false
+  }
+}
 ```
 
 ### `POST /billing/webhook` *(Stripe 调用，无 auth)*
@@ -514,6 +535,8 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 
 // Response 200 OK
 ```
+
+**说明：** 订阅取消、换卡、发票等自助管理统一走 Stripe Customer Portal；v1 不实现 `/billing/cancel`。
 
 ---
 

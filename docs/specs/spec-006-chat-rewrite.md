@@ -29,7 +29,7 @@ v1 玩法是「场景内自由对话」（[`product/gameplay.md §4`](../product
 - **配额完整实现**（决策 A）：
   - KV `quota:{user_id}:{YYYY-MM-DD}`（UTC）—— 30 条/日 free → 402
   - KV `ratelimit:{user_id}:{YYYY-MM-DDTHH:MM}` —— 10/分钟 → 429
-  - subscription 判断 stub 成 `false`（结构与 `subscriptions` 表对齐，spec-010 翻开关即可）
+  - subscription 判断 stub 成 `false`（spec-010 会替换为 billing entitlement helper）
 - **摘要触发点**（决策 C）：消息数 > 50 时投递 `JOB_QUEUE` 桩 payload，consumer 留到后续 spec
 - **DELETE = 硬删**（决策 A）：清 `messages` + 重置 `threads.message_count/summary`，relationships 不动
 - 关闭 `/chat/*` 的 410 Gone，挂上真实 handler
@@ -164,7 +164,7 @@ export async function incrementQuota(env: Env, userId: string, now: number): Pro
 export async function isSubscriberActive(env: Env, userId: string, now: number): Promise<boolean>;
 ```
 
-`isSubscriberActive` 现在恒返回 `false`，但 SQL 已经按 `SELECT 1 FROM subscriptions WHERE user_id=? AND status='active' AND current_period_end > ?` 写好（spec-010 时去掉短路）。
+`isSubscriberActive` 在 spec-006 阶段只作为过渡入口；spec-010 必须移除 chat 模块对旧 `subscriptions` 表的直接依赖，改为调用 billing entitlement helper。
 
 KV 键：
 - `quota:{uid}:{YYYY-MM-DD}` UTC，read+write +1，`expirationTtl: 90000`（~25h），≥ 30 → `ok=false`

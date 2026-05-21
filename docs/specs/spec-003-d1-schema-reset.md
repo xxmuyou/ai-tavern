@@ -57,7 +57,7 @@ relationships
 threads
 messages
 events
-subscriptions
+subscriptions        -- spec-010 会替换为 billing_* 新 schema
 usage_log
 llm_logs
 llm_config

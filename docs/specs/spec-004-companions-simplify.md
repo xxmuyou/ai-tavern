@@ -188,6 +188,6 @@ type CreateInput = {
 ## 注意
 
 - 6 字段简化已在 spec-003 的 schema 中落地；本 spec 不改 schema
-- v1 暂时所有用户走免费路径（quota=3），spec-010 上线后通过 subscriptions 表 + middleware 给订阅用户绕过
+- v1 暂时所有用户走免费路径（quota=3），spec-010 上线后通过 billing entitlement helper 给 Pro 用户绕过
 - 不要在本 spec 中实现 `/companions/assist` —— 它会拉进 LLM 依赖，破坏"小而专"的 spec 边界
 - 删除官方角色路径暂不开放（管理后台是 spec-011 的工作）
