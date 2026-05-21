@@ -35,7 +35,7 @@
 | 009 | [Auth OIDC + Magic Link](./spec-009-auth-oidc-magic-link.md) | 新建 | 003 | 5-7 天 | 待办（详细） |
 | 010 | [Stripe Billing + Entitlements + Quota 计量](./spec-010-billing-entitlements-quota.md) | 新建 | 003, 009 | 5-7 天 | 待办（详细） |
 | 011 | [admin 端点（LLM 配置 + 测试）](./spec-011-admin-llm-endpoints.md) | 新建 | 002 | 2 天 | 🟢 done |
-| 012 | Expo app UI 重做（场景列表 + 角色页 + 进度条 + 对话） | 重写 | 004, 005, 006, 007, 010 | 7-10 天 | 待办（stub） |
+| 012 | [Expo app UI 重做（场景列表 + 角色页 + 进度条 + 对话）](./spec-012-expo-ui-rewrite.md) | 重写 | 004, 005, 006, 007, 010 | 7-10 天 | 待办（详细） |
 | 013 | v1 内容 seed migration（10 场景 + 10 角色） | 新建 | 003, 004, 007 | 1-2 天（+美术周期） | 待办（stub） |
 | 014 | Cloudflare custom domain 绑定 | 配置 | — | 1 天 | 待办（stub） |
 | 015 | iOS / Android EAS Build pipeline | 新建 | 012 | 3-5 天 | 待办（stub） |
