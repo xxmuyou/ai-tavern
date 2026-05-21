@@ -15,7 +15,8 @@
     "typecheck": "node ../../scripts/tasks/run.mjs api:typecheck"
   },
   "dependencies": {
-    "@xtbit/shared": "file:../shared"
+    "@xtbit/shared": "file:../shared",
+    "jose": "^6.0.10"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260511.1",
