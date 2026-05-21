@@ -57,3 +57,160 @@ export function createSessionsStore() {
 }
 
 export type SessionsStore = ReturnType<typeof createSessionsStore>;
+
+export type UserFixture = {
+  id: string;
+  email: string;
+  email_verified: number;
+  display_name: string | null;
+  created_at: number;
+  last_seen_at: number;
+};
+
+export type UsersStoreResult =
+  | { kind: "run"; result: { meta: { changes: number } } }
+  | { kind: "first"; result: UserFixture | { id: string; email: string } | null };
+
+export function createUsersStore(seed: UserFixture[] = []) {
+  const byId = new Map<string, UserFixture>();
+  for (const user of seed) byId.set(user.id, user);
+
+  return {
+    list(): UserFixture[] {
+      return [...byId.values()];
+    },
+    getById(id: string): UserFixture | null {
+      return byId.get(id) ?? null;
+    },
+    getByEmail(email: string): UserFixture | null {
+      return [...byId.values()].find((u) => u.email === email) ?? null;
+    },
+    handle(sql: string, values: unknown[]): UsersStoreResult | null {
+      if (sql.includes("INSERT INTO users") || sql.includes("INSERT OR IGNORE INTO users")) {
+        const params = values as unknown[];
+        const id = params[0] as string;
+        const email = params[1] as string;
+        if (!byId.has(id) && ![...byId.values()].some((u) => u.email === email)) {
+          // Detect full-fields INSERT vs ensureUserByEmail's 4-column INSERT
+          if (params.length >= 6) {
+            byId.set(id, {
+              id,
+              email,
+              email_verified: (params[2] as number) ?? 0,
+              display_name: (params[3] as string | null) ?? null,
+              created_at: params[4] as number,
+              last_seen_at: params[5] as number,
+            });
+          } else {
+            byId.set(id, {
+              id,
+              email,
+              email_verified: 0,
+              display_name: null,
+              created_at: (params[2] as number) ?? Date.now(),
+              last_seen_at: (params[3] as number) ?? Date.now(),
+            });
+          }
+          return { kind: "run", result: { meta: { changes: 1 } } };
+        }
+        return { kind: "run", result: { meta: { changes: 0 } } };
+      }
+      if (sql.includes("UPDATE users SET email_verified = 1") && sql.includes("WHERE id = ?")) {
+        const [id] = values as [string];
+        const user = byId.get(id);
+        if (user) {
+          user.email_verified = 1;
+          return { kind: "run", result: { meta: { changes: 1 } } };
+        }
+        return { kind: "run", result: { meta: { changes: 0 } } };
+      }
+      if (sql.includes("UPDATE users SET display_name") && sql.includes("display_name IS NULL")) {
+        const [name, id] = values as [string, string];
+        const user = byId.get(id);
+        if (user && user.display_name === null) {
+          user.display_name = name;
+          return { kind: "run", result: { meta: { changes: 1 } } };
+        }
+        return { kind: "run", result: { meta: { changes: 0 } } };
+      }
+      if (sql.includes("FROM users") && sql.includes("WHERE email = ?")) {
+        const [email] = values as [string];
+        return { kind: "first", result: this.getByEmail(email) };
+      }
+      if (sql.includes("FROM users") && sql.includes("WHERE id = ?")) {
+        const [id] = values as [string];
+        return { kind: "first", result: this.getById(id) };
+      }
+      return null;
+    },
+  };
+}
+
+export type UsersStore = ReturnType<typeof createUsersStore>;
+
+export type IdentityFixture = {
+  id: string;
+  user_id: string;
+  provider: string;
+  provider_subject: string;
+  provider_email: string | null;
+  created_at: number;
+};
+
+export type IdentitiesStoreResult =
+  | { kind: "run"; result: { meta: { changes: number } } }
+  | { kind: "first"; result: IdentityFixture | { user_id: string } | null }
+  | { kind: "all"; result: IdentityFixture[] };
+
+export function createIdentitiesStore() {
+  const rows: IdentityFixture[] = [];
+
+  return {
+    list(): IdentityFixture[] {
+      return [...rows];
+    },
+    seed(identity: IdentityFixture): void {
+      rows.push(identity);
+    },
+    handle(sql: string, values: unknown[]): IdentitiesStoreResult | null {
+      if (sql.includes("INSERT INTO user_identities") || sql.includes("INSERT OR IGNORE INTO user_identities")) {
+        const [id, userId, provider, subject, email, createdAt] = values as [
+          string,
+          string,
+          string,
+          string,
+          string | null,
+          number,
+        ];
+        const conflict = rows.some((r) => r.provider === provider && r.provider_subject === subject);
+        if (conflict) {
+          return { kind: "run", result: { meta: { changes: 0 } } };
+        }
+        rows.push({
+          id,
+          user_id: userId,
+          provider,
+          provider_subject: subject,
+          provider_email: email,
+          created_at: createdAt,
+        });
+        return { kind: "run", result: { meta: { changes: 1 } } };
+      }
+      if (
+        sql.includes("FROM user_identities") &&
+        sql.includes("WHERE provider = ? AND provider_subject = ?")
+      ) {
+        const [provider, subject] = values as [string, string];
+        const found = rows.find((r) => r.provider === provider && r.provider_subject === subject) ?? null;
+        return { kind: "first", result: found };
+      }
+      if (sql.includes("FROM user_identities") && sql.includes("WHERE user_id = ?")) {
+        const [userId] = values as [string];
+        return { kind: "all", result: rows.filter((r) => r.user_id === userId) };
+      }
+      return null;
+    },
+  };
+}
+
+export type IdentitiesStore = ReturnType<typeof createIdentitiesStore>;
