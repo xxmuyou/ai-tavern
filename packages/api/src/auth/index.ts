@@ -1,4 +1,8 @@
 import { handleDevSession } from "./dev-session";
+import { handleSendLink, handleVerify } from "./email-link";
+import { handleLogout, handleMe } from "./me";
+import { handleOAuthCallback, handleOAuthStart } from "./oauth";
+import type { AuthEnv } from "./types";
 
 export {
   isAdminEmail,
@@ -19,6 +23,32 @@ export async function handleAuthRequest(
 ): Promise<Response | null> {
   if (pathname === "/auth/dev-session") {
     return handleDevSession(request, env);
+  }
+
+  if (pathname === "/auth/me") {
+    return handleMe(request, env as AuthEnv);
+  }
+
+  if (pathname === "/auth/logout") {
+    return handleLogout(request, env as AuthEnv);
+  }
+
+  if (pathname === "/auth/email/send-link") {
+    return handleSendLink(request, env as AuthEnv);
+  }
+
+  if (pathname === "/auth/email/verify") {
+    return handleVerify(request, env as AuthEnv);
+  }
+
+  const oidcStartMatch = pathname.match(/^\/auth\/oidc\/([^/]+)\/start$/);
+  if (oidcStartMatch) {
+    return handleOAuthStart(request, env as AuthEnv, oidcStartMatch[1]!);
+  }
+
+  const oidcCallbackMatch = pathname.match(/^\/auth\/oidc\/([^/]+)\/callback$/);
+  if (oidcCallbackMatch) {
+    return handleOAuthCallback(request, env as AuthEnv, oidcCallbackMatch[1]!);
   }
 
   return null;

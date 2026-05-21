@@ -85,6 +85,9 @@ export function createUsersStore(seed: UserFixture[] = []) {
     getByEmail(email: string): UserFixture | null {
       return [...byId.values()].find((u) => u.email === email) ?? null;
     },
+    seed(user: UserFixture): void {
+      byId.set(user.id, user);
+    },
     handle(sql: string, values: unknown[]): UsersStoreResult | null {
       if (sql.includes("INSERT INTO users") || sql.includes("INSERT OR IGNORE INTO users")) {
         const params = values as unknown[];
