@@ -62,6 +62,14 @@
         "binding": "JOB_QUEUE",
         "queue": "xtbit-apps-dev-jobs"
       }
+    ],
+    "consumers": [
+      {
+        "queue": "xtbit-apps-dev-jobs",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 3
+      }
     ]
   },
   "durable_objects": {
@@ -133,6 +141,14 @@
           {
             "binding": "JOB_QUEUE",
             "queue": "xtbit-apps-prod-jobs"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "xtbit-apps-prod-jobs",
+            "max_batch_size": 10,
+            "max_batch_timeout": 30,
+            "max_retries": 3
           }
         ]
       },

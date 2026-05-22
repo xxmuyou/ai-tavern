@@ -3,6 +3,7 @@ import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
 import { handleChatRequest } from "./chat";
+import { handleQueueBatch } from "./chat/summary-consumer";
 import { handleCompanionsRequest } from "./companions";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
@@ -161,6 +162,9 @@ export default {
       console.error(JSON.stringify({ message: "Unhandled API error", error: String(error) }));
       return jsonCorsResponse(request, env, { error: "internal_error" }, { status: 500 });
     }
+  },
+  async queue(batch, env): Promise<void> {
+    await handleQueueBatch(batch, env);
   },
 } satisfies ExportedHandler<Env>;
 
