@@ -24,21 +24,22 @@
 
 | # | Spec | 类型 | 依赖 | 估时 | 状态 |
 |---|------|------|------|------|------|
-| 001 | [清理 multi-app 抽象与 .orig 备份](./spec-001-cleanup-multi-app.md) | 删除 | — | 1-2 天 | 待办（详细） |
-| 003 | [D1 schema reset（清库重建 v1 结构）](./spec-003-d1-schema-reset.md) | 重建 | 001 | 2-3 天 | 待办（详细） |
-| 007 | [scenes 模块新建](./spec-007-scenes-module.md) | 新建 | 003 | 2-3 天 | 待办（详细） |
-| 004 | [companions 角色卡简化（15+ → 6 字段，7 维度对齐）](./spec-004-companions-simplify.md) | 改写 | 003 | 2-3 天 | 待办（详细） |
-| 005 | [relationships 模块拆出](./spec-005-relationships-module.md) | 重构 | 003, 004 | 1-2 天 | 待办（详细） |
-| 002 | [LLM 多供应商抽象层](./spec-002-llm-multi-provider.md) | 重写 | 001, 003 | 3-5 天 | 待办（详细） |
-| 006 | [chat 重写（去掉章节制，场景内自由对话）](./spec-006-chat-rewrite.md) | 重写 | 002, 003, 005, 007 | 5-7 天 | 待办（详细） |
+| 001 | [清理 multi-app 抽象与 .orig 备份](./spec-001-cleanup-multi-app.md) | 删除 | — | 1-2 天 | 🟢 done |
+| 003 | [D1 schema reset（清库重建 v1 结构）](./spec-003-d1-schema-reset.md) | 重建 | 001 | 2-3 天 | 🟢 done |
+| 007 | [scenes 模块新建](./spec-007-scenes-module.md) | 新建 | 003 | 2-3 天 | 🟢 done |
+| 004 | [companions 角色卡简化（15+ → 6 字段，7 维度对齐）](./spec-004-companions-simplify.md) | 改写 | 003 | 2-3 天 | 🟢 done |
+| 005 | [relationships 模块拆出](./spec-005-relationships-module.md) | 重构 | 003, 004 | 1-2 天 | 🟢 done |
+| 002 | [LLM 多供应商抽象层](./spec-002-llm-multi-provider.md) | 重写 | 001, 003 | 3-5 天 | 🟢 done |
+| 006 | [chat 重写（去掉章节制，场景内自由对话）](./spec-006-chat-rewrite.md) | 重写 | 002, 003, 005, 007 | 5-7 天 | 🟢 done |
 | 008 | [events 模块新建](./spec-008-events-module.md) | 新建 | 003, 005, 006, 007 | 3-5 天 | 🟢 done |
-| 009 | [Auth OIDC + Magic Link](./spec-009-auth-oidc-magic-link.md) | 新建 | 003 | 5-7 天 | 待办（详细） |
+| 009 | [Auth OIDC + Magic Link](./spec-009-auth-oidc-magic-link.md) | 新建 | 003 | 5-7 天 | 🟢 done |
 | 010 | [Stripe Billing + Entitlements + Quota 计量](./spec-010-billing-entitlements-quota.md) | 新建 | 003, 009 | 5-7 天 | 🟢 done |
 | 011 | [admin 端点（LLM 配置 + 测试）](./spec-011-admin-llm-endpoints.md) | 新建 | 002 | 2 天 | 🟢 done |
-| 012 | [Expo app UI 重做（场景列表 + 角色页 + 进度条 + 对话）](./spec-012-expo-ui-rewrite.md) | 重写 | 004, 005, 006, 007, 010 | 7-10 天 | 待办（详细） |
-| 013 | v1 内容 seed migration（10 场景 + 10 角色） | 新建 | 003, 004, 007 | 1-2 天（+美术周期） | 待办（stub） |
-| 014 | Cloudflare custom domain 绑定 | 配置 | — | 1 天 | 待办（stub） |
-| 015 | iOS / Android EAS Build pipeline | 新建 | 012 | 3-5 天 | 待办（stub） |
+| 012 | [Expo app UI 重做（场景列表 + 角色页 + 进度条 + 对话）](./spec-012-expo-ui-rewrite.md) | 重写 | 004, 005, 006, 007, 010 | 7-10 天 | 🟢 done |
+| 013 | [v1 内容 seed migration（10 场景 + 10 角色）](./spec-013-v1-content-seed.md) | 新建 | 003, 004, 007 | 1-2 天（+美术周期） | 🟢 done |
+| 014 | [Cloudflare custom domain 绑定](./spec-014-cloudflare-custom-domain.md) | 配置 | — | 1 天 | ⚪ todo（详细） |
+| 015 | [iOS / Android EAS Build pipeline](./spec-015-eas-build-pipeline.md) | 新建 | 012 | 3-5 天 | ⚪ todo（详细） |
+| 016 | [本地密钥管理收敛（.env.dev SOT + sync）](./spec-016-local-secrets-mgmt.md) | 新建 | — | 0.5 天 | ⚪ todo（详细） |
 
 **估时总计：** 约 45-65 工程日（不含美术、QA、市场准备）
 
@@ -54,6 +55,7 @@
 - **D 路径（内容）：** 003 → 004 → 013
 - **E 路径（前端）：** 等 004 + 005 + 006 + 007 + 010 完成后开 012
 - **F 路径（部署）：** 014 + 015 可任意时间开（独立基础）
+- **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
 
 ---
 
@@ -61,7 +63,7 @@
 
 下列 spec 全部 `done` 后可考虑 v1 RC：
 
-- 001 ~ 015 全部完成
+- 001 ~ 016 全部完成
 - E2E 测试通过（至少：登录 → 进场景 → 与官方角色对话 → 触发事件 → 数值变化 → 订阅）
 - 内容 seed（10 场景 + 10 角色 + 美术资源）就位
 - v1 上线 checklist（[`ops/secrets.md §5`](../ops/secrets.md#5-待获取--待配置v1-上线前-checklist)）全部清零
