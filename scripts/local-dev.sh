@@ -38,15 +38,15 @@ write_prefixed() {
     local line
     while IFS= read -r line; do
         [ -n "$line" ] || continue
-        echo "[$label] $line"
+        echo "[$label] $line" >&2
         printf '%s [%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$label" "$line" >> "$LOG_FILE"
     done
 }
 
 start_proc() {
     local label="$1"; shift
-    ( "$@" 2>&1 | write_prefixed "$label" ) &
-    echo $!
+    ( unset NO_COLOR; "$@" 2>&1 | write_prefixed "$label" ) &
+    STARTED_PID="$!"
 }
 
 stop_proc() {
@@ -57,7 +57,14 @@ stop_proc() {
     kill -TERM -"$pid" 2>/dev/null || true
 }
 
+CLEANED_UP=0
+
 cleanup() {
+    trap - INT TERM
+    if [ "$CLEANED_UP" -eq 1 ]; then
+        exit 0
+    fi
+    CLEANED_UP=1
     echo ""
     echo "Stopping local dev services..."
     for pid in "${CHILDREN[@]:-}"; do
@@ -70,8 +77,10 @@ cleanup() {
 stop_ports
 
 CHILDREN=()
-CHILDREN+=("$(start_proc api pnpm run dev:api)")
-CHILDREN+=("$(start_proc app pnpm run dev:app)")
+start_proc api pnpm run dev:api
+CHILDREN+=("$STARTED_PID")
+start_proc app pnpm run dev:app
+CHILDREN+=("$STARTED_PID")
 
 trap cleanup INT TERM
 
