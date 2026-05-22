@@ -4,15 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node ../../scripts/tasks/run.mjs api:dev",
-    "deploy": "node ../../scripts/tasks/run.mjs api:deploy-dev",
-    "deploy:dev": "node ../../scripts/tasks/run.mjs api:deploy-dev",
-    "cf:types": "node ../../scripts/tasks/run.mjs api:cf-types",
-    "d1:migrate:local": "node ../../scripts/tasks/run.mjs api:d1-migrate-local",
-    "d1:migrate:dev": "node ../../scripts/tasks/run.mjs api:d1-migrate-dev",
-    "d1:migrate:prod": "node ../../scripts/tasks/run.mjs api:d1-migrate-prod",
+    "dev": "../../scripts/tasks/run.sh api:dev",
+    "deploy": "../../scripts/tasks/run.sh api:deploy-dev",
+    "deploy:dev": "../../scripts/tasks/run.sh api:deploy-dev",
+    "cf:types": "../../scripts/tasks/run.sh api:cf-types",
+    "d1:migrate:local": "../../scripts/tasks/run.sh api:d1-migrate-local",
+    "d1:migrate:dev": "../../scripts/tasks/run.sh api:d1-migrate-dev",
+    "d1:migrate:prod": "../../scripts/tasks/run.sh api:d1-migrate-prod",
     "test": "vitest run",
-    "typecheck": "node ../../scripts/tasks/run.mjs api:typecheck"
+    "typecheck": "../../scripts/tasks/run.sh api:typecheck"
   },
   "dependencies": {
     "@xtbit/shared": "file:../shared",

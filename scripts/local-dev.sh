@@ -7,6 +7,26 @@ LOG_DIR="$REPO_ROOT/tmp"
 LOG_FILE="$LOG_DIR/local-dev.log"
 PORTS=(8081 8787)
 
+SKIP_MIGRATE=0
+for arg in "$@"; do
+    case "$arg" in
+        --skip-migrate) SKIP_MIGRATE=1 ;;
+        -h|--help)
+            cat <<'USAGE'
+Usage: scripts/local-dev.sh [--skip-migrate]
+
+Starts the Cloudflare Workers API on :8787 and the Expo web app on :8081.
+By default applies any pending local D1 migrations before booting the API
+so the worker never starts against a stale schema.
+
+Options:
+  --skip-migrate   Skip the D1 migration step (faster restart when schema
+                   is known to be current).
+USAGE
+            exit 0 ;;
+    esac
+done
+
 mkdir -p "$LOG_DIR"
 touch "$LOG_FILE"
 
@@ -75,6 +95,17 @@ cleanup() {
 }
 
 stop_ports
+
+if [ "$SKIP_MIGRATE" -eq 1 ]; then
+    echo "Skipping D1 migration (--skip-migrate)."
+else
+    echo "Applying pending D1 migrations (local)..."
+    if ! "$SCRIPT_DIR/tasks/run.sh" api:d1-migrate-local; then
+        echo "D1 migration failed. Refusing to start with a stale schema." >&2
+        echo "Re-run after fixing the migration, or pass --skip-migrate to bypass." >&2
+        exit 1
+    fi
+fi
 
 CHILDREN=()
 start_proc api pnpm run dev:api
