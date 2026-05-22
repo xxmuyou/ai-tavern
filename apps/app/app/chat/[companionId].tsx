@@ -84,7 +84,7 @@ function ChatScreenInner() {
       try {
         const detail = await getCompanion(companionId);
         if (!cancelled) {
-          setCompanionName(detail.companion?.name ?? 'Chat');
+          setCompanionName(detail.name ?? 'Chat');
         }
       } catch {
         if (!cancelled) {

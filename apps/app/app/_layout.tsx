@@ -22,7 +22,10 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="auth/login" />
             <Stack.Screen name="auth/success" />
+            <Stack.Screen name="billing/index" />
             <Stack.Screen name="chat/[companionId]" />
+            <Stack.Screen name="companion/[id]" />
+            <Stack.Screen name="scene/[id]" />
           </Stack>
           <ErrorBanner />
           <StatusBar style="dark" />

@@ -3,13 +3,16 @@ import { useRouter } from 'expo-router';
 import { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { QuotaBadge } from './QuotaBadge';
+
 type TopBarProps = {
   right?: ReactNode;
+  showQuota?: boolean;
   showBack?: boolean;
   title: string;
 };
 
-export function TopBar({ right, showBack, title }: TopBarProps) {
+export function TopBar({ right, showBack, showQuota, title }: TopBarProps) {
   const router = useRouter();
 
   return (
@@ -24,7 +27,12 @@ export function TopBar({ right, showBack, title }: TopBarProps) {
           {title}
         </Text>
       </View>
-      {right ? <View className="ml-3">{right}</View> : null}
+      {showQuota || right ? (
+        <View className="ml-3 flex-row items-center gap-2">
+          {showQuota ? <QuotaBadge /> : null}
+          {right}
+        </View>
+      ) : null}
     </View>
   );
 }

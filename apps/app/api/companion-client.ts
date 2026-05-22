@@ -35,6 +35,16 @@ export function objectUrl(key: string): string {
   return `${API_BASE_URL}/objects/${encodeURIComponent(key)}`;
 }
 
+export function mediaUrl(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  if (/^(https?:|data:|blob:)/i.test(value)) {
+    return value;
+  }
+  return objectUrl(value);
+}
+
 export async function createDevSession(email: string): Promise<AuthSession> {
   return requestJson<AuthSession>(
     '/auth/dev-session',

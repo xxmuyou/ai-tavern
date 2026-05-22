@@ -11,25 +11,37 @@ export type RelationshipDimensions = Record<RelationshipDimensionKey, number>;
 
 export type RelationshipSummary = {
   dimensions: RelationshipDimensions;
-  first_met_at: string | null;
-  last_interaction_at: string | null;
+  first_met_at: number | null;
+  last_interaction_at: number | null;
   level: string;
   milestones?: unknown[];
 };
 
-export type Companion = {
-  appearance?: string | null;
-  avatar_url?: string | null;
-  background?: string | null;
+export type CompanionSource = 'official' | 'user';
+
+export type CompanionListItem = {
+  art_url: string | null;
+  current_level: string | null;
   id: string;
-  is_active?: boolean;
+  last_interaction_at: number | null;
   name: string;
-  personality?: string | null;
-  preferred_scenes?: string[];
-  relationship?: RelationshipSummary;
-  relationship_role?: string | null;
-  source: 'official' | 'user';
-  speech_style?: string | null;
+  preferred_scenes: string[];
+  relationship_role: string | null;
+  source: CompanionSource;
+};
+
+export type CompanionDetail = {
+  appearance: string | null;
+  art_url: string | null;
+  background: string | null;
+  id: string;
+  name: string;
+  personality: string | null;
+  preferred_scenes: string[];
+  relationship: RelationshipSummary;
+  relationship_role: string | null;
+  source: CompanionSource;
+  speech_style: string | null;
 };
 
 export type CompanionCreateInput = {
@@ -43,17 +55,18 @@ export type CompanionCreateInput = {
 };
 
 export type CompanionsListResponse = {
-  companions: Companion[];
+  items: CompanionListItem[];
 };
 
-export type CompanionDetailResponse = {
-  companion: Companion;
-  relationship: RelationshipSummary;
-};
+export type CompanionDetailResponse = CompanionDetail;
 
 export type RelationshipResponse = {
-  companion: Companion;
-  relationship: RelationshipSummary;
+  companion_id: string;
+  dimensions: RelationshipDimensions;
+  first_met_at: number | null;
+  last_interaction_at: number | null;
+  level: string;
+  milestones: unknown[];
 };
 
 export type SceneUnlockHint = {
@@ -63,15 +76,19 @@ export type SceneUnlockHint = {
   value?: number;
 };
 
-export type Scene = {
-  banner_url?: string | null;
-  default_companions?: string[];
+export type SceneCompanionPreview = {
   id: string;
-  mood?: string | null;
-  name?: string;
-  potential_companions?: Companion[];
-  summary?: string | null;
-  title?: string;
+  level: string | null;
+  name: string;
+};
+
+export type Scene = {
+  art_url: string | null;
+  id: string;
+  mood: string;
+  name: string;
+  potential_companions: SceneCompanionPreview[];
+  tags: string[];
   unlock_hint?: SceneUnlockHint | string | null;
   unlocked: boolean;
 };
@@ -80,10 +97,24 @@ export type ScenesListResponse = {
   scenes: Scene[];
 };
 
+export type SceneEntered = {
+  art_url: string | null;
+  id: string;
+  mood: string;
+  name: string;
+  tags: string[];
+};
+
+export type SceneCompanionPresent = {
+  id: string;
+  name: string;
+  opener: string;
+};
+
 export type SceneEnterResponse = {
-  companions_present: Companion[];
+  companions_present: SceneCompanionPresent[];
   event: unknown | null;
-  scene: Scene;
+  scene: SceneEntered;
 };
 
 export type ChatMessage = {
@@ -111,18 +142,40 @@ export type SseEvent = {
 };
 
 export type BillingStatusResponse = {
-  quota: {
+  entitlements: {
+    custom_companion_limit: number | null;
     message_limit_daily: number | null;
-    messages_limit_today?: number | null;
-    messages_used_today: number;
-    subscriber_soft_threshold_exceeded?: boolean;
+    subscriber_soft_message_threshold_daily: number | null;
+    tier: 'free' | 'pro';
   };
   subscription: {
-    cancel_at_period_end?: boolean;
+    cancel_at_period_end: boolean;
     current_period_end: number | null;
+    price_id: string | null;
     status: string;
     tier: 'free' | 'pro';
   };
+  usage: {
+    date_utc: string;
+    message_limit_daily: number | null;
+    messages_used_today: number;
+    subscriber_soft_threshold_exceeded: boolean;
+  };
+};
+
+export type MeQuota = {
+  message_limit_daily?: number | null;
+  messages_limit_today?: number | null;
+  messages_used_today: number;
+  subscriber_soft_threshold_exceeded?: boolean;
+};
+
+export type MeSubscription = {
+  cancel_at_period_end?: boolean;
+  current_period_end: number | null;
+  price_id?: string | null;
+  status: string;
+  tier: 'free' | 'pro';
 };
 
 export type MeResponse = {
@@ -131,8 +184,8 @@ export type MeResponse = {
   email_verified: boolean;
   id: string;
   linked_providers: string[];
-  quota: BillingStatusResponse['quota'];
-  subscription: BillingStatusResponse['subscription'];
+  quota: MeQuota;
+  subscription: MeSubscription;
 };
 
 export type AsyncState<T> =
