@@ -243,7 +243,7 @@ describe("POST /admin/llm/test", () => {
     const response = await handleAdminLlmRequest(
       authedPostRequest("http://api/admin/llm/test", token, {
         task: "chat",
-        prompt: "你好",
+        prompt: "Hello",
       }),
       env,
       "/admin/llm/test",
@@ -257,7 +257,7 @@ describe("POST /admin/llm/test", () => {
     expect(body.text).toBe("hello back");
 
     expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke.mock.calls[0]![1].messages).toEqual([{ role: "user", content: "你好" }]);
+    expect(invoke.mock.calls[0]![1].messages).toEqual([{ role: "user", content: "Hello" }]);
     expect(invoke.mock.calls[0]![2]).toEqual({ provider: "deepseek", model: "deepseek-chat" });
 
     // Should not have written any llm_logs row.

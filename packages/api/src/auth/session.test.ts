@@ -44,7 +44,7 @@ describe("signSession", () => {
 });
 
 describe("verifyAuthToken", () => {
-  it("rejects legacy tokens without jti (一刀切 strategy)", async () => {
+  it("rejects legacy tokens without jti (strict cutoff strategy)", async () => {
     const env = createEnv();
     // Manually sign an old-shape token (no jti) using the same secret.
     const secret = new TextEncoder().encode("test-auth-secret");

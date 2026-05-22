@@ -8,11 +8,11 @@ import { AUTH_LOGIN_ROUTE, SCENES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
 const errorMessages: Record<string, string> = {
-  email_unverified: '您的 Google 账户邮箱尚未验证，请验证后重试',
-  invalid_magic_link: '此登录链接已失效，请重新发送',
-  invalid_oauth_state: '登录会话已过期，请重试',
-  invalid_oauth_token: '第三方登录验证失败，请重试',
-  provider_not_configured: '该登录方式暂未开放',
+  email_unverified: 'Your Google account email is not verified. Please verify it and try again.',
+  invalid_magic_link: 'This sign-in link has expired. Please request a new one.',
+  invalid_oauth_state: 'Your sign-in session has expired. Please try again.',
+  invalid_oauth_token: 'Third-party sign-in verification failed. Please try again.',
+  provider_not_configured: 'This sign-in method is not available yet.',
 };
 
 export default function AuthSuccessScreen() {
@@ -35,12 +35,12 @@ export default function AuthSuccessScreen() {
         router.replace(SCENES_ROUTE);
         return;
       }
-      setError('登录信息无效，请重新登录');
+      setError('The sign-in information is invalid. Please sign in again.');
       return;
     }
 
     if (code) {
-      setError(errorMessages[code] ?? '登录失败，请稍后重试');
+      setError(errorMessages[code] ?? 'Sign-in failed. Please try again later.');
       return;
     }
 
@@ -48,16 +48,16 @@ export default function AuthSuccessScreen() {
   }, [acceptSessionFragment, router]);
 
   if (!error) {
-    return <LoadingScreen label="正在完成登录..." />;
+    return <LoadingScreen label="Completing sign-in..." />;
   }
 
   return (
     <View className="flex-1 items-center justify-center bg-app-bg px-6">
       <View className="w-full max-w-md rounded-lg border border-app-line bg-app-card p-6">
-        <Text className="text-center text-2xl font-semibold text-app-text">登录失败</Text>
+        <Text className="text-center text-2xl font-semibold text-app-text">Sign-in failed</Text>
         <Text className="mt-3 text-center text-sm leading-5 text-app-muted">{error}</Text>
         <View className="mt-6">
-          <Button label="重新登录" onPress={() => router.replace(AUTH_LOGIN_ROUTE)} />
+          <Button label="Sign in again" onPress={() => router.replace(AUTH_LOGIN_ROUTE)} />
         </View>
       </View>
     </View>

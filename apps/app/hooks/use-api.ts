@@ -26,23 +26,23 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     return await requestJson<T>(path, init);
   } catch (error) {
     const status = (error as Error & { status?: number }).status;
-    const message = error instanceof Error ? error.message : '请求失败';
+    const message = error instanceof Error ? error.message : 'Request failed';
 
     if (status === 401) {
       clearStoredAuthSession();
-      throw new ApiError('登录已过期，请重新登录', 401, 'unauthorized');
+      throw new ApiError('Your session has expired. Please sign in again.', 401, 'unauthorized');
     }
     if (status === 402) {
-      throw new QuotaExceededError('今日额度已用完', 402, 'quota_exceeded');
+      throw new QuotaExceededError('You have reached your daily limit.', 402, 'quota_exceeded');
     }
     if (status === 429) {
-      throw new RateLimitedError('请求过快，请稍后再试', null);
+      throw new RateLimitedError('Too many requests. Please try again later.', null);
     }
     if (status && status >= 500) {
-      throw new ServerError('服务器暂时不可用，请稍后重试', status, 'server_error');
+      throw new ServerError('The server is temporarily unavailable. Please try again later.', status, 'server_error');
     }
     if (!status) {
-      throw new NetworkError('网络连接异常', undefined, 'network_error');
+      throw new NetworkError('Network connection failed.', undefined, 'network_error');
     }
     throw new ApiError(message, status);
   }
@@ -60,7 +60,7 @@ export function useApi<T>(loader: () => Promise<T>, deps: unknown[] = []) {
       const nextData = await loader();
       setData(nextData);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError : new Error('请求失败'));
+      setError(nextError instanceof Error ? nextError : new Error('Request failed'));
     } finally {
       setIsLoading(false);
     }

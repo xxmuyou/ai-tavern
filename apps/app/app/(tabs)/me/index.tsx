@@ -26,7 +26,7 @@ export default function MeScreen() {
           setMe(payload);
         }
       } catch {
-        pushError('无法读取账户信息');
+        pushError('Could not load account details.');
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -50,7 +50,7 @@ export default function MeScreen() {
   }
 
   if (isLoading) {
-    return <LoadingScreen label="读取账户..." />;
+    return <LoadingScreen label="Loading account..." />;
   }
 
   const email = me?.email ?? session?.email ?? '';
@@ -60,13 +60,13 @@ export default function MeScreen() {
       <TopBar title="Me" />
       <View className="mx-auto w-full max-w-3xl flex-1 gap-4 px-4 py-6">
         <View className="rounded-lg border border-app-line bg-app-card p-5">
-          <Text className="text-sm font-medium text-app-muted">账户</Text>
+          <Text className="text-sm font-medium text-app-muted">Account</Text>
           <Text className="mt-2 text-2xl font-semibold text-app-text">{me?.display_name ?? email}</Text>
           <Text className="mt-1 text-sm text-app-muted">{email}</Text>
         </View>
 
         <View className="rounded-lg border border-app-line bg-app-card p-5">
-          <Text className="text-sm font-medium text-app-muted">登录方式</Text>
+          <Text className="text-sm font-medium text-app-muted">Sign-in methods</Text>
           <View className="mt-3 flex-row flex-wrap gap-2">
             {(me?.linked_providers?.length ? me.linked_providers : ['email']).map((provider) => (
               <View key={provider} className="rounded-full bg-app-primarySoft px-3 py-1">
@@ -77,7 +77,7 @@ export default function MeScreen() {
         </View>
 
         <View className="mt-auto">
-          <Button isLoading={isSigningOut} label="退出登录" onPress={handleSignOut} variant="secondary" />
+          <Button isLoading={isSigningOut} label="Sign out" onPress={handleSignOut} variant="secondary" />
         </View>
       </View>
     </View>

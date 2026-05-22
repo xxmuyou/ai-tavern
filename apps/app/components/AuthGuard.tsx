@@ -9,7 +9,7 @@ export function AuthGuard({ children }: PropsWithChildren) {
   const { isLoading, session } = useSession();
 
   if (isLoading) {
-    return <LoadingScreen label="检查登录状态..." />;
+    return <LoadingScreen label="Checking your session..." />;
   }
 
   if (!session) {

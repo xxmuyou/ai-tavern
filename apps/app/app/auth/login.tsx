@@ -24,7 +24,7 @@ export default function LoginScreen() {
   const [notice, setNotice] = useState<string | null>(null);
 
   if (isLoading) {
-    return <LoadingScreen label="检查登录状态..." />;
+    return <LoadingScreen label="Checking your session..." />;
   }
 
   if (session) {
@@ -34,7 +34,7 @@ export default function LoginScreen() {
   async function handleMagicLink() {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      pushError('请输入邮箱');
+      pushError('Enter your email address.');
       return;
     }
 
@@ -42,9 +42,9 @@ export default function LoginScreen() {
     setNotice(null);
     try {
       await sendMagicLink(trimmedEmail);
-      setNotice(`登录链接已发送至 ${trimmedEmail}，请在 15 分钟内点击`);
+      setNotice(`A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
     } catch {
-      pushError('登录链接发送失败，请稍后重试');
+      pushError('Could not send the sign-in link. Please try again later.');
     } finally {
       setIsSendingLink(false);
     }
@@ -53,7 +53,7 @@ export default function LoginScreen() {
   async function handleDevSignIn() {
     const trimmedEmail = devEmail.trim();
     if (!trimmedEmail) {
-      pushError('请输入 Dev 邮箱');
+      pushError('Enter a dev email address.');
       return;
     }
 
@@ -62,7 +62,7 @@ export default function LoginScreen() {
       await signInDev(trimmedEmail);
       router.replace(SCENES_ROUTE);
     } catch {
-      pushError('Dev 登录失败');
+      pushError('Dev sign-in failed.');
     } finally {
       setIsSigningInDev(false);
     }
@@ -72,10 +72,10 @@ export default function LoginScreen() {
     <View className="flex-1 items-center justify-center bg-app-bg px-5 py-10">
       <View className="w-full max-w-md rounded-lg border border-app-line bg-app-card p-6 shadow-sm">
         <Text className="text-center text-3xl font-semibold text-app-text">XTBit</Text>
-        <Text className="mt-2 text-center text-sm leading-5 text-app-muted">登录后进入都市奇幻人际沙盒。</Text>
+        <Text className="mt-2 text-center text-sm leading-5 text-app-muted">Sign in to enter an urban fantasy relationship sandbox.</Text>
 
         <View className="mt-8 gap-3">
-          <Text className="text-sm font-semibold text-app-text">邮箱登录</Text>
+          <Text className="text-sm font-semibold text-app-text">Email sign-in</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="email"
@@ -86,12 +86,12 @@ export default function LoginScreen() {
             value={email}
             className="min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text"
           />
-          <Button isLoading={isSendingLink} label="发送登录链接" onPress={handleMagicLink} />
+          <Button isLoading={isSendingLink} label="Send sign-in link" onPress={handleMagicLink} />
           {notice ? <Text className="text-sm leading-5 text-app-primary">{notice}</Text> : null}
         </View>
 
         <View className="mt-5">
-          <Button label="使用 Google 登录" onPress={signInGoogle} variant="secondary" />
+          <Button label="Continue with Google" onPress={signInGoogle} variant="secondary" />
         </View>
 
         {isDevLoginEnabled() ? (

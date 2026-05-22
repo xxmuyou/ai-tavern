@@ -7,7 +7,7 @@ export default function ScenesScreen() {
   return (
     <View className="flex-1 bg-app-bg">
       <TopBar title="Scenes" />
-      <EmptyState title="场景即将开放" description="P2 会接入 /scenes 并展示可进入的都市奇幻场景。" />
+      <EmptyState title="Scenes are coming soon" description="P2 will connect /scenes and show available urban fantasy scenes." />
     </View>
   );
 }

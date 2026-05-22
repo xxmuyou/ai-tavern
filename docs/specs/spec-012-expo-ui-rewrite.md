@@ -46,7 +46,7 @@ v1 上线只发 Web（Cloudflare Pages）；iOS/Android 原生 build 是 spec-01
 - ❌ iOS / Android 原生 build（spec-015）
 - ❌ 推送通知
 - ❌ Admin UI（独立 spec，本 spec 不消费 `/admin/llm/*`）
-- ❌ 多语言 i18n（v1 仅中文）
+- ❌ 多语言 i18n（v1 English-first；中文等其他语言留给 v2+）
 - ❌ 用户角色定制 / persona 切换（[`vision.md §12`](../product/vision.md) 出 v1）
 - ❌ Chapter 1 / 2 / 3 旧玩法（删除）
 - ❌ 角色社区分享 / 公开浏览（[`vision.md §12`](../product/vision.md) 出 v1）
