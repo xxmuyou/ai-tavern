@@ -37,6 +37,83 @@
 
 ---
 
+## 1.5 Dev 阶段最小密钥集（开发期 vs 验证期）
+
+> **结论：开发阶段 `.env.dev` 只需要 LLM key。** 其他大部分密钥都有 dev 自动回退或可走 dev 旁路端点。
+>
+> 这一节回答："本地起 worker 跑代码，到底必填哪些？"
+
+### 1.5.1 dev runtime 判定
+
+`auth/types.ts` 的 `isDevRuntime(env)` 判 `env.APP_ENV !== "prod"`。`infra/cloudflare/wrangler.jsonc` 顶层 `vars.APP_ENV = "dev"` 已硬编码，所以 `wrangler dev` 默认就是 dev 模式，无需手工开关。
+
+### 1.5.2 必填 keys（dev 也必填）
+
+| Key | 缺失后果 | 备注 |
+|---|---|---|
+| `DEEPSEEK_API_KEY`（或任一 LLM key） | LLM 调用返回 500 | 至少配一个 provider；`LLM_DEFAULT_ROUTE` 决定走哪条 |
+| `LLM_DEFAULT_ROUTE` | 路由不确定 | `.env.example` 默认 `cheap-dialogue` |
+| `OPENAI_MODEL` | OpenAI 路径失败 | 仅当 OPENAI_API_KEY 配了才用得到 |
+| `EXPO_PUBLIC_API_URL` | Expo 客户端不知道连哪儿 | dev 默认 `http://127.0.0.1:8787` |
+
+> Stripe 相关：仅当**要测付费流程**时才需要 `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`；纯 chat / 场景流程可空。
+
+### 1.5.3 dev 可省 keys + 自动回退行为
+
+| Key | dev 缺失时的实际行为 | 出处 |
+|---|---|---|
+| `AUTH_TOKEN_SECRET` / `JWT_SIGNING_KEY` | 自动回退到 `DEV_FALLBACK_SECRET = "xtbit-local-dev-auth-token-secret"`，session 仍可签发与校验 | `auth/types.ts:39` + `auth/session.ts:131` |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google 登录按钮不可用；但 **dev-session 旁路端点**仍能签发 token（见 §1.5.4） | `auth/oauth.ts`（只有点 Google 登录才触发） |
+| `EMAIL_PROVIDER_API_KEY` / `EMAIL_FROM_ADDRESS` | Magic Link 进 dev dry-run 分支：不真发邮件，但 magic link URL 打到 worker stdout，复制即可登录 | `auth/email-link.ts:50,80+` |
+| `ALLOWED_ORIGINS` | `wrangler.jsonc` dev `vars` 已硬编码 `http://localhost:8081,http://127.0.0.1:8081,https://dev.xtbit-apps.pages.dev,https://dev.aiappsbox.com` | wrangler.jsonc |
+| `ADMIN_EMAILS` | `wrangler.jsonc` dev `vars` 已硬编码 `admin@aiappsbox.com` | wrangler.jsonc |
+| `AUTH_SUCCESS_URL` | `wrangler.jsonc` dev `vars` 已硬编码 `https://dev.xtbit-apps.pages.dev/auth/success`（开发期回跳到 dev pages，本地 OAuth 流程要注意） | wrangler.jsonc |
+| Apple Sign-In 全套 | dev / v1 不实现 | spec-009 |
+
+### 1.5.4 dev 旁路端点：`POST /api/auth/dev-session`
+
+实现见 `packages/api/src/auth/dev-session.ts`。仅 `isDevRuntime(env)` 为 true 时启用，否则返回 `403 dev_auth_disabled`。
+
+```bash
+curl -X POST http://localhost:8787/api/auth/dev-session \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com"}'
+# → 直接返回 { user, token, expires_at, ... }
+```
+
+用法：
+
+- 本地测 chat / scenes / companions 等需要登录态的端点，**用这个发 token**，跳过 OAuth / Magic Link
+- 浏览器调试：拿到 token 后塞 `localStorage.auth_token = "<token>"` 即可
+- TTL：`DEV_AUTH_TOKEN_TTL_SECONDS` 控制（默认 28800 秒 = 8 小时）
+
+### 1.5.5 何时该补齐这些"可省" keys
+
+| 触发场景 | 应补的 keys |
+|---|---|
+| 要在浏览器走真实 Google 登录流程 | `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET`（在 Google Cloud Console 配 redirect URI = `http://localhost:8787/api/auth/oidc/google/callback`） |
+| 要测真实 Magic Link 邮件 | `EMAIL_PROVIDER_API_KEY` + `EMAIL_FROM_ADDRESS`（Resend dev 用 `onboarding@resend.dev` 默认 sender，仅能发到 verify 过的邮箱） |
+| 要测 Stripe 订阅流程 | `STRIPE_SECRET_KEY`（test mode）+ `STRIPE_WEBHOOK_SECRET`（Stripe CLI listen 转发 webhook 时给出）|
+| 准备发布到 prod | 全部按 §1 表格逐项准备，且独立 dev / prod |
+
+### 1.5.6 dev 启动最快路径
+
+```bash
+# 主仓库
+cp .env.example .env.dev      # 首次
+vim .env.dev                  # 只填 DEEPSEEK_API_KEY / EXPO_PUBLIC_API_URL / LLM_DEFAULT_ROUTE / OPENAI_MODEL
+pnpm install                  # 装 husky + dev deps
+pnpm dev                      # predev 自动 sync-env，再起 worker (8787) + Expo (8081)
+
+# 拿 dev token
+curl -X POST http://localhost:8787/api/auth/dev-session \
+  -H 'content-type: application/json' \
+  -d '{"email":"you@example.com"}'
+# 复制 token 到 localStorage，浏览器开 http://localhost:8081 即可
+```
+
+---
+
 ## 2. 注入方式
 
 ### 2.1 Wrangler secret（Workers 后端）
