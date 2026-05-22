@@ -1,10 +1,5 @@
-import AiCompanionScreen from '@/features/ai-companion/AiCompanionScreen';
-import { AiCompanionErrorBoundary } from '@/features/ai-companion/ErrorBoundary';
+import { Redirect } from 'expo-router';
 
-export default function AiCompanionRoute() {
-  return (
-    <AiCompanionErrorBoundary>
-      <AiCompanionScreen />
-    </AiCompanionErrorBoundary>
-  );
+export default function TabsIndex() {
+  return <Redirect href="/(tabs)/scenes" />;
 }

@@ -362,7 +362,24 @@ openBillingPortal(): Promise<{ portal_url: string }>
 
 ## 阶段化实施步骤
 
-### P1（spec-009 完成即可启动；约 2 天）
+### 协作分工
+
+| 阶段 | 负责人 | 职责边界 | 交付物 |
+|------|--------|----------|--------|
+| P1 | 负责人 A | 前端基建、登录链路、路由骨架、通用组件、API client 基础形态 | 可运行的 Expo Web 新骨架，登录后能进入三 tab，占位 Me 页可读取用户并登出 |
+| P2 | 负责人 B | Scenes / Companions / Relationships 业务页与展示组件 | 场景列表、场景详情、角色列表、角色详情、7 维关系条完整可用 |
+| P3 | 负责人 A | Chat 页面、SSE 流式对话、history 分页、quota/rate-limit/error 交互 | 能发送消息、流式显示回复、加载历史、清空对话，并正确处理 402/429/SSE 错误 |
+| P4 | 负责人 A | Billing UI、QuotaBadge、Me 页订阅区、checkout/portal 跳转 | free/pro 状态展示、升级入口、订阅管理入口、checkout success 回跳处理 |
+
+**并行规则**：
+
+- P1 先做并合并，作为 P2/P3/P4 的共同基线。
+- P2 从 P1 后开始，主改 scenes / companions / relationship 相关页面、hook、展示组件。
+- P3/P4 从 P1 后开始，主改 chat / billing / quota 相关页面、hook、展示组件。
+- 共享文件 `apps/app/api/companion-client.ts`、`apps/app/api/types.ts` 由负责人 A 先定调用风格和基础类型；负责人 B 只补 P2 必需字段与方法，不重构 client 架构。
+- 合并顺序建议：P1 → P2 → P3 → P4。若 P3 先完成，合并前只接受 P2 暴露的稳定路由，不反向修改 P2 页面。
+
+### P1（负责人 A；spec-009 完成即可启动；约 2 天）
 
 **目标**：基建 + 登录链路跑通。验证完即可上 dev Pages。
 
@@ -375,7 +392,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 7. `me/index.tsx` 占位实现（接 fetchMe，只显示 email + 登出按钮）
 8. 验证：本地 + dev pages 走 Google → success → tabs；dev-sign-in → success → tabs；Magic Link → email → success → tabs
 
-### P2（依赖 spec-004 + 005 + 007；约 3 天）
+### P2（负责人 B；依赖 spec-004 + 005 + 007；约 3 天）
 
 9. `use-scenes` + `<SceneCard/>` + `(tabs)/scenes/index.tsx`
 10. `scene/[id].tsx`
@@ -383,7 +400,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 12. `<DimensionBar/>` + `<DimensionBoard/>` + `companion/[id].tsx`
 13. 验证：scene 列表锁/解锁两组数据；进入 scene 看到 companions；点角色看到 7 维度条；进度条 0/50/100 视觉
 
-### P3（依赖 spec-006；约 2-3 天）
+### P3（负责人 A；依赖 spec-006；约 2-3 天）
 
 14. `use-chat-history` + `use-chat-stream` + `<MessageBubble/>` + `<StreamingBubble/>` + `chat/[companionId].tsx`
 15. 顶部"加载更多" + 底部 input + 发送 + emotion emoji
@@ -391,7 +408,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 17. 清空对话二次确认
 18. 验证：单 turn / 多 turn / 触发 quota / 触发 rate / SSE 中断重连
 
-### P4（依赖 spec-010；约 1-2 天）
+### P4（负责人 A；依赖 spec-010；约 1-2 天）
 
 19. `use-billing` + `<QuotaBadge/>`（挂到 TopBar）
 20. Me 页订阅 section 接真实 `/billing/status`
