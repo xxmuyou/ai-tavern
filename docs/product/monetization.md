@@ -117,6 +117,7 @@ Worker 验证签名 + 更新 D1 用户订阅状态（active / period_end）
 1. 从 JWT 取出 user_id
 2. 查 D1 `billing_subscriptions`：
    - `status IN ('active', 'trialing')` 且 `current_period_end > now()` → Pro
+   - `current_period_end` 存 Unix milliseconds，Stripe seconds timestamp 在 webhook sync 边界转换
    - 否则按免费用户处理
 3. 不要求每日 cron 清理；过期订阅只要超过 `current_period_end` 就不会被判定为 Pro
 

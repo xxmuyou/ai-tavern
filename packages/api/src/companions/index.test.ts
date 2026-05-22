@@ -39,6 +39,7 @@ type RelationshipFixture = {
 
 type Fixtures = {
   companions: CompanionRow[];
+  proUserIds?: string[];
   relationships: RelationshipFixture[];
   users?: Array<{ id: string; email: string }>;
 };
@@ -269,6 +270,26 @@ describe("companions module", () => {
     expect(body.limit).toBe(3);
   });
 
+  it("POST 4th active user companion succeeds for Pro", async () => {
+    const env = createEnv({
+      companions: [
+        userCompanion("a", "user-1"),
+        userCompanion("b", "user-1"),
+        userCompanion("c", "user-1"),
+      ],
+      proUserIds: ["user-1"],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions", token, "POST", { name: "Echo" }),
+      env,
+      "/companions",
+    );
+
+    expect(response?.status).toBe(201);
+  });
+
   it("PUT updates only owner's fields", async () => {
     const env = createEnv({
       companions: [userCompanion("alex", "user-1")],
@@ -458,6 +479,7 @@ function createEnv(fixtures: Fixtures): Env {
   for (const c of fixtures.companions) companions.set(c.id, { ...c });
 
   const relationships = fixtures.relationships.map((r) => ({ ...r }));
+  const proUserIds = new Set(fixtures.proUserIds ?? []);
   const sessionsStore = createSessionsStore();
 
   return {
@@ -465,7 +487,7 @@ function createEnv(fixtures: Fixtures): Env {
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
-        return buildStatement(sql, companions, relationships, users, sessionsStore);
+        return buildStatement(sql, companions, relationships, users, sessionsStore, proUserIds);
       },
     },
   } as unknown as Env;
@@ -477,6 +499,7 @@ function buildStatement(
   relationships: RelationshipFixture[],
   users: Map<string, { id: string; email: string }>,
   sessionsStore: SessionsStore,
+  proUserIds: Set<string>,
 ) {
   const exec = (values: unknown[]) => ({
     async all<T>(): Promise<{ results: T[] }> {
@@ -487,7 +510,7 @@ function buildStatement(
       if (sessionResult?.kind === "first") {
         return sessionResult.result as unknown as T | null;
       }
-      return queryFirst<T>(sql, values, companions, relationships, users);
+      return queryFirst<T>(sql, values, companions, relationships, users, proUserIds);
     },
     async run() {
       const sessionResult = sessionsStore.handle(sql, values);
@@ -552,6 +575,7 @@ function queryFirst<T>(
   companions: Map<string, CompanionRow>,
   relationships: RelationshipFixture[],
   users: Map<string, { id: string; email: string }>,
+  proUserIds: Set<string>,
 ): T | null {
   if (sql.includes("FROM users")) {
     if (sql.includes("WHERE email = ?")) {
@@ -590,6 +614,26 @@ function queryFirst<T>(
       (c) => c.created_by === ownerId && c.source === "user" && c.is_active === 1,
     ).length;
     return { n } as unknown as T;
+  }
+
+  if (sql.includes("FROM billing_subscriptions")) {
+    const userId = values[0] as string;
+    if (!proUserIds.has(userId)) return null;
+    return {
+      cancel_at_period_end: 0,
+      canceled_at: null,
+      created_at: Date.now(),
+      current_period_end: Date.now() + 86_400_000,
+      current_period_start: Date.now() - 1_000,
+      id: "sub_123",
+      livemode: 0,
+      price_id: "price_pro",
+      raw_json: "{}",
+      status: "active",
+      stripe_customer_id: "cus_123",
+      updated_at: Date.now(),
+      user_id: userId,
+    } as unknown as T;
   }
 
   return null;

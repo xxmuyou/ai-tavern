@@ -27,6 +27,20 @@ describe("api security helpers", () => {
     }), env, "/health")).toBe(false);
   });
 
+  it("uses the Stripe webhook body limit on /billing/webhook", () => {
+    const env = {
+      REQUEST_BODY_LIMIT_BYTES: "10",
+      STRIPE_WEBHOOK_BODY_LIMIT_BYTES: "100",
+    } as unknown as Env;
+
+    const request = new Request("https://api.example.com/billing/webhook", {
+      headers: { "content-length": "50" },
+      method: "POST",
+    });
+
+    expect(isRequestBodyTooLarge(request, env, "/billing/webhook")).toBe(false);
+  });
+
   it("rate limits repeated mutations in the same minute", async () => {
     const env = createRateLimitEnv();
     const request = new Request("https://api.example.com/shows/dating-heart-signal/workspace/guests", {
@@ -37,6 +51,14 @@ describe("api security helpers", () => {
     const blocked = await enforceRateLimit(env, request, "/shows/dating-heart-signal/workspace/guests");
 
     expect(blocked?.status).toBe(429);
+  });
+
+  it("does not rate limit Stripe webhooks", async () => {
+    const env = createRateLimitEnv();
+    const request = new Request("https://api.example.com/billing/webhook", { method: "POST" });
+
+    expect(await enforceRateLimit(env, request, "/billing/webhook")).toBeNull();
+    expect(await enforceRateLimit(env, request, "/billing/webhook")).toBeNull();
   });
 });
 

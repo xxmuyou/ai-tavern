@@ -16,10 +16,12 @@
   },
   "dependencies": {
     "@xtbit/shared": "file:../shared",
-    "jose": "^6.0.10"
+    "jose": "^6.0.10",
+    "stripe": "^22.1.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260511.1",
+    "@types/node": "^25.9.0",
     "typescript": "~5.9.2",
     "vitest": "^4.1.6",
     "wrangler": "^4.90.1"

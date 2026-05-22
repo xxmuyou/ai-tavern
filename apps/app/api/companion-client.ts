@@ -22,8 +22,18 @@ export type MeResponse = {
   email_verified: boolean;
   display_name: string | null;
   linked_providers: string[];
-  subscription: { status: string; current_period_end: string | null };
-  quota: { messages_used_today: number; messages_limit_today: number };
+  subscription: {
+    tier?: 'free' | 'pro';
+    status: string;
+    price_id?: string | null;
+    current_period_end: number | null;
+    cancel_at_period_end?: boolean;
+  };
+  quota: {
+    messages_used_today: number;
+    messages_limit_today: number | null;
+    subscriber_soft_threshold_exceeded?: boolean;
+  };
 };
 
 export type AsyncState<T> =

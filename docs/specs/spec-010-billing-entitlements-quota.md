@@ -1,6 +1,6 @@
 # spec-010: Stripe Billing + Entitlements + Quota 计量
 
-> **类型：** 新建  |  **依赖：** spec-003, spec-009  |  **估时：** 5-7 天  |  **状态：** ⚪ todo
+> **类型：** 新建  |  **依赖：** spec-003, spec-009  |  **估时：** 5-7 天  |  **状态：** 🟢 done
 
 ---
 
@@ -88,7 +88,7 @@ Checkout Session 创建规则：
 - price 只允许 `STRIPE_PRICE_PRO_MONTHLY`
 - `client_reference_id = user.id`
 - `customer` 优先使用本地 `billing_customers.stripe_customer_id`
-- 首次没有 customer 时创建 Stripe Customer，email 使用当前 auth user email
+- 首次没有 customer 时创建 Stripe Customer，email 使用当前 auth user email，并在 Checkout Session 创建前立即 upsert `billing_customers`
 - checkout session 和 subscription metadata 都写入 `user_id`
 - success/cancel URL 分别来自 `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL`
 
@@ -151,6 +151,12 @@ CREATE INDEX idx_billing_webhook_events_type ON billing_webhook_events(type);
 ```
 
 `usage_log` 保留现状，用于冷数据审计。KV 继续作为日额度热路径，不迁移到 D1。
+
+时间戳单位：
+
+- D1 中所有 `*_at`、`current_period_start`、`current_period_end` 统一存 Unix milliseconds。
+- API response 中的 `current_period_end` 也返回 Unix milliseconds。
+- Stripe event/API 返回的 seconds timestamp 必须只在 `billing/repository.ts` 或 webhook sync 边界转换为 milliseconds，业务层不得混用 seconds。
 
 ### E. API 契约
 
@@ -282,7 +288,16 @@ Response 200: { "ok": true }
 - invoice succeeded/failed 不直接猜权益；只用于必要时拉取并同步对应 subscription。
 - 无法解析 user_id/customer/subscription 的 event 标记 `ignored`，返回 200，不重试卡住 Stripe。
 - event id 已存在且 status 为 `processed` 或 `ignored` 时，不再执行副作用。
+- event id 已存在且 status 为 `processing` 时视为并发重复请求，直接返回 200，不重复执行副作用。
+- event id 已存在且 status 为 `failed` 时，Stripe 重试可把该行重新置为 `processing` 并再次执行。
 - 处理失败时记录 `failed` 和 error，返回 500，让 Stripe 重试。
+
+subscription event 解析 `user_id` 顺序：
+
+1. `subscription.metadata.user_id`
+2. `billing_customers` 通过 `stripe_customer_id` 查到的 `user_id`
+3. `checkout.session.completed` 的 `client_reference_id` / metadata（仅 checkout event 可用）
+4. 仍无法解析则标记 `ignored`
 
 ### G. Entitlements / quota
 
@@ -313,6 +328,8 @@ quota:{user_id}:{YYYY-MM-DD}:messages
 ```
 
 值为整数。TTL 使用 90,000 秒，和当前 chat quota 行为保持一致。旧 key 形态 `quota:{user_id}:{YYYY-MM-DD}` 可以在 spec-010 实现时停止写入；不要求迁移历史 key。
+
+v1 接受 KV read/write 的小竞态，不引入 Durable Object 或 D1 transactional counter 做强一致计数；如果真实滥用显著，再单独开后续 spec。
 
 消息计量时机：
 

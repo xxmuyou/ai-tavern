@@ -296,7 +296,7 @@ CREATE INDEX idx_billing_subscriptions_status ON billing_subscriptions(status);
 CREATE INDEX idx_billing_subscriptions_period_end ON billing_subscriptions(current_period_end);
 ```
 
-**判断 Pro 权益：** `status IN ('active', 'trialing') AND current_period_end > now()`；多条订阅时取仍有效且 `current_period_end` 最新的一条。
+**判断 Pro 权益：** `status IN ('active', 'trialing') AND current_period_end > now()`；多条订阅时取仍有效且 `current_period_end` 最新的一条。所有 billing timestamp 存 Unix milliseconds；Stripe seconds timestamp 在 webhook/repository 边界转换。
 
 ### 3.11 `billing_webhook_events`
 
@@ -481,7 +481,7 @@ pnpm cf:d1:migrate:prod   # prod 环境（需要 admin 确认）
 | `usage_log` | 永久保留（合规审计 / 财务） |
 | `llm_logs` | 30 天后归档到 R2，原表清理 |
 | `sessions` | 过期自动清理（cron job） |
-| KV `quota:*` | TTL 7 天自动清理 |
+| KV `quota:*` | TTL 90,000 秒自动清理 |
 
 ---
 

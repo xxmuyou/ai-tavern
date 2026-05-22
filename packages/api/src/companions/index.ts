@@ -1,9 +1,11 @@
 import { requireAuthUser } from "../auth";
+import { isProUser } from "../billing/entitlements";
+import { QUOTA_LIMITS } from "../billing/quota";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
 
-const MAX_FREE_USER_COMPANIONS = 3;
+const MAX_FREE_USER_COMPANIONS = QUOTA_LIMITS.FREE_CUSTOM_COMPANIONS;
 const NAME_MAX = 80;
 const TEXT_FIELD_MAX = 4000;
 const KNOWN_RELATIONSHIP_ROLES: ReadonlySet<string> = new Set([
@@ -211,8 +213,8 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
   }
 
   const activeCount = await countActiveUserCompanions(env, user.id);
-  // TODO(spec-010): bypass when subscriptions.status === 'active'.
-  if (activeCount >= MAX_FREE_USER_COMPANIONS) {
+  const pro = await isProUser(env, user.id);
+  if (!pro && activeCount >= MAX_FREE_USER_COMPANIONS) {
     return jsonResponse(
       { error: "quota_exceeded", limit: MAX_FREE_USER_COMPANIONS, current: activeCount },
       { status: 402 },
