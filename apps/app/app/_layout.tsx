@@ -22,6 +22,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="auth/login" />
             <Stack.Screen name="auth/success" />
+            <Stack.Screen name="chat/[companionId]" />
           </Stack>
           <ErrorBanner />
           <StatusBar style="dark" />
