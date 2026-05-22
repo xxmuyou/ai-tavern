@@ -95,16 +95,20 @@ apps/app/app/
 │   └── success.tsx                # 落点页：fragment 解析 + error 展示 + 跳首页
 ├── (tabs)/
 │   ├── _layout.tsx                # 三标签布局：Scenes / Companions / Me
-│   ├── scenes/index.tsx           # 场景列表（默认首页）
-│   ├── companions/index.tsx       # 我的角色列表（official + user）
-│   └── me/index.tsx               # 个人页 + 订阅状态 + 登出
+│   ├── scenes.tsx                 # 场景列表（默认首页）
+│   ├── companions.tsx             # 我的角色列表（official + user）
+│   └── me.tsx                     # 个人页 + 订阅状态 + 登出
+│   # 注意：tab 必须是 (tabs)/<name>.tsx 单文件，不要写成 (tabs)/<name>/index.tsx —
+│   # expo-router 6.x 会把后者注册成 screen name "<name>/index"，与 _layout.tsx 里
+│   # <Tabs.Screen name="<name>"> 和 initialRouteName 不匹配，启动会崩。
+│   # 真要 tab 内做深层路由，再在该 tab 下加目录 + _layout.tsx 走 Stack。
 ├── scene/[id].tsx                 # 场景详情：companions present + 进入按钮
 ├── companion/[id].tsx             # 角色详情：关系级别 + 7-dim 进度条
 ├── chat/[companionId].tsx         # 对话页：SSE 流 + history 分页
 └── billing/index.tsx              # 订阅升级 / Portal 跳转
 ```
 
-打开 app 默认进 `(tabs)/scenes/index.tsx`（`(tabs)/_layout.tsx` 的 `initialRouteName`）。未登录 → `<AuthGuard>` 触发 `router.replace('/auth/login')`。
+打开 app 默认进 `(tabs)/scenes.tsx`（`(tabs)/_layout.tsx` 的 `initialRouteName`）。未登录 → `<AuthGuard>` 触发 `router.replace('/auth/login')`。
 
 ### C. 组件清单（`apps/app/components/`）
 
@@ -221,7 +225,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 
 **dev 检测**：`process.env.EXPO_PUBLIC_API_URL` 包含 `localhost` 或 `127.0.0.1` 或 `dev` 时显示 dev 入口；prod build 隐藏。
 
-#### F.3 Scenes 列表（区 C，`(tabs)/scenes/index.tsx`）
+#### F.3 Scenes 列表（区 C，`(tabs)/scenes.tsx`）
 
 **状态机**：loading（spinner）→ ready（render list）/ empty（"还没有场景" + dev 提示）/ error（ErrorBanner + 重试）
 
@@ -245,7 +249,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 
 **特殊**：locked → 返回 403 → 跳回 scenes list + push error "该场景未解锁"
 
-#### F.5 Companions 列表（区 D，`(tabs)/companions/index.tsx`）
+#### F.5 Companions 列表（区 D，`(tabs)/companions.tsx`）
 
 **渲染**：
 
@@ -310,7 +314,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 
 **清空 history**：右上角菜单「清空对话」→ 二次确认 → `clearChatHistory` → 重置消息列表
 
-#### F.8 Me 页（区 F，`(tabs)/me/index.tsx`）
+#### F.8 Me 页（区 F，`(tabs)/me.tsx`）
 
 **数据源**：
 
@@ -394,9 +398,9 @@ openBillingPortal(): Promise<{ portal_url: string }>
 
 ### P2（负责人 B；依赖 spec-004 + 005 + 007；约 3 天）
 
-9. `use-scenes` + `<SceneCard/>` + `(tabs)/scenes/index.tsx`
+9. `use-scenes` + `<SceneCard/>` + `(tabs)/scenes.tsx`
 10. `scene/[id].tsx`
-11. `use-companions` + `use-companion` + `<CompanionCard/>` + `(tabs)/companions/index.tsx`
+11. `use-companions` + `use-companion` + `<CompanionCard/>` + `(tabs)/companions.tsx`
 12. `<DimensionBar/>` + `<DimensionBoard/>` + `companion/[id].tsx`
 13. 验证：scene 列表锁/解锁两组数据；进入 scene 看到 companions；点角色看到 7 维度条；进度条 0/50/100 视觉
 
