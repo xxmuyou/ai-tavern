@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync-env": "node ./scripts/sync-env.mjs",
+    "sync-env:prod": "node ./scripts/sync-env.mjs --env=prod",
+    "predev": "pnpm sync-env",
     "dev": "node ./scripts/local-dev.mjs",
     "dev:app": "node ./scripts/tasks/run.mjs app:web",
     "dev:api": "node ./scripts/tasks/run.mjs api:dev",
@@ -16,9 +19,11 @@
     "cf:d1:migrate:prod": "node ./scripts/tasks/run.mjs api:d1-migrate-prod",
     "cf:secrets:dev": "node ./scripts/cloudflare/upload-dev-secrets.mjs",
     "deploy:api:dev": "node ./scripts/tasks/run.mjs api:deploy-dev",
-    "deploy:web:dev": "node ./scripts/tasks/run.mjs deploy:web-dev"
+    "deploy:web:dev": "node ./scripts/tasks/run.mjs deploy:web-dev",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "typescript": "~5.9.2"
   },
   "engines": {

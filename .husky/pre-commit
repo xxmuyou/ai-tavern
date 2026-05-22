@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+
+if command -v gitleaks >/dev/null 2>&1; then
+    gitleaks protect --staged --redact --config=.gitleaks.toml --verbose || {
+        echo ""
+        echo "❌ gitleaks detected potential secret leak in staged changes — commit blocked."
+        echo "   If this is a false positive, add the pattern/path to .gitleaks.toml allowlist."
+        exit 1
+    }
+else
+    echo "⚠️  gitleaks not installed — skipping secret scan."
+    echo "   Install: brew install gitleaks  (or download from https://github.com/gitleaks/gitleaks/releases)"
+fi

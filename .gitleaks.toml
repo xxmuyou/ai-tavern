@@ -1,0 +1,18 @@
+title = "xtbit-apps gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Schema / docs / tests may contain placeholder patterns that look like secrets"
+paths = [
+    '''\.env\.example$''',
+    '''docs/specs/.*\.md$''',
+    '''docs/ops/.*\.md$''',
+    '''docs/architecture/.*\.md$''',
+    '''docs/product/.*\.md$''',
+    '''docs/_archive/.*''',
+    '''README\.md$''',
+    '''.*\.test\.(ts|tsx|js|mjs)$''',
+    '''\.gitleaks\.toml$''',
+]
