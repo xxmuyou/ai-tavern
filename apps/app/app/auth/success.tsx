@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { AUTH_LOGIN_ROUTE, SCENES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
 const errorMessages: Record<string, string> = {
@@ -31,7 +32,7 @@ export default function AuthSuccessScreen() {
     if (hash.includes('token=')) {
       const session = acceptSessionFragment(hash);
       if (session) {
-        router.replace('/(tabs)/scenes');
+        router.replace(SCENES_ROUTE);
         return;
       }
       setError('登录信息无效，请重新登录');
@@ -43,7 +44,7 @@ export default function AuthSuccessScreen() {
       return;
     }
 
-    router.replace('/auth/login');
+    router.replace(AUTH_LOGIN_ROUTE);
   }, [acceptSessionFragment, router]);
 
   if (!error) {
@@ -56,7 +57,7 @@ export default function AuthSuccessScreen() {
         <Text className="text-center text-2xl font-semibold text-app-text">登录失败</Text>
         <Text className="mt-3 text-center text-sm leading-5 text-app-muted">{error}</Text>
         <View className="mt-6">
-          <Button label="重新登录" onPress={() => router.replace('/auth/login')} />
+          <Button label="重新登录" onPress={() => router.replace(AUTH_LOGIN_ROUTE)} />
         </View>
       </View>
     </View>

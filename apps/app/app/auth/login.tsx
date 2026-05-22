@@ -5,6 +5,7 @@ import { Text, TextInput, View } from 'react-native';
 import { API_BASE_URL } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
@@ -27,7 +28,7 @@ export default function LoginScreen() {
   }
 
   if (session) {
-    return <Redirect href="/(tabs)/scenes" />;
+    return <Redirect href={SCENES_ROUTE} />;
   }
 
   async function handleMagicLink() {
@@ -59,7 +60,7 @@ export default function LoginScreen() {
     setIsSigningInDev(true);
     try {
       await signInDev(trimmedEmail);
-      router.replace('/(tabs)/scenes');
+      router.replace(SCENES_ROUTE);
     } catch {
       pushError('Dev 登录失败');
     } finally {
