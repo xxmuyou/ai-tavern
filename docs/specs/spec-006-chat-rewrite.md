@@ -167,10 +167,10 @@ export async function isSubscriberActive(env: Env, userId: string, now: number):
 `isSubscriberActive` 在 spec-006 阶段只作为过渡入口；spec-010 必须移除 chat 模块对旧 `subscriptions` 表的直接依赖，改为调用 billing entitlement helper。
 
 KV 键：
-- `quota:{uid}:{YYYY-MM-DD}` UTC，read+write +1，`expirationTtl: 90000`（~25h），≥ 30 → `ok=false`
+- `quota:{uid}:{YYYY-MM-DD}:messages` UTC，read+write +1，`expirationTtl: 90000`（~25h），free ≥ 30 → `ok=false`
 - `ratelimit:{uid}:{YYYY-MM-DDTHH:mm}` UTC，read+write +1，`expirationTtl: 120`，≥ 10 → `ok=false`
 
-非订阅用户跑 free counter；订阅 stub 翻开后跑独立 `quota:{uid}:{YYYY-MM-DD}:sub`（软上限 1000，超 → 402）。
+spec-010 翻开后 free/pro 共用 message counter；Pro 软阈值 1000/日只展示/记录，不返回 402。
 
 ### F. 新建 `packages/api/src/chat/usage.ts`
 

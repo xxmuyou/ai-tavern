@@ -53,8 +53,8 @@ const NOW = Date.UTC(2026, 4, 21, 9, 30, 0); // 2026-05-21T09:30Z
 
 describe("quota key formatting", () => {
   it("daily key uses UTC YYYY-MM-DD", () => {
-    expect(dailyKey("user-1", NOW, false)).toBe("quota:user-1:2026-05-21");
-    expect(dailyKey("user-1", NOW, true)).toBe("quota:user-1:2026-05-21:sub");
+    expect(dailyKey("user-1", NOW, false)).toBe("quota:user-1:2026-05-21:messages");
+    expect(dailyKey("user-1", NOW, true)).toBe("quota:user-1:2026-05-21:messages");
   });
 
   it("minute key uses UTC YYYY-MM-DDTHH:MM", () => {
@@ -64,8 +64,8 @@ describe("quota key formatting", () => {
   it("rolls over correctly at UTC midnight", () => {
     const before = Date.UTC(2026, 4, 21, 23, 59, 59);
     const after = Date.UTC(2026, 4, 22, 0, 0, 0);
-    expect(dailyKey("u", before, false)).toBe("quota:u:2026-05-21");
-    expect(dailyKey("u", after, false)).toBe("quota:u:2026-05-22");
+    expect(dailyKey("u", before, false)).toBe("quota:u:2026-05-21:messages");
+    expect(dailyKey("u", after, false)).toBe("quota:u:2026-05-22:messages");
   });
 });
 
@@ -92,7 +92,7 @@ describe("checkRateLimit", () => {
 
 describe("checkQuota / incrementQuota", () => {
   it("free user blocked at 30", async () => {
-    const { kv } = createKV({ "quota:u:2026-05-21": "30" });
+    const { kv } = createKV({ "quota:u:2026-05-21:messages": "30" });
     const env = createEnv({ kv });
 
     const r = await checkQuota(env, "u", NOW, false);
@@ -100,29 +100,30 @@ describe("checkQuota / incrementQuota", () => {
   });
 
   it("free user with 29 has 1 remaining", async () => {
-    const { kv } = createKV({ "quota:u:2026-05-21": "29" });
+    const { kv } = createKV({ "quota:u:2026-05-21:messages": "29" });
     const env = createEnv({ kv });
     const r = await checkQuota(env, "u", NOW, false);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.remaining).toBe(1);
   });
 
-  it("subscriber soft cap at 1000", async () => {
-    const { kv } = createKV({ "quota:u:2026-05-21:sub": "1000" });
+  it("subscriber soft cap does not block", async () => {
+    const { kv } = createKV({ "quota:u:2026-05-21:messages": "1000" });
     const env = createEnv({ kv });
     const r = await checkQuota(env, "u", NOW, true);
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.remaining).toBeNull();
   });
 
   it("incrementQuota writes count + day TTL", async () => {
-    const { kv, puts } = createKV({ "quota:u:2026-05-21": "5" });
+    const { kv, puts } = createKV({ "quota:u:2026-05-21:messages": "5" });
     const env = createEnv({ kv });
     await incrementQuota(env, "u", NOW, false);
-    expect(puts[0]).toEqual({ key: "quota:u:2026-05-21", ttl: 90_000, value: "6" });
+    expect(puts[0]).toEqual({ key: "quota:u:2026-05-21:messages", ttl: 90_000, value: "6" });
   });
 
   it("treats non-numeric counter as 0", async () => {
-    const { kv } = createKV({ "quota:u:2026-05-21": "garbage" });
+    const { kv } = createKV({ "quota:u:2026-05-21:messages": "garbage" });
     const env = createEnv({ kv });
     const r = await checkQuota(env, "u", NOW, false);
     expect(r.ok).toBe(true);

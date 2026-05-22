@@ -69,16 +69,24 @@ describe("GET /auth/me", () => {
       email_verified: boolean;
       display_name: string | null;
       linked_providers: string[];
-      subscription: { status: string; current_period_end: null };
-      quota: { messages_used_today: number; messages_limit_today: number };
+      subscription: { status: string; tier: string; current_period_end: null };
+      quota: {
+        messages_used_today: number;
+        messages_limit_today: number | null;
+        subscriber_soft_threshold_exceeded: boolean;
+      };
     };
     expect(body.id).toBe("user-1");
     expect(body.email).toBe("player@example.com");
     expect(body.email_verified).toBe(true);
     expect(body.display_name).toBe("Player");
     expect(body.linked_providers).toEqual(["email"]);
-    expect(body.subscription).toEqual({ status: "free", current_period_end: null });
-    expect(body.quota).toEqual({ messages_used_today: 0, messages_limit_today: 30 });
+    expect(body.subscription).toMatchObject({ current_period_end: null, status: "free", tier: "free" });
+    expect(body.quota).toEqual({
+      messages_limit_today: 30,
+      messages_used_today: 0,
+      subscriber_soft_threshold_exceeded: false,
+    });
   });
 
   it("returns 401 for revoked session", async () => {

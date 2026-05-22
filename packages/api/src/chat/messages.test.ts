@@ -31,6 +31,7 @@ type Inserts = {
 
 function createEnv(opts: {
   companion: CompanionFixture | null;
+  pro?: boolean;
   quotaCount?: number;
   rateCount?: number;
   llmConfigChat?: { provider: string; model: string };
@@ -46,7 +47,7 @@ function createEnv(opts: {
 
   const kv = new Map<string, string>();
   if (opts.quotaCount !== undefined) {
-    kv.set(`quota:u-1:${todayUtc()}`, String(opts.quotaCount));
+    kv.set(`quota:u-1:${todayUtc()}:messages`, String(opts.quotaCount));
   }
   if (opts.rateCount !== undefined) {
     const minute = nowMinuteUtc();
@@ -121,8 +122,24 @@ function createEnv(opts: {
             if (sql.includes("FROM llm_config")) {
               return (llmConfig.get(values[0] as string) ?? null) as T | null;
             }
-            if (sql.includes("FROM subscriptions")) {
-              return null;
+            if (sql.includes("FROM billing_subscriptions")) {
+              return opts.pro
+                ? {
+                  cancel_at_period_end: 0,
+                  canceled_at: null,
+                  created_at: Date.now(),
+                  current_period_end: Date.now() + 86_400_000,
+                  current_period_start: Date.now() - 1_000,
+                  id: "sub_123",
+                  livemode: 0,
+                  price_id: "price_pro",
+                  raw_json: "{}",
+                  status: "active",
+                  stripe_customer_id: "cus_123",
+                  updated_at: Date.now(),
+                  user_id: "u-1",
+                } as unknown as T
+                : null;
             }
             return null;
           },
@@ -377,6 +394,20 @@ describe("handlePostMessage", () => {
       "c-1",
     );
     expect(response.status).toBe(402);
+  });
+
+  it("does not block pro users past the soft threshold", async () => {
+    pendingSignal(false);
+    const { env } = createEnv({ companion: COMPANION, pro: true, quotaCount: 1000 });
+    vi.stubGlobal("fetch", buildStreamFetch());
+    const response = await handlePostMessage(
+      buildPost({ text: "hi" }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
   });
 
   it("returns 503 when call 1 fails before any chunks", async () => {

@@ -163,7 +163,7 @@ Query: ?token=...
   "subscription": {
     "tier": "free" | "pro",
     "status": "active" | "trialing" | "past_due" | "canceled" | "free",
-    "price_id": "...",
+    "price_id": "price_...",
     "current_period_end": ...,
     "cancel_at_period_end": false
   },
@@ -174,6 +174,8 @@ Query: ?token=...
   }
 }
 ```
+
+**说明：** `current_period_end` 为 Unix milliseconds；免费用户 `price_id/current_period_end` 为 `null`。
 
 ---
 
@@ -365,14 +367,14 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 
 **服务端处理：**
 1. 校验 auth + 订阅
-2. 扣 quota（KV atomic increment）
+2. 检查 free quota（KV read/write 计数，v1 接受小竞态）
 3. 加载 thread + 关系 + 场景 + 角色卡
 4. 构造 prompt，调用 LLM（流式）
 5. 流式回传 text
 6. 流结束时返回 signals + emotion
 7. 更新 relationships 数值
 8. 写入 messages 表
-9. 异步触发 usage_log + llm_logs
+9. 成功持久化消息后 increment quota，并异步触发 usage_log + llm_logs
 
 ### `GET /chat/{companion_id}/history`
 

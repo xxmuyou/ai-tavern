@@ -114,10 +114,16 @@ importers:
       jose:
         specifier: ^6.0.10
         version: 6.2.3
+      stripe:
+        specifier: ^22.1.1
+        version: 22.1.1(@types/node@25.9.0)
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260511.1
         version: 4.20260519.1
+      '@types/node':
+        specifier: ^25.9.0
+        version: 25.9.0
       typescript:
         specifier: ~5.9.2
         version: 5.9.3
@@ -4482,6 +4488,15 @@ packages:
   strip-json-comments@3.1.1:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
+
+  stripe@22.1.1:
+    resolution: {integrity: sha512-cmodIYP27tBkJ8G7DuGgWw0PFuemlFZbuF3Wwr1TrjFjUa3T7NIgCe6TVwX8BO2ynu+xtTuDGfHafNDCPt9lXA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   structured-headers@0.4.1:
     resolution: {integrity: sha512-0MP/Cxx5SzeeZ10p/bZI0S6MpgD+yxAhi1BOQ34jgnMXsCq3j1t6tQnZu+KdlL7dvJTLT3g9xN8tl10TqgFMcg==}
@@ -10115,6 +10130,10 @@ snapshots:
   strip-json-comments@2.0.1: {}
 
   strip-json-comments@3.1.1: {}
+
+  stripe@22.1.1(@types/node@25.9.0):
+    optionalDependencies:
+      '@types/node': 25.9.0
 
   structured-headers@0.4.1: {}
 

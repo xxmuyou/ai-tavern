@@ -74,7 +74,7 @@ export function isRequestBodyTooLarge(request: Request, env: Env, pathname: stri
   }
 
   const securityEnv = env as SecurityEnv;
-  const limit = pathname === "/billing/stripe/webhook"
+  const limit = pathname === "/billing/webhook"
     ? readPositiveInt(securityEnv.STRIPE_WEBHOOK_BODY_LIMIT_BYTES, DEFAULT_STRIPE_WEBHOOK_BODY_LIMIT_BYTES)
     : isAssetUploadRequest(request, pathname)
       ? readPositiveInt(securityEnv.ASSET_UPLOAD_BODY_LIMIT_BYTES, DEFAULT_ASSET_UPLOAD_BODY_LIMIT_BYTES)
@@ -125,7 +125,7 @@ function shouldRateLimit(request: Request, pathname: string): boolean {
     return false;
   }
 
-  if (pathname === "/billing/stripe/webhook") {
+  if (pathname === "/billing/webhook") {
     return false;
   }
 

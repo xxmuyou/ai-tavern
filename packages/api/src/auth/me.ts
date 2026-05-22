@@ -1,4 +1,5 @@
 import { jsonResponse } from "../http";
+import { getBillingStatus } from "../billing/entitlements";
 import { loadUserWithProviders } from "./repository";
 import { revokeSession, verifyAuthToken, verifyRequestAuth } from "./session";
 import { authError } from "./types";
@@ -25,14 +26,20 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
     return authError("invalid_token", 401);
   }
 
+  const billing = await getBillingStatus(env, payload.sub);
+
   return jsonResponse({
     id: userWithProviders.id,
     email: userWithProviders.email,
     email_verified: userWithProviders.email_verified === 1,
     display_name: userWithProviders.display_name,
     linked_providers: userWithProviders.linked_providers,
-    subscription: { status: "free", current_period_end: null },
-    quota: { messages_used_today: 0, messages_limit_today: 30 },
+    subscription: billing.subscription,
+    quota: {
+      messages_limit_today: billing.usage.message_limit_daily,
+      messages_used_today: billing.usage.messages_used_today,
+      subscriber_soft_threshold_exceeded: billing.usage.subscriber_soft_threshold_exceeded,
+    },
   });
 }
 
