@@ -1,3 +1,4 @@
+import { isAdminEmail } from "../auth/guards";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
@@ -62,22 +63,27 @@ export async function handlePostMessage(
   }
 
   const now = Date.now();
+  const isAdmin = isAdminEmail(env, user.email);
 
-  const rateCheck = await checkRateLimit(env, user.id, now);
-  if (!rateCheck.ok) {
-    return jsonResponse(
-      { error: "rate_limited", message: "Too many messages this minute." },
-      { status: 429, headers: { "retry-after": "60" } },
-    );
+  if (!isAdmin) {
+    const rateCheck = await checkRateLimit(env, user.id, now);
+    if (!rateCheck.ok) {
+      return jsonResponse(
+        { error: "rate_limited", message: "Too many messages this minute." },
+        { status: 429, headers: { "retry-after": "60" } },
+      );
+    }
   }
 
-  const subscriber = await isSubscriberActive(env, user.id, now);
-  const quotaCheck = await checkQuota(env, user.id, now, subscriber);
-  if (!quotaCheck.ok) {
-    return jsonResponse(
-      { error: "quota_exceeded", message: "Daily message limit reached." },
-      { status: 402 },
-    );
+  const subscriber = isAdmin || (await isSubscriberActive(env, user.id, now));
+  if (!isAdmin) {
+    const quotaCheck = await checkQuota(env, user.id, now, subscriber);
+    if (!quotaCheck.ok) {
+      return jsonResponse(
+        { error: "quota_exceeded", message: "Daily message limit reached." },
+        { status: 402 },
+      );
+    }
   }
 
   const scene = sceneIdInput ? await loadSceneForChat(env, sceneIdInput) : null;

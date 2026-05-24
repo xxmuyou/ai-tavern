@@ -8,10 +8,15 @@ import {
 } from "./repository";
 import type { BillingStatusDto, BillingTier, SubscriptionDto } from "./types";
 
-export async function getBillingStatus(env: Env, userId: string, now = Date.now()): Promise<BillingStatusDto> {
+export async function getBillingStatus(
+  env: Env,
+  userId: string,
+  now = Date.now(),
+  options: { adminOverride?: boolean } = {},
+): Promise<BillingStatusDto> {
   const active = await getActiveSubscriptionForUser(env, userId, now);
   const latest = active ?? await getLatestSubscriptionForUser(env, userId);
-  const tier: BillingTier = active ? "pro" : "free";
+  const tier: BillingTier = options.adminOverride || active ? "pro" : "free";
 
   return {
     entitlements: entitlementsForTier(tier),
