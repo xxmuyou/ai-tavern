@@ -52,8 +52,21 @@ const VALID_EMOTIONS: ReadonlySet<string> = new Set([
 ]);
 
 const SIGNAL_SYSTEM_PROMPT =
-  "You score a single roleplay exchange. Given the user's message, the companion's reply, and a short narrative summary of the relationship, output JSON describing how this exchange should shift each of the 7 relationship dimensions (each in -3..+3) and the companion's current emotion. " +
-  "Positive shift = +1..+3. No shift = 0. Hostile / cold reactions go to hostility/tension/distance. Be conservative — most exchanges move dimensions by 0 or ±1; reserve ±2/±3 for clearly emotional turns.";
+  "You score a single roleplay exchange. Given the user's message, the companion's reply, and a short narrative summary of the relationship, output a single JSON object — no prose, no markdown — with this exact shape:\n" +
+  "{\n" +
+  "  \"signals\": {\n" +
+  "    \"closeness\": integer -3..3,\n" +
+  "    \"trust\": integer -3..3,\n" +
+  "    \"romance\": integer -3..3,\n" +
+  "    \"friendship\": integer -3..3,\n" +
+  "    \"hostility\": integer -3..3,\n" +
+  "    \"tension\": integer -3..3,\n" +
+  "    \"distance\": integer -3..3\n" +
+  "  },\n" +
+  "  \"emotion\": one of \"warm\" | \"neutral\" | \"guarded\" | \"playful\" | \"tense\" | \"annoyed\"\n" +
+  "}\n" +
+  "All seven signal keys are required (use 0 when nothing changed). The emotion MUST be exactly one of the six lowercase enum values above — do not invent new labels (no \"angry\", \"happy\", \"frustrated\", etc.).\n" +
+  "Scoring guidance: positive shifts = +1..+3, no shift = 0, negative = -1..-3. Hostile or cold reactions feed hostility/tension/distance. Be conservative on dimensions — most exchanges move them by 0 or ±1; reserve ±2/±3 for clearly emotional turns. Pick the emotion that best matches the companion's reply in this turn: warm for affectionate/supportive, playful for teasing/flirtatious, guarded for cautious/withdrawn, tense for anxious/conflicted, annoyed for irritated/hostile, neutral only when none clearly fits.";
 
 export async function extractSignals(
   env: Env,
