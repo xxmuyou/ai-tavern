@@ -60,9 +60,10 @@ export default function ChatScreen() {
 }
 
 function ChatScreenInner() {
-  const params = useLocalSearchParams<{ companionId?: string; sceneId?: string }>();
+  const params = useLocalSearchParams<{ companionId?: string; sceneArt?: string; sceneId?: string }>();
   const companionId = typeof params.companionId === 'string' ? params.companionId : '';
   const sceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
+  const sceneArt = typeof params.sceneArt === 'string' && params.sceneArt.length > 0 ? params.sceneArt : null;
   const router = useRouter();
   const { pushError } = useErrorBanner();
 
@@ -295,6 +296,7 @@ function ChatScreenInner() {
         artUrl={companion.art_url}
         emotion={currentEmotion}
         name={companion.name}
+        sceneArt={sceneArt}
       />
 
       <KeyboardAvoidingView

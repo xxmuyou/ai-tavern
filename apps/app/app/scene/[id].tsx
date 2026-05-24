@@ -51,7 +51,11 @@ export default function SceneDetailScreen() {
   const companions = data.companions_present;
 
   function openChat(companionId: string) {
-    router.push(`/chat/${encodeURIComponent(companionId)}?sceneId=${encodeURIComponent(scene.id)}` as Href);
+    const params = new URLSearchParams({ sceneId: scene.id });
+    if (scene.art_url) {
+      params.set('sceneArt', scene.art_url);
+    }
+    router.push(`/chat/${encodeURIComponent(companionId)}?${params.toString()}` as Href);
   }
 
   return (
@@ -60,7 +64,7 @@ export default function SceneDetailScreen() {
       <ScrollView className="flex-1">
         <View className="mx-auto w-full max-w-4xl gap-5 px-4 py-6">
           <View className="overflow-hidden rounded-lg border border-app-line bg-app-card">
-            <View className="h-64 bg-app-primarySoft">
+            <View className="aspect-video w-full bg-app-primarySoft">
               {imageSource ? (
                 <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
               ) : (

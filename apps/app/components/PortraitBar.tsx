@@ -11,7 +11,11 @@ type PortraitBarProps = {
   artUrl?: string | null;
   emotion: ChatEmotion | null;
   name: string;
+  sceneArt?: string | null;
 };
+
+const CONTAINER_HEIGHT = 280;
+const PORTRAIT_ASPECT = 1023 / 1535;
 
 const EMOTION_LABEL: Record<ChatEmotion, string> = {
   annoyed: 'annoyed',
@@ -45,30 +49,64 @@ function resolvePortrait(artEmotions: ArtEmotions, artUrl: string | null | undef
   return mediaSource(raw);
 }
 
-export function PortraitBar({ artEmotions, artUrl, emotion, name }: PortraitBarProps) {
+export function PortraitBar({ artEmotions, artUrl, emotion, name, sceneArt }: PortraitBarProps) {
   const activeEmotion: ChatEmotion = emotion ?? 'neutral';
-  const portraitUrl = resolvePortrait(artEmotions, artUrl, activeEmotion);
+  const portraitSource = resolvePortrait(artEmotions, artUrl, activeEmotion);
+  const sceneSource = mediaSource(sceneArt);
   const tint = EMOTION_TINT[activeEmotion];
   const initial = name.trim().charAt(0).toUpperCase() || '?';
 
   return (
     <View
-      className="border-b border-app-line bg-app-card"
-      style={{ height: 180, overflow: 'hidden' }}
+      className="border-b border-app-line"
+      style={{ height: CONTAINER_HEIGHT, overflow: 'hidden', backgroundColor: tint }}
     >
-      {portraitUrl ? (
+      {sceneSource ? (
         <Image
-          accessibilityLabel={`${name}, ${EMOTION_LABEL[activeEmotion]}`}
+          accessibilityIgnoresInvertColors
+          source={sceneSource}
           resizeMode="cover"
-          source={portraitUrl}
-          style={{ height: '100%', width: '100%' }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
-      ) : (
-        <Placeholder activeEmotion={activeEmotion} initial={initial} tint={tint} />
-      )}
+      ) : null}
 
       <View
-        className="absolute bottom-2 right-3 flex-row items-center rounded-full bg-black/40 px-3 py-1"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+        }}
+      >
+        {portraitSource ? (
+          <Image
+            accessibilityLabel={`${name}, ${EMOTION_LABEL[activeEmotion]}`}
+            source={portraitSource}
+            resizeMode="contain"
+            style={{ height: '100%', aspectRatio: PORTRAIT_ASPECT }}
+          />
+        ) : (
+          <Placeholder activeEmotion={activeEmotion} initial={initial} />
+        )}
+      </View>
+
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 56,
+          backgroundColor: 'rgba(0,0,0,0.45)',
+        }}
+      />
+
+      <View
+        className="absolute bottom-2 right-3 flex-row items-center rounded-full bg-black/50 px-3 py-1"
         pointerEvents="none"
       >
         <Text className="text-sm font-medium text-white">{name}</Text>
@@ -81,25 +119,22 @@ export function PortraitBar({ artEmotions, artUrl, emotion, name }: PortraitBarP
 function Placeholder({
   activeEmotion,
   initial,
-  tint,
 }: {
   activeEmotion: ChatEmotion;
   initial: string;
-  tint: string;
 }) {
   return (
     <View
       style={{
         alignItems: 'center',
-        backgroundColor: tint,
-        flex: 1,
         justifyContent: 'center',
+        paddingBottom: 64,
       }}
     >
       <View
         style={{
           alignItems: 'center',
-          backgroundColor: 'rgba(255,255,255,0.18)',
+          backgroundColor: 'rgba(255,255,255,0.25)',
           borderRadius: 56,
           height: 112,
           justifyContent: 'center',

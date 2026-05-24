@@ -15,7 +15,7 @@ export function SceneCard({ onPress, scene }: SceneCardProps) {
 
   return (
     <Pressable accessibilityRole="button" onPress={onPress} className="overflow-hidden rounded-lg border border-app-line bg-app-card">
-      <View className="h-48 bg-app-primarySoft">
+      <View className="aspect-video w-full bg-app-primarySoft">
         {imageSource ? (
           <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
         ) : (

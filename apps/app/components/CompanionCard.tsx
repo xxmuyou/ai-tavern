@@ -17,9 +17,9 @@ export function CompanionCard({ artUrl, level, name, onPress, opener, role }: Co
   const imageSource = mediaSource(artUrl);
   const content = (
     <>
-      <View className="aspect-square w-full overflow-hidden rounded-lg bg-app-primarySoft">
+      <View className="aspect-[3/4] w-full items-center justify-start overflow-hidden rounded-lg bg-app-primarySoft">
         {imageSource ? (
-          <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
+          <Image source={imageSource} resizeMode="contain" className="h-full w-full" />
         ) : (
           <View className="h-full w-full items-center justify-center bg-app-primarySoft">
             <Text className="text-4xl font-semibold text-app-primary">{name.slice(0, 1).toUpperCase()}</Text>
