@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Linking, Text, TextInput, View } from 'react-native';
 
 import { API_BASE_URL } from '@/api/companion-client';
 import { Button } from '@/components/Button';
@@ -21,6 +21,7 @@ export default function LoginScreen() {
   const [devEmail, setDevEmail] = useState('dev@example.com');
   const [isSendingLink, setIsSendingLink] = useState(false);
   const [isSigningInDev, setIsSigningInDev] = useState(false);
+  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   if (isLoading) {
@@ -40,9 +41,15 @@ export default function LoginScreen() {
 
     setIsSendingLink(true);
     setNotice(null);
+    setDevVerifyUrl(null);
     try {
-      await sendMagicLink(trimmedEmail);
-      setNotice(`A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
+      const response = await sendMagicLink(trimmedEmail);
+      if (response.verify_url) {
+        setDevVerifyUrl(response.verify_url);
+        setNotice(`Dev sign-in link is ready for ${trimmedEmail}. Open it within 15 minutes.`);
+      } else {
+        setNotice(`A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
+      }
     } catch {
       pushError('Could not send the sign-in link. Please try again later.');
     } finally {
@@ -88,6 +95,9 @@ export default function LoginScreen() {
           />
           <Button isLoading={isSendingLink} label="Send sign-in link" onPress={handleMagicLink} />
           {notice ? <Text className="text-sm leading-5 text-app-primary">{notice}</Text> : null}
+          {devVerifyUrl ? (
+            <Button label="Open dev sign-in link" onPress={() => void Linking.openURL(devVerifyUrl)} variant="secondary" />
+          ) : null}
         </View>
 
         <View className="mt-5">

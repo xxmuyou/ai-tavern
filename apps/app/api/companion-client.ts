@@ -32,6 +32,12 @@ export type AuthSession = {
   };
 };
 
+export type MagicLinkResponse = {
+  ok: boolean;
+  expires_in: number;
+  verify_url?: string;
+};
+
 export function objectUrl(key: string): string {
   return `${API_BASE_URL}/objects/${encodeURIComponent(key)}`;
 }
@@ -131,8 +137,8 @@ export function startGoogleLogin(redirectPath?: string): void {
 export async function sendMagicLink(
   email: string,
   redirect?: string,
-): Promise<{ ok: boolean; expires_in: number; verify_url?: string }> {
-  return requestJson<{ ok: boolean; expires_in: number; verify_url?: string }>(
+): Promise<MagicLinkResponse> {
+  return requestJson<MagicLinkResponse>(
     '/auth/email/send-link',
     {
       body: JSON.stringify({ email, redirect }),

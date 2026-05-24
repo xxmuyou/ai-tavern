@@ -5,9 +5,9 @@ import { Image, ScrollView, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
-import { CompanionCard } from '@/components/CompanionCard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { SceneCompanionCard } from '@/components/SceneCompanionCard';
 import { TopBar } from '@/components/TopBar';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -95,7 +95,7 @@ export default function SceneDetailScreen() {
                 <View className="flex-row gap-3 pr-4">
                   {companions.map((companion) => (
                     <View key={companion.id} className="w-52">
-                      <CompanionCard
+                      <SceneCompanionCard
                         artUrl={companion.art_url}
                         name={companion.name}
                         opener={companion.opener}

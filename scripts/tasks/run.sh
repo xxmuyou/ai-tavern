@@ -117,7 +117,7 @@ task_deploy_web_dev() {
     task_app_export_web_dev
     run_in "." npx wrangler pages deploy apps/app/dist \
         --project-name xtbit-apps \
-        --branch dev \
+        --branch prod \
         --commit-dirty=true \
         --commit-hash local-dev \
         --commit-message "dev web deploy"

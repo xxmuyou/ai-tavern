@@ -329,6 +329,29 @@ describe("handlePostMessage", () => {
     expect(state.relationshipApplies).toBeGreaterThanOrEqual(1);
   });
 
+  it("forces annoyed hostile signals for direct abuse even when the model scores warm", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({ companion: COMPANION });
+    vi.stubGlobal("fetch", buildStreamFetch());
+
+    const response = await handlePostMessage(buildPost({ text: "傻逼，我弄死你" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+
+    const body = await response.text();
+    expect(body).toMatch(/event: emotion\ndata: {"value":"annoyed"}/);
+    expect(body).toContain(`"hostility":3`);
+    expect(body).toContain(`"tension":2`);
+
+    const companionMessage = state.messages.find((msg) => msg.role === "companion");
+    expect(companionMessage?.emotion).toBe("annoyed");
+    expect(JSON.parse(companionMessage?.signals ?? "{}")).toMatchObject({
+      distance: 2,
+      hostility: 3,
+      tension: 2,
+      trust: -2,
+    });
+  });
+
   it("returns 400 when text is missing", async () => {
     pendingSignal(false);
     const { env } = createEnv({ companion: COMPANION });

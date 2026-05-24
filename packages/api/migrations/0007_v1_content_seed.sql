@@ -118,7 +118,7 @@ VALUES
 -- companions (official)
 -- ============================================================
 INSERT OR REPLACE INTO companions
-  (id, source, created_by, is_active, name, appearance, personality, background, speech_style, relationship_role, preferred_scenes, art_url, gender, initial_dims, created_at, updated_at)
+  (id, source, created_by, is_active, name, appearance, personality, background, speech_style, relationship_role, preferred_scenes, art_url, initial_dims, created_at, updated_at)
 VALUES
   ('maya', 'official', NULL, 1,
    'Maya Chen',
@@ -129,7 +129,6 @@ VALUES
    'crush',
    '["pier_coffee_shop","brookside_bookshop"]',
    'portraits/maya/neutral.webp',
-   'female',
    '{"closeness":5,"trust":5,"romance":10,"friendship":5,"hostility":0,"tension":5,"distance":20}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -142,7 +141,6 @@ VALUES
    'colleague',
    '["sky_office","twin_pines_park"]',
    'portraits/ryan/neutral.webp',
-   'male',
    '{"closeness":10,"trust":10,"romance":0,"friendship":10,"hostility":0,"tension":0,"distance":15}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -155,7 +153,6 @@ VALUES
    'stranger',
    '["moon_bar","harbor_market"]',
    'portraits/lila/neutral.webp',
-   'female',
    '{"closeness":0,"trust":0,"romance":5,"friendship":0,"hostility":0,"tension":10,"distance":40}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -168,7 +165,6 @@ VALUES
    'friend',
    '["iron_forge_gym","twin_pines_park"]',
    NULL,
-   'male',
    '{"closeness":10,"trust":10,"romance":0,"friendship":15,"hostility":0,"tension":0,"distance":10}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -181,7 +177,6 @@ VALUES
    'crush',
    '["skyline_rooftop","brookside_bookshop"]',
    'portraits/sora/neutral.webp',
-   'female',
    '{"closeness":0,"trust":5,"romance":10,"friendship":5,"hostility":0,"tension":5,"distance":30}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -194,7 +189,6 @@ VALUES
    'friend',
    '["crescent_library","skyline_rooftop"]',
    NULL,
-   'male',
    '{"closeness":5,"trust":10,"romance":0,"friendship":10,"hostility":0,"tension":5,"distance":20}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -207,7 +201,6 @@ VALUES
    'colleague',
    '["sky_office","brookside_bookshop","crescent_library"]',
    'portraits/aiko/neutral.webp',
-   'female',
    '{"closeness":5,"trust":5,"romance":5,"friendship":5,"hostility":0,"tension":5,"distance":25}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -220,7 +213,6 @@ VALUES
    'stranger',
    '["harbor_market","moon_bar"]',
    NULL,
-   'male',
    '{"closeness":0,"trust":0,"romance":10,"friendship":0,"hostility":0,"tension":5,"distance":40}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -233,7 +225,6 @@ VALUES
    'neighbor',
    '["sunrise_apartment","twin_pines_park"]',
    NULL,
-   'female',
    '{"closeness":15,"trust":15,"romance":0,"friendship":15,"hostility":0,"tension":0,"distance":5}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -246,6 +237,5 @@ VALUES
    'crush',
    '["pier_coffee_shop","brookside_bookshop"]',
    NULL,
-   'male',
    '{"closeness":5,"trust":10,"romance":10,"friendship":10,"hostility":0,"tension":0,"distance":15}',
    unixepoch() * 1000, unixepoch() * 1000);

@@ -1,8 +1,8 @@
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { mediaUrl } from '@/api/companion-client';
+import { mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { EmptyState } from '@/components/EmptyState';
@@ -35,7 +35,7 @@ export default function CompanionDetailScreen() {
     );
   }
 
-  const imageUrl = mediaUrl(data.art_url);
+  const imageSource = mediaSource(data.art_url);
 
   return (
     <View className="flex-1 bg-app-bg">
@@ -44,9 +44,18 @@ export default function CompanionDetailScreen() {
         <View className="mx-auto w-full max-w-4xl gap-5 px-4 py-6">
           <View className="rounded-lg border border-app-line bg-app-card p-5">
             <View className="flex-row gap-4">
-              <View className="h-28 w-28 overflow-hidden rounded-lg bg-app-primarySoft">
-                {imageUrl ? (
-                  <Image source={{ uri: imageUrl }} resizeMode="cover" className="h-full w-full" />
+              <View
+                className="h-28 w-28 items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft"
+                style={styles.portraitFrame}
+              >
+                <View pointerEvents="none" style={styles.portraitFloor} />
+                {imageSource ? (
+                  <Image
+                    accessibilityLabel={data.name}
+                    resizeMode="contain"
+                    source={imageSource}
+                    style={styles.portraitImage}
+                  />
                 ) : (
                   <View className="h-full w-full items-center justify-center">
                     <Text className="text-5xl font-semibold text-app-primary">{data.name.slice(0, 1).toUpperCase()}</Text>
@@ -111,3 +120,22 @@ function TextBlock({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  portraitFloor: {
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    bottom: 0,
+    height: 34,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  portraitFrame: {
+    backgroundColor: '#EEF1F4',
+  },
+  portraitImage: {
+    height: '112%',
+    transform: [{ translateY: 9 }],
+    width: '112%',
+  },
+});

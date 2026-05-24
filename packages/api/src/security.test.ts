@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { enforceRateLimit, isRequestBodyTooLarge, resolveAllowedCorsOrigin } from "./security";
+import { enforceRateLimit, isRequestBodyTooLarge, resolveAllowedCorsOrigin, withCors } from "./security";
 
 describe("api security helpers", () => {
   it("allows only configured CORS origins", () => {
@@ -12,6 +12,19 @@ describe("api security helpers", () => {
     expect(resolveAllowedCorsOrigin(new Request("https://api.example.com", {
       headers: { origin: "https://evil.example.com" },
     }), env)).toBeNull();
+  });
+
+  it("allows browser DELETE preflight for mutation endpoints", () => {
+    const env = { ALLOWED_ORIGINS: "http://localhost:8081" } as unknown as Env;
+    const request = new Request("https://api.example.com/chat/ryan/history", {
+      headers: { origin: "http://localhost:8081" },
+      method: "OPTIONS",
+    });
+
+    const response = withCors(request, env, new Response(null, { status: 204 }));
+
+    expect(response.headers.get("access-control-allow-methods")).toContain("DELETE");
+    expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:8081");
   });
 
   it("checks mutation request body size from content-length", () => {

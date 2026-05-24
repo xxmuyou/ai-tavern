@@ -10,13 +10,14 @@ import {
   startGoogleLogin,
   writeStoredAuthSession,
   type AuthSession,
+  type MagicLinkResponse,
 } from '@/api/companion-client';
 
 type SessionContextValue = {
   acceptSessionFragment: (hash: string) => AuthSession | null;
   error: string | null;
   isLoading: boolean;
-  sendMagicLink: (email: string) => Promise<void>;
+  sendMagicLink: (email: string) => Promise<MagicLinkResponse>;
   session: AuthSession | null;
   signInDev: (email: string) => Promise<AuthSession>;
   signInGoogle: () => void;
@@ -75,7 +76,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const sendMagicLink = useCallback(async (email: string) => {
     setError(null);
-    await sendMagicLinkRequest(email, '/auth/success');
+    return sendMagicLinkRequest(email, '/auth/success');
   }, []);
 
   const signOut = useCallback(async () => {

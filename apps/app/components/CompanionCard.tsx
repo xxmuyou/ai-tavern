@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
 import { formatLevel } from '@/utils/format';
@@ -17,9 +17,18 @@ export function CompanionCard({ artUrl, level, name, onPress, opener, role }: Co
   const imageSource = mediaSource(artUrl);
   const content = (
     <>
-      <View className="aspect-[3/4] w-full items-center justify-start overflow-hidden rounded-lg bg-app-primarySoft">
+      <View
+        className="aspect-[4/5] w-full items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft"
+        style={styles.portraitFrame}
+      >
+        <View pointerEvents="none" style={styles.portraitFloor} />
         {imageSource ? (
-          <Image source={imageSource} resizeMode="contain" className="h-full w-full" />
+          <Image
+            accessibilityLabel={name}
+            resizeMode="contain"
+            source={imageSource}
+            style={styles.portraitImage}
+          />
         ) : (
           <View className="h-full w-full items-center justify-center bg-app-primarySoft">
             <Text className="text-4xl font-semibold text-app-primary">{name.slice(0, 1).toUpperCase()}</Text>
@@ -54,3 +63,22 @@ export function CompanionCard({ artUrl, level, name, onPress, opener, role }: Co
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  portraitFloor: {
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    bottom: 0,
+    height: 58,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  portraitFrame: {
+    backgroundColor: '#EEF1F4',
+  },
+  portraitImage: {
+    height: '108%',
+    transform: [{ translateY: 10 }],
+    width: '108%',
+  },
+});

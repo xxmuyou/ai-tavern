@@ -42,7 +42,7 @@ export function withCors(request: Request, env: Env, response: Response): Respon
     headers.set("access-control-allow-credentials", "true");
   }
 
-  headers.set("access-control-allow-methods", "GET,POST,PUT,PATCH,OPTIONS");
+  headers.set("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   headers.set("access-control-allow-headers", "content-type,authorization,stripe-signature");
   headers.append("vary", "origin");
 

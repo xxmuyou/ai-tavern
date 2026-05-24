@@ -83,6 +83,9 @@ function buildSystemPrompt(input: ChatPromptInput): string {
   lines.push("Stay strictly in character. Output prose only — no JSON, no meta-commentary.");
   lines.push("Keep replies under 220 words unless the user explicitly invites length.");
   lines.push("Do not break the fourth wall or reference being an AI.");
+  lines.push(
+    "If the user insults, degrades, threatens, or tries to physically attack you, react with clear self-respect: become irritated or cold, set a boundary, withdraw, refuse to continue the bit, or demand an apology. Do not reward abuse with playful banter.",
+  );
   lines.push("");
   lines.push("# Output format (CRITICAL — read carefully)");
   lines.push(

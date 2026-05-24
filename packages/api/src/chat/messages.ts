@@ -16,6 +16,7 @@ import {
 } from "./loaders";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPrompt } from "./prompt";
+import { applyHostilityOverride, assessHostileInput } from "./hostility";
 import {
   checkQuota,
   checkRateLimit,
@@ -224,31 +225,33 @@ async function runChat(args: RunChatArgs): Promise<void> {
     userId: user.id,
     userText,
   });
+  const hostilityAssessment = assessHostileInput(userText);
+  const finalExtract = applyHostilityOverride(extract, hostilityAssessment);
 
-  if (extract.ok && companionMessageId) {
+  if (finalExtract.ok && companionMessageId) {
     try {
       await env.DB.prepare(
         `UPDATE messages SET signals = ?, emotion = ? WHERE id = ?`,
       )
-        .bind(JSON.stringify(extract.signals), extract.emotion, companionMessageId)
+        .bind(JSON.stringify(finalExtract.signals), finalExtract.emotion, companionMessageId)
         .run();
-      await applySignals(env, user.id, companionId, extract.signals, now);
-      conflictSignals = extract.signals;
+      await applySignals(env, user.id, companionId, finalExtract.signals, now);
+      conflictSignals = finalExtract.signals;
     } catch (err) {
       // Persistence of signals failed but reply is already saved; degrade to warning.
-      extract.ok = false;
+      finalExtract.ok = false;
     }
   }
 
-  sse.writeEvent("signals", extract.signals);
-  sse.writeEvent("emotion", { value: extract.emotion satisfies Emotion });
+  sse.writeEvent("signals", finalExtract.signals);
+  sse.writeEvent("emotion", { value: finalExtract.emotion satisfies Emotion });
   sse.writeEvent("done", {
     message_id: companionMessageId,
     usage: {
       input_tokens: call1Usage.input_tokens,
       output_tokens: call1Usage.output_tokens,
     },
-    warning: extract.ok ? null : "signal_extract_failed",
+    warning: finalExtract.ok ? null : "signal_extract_failed",
   });
   sse.close();
 
@@ -266,7 +269,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
     );
   }
 
-  const totalCost = extract.cost_usd; // call 1 cost is logged inside llmStream.
+  const totalCost = finalExtract.cost_usd; // call 1 cost is logged inside llmStream.
   void recordUsage(env, user.id, formatDateUtc(now), 1, totalCost);
   void maybeEnqueueSummary(env, thread.id, thread.message_count + 2);
 }
