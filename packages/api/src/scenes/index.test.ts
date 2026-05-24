@@ -22,6 +22,7 @@ type CompanionFixture = {
   is_active?: number;
   gender?: "male" | "female" | null;
   source?: "official" | "user";
+  art_url?: string | null;
 };
 
 type RelationshipFixture = {
@@ -120,7 +121,7 @@ describe("scenes module", () => {
     expect(cafe?.unlock_hint).toBeNull();
     expect(cafe?.tags).toEqual(["cafe"]);
     expect(cafe?.potential_companions).toEqual([
-      { id: "maya", level: "Friend", name: "Maya" },
+      { art_url: null, id: "maya", level: "Friend", name: "Maya" },
     ]);
 
     const rooftop = body.scenes.find((s) => s.id === "rooftop");
@@ -205,7 +206,7 @@ describe("scenes module", () => {
     expect(response?.status).toBe(200);
     const body = (await response?.json()) as {
       scene: { id: string; tags: string[]; art_url: string | null };
-      companions_present: Array<{ id: string; name: string; opener: string }>;
+      companions_present: Array<{ id: string; name: string; opener: string; art_url: string | null }>;
       event: null;
     };
 
@@ -359,6 +360,7 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
       .map((c) => {
         const rel = fixtures.relationships.find((r) => r.user_id === userId && r.companion_id === c.id);
         return {
+          art_url: c.art_url ?? null,
           gender: c.gender ?? null,
           id: c.id,
           level_label: rel?.level_label ?? null,

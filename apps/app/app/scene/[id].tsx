@@ -96,6 +96,7 @@ export default function SceneDetailScreen() {
                   {companions.map((companion) => (
                     <View key={companion.id} className="w-52">
                       <CompanionCard
+                        artUrl={companion.art_url}
                         name={companion.name}
                         opener={companion.opener}
                         onPress={() => {

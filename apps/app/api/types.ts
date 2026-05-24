@@ -93,6 +93,7 @@ export type SceneUnlockHint = {
 };
 
 export type SceneCompanionPreview = {
+  art_url: string | null;
   id: string;
   level: string | null;
   name: string;
@@ -122,6 +123,7 @@ export type SceneEntered = {
 };
 
 export type SceneCompanionPresent = {
+  art_url: string | null;
   id: string;
   name: string;
   opener: string;

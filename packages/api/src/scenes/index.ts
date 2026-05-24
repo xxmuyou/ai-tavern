@@ -31,6 +31,7 @@ type CompanionPreviewRow = {
   level_label: string | null;
   gender: string | null;
   source: "official" | "user";
+  art_url: string | null;
 };
 
 type ScenesListItem = {
@@ -50,12 +51,14 @@ type CompanionPreviewItem = {
   level: string | null;
   gender: Gender | null;
   source: "official" | "user";
+  art_url: string | null;
 };
 
 type CompanionPreviewPublic = {
   id: string;
   name: string;
   level: string | null;
+  art_url: string | null;
 };
 
 type EnterSceneResponse = {
@@ -70,6 +73,7 @@ type EnterSceneResponse = {
     id: string;
     name: string;
     opener: string;
+    art_url: string | null;
   }>;
   event: EventResponseItem | null;
 };
@@ -163,7 +167,8 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
   const preference = await loadRomancePreference(env, user.id);
   const present = pickPresentCompanions(companions, preference);
   const now = Date.now();
-  const companionsPresent = present.map(({ id, name }) => ({
+  const companionsPresent = present.map(({ id, name, art_url }) => ({
+    art_url,
     id,
     name,
     opener: pickOpener({
@@ -223,6 +228,7 @@ async function loadPotentialCompanions(
             c.name        AS name,
             c.gender      AS gender,
             c.source      AS source,
+            c.art_url     AS art_url,
             r.level_label AS level_label
      FROM companions c
      LEFT JOIN relationships r
@@ -233,6 +239,7 @@ async function loadPotentialCompanions(
     .all<CompanionPreviewRow>();
 
   return (results ?? []).map((row) => ({
+    art_url: row.art_url,
     gender: normalizeGender(row.gender),
     id: row.id,
     level: row.level_label,
@@ -280,7 +287,7 @@ function normalizeGender(raw: string | null | undefined): Gender | null {
 }
 
 function toPublicPreview(c: CompanionPreviewItem): CompanionPreviewPublic {
-  return { id: c.id, level: c.level, name: c.name };
+  return { art_url: c.art_url, id: c.id, level: c.level, name: c.name };
 }
 
 function normalizePreference(raw: string | null | undefined): RomancePreference {
