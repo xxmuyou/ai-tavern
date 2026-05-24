@@ -1,9 +1,11 @@
-import { jsonResponse } from "../http";
+import { jsonResponse, readJson } from "../http";
 import { getBillingStatus } from "../billing/entitlements";
 import { loadUserWithProviders } from "./repository";
 import { revokeSession, verifyAuthToken, verifyRequestAuth } from "./session";
 import { authError } from "./types";
 import type { AuthEnv, AuthPayload } from "./types";
+
+const KNOWN_PREFERENCES = new Set(["male", "female", "any"]);
 
 export async function handleMe(request: Request, env: AuthEnv): Promise<Response> {
   if (request.method !== "GET") {
@@ -33,6 +35,7 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
     email: userWithProviders.email,
     email_verified: userWithProviders.email_verified === 1,
     display_name: userWithProviders.display_name,
+    romance_preference: userWithProviders.romance_preference,
     linked_providers: userWithProviders.linked_providers,
     subscription: billing.subscription,
     quota: {
@@ -41,6 +44,39 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
       subscriber_soft_threshold_exceeded: billing.usage.subscriber_soft_threshold_exceeded,
     },
   });
+}
+
+export async function handleMePreferences(request: Request, env: AuthEnv): Promise<Response> {
+  if (request.method !== "PATCH") {
+    return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+  }
+
+  let payload: AuthPayload | null;
+  try {
+    payload = await verifyRequestAuth(env, request);
+  } catch (err) {
+    if (err instanceof Response) return err;
+    throw err;
+  }
+  if (!payload) {
+    return authError("auth_required", 401);
+  }
+
+  const body = await readJson<unknown>(request);
+  if (!body || typeof body !== "object") {
+    return jsonResponse({ error: "invalid_body" }, { status: 400 });
+  }
+
+  const raw = (body as Record<string, unknown>).romance_preference;
+  if (typeof raw !== "string" || !KNOWN_PREFERENCES.has(raw)) {
+    return jsonResponse({ error: "invalid_romance_preference" }, { status: 400 });
+  }
+
+  await env.DB.prepare(`UPDATE users SET romance_preference = ? WHERE id = ?`)
+    .bind(raw, payload.sub)
+    .run();
+
+  return jsonResponse({ romance_preference: raw });
 }
 
 export async function handleLogout(request: Request, env: AuthEnv): Promise<Response> {

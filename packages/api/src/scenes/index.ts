@@ -1,4 +1,10 @@
 import { requireAuthUser } from "../auth";
+import {
+  sampleCompanionsByPreference,
+  type Gender,
+  type RomancePreference,
+  type WeightedCandidate,
+} from "../companions/gender-weight";
 import { createSceneTriggeredEvent } from "../events/create";
 import { evaluateTriggersForScene } from "../events/engine";
 import { pickOpener } from "../events/openers";
@@ -23,6 +29,8 @@ type CompanionPreviewRow = {
   id: string;
   name: string;
   level_label: string | null;
+  gender: string | null;
+  source: "official" | "user";
 };
 
 type ScenesListItem = {
@@ -33,10 +41,18 @@ type ScenesListItem = {
   art_url: string | null;
   unlocked: boolean;
   unlock_hint: string | null;
-  potential_companions: CompanionPreviewItem[];
+  potential_companions: CompanionPreviewPublic[];
 };
 
 type CompanionPreviewItem = {
+  id: string;
+  name: string;
+  level: string | null;
+  gender: Gender | null;
+  source: "official" | "user";
+};
+
+type CompanionPreviewPublic = {
   id: string;
   name: string;
   level: string | null;
@@ -98,6 +114,7 @@ async function listScenes(env: Env, user: UserRecord): Promise<Response> {
      ORDER BY display_order ASC, id ASC`,
   ).all<SceneRow>();
 
+  const preference = await loadRomancePreference(env, user.id);
   const items: ScenesListItem[] = [];
 
   for (const row of results ?? []) {
@@ -111,7 +128,7 @@ async function listScenes(env: Env, user: UserRecord): Promise<Response> {
       id: row.id,
       mood: row.mood,
       name: row.name,
-      potential_companions: companions,
+      potential_companions: sortByPreference(companions, preference).map(toPublicPreview),
       tags: parseStringArray(row.tags),
       unlock_hint: hint,
       unlocked,
@@ -143,8 +160,10 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
   }
 
   const companions = await loadPotentialCompanions(env, user.id, row.default_companions);
+  const preference = await loadRomancePreference(env, user.id);
+  const present = pickPresentCompanions(companions, preference);
   const now = Date.now();
-  const companionsPresent = companions.map(({ id, name }) => ({
+  const companionsPresent = present.map(({ id, name }) => ({
     id,
     name,
     opener: pickOpener({
@@ -161,7 +180,7 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
     env,
     user.id,
     { id: row.id, mood: row.mood, name: row.name, possible_events: row.possible_events },
-    companions,
+    present,
     now,
   );
   const event = candidate
@@ -202,6 +221,8 @@ async function loadPotentialCompanions(
   const { results } = await env.DB.prepare(
     `SELECT c.id          AS id,
             c.name        AS name,
+            c.gender      AS gender,
+            c.source      AS source,
             r.level_label AS level_label
      FROM companions c
      LEFT JOIN relationships r
@@ -212,10 +233,58 @@ async function loadPotentialCompanions(
     .all<CompanionPreviewRow>();
 
   return (results ?? []).map((row) => ({
+    gender: normalizeGender(row.gender),
     id: row.id,
     level: row.level_label,
     name: row.name,
+    source: row.source,
   }));
+}
+
+async function loadRomancePreference(env: Env, userId: string): Promise<RomancePreference> {
+  const row = await env.DB.prepare(
+    `SELECT romance_preference AS pref FROM users WHERE id = ?`,
+  )
+    .bind(userId)
+    .first<{ pref: string | null }>();
+  return normalizePreference(row?.pref);
+}
+
+function pickPresentCompanions(
+  candidates: CompanionPreviewItem[],
+  preference: RomancePreference,
+): CompanionPreviewItem[] {
+  if (candidates.length === 0) return [];
+  const weighted: WeightedCandidate<CompanionPreviewItem>[] = candidates.map((c) => ({
+    candidate: c,
+    gender: c.gender,
+    source: c.source,
+  }));
+  return sampleCompanionsByPreference(weighted, preference);
+}
+
+function sortByPreference(
+  candidates: CompanionPreviewItem[],
+  preference: RomancePreference,
+): CompanionPreviewItem[] {
+  if (preference === "any" || candidates.length <= 1) return candidates;
+  const rank = (c: CompanionPreviewItem): number => {
+    if (!c.gender) return 1;
+    return c.gender === preference ? 0 : 2;
+  };
+  return [...candidates].sort((a, b) => rank(a) - rank(b));
+}
+
+function normalizeGender(raw: string | null | undefined): Gender | null {
+  return raw === "male" || raw === "female" ? raw : null;
+}
+
+function toPublicPreview(c: CompanionPreviewItem): CompanionPreviewPublic {
+  return { id: c.id, level: c.level, name: c.name };
+}
+
+function normalizePreference(raw: string | null | undefined): RomancePreference {
+  return raw === "male" || raw === "female" ? raw : "any";
 }
 
 function parseStringArray(raw: string | null | undefined): string[] {

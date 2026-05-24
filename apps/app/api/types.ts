@@ -19,9 +19,14 @@ export type RelationshipSummary = {
 
 export type CompanionSource = 'official' | 'user';
 
+export type Gender = 'male' | 'female';
+
+export type RomancePreference = Gender | 'any';
+
 export type CompanionListItem = {
   art_url: string | null;
   current_level: string | null;
+  gender: Gender | null;
   id: string;
   last_interaction_at: number | null;
   name: string;
@@ -30,10 +35,20 @@ export type CompanionListItem = {
   source: CompanionSource;
 };
 
+export type ChatEmotionKey =
+  | 'warm'
+  | 'neutral'
+  | 'guarded'
+  | 'playful'
+  | 'tense'
+  | 'annoyed';
+
 export type CompanionDetail = {
   appearance: string | null;
+  art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
   art_url: string | null;
   background: string | null;
+  gender: Gender | null;
   id: string;
   name: string;
   personality: string | null;
@@ -47,6 +62,7 @@ export type CompanionDetail = {
 export type CompanionCreateInput = {
   appearance: string;
   background: string;
+  gender: Gender;
   name: string;
   personality: string;
   preferred_scenes?: string[];
@@ -185,6 +201,7 @@ export type MeResponse = {
   id: string;
   linked_providers: string[];
   quota: MeQuota;
+  romance_preference: RomancePreference;
   subscription: MeSubscription;
 };
 

@@ -83,6 +83,24 @@ function buildSystemPrompt(input: ChatPromptInput): string {
   lines.push("Stay strictly in character. Output prose only — no JSON, no meta-commentary.");
   lines.push("Keep replies under 220 words unless the user explicitly invites length.");
   lines.push("Do not break the fourth wall or reference being an AI.");
+  lines.push("");
+  lines.push("# Output format (CRITICAL — read carefully)");
+  lines.push(
+    "Every action, gesture, facial expression, scene description, or inner observation MUST be wrapped in <narration>...</narration> tags.",
+  );
+  lines.push("Plain text (outside any tag) is reserved for spoken dialogue ONLY.");
+  lines.push(
+    "DO NOT use markdown for actions: no *asterisks*, no _underscores_, no (parentheses). Use ONLY <narration> tags.",
+  );
+  lines.push(
+    "Correct: <narration>She leaned closer, voice low.</narration>You came back.<narration>A small smile played at her lips.</narration>",
+  );
+  lines.push(
+    "Incorrect: *She leaned closer.* You came back. *Smiles softly.*",
+  );
+  lines.push(
+    "Mix narration and dialogue freely. Do not nest tags. Do not output any other XML-like tags.",
+  );
 
   return lines.join("\n");
 }

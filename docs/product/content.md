@@ -110,7 +110,7 @@
 | `ryan` | Ryan Park | M | 28 | colleague | sky_office, twin_pines_park | 理性温柔的同事工程师 |
 | `lila` | Lila Marchetti | F | 30 | stranger | moon_bar, harbor_market | 冷艳神秘的调酒师 |
 | `ethan` | Ethan Williams | M | 27 | friend | iron_forge_gym, twin_pines_park | 阳光开朗的健身教练 |
-| `sora` | Sora Aizawa | NB | 24 | crush | skyline_rooftop, brookside_bookshop | 自由灵魂的独立音乐人 |
+| `sora` | Sora Aizawa | F | 24 | crush | skyline_rooftop, brookside_bookshop | 自由灵魂的独立音乐人 |
 | `marcus` | Marcus Reid | M | 32 | friend | crescent_library, skyline_rooftop | 沉静睿智的记者 |
 | `aiko` | Aiko Tanaka | F | 29 | colleague | sky_office, brookside_bookshop, crescent_library | 知性内敛的建筑师 |
 | `jordan` | Jordan Lopez | M | 26 | stranger | harbor_market, moon_bar | 浪荡不羁的街头摄影师 |
@@ -118,7 +118,9 @@
 | `theo` | Theo Nakamura | M | 28 | crush | pier_coffee_shop, brookside_bookshop | 温和文艺的咖啡师 |
 
 **关系定位分布：** crush ×4 / friend ×2 / colleague ×2 / stranger ×2 / neighbor ×1
-**性别分布：** 女 ×5 / 男 ×4 / 非二元 ×1
+**性别分布：** 女 ×5 / 男 ×5
+
+> 用户在「Me」页面可以设置恋爱偏好（女 / 男 / 不限）。该偏好仅影响场景中伴侣的出现频率：偏好性别 80%、非偏好 20%（`packages/api/src/companions/gender-weight.ts`）。选「不限」时不抽样、所有默认伴侣全部 present；用户自建的伴侣不参与抽样、始终出现；详见 [`spec-017-romance-preference.md`](../specs/spec-017-romance-preference.md) 及 [`gameplay.md`](./gameplay.md)。
 
 ### 3.1 Maya Chen
 - **Appearance：** Asian-American, slim build, dark shoulder-length hair often tucked behind one ear, prefers oversized cardigans and sneakers. Always carries a sketchbook.
@@ -149,9 +151,9 @@
 - **Initial dimensions：** closeness 10, trust 10, romance 0, friendship 15, hostility 0, tension 0, distance 10
 
 ### 3.5 Sora Aizawa
-- **Appearance：** Japanese, androgynous presentation, layered black-and-platinum hair, often in oversized vintage clothes, multiple rings.
-- **Personality：** Lives in the moment. Hates labels (including their own). Brutally honest, occasionally cryptic. Drawn to people who are honest back.
-- **Background：** Independent musician, plays small venues, releases music online. Crashes on friends' couches as often as their own apartment.
+- **Appearance：** Japanese, slender build, layered black-and-platinum hair just past the shoulders, often in oversized vintage clothes and multiple rings. Sharp eyeliner, no makeup beyond it.
+- **Personality：** Lives in the moment. Hates labels. Brutally honest, occasionally cryptic. Drawn to people who are honest back.
+- **Background：** Independent musician, plays small venues, releases music online. Crashes on friends' couches as often as her own apartment.
 - **Speech style：** Casual, fragmented, song-lyric quality. Drops poetry into conversation without flagging it.
 - **Initial dimensions：** closeness 0, trust 5, romance 10, friendship 5, hostility 0, tension 5, distance 30
 
@@ -269,7 +271,7 @@
 ## 8. 待最终敲定
 
 - [ ] 都市名 `Aurelia City` 还是其他
-- [ ] 是否调整角色性别比 / 关系定位分布
+- [x] 角色性别比定为 5 男 5 女；用户通过 `romance_preference` 调出现权重（spec-017）
 - [ ] 角色姓氏命名风格（v1 用国际混合姓 vs 锁定某文化）
 - [ ] 关系定位 `crush` 角色是否过多（4 个 vs 总 10 个）
 - [ ] 是否在 v1 加入"动物 companion"（如宠物 NPC）—— 我倾向不加

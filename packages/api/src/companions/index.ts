@@ -4,6 +4,7 @@ import { QUOTA_LIMITS } from "../billing/quota";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
+import type { Gender } from "./gender-weight";
 
 const MAX_FREE_USER_COMPANIONS = QUOTA_LIMITS.FREE_CUSTOM_COMPANIONS;
 const NAME_MAX = 80;
@@ -16,6 +17,7 @@ const KNOWN_RELATIONSHIP_ROLES: ReadonlySet<string> = new Set([
   "stranger",
   "family",
 ]);
+const KNOWN_GENDERS: ReadonlySet<Gender> = new Set(["male", "female"]);
 
 type CompanionRow = {
   id: string;
@@ -30,6 +32,8 @@ type CompanionRow = {
   relationship_role: string | null;
   preferred_scenes: string | null;
   art_url: string | null;
+  art_emotions: string | null;
+  gender: string | null;
   initial_dims: string | null;
   created_at: number;
   updated_at: number;
@@ -52,6 +56,7 @@ type CompanionListItem = {
   id: string;
   source: "official" | "user";
   name: string;
+  gender: Gender | null;
   relationship_role: string | null;
   art_url: string | null;
   preferred_scenes: string[];
@@ -135,7 +140,7 @@ async function listCompanions(env: Env, user: UserRecord, source: string): Promi
   const { results } = await env.DB.prepare(
     `SELECT c.id, c.source, c.created_by, c.is_active, c.name,
             c.appearance, c.personality, c.background, c.speech_style,
-            c.relationship_role, c.preferred_scenes, c.art_url,
+            c.relationship_role, c.preferred_scenes, c.art_url, c.gender,
             c.initial_dims, c.created_at, c.updated_at,
             r.level_label         AS level_label,
             r.last_interaction_at AS last_interaction_at
@@ -150,6 +155,7 @@ async function listCompanions(env: Env, user: UserRecord, source: string): Promi
   const items: CompanionListItem[] = (results ?? []).map((row) => ({
     art_url: row.art_url,
     current_level: row.level_label,
+    gender: normalizeGender(row.gender),
     id: row.id,
     last_interaction_at: row.last_interaction_at,
     name: row.name,
@@ -186,8 +192,10 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
 
   const body = {
     appearance: row.appearance,
+    art_emotions: parseEmotionArt(row.art_emotions),
     art_url: row.art_url,
     background: row.background,
+    gender: normalizeGender(row.gender),
     id: row.id,
     name: row.name,
     personality: row.personality,
@@ -227,8 +235,8 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
     `INSERT INTO companions
       (id, source, created_by, is_active, name, appearance, personality,
        background, speech_style, relationship_role, preferred_scenes,
-       art_url, initial_dims, created_at, updated_at)
-     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       art_url, gender, initial_dims, created_at, updated_at)
+     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   )
     .bind(
       id,
@@ -241,6 +249,7 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
       input.value.relationship_role ?? null,
       input.value.preferred_scenes ? JSON.stringify(input.value.preferred_scenes) : null,
       input.value.art_url ?? null,
+      input.value.gender,
       now,
       now,
     )
@@ -282,6 +291,7 @@ async function updateCompanion(
     appearance: patch.value.appearance ?? existing.appearance,
     art_url: patch.value.art_url ?? existing.art_url,
     background: patch.value.background ?? existing.background,
+    gender: patch.value.gender ?? existing.gender,
     name: patch.value.name ?? existing.name,
     personality: patch.value.personality ?? existing.personality,
     preferred_scenes:
@@ -296,7 +306,7 @@ async function updateCompanion(
     `UPDATE companions
      SET name = ?, appearance = ?, personality = ?, background = ?,
          speech_style = ?, relationship_role = ?, preferred_scenes = ?,
-         art_url = ?, updated_at = ?
+         art_url = ?, gender = ?, updated_at = ?
      WHERE id = ?`,
   )
     .bind(
@@ -308,6 +318,7 @@ async function updateCompanion(
       merged.relationship_role,
       merged.preferred_scenes,
       merged.art_url,
+      merged.gender,
       Date.now(),
       companionId,
     )
@@ -366,7 +377,7 @@ async function loadCompanion(env: Env, companionId: string): Promise<CompanionRo
   return env.DB.prepare(
     `SELECT id, source, created_by, is_active, name, appearance, personality,
             background, speech_style, relationship_role, preferred_scenes,
-            art_url, initial_dims, created_at, updated_at
+            art_url, art_emotions, gender, initial_dims, created_at, updated_at
      FROM companions
      WHERE id = ?`,
   )
@@ -401,9 +412,11 @@ async function countActiveUserCompanions(env: Env, userId: string): Promise<numb
 function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
   return {
     appearance: row.appearance,
+    art_emotions: parseEmotionArt(row.art_emotions),
     art_url: row.art_url,
     background: row.background,
     created_at: row.created_at,
+    gender: normalizeGender(row.gender),
     id: row.id,
     name: row.name,
     personality: row.personality,
@@ -415,10 +428,16 @@ function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
   };
 }
 
+function normalizeGender(raw: string | null | undefined): Gender | null {
+  if (raw === "male" || raw === "female") return raw;
+  return null;
+}
+
 type ParsedInput<T> = { value: T } | { error: true; response: Response };
 
 type CreateValue = {
   name: string;
+  gender: Gender;
   appearance?: string;
   personality?: string;
   background?: string;
@@ -438,11 +457,17 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
     return invalid("name_required");
   }
 
+  const gender = readGender(raw);
+  if (!gender) {
+    return invalid("gender_required");
+  }
+
   return {
     value: {
       appearance: readOptionalText(raw, "appearance"),
       art_url: readOptionalText(raw, "art_url", 2048),
       background: readOptionalText(raw, "background"),
+      gender,
       name,
       personality: readOptionalText(raw, "personality"),
       preferred_scenes: readOptionalStringArray(raw, "preferred_scenes"),
@@ -452,7 +477,7 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
   };
 }
 
-type UpdateValue = Partial<CreateValue>;
+type UpdateValue = Partial<Omit<CreateValue, "gender">> & { gender?: Gender };
 
 function parseUpdateInput(raw: unknown): ParsedInput<UpdateValue> {
   if (!isObject(raw)) {
@@ -480,8 +505,22 @@ function parseUpdateInput(raw: unknown): ParsedInput<UpdateValue> {
   if ("preferred_scenes" in raw) {
     value.preferred_scenes = readOptionalStringArray(raw, "preferred_scenes") ?? [];
   }
+  if ("gender" in raw) {
+    const gender = readGender(raw);
+    if (!gender) {
+      return invalid("invalid_gender");
+    }
+    value.gender = gender;
+  }
 
   return { value };
+}
+
+function readGender(obj: Record<string, unknown>): Gender | null {
+  const value = obj["gender"];
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return KNOWN_GENDERS.has(normalized as Gender) ? (normalized as Gender) : null;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -534,5 +573,31 @@ function parseStringArray(raw: string | null | undefined): string[] {
     return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string") : [];
   } catch {
     return [];
+  }
+}
+
+const KNOWN_EMOTIONS: ReadonlySet<string> = new Set([
+  "warm",
+  "neutral",
+  "guarded",
+  "playful",
+  "tense",
+  "annoyed",
+]);
+
+function parseEmotionArt(raw: string | null | undefined): Record<string, string> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (KNOWN_EMOTIONS.has(key) && typeof value === "string" && value.length > 0) {
+        out[key] = value;
+      }
+    }
+    return Object.keys(out).length > 0 ? out : null;
+  } catch {
+    return null;
   }
 }

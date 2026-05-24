@@ -1,6 +1,6 @@
 import { handleDevSession } from "./dev-session";
 import { handleSendLink, handleVerify } from "./email-link";
-import { handleLogout, handleMe } from "./me";
+import { handleLogout, handleMe, handleMePreferences } from "./me";
 import { handleOAuthCallback, handleOAuthStart } from "./oauth";
 import type { AuthEnv } from "./types";
 
@@ -27,6 +27,10 @@ export async function handleAuthRequest(
 
   if (pathname === "/auth/me") {
     return handleMe(request, env as AuthEnv);
+  }
+
+  if (pathname === "/auth/me/preferences") {
+    return handleMePreferences(request, env as AuthEnv);
   }
 
   if (pathname === "/auth/logout") {

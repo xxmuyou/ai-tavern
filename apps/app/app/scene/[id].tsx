@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { Image, ScrollView, Text, View } from 'react-native';
 
-import { mediaUrl } from '@/api/companion-client';
+import { mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { CompanionCard } from '@/components/CompanionCard';
 import { EmptyState } from '@/components/EmptyState';
@@ -47,7 +47,7 @@ export default function SceneDetailScreen() {
   }
 
   const scene = data.scene;
-  const imageUrl = mediaUrl(scene.art_url);
+  const imageSource = mediaSource(scene.art_url);
   const companions = data.companions_present;
 
   function openChat(companionId: string) {
@@ -61,8 +61,8 @@ export default function SceneDetailScreen() {
         <View className="mx-auto w-full max-w-4xl gap-5 px-4 py-6">
           <View className="overflow-hidden rounded-lg border border-app-line bg-app-card">
             <View className="h-64 bg-app-primarySoft">
-              {imageUrl ? (
-                <Image source={{ uri: imageUrl }} resizeMode="cover" className="h-full w-full" />
+              {imageSource ? (
+                <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
               ) : (
                 <View className="h-full w-full items-center justify-center bg-app-primarySoft">
                   <Text className="text-lg font-semibold text-app-primary">Scene artwork pending</Text>

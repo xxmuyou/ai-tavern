@@ -20,6 +20,8 @@ type CompanionFixture = {
   id: string;
   name: string;
   is_active?: number;
+  gender?: "male" | "female" | null;
+  source?: "official" | "user";
 };
 
 type RelationshipFixture = {
@@ -313,6 +315,10 @@ function queryFirst<T>(
   users: Map<string, { id: string; email: string }>,
 ): T | null {
   if (sql.includes("FROM users")) {
+    if (sql.includes("romance_preference") && sql.includes("WHERE id = ?")) {
+      // Scenes module reads the user's preference; tests default to 'any'.
+      return { pref: null } as unknown as T;
+    }
     if (sql.includes("WHERE email = ?")) {
       return (users.get(values[0] as string) ?? null) as T | null;
     }
@@ -352,7 +358,13 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
       .filter((c) => ids.includes(c.id) && (c.is_active ?? 1) === 1)
       .map((c) => {
         const rel = fixtures.relationships.find((r) => r.user_id === userId && r.companion_id === c.id);
-        return { id: c.id, level_label: rel?.level_label ?? null, name: c.name };
+        return {
+          gender: c.gender ?? null,
+          id: c.id,
+          level_label: rel?.level_label ?? null,
+          name: c.name,
+          source: c.source ?? "official",
+        };
       });
     return results as unknown as T[];
   }

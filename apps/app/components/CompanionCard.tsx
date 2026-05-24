@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, Text, View } from 'react-native';
 
-import { mediaUrl } from '@/api/companion-client';
+import { mediaSource } from '@/api/companion-client';
 import { formatLevel } from '@/utils/format';
 
 type CompanionCardProps = {
@@ -14,12 +14,12 @@ type CompanionCardProps = {
 };
 
 export function CompanionCard({ artUrl, level, name, onPress, opener, role }: CompanionCardProps) {
-  const imageUrl = mediaUrl(artUrl);
+  const imageSource = mediaSource(artUrl);
   const content = (
     <>
       <View className="aspect-square w-full overflow-hidden rounded-lg bg-app-primarySoft">
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} resizeMode="cover" className="h-full w-full" />
+        {imageSource ? (
+          <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
         ) : (
           <View className="h-full w-full items-center justify-center bg-app-primarySoft">
             <Text className="text-4xl font-semibold text-app-primary">{name.slice(0, 1).toUpperCase()}</Text>

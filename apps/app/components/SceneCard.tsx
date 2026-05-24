@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Pressable, Text, View } from 'react-native';
 
-import { mediaUrl } from '@/api/companion-client';
+import { mediaSource } from '@/api/companion-client';
 import type { Scene } from '@/api/types';
 
 type SceneCardProps = {
@@ -10,14 +10,14 @@ type SceneCardProps = {
 };
 
 export function SceneCard({ onPress, scene }: SceneCardProps) {
-  const imageUrl = mediaUrl(scene.art_url);
+  const imageSource = mediaSource(scene.art_url);
   const hint = formatUnlockHint(scene.unlock_hint);
 
   return (
     <Pressable accessibilityRole="button" onPress={onPress} className="overflow-hidden rounded-lg border border-app-line bg-app-card">
       <View className="h-48 bg-app-primarySoft">
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} resizeMode="cover" className="h-full w-full" />
+        {imageSource ? (
+          <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
         ) : (
           <View className="h-full w-full items-center justify-center bg-app-primarySoft">
             <Ionicons color="#1E6B52" name="map-outline" size={40} />

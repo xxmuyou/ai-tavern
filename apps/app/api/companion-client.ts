@@ -1,4 +1,4 @@
-import { Linking } from 'react-native';
+import { Linking, type ImageSourcePropType } from 'react-native';
 
 import type {
   BillingStatusResponse,
@@ -9,6 +9,7 @@ import type {
   CompanionsListResponse,
   MeResponse,
   RelationshipResponse,
+  RomancePreference,
   SceneEnterResponse,
   ScenesListResponse,
   SseEvent,
@@ -44,6 +45,62 @@ export function mediaUrl(value: string | null | undefined): string | null {
   }
   return objectUrl(value);
 }
+
+export function mediaSource(value: string | null | undefined): ImageSourcePropType | null {
+  if (!value) {
+    return null;
+  }
+
+  const localSource = LOCAL_MEDIA[value];
+  if (localSource) {
+    return localSource;
+  }
+
+  const url = mediaUrl(value);
+  return url ? { uri: url } : null;
+}
+
+const LOCAL_MEDIA: Record<string, ImageSourcePropType> = {
+  'scenes/brookside_bookshop.png': require('../assets/ai-companion/scenes/brookside_bookshop.png'),
+  'scenes/crescent_library.png': require('../assets/ai-companion/scenes/crescent_library.png'),
+  'scenes/harbor_market.png': require('../assets/ai-companion/scenes/harbor_market.png'),
+  'scenes/iron_forge_gym.png': require('../assets/ai-companion/scenes/iron_forge_gym.png'),
+  'scenes/moon_bar.png': require('../assets/ai-companion/scenes/moon_bar.png'),
+  'scenes/pier_coffee_shop.png': require('../assets/ai-companion/scenes/pier_coffee_shop.png'),
+  'scenes/sky_office.png': require('../assets/ai-companion/scenes/sky_office.png'),
+  'scenes/skyline_rooftop.png': require('../assets/ai-companion/scenes/skyline_rooftop.png'),
+  'scenes/twin_pines_park.png': require('../assets/ai-companion/scenes/twin_pines_park.png'),
+  'portraits/aiko/annoyed.webp': require('../assets/ai-companion/portraits/aiko/annoyed.webp'),
+  'portraits/aiko/guarded.webp': require('../assets/ai-companion/portraits/aiko/guarded.webp'),
+  'portraits/aiko/neutral.webp': require('../assets/ai-companion/portraits/aiko/neutral.webp'),
+  'portraits/aiko/playful.webp': require('../assets/ai-companion/portraits/aiko/playful.webp'),
+  'portraits/aiko/tense.webp': require('../assets/ai-companion/portraits/aiko/tense.webp'),
+  'portraits/aiko/warm.webp': require('../assets/ai-companion/portraits/aiko/warm.webp'),
+  'portraits/lila/annoyed.webp': require('../assets/ai-companion/portraits/lila/annoyed.webp'),
+  'portraits/lila/guarded.webp': require('../assets/ai-companion/portraits/lila/guarded.webp'),
+  'portraits/lila/neutral.webp': require('../assets/ai-companion/portraits/lila/neutral.webp'),
+  'portraits/lila/playful.webp': require('../assets/ai-companion/portraits/lila/playful.webp'),
+  'portraits/lila/tense.webp': require('../assets/ai-companion/portraits/lila/tense.webp'),
+  'portraits/lila/warm.webp': require('../assets/ai-companion/portraits/lila/warm.webp'),
+  'portraits/maya/annoyed.webp': require('../assets/ai-companion/portraits/maya/annoyed.webp'),
+  'portraits/maya/guarded.webp': require('../assets/ai-companion/portraits/maya/guarded.webp'),
+  'portraits/maya/neutral.webp': require('../assets/ai-companion/portraits/maya/neutral.webp'),
+  'portraits/maya/playful.webp': require('../assets/ai-companion/portraits/maya/playful.webp'),
+  'portraits/maya/tense.webp': require('../assets/ai-companion/portraits/maya/tense.webp'),
+  'portraits/maya/warm.webp': require('../assets/ai-companion/portraits/maya/warm.webp'),
+  'portraits/ryan/annoyed.webp': require('../assets/ai-companion/portraits/ryan/annoyed.webp'),
+  'portraits/ryan/guarded.webp': require('../assets/ai-companion/portraits/ryan/guarded.webp'),
+  'portraits/ryan/neutral.webp': require('../assets/ai-companion/portraits/ryan/neutral.webp'),
+  'portraits/ryan/playful.webp': require('../assets/ai-companion/portraits/ryan/playful.webp'),
+  'portraits/ryan/tense.webp': require('../assets/ai-companion/portraits/ryan/tense.webp'),
+  'portraits/ryan/warm.webp': require('../assets/ai-companion/portraits/ryan/warm.webp'),
+  'portraits/sora/annoyed.webp': require('../assets/ai-companion/portraits/sora/annoyed.webp'),
+  'portraits/sora/guarded.webp': require('../assets/ai-companion/portraits/sora/guarded.webp'),
+  'portraits/sora/neutral.webp': require('../assets/ai-companion/portraits/sora/neutral.webp'),
+  'portraits/sora/playful.webp': require('../assets/ai-companion/portraits/sora/playful.webp'),
+  'portraits/sora/tense.webp': require('../assets/ai-companion/portraits/sora/tense.webp'),
+  'portraits/sora/warm.webp': require('../assets/ai-companion/portraits/sora/warm.webp'),
+};
 
 export async function createDevSession(email: string): Promise<AuthSession> {
   return requestJson<AuthSession>(
@@ -88,6 +145,16 @@ export async function sendMagicLink(
 
 export async function fetchMe(): Promise<MeResponse> {
   return requestJson<MeResponse>('/auth/me');
+}
+
+export async function updateRomancePreference(
+  preference: RomancePreference,
+): Promise<{ romance_preference: RomancePreference }> {
+  return requestJson<{ romance_preference: RomancePreference }>('/auth/me/preferences', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ romance_preference: preference }),
+  });
 }
 
 export async function logout(): Promise<void> {

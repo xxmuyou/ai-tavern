@@ -1,8 +1,8 @@
 -- v1 content seed (spec-013)
 --
 -- Inserts the 10 official scenes and 10 official companions defined in
--- docs/product/content.md (Aurelia City). All fields except `art_url`
--- are populated; art_url stays NULL until the art pipeline catches up.
+-- docs/product/content.md (Aurelia City). Art URLs are populated for
+-- assets that have been delivered; missing assets stay NULL.
 --
 -- Idempotent: uses INSERT OR REPLACE so re-running the migration restores
 -- canonical content without leaving stale rows behind. User-created
@@ -21,7 +21,7 @@ VALUES
    '["daily_encounter","invitation","gift"]',
    '["maya","theo"]',
    NULL,
-   NULL,
+   'scenes/pier_coffee_shop.png',
    1, 1, unixepoch() * 1000),
 
   ('sky_office',
@@ -31,7 +31,7 @@ VALUES
    '["daily_encounter","conflict","invitation"]',
    '["ryan","aiko"]',
    NULL,
-   NULL,
+   'scenes/sky_office.png',
    2, 1, unixepoch() * 1000),
 
   ('twin_pines_park',
@@ -41,7 +41,7 @@ VALUES
    '["daily_encounter","invitation","milestone"]',
    '["ethan","iris"]',
    NULL,
-   NULL,
+   'scenes/twin_pines_park.png',
    3, 1, unixepoch() * 1000),
 
   ('moon_bar',
@@ -51,7 +51,7 @@ VALUES
    '["daily_encounter","confession","gift"]',
    '["lila"]',
    NULL,
-   NULL,
+   'scenes/moon_bar.png',
    4, 1, unixepoch() * 1000),
 
   ('sunrise_apartment',
@@ -71,7 +71,7 @@ VALUES
    '["daily_encounter","gift","invitation"]',
    '["sora","aiko","theo"]',
    NULL,
-   NULL,
+   'scenes/brookside_bookshop.png',
    6, 1, unixepoch() * 1000),
 
   ('skyline_rooftop',
@@ -81,7 +81,7 @@ VALUES
    '["confession","milestone","invitation"]',
    '["sora","marcus"]',
    '{"type":"min_relationship","companion_id":"sora","dim":"closeness","value":30}',
-   NULL,
+   'scenes/skyline_rooftop.png',
    7, 1, unixepoch() * 1000),
 
   ('iron_forge_gym',
@@ -91,7 +91,7 @@ VALUES
    '["daily_encounter","invitation"]',
    '["ethan"]',
    NULL,
-   NULL,
+   'scenes/iron_forge_gym.png',
    8, 1, unixepoch() * 1000),
 
   ('crescent_library',
@@ -101,7 +101,7 @@ VALUES
    '["daily_encounter","gift","invitation"]',
    '["marcus","aiko"]',
    NULL,
-   NULL,
+   'scenes/crescent_library.png',
    9, 1, unixepoch() * 1000),
 
   ('harbor_market',
@@ -111,14 +111,14 @@ VALUES
    '["daily_encounter","gift","invitation"]',
    '["jordan","lila"]',
    NULL,
-   NULL,
+   'scenes/harbor_market.png',
    10, 1, unixepoch() * 1000);
 
 -- ============================================================
 -- companions (official)
 -- ============================================================
 INSERT OR REPLACE INTO companions
-  (id, source, created_by, is_active, name, appearance, personality, background, speech_style, relationship_role, preferred_scenes, art_url, initial_dims, created_at, updated_at)
+  (id, source, created_by, is_active, name, appearance, personality, background, speech_style, relationship_role, preferred_scenes, art_url, gender, initial_dims, created_at, updated_at)
 VALUES
   ('maya', 'official', NULL, 1,
    'Maya Chen',
@@ -128,7 +128,8 @@ VALUES
    'Soft-spoken, often pauses mid-sentence, uses metaphors, asks more questions than she answers.',
    'crush',
    '["pier_coffee_shop","brookside_bookshop"]',
-   NULL,
+   'portraits/maya/neutral.webp',
+   'female',
    '{"closeness":5,"trust":5,"romance":10,"friendship":5,"hostility":0,"tension":5,"distance":20}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -140,7 +141,8 @@ VALUES
    'Precise, occasionally formal, lets warmth show through small acts (remembering your coffee order) rather than words.',
    'colleague',
    '["sky_office","twin_pines_park"]',
-   NULL,
+   'portraits/ryan/neutral.webp',
+   'male',
    '{"closeness":10,"trust":10,"romance":0,"friendship":10,"hostility":0,"tension":0,"distance":15}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -152,7 +154,8 @@ VALUES
    'Low, deliberate, often uses silence as response. Occasionally drops something startlingly honest.',
    'stranger',
    '["moon_bar","harbor_market"]',
-   NULL,
+   'portraits/lila/neutral.webp',
+   'female',
    '{"closeness":0,"trust":0,"romance":5,"friendship":0,"hostility":0,"tension":10,"distance":40}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -165,18 +168,20 @@ VALUES
    'friend',
    '["iron_forge_gym","twin_pines_park"]',
    NULL,
+   'male',
    '{"closeness":10,"trust":10,"romance":0,"friendship":15,"hostility":0,"tension":0,"distance":10}',
    unixepoch() * 1000, unixepoch() * 1000),
 
   ('sora', 'official', NULL, 1,
    'Sora Aizawa',
-   'Japanese, androgynous presentation, layered black-and-platinum hair, often in oversized vintage clothes, multiple rings.',
-   'Lives in the moment. Hates labels (including their own). Brutally honest, occasionally cryptic. Drawn to people who are honest back.',
-   'Independent musician, plays small venues, releases music online. Crashes on friends'' couches as often as their own apartment.',
+   'Japanese, slender build, layered black-and-platinum hair just past the shoulders, often in oversized vintage clothes and multiple rings. Sharp eyeliner, no makeup beyond it.',
+   'Lives in the moment. Hates labels. Brutally honest, occasionally cryptic. Drawn to people who are honest back.',
+   'Independent musician, plays small venues, releases music online. Crashes on friends'' couches as often as her own apartment.',
    'Casual, fragmented, song-lyric quality. Drops poetry into conversation without flagging it.',
    'crush',
    '["skyline_rooftop","brookside_bookshop"]',
-   NULL,
+   'portraits/sora/neutral.webp',
+   'female',
    '{"closeness":0,"trust":5,"romance":10,"friendship":5,"hostility":0,"tension":5,"distance":30}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -189,6 +194,7 @@ VALUES
    'friend',
    '["crescent_library","skyline_rooftop"]',
    NULL,
+   'male',
    '{"closeness":5,"trust":10,"romance":0,"friendship":10,"hostility":0,"tension":5,"distance":20}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -200,7 +206,8 @@ VALUES
    'Clear, considered, occasionally a touch formal. Surprises people with sudden warmth or dry humor.',
    'colleague',
    '["sky_office","brookside_bookshop","crescent_library"]',
-   NULL,
+   'portraits/aiko/neutral.webp',
+   'female',
    '{"closeness":5,"trust":5,"romance":5,"friendship":5,"hostility":0,"tension":5,"distance":25}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -213,6 +220,7 @@ VALUES
    'stranger',
    '["harbor_market","moon_bar"]',
    NULL,
+   'male',
    '{"closeness":0,"trust":0,"romance":10,"friendship":0,"hostility":0,"tension":5,"distance":40}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -225,6 +233,7 @@ VALUES
    'neighbor',
    '["sunrise_apartment","twin_pines_park"]',
    NULL,
+   'female',
    '{"closeness":15,"trust":15,"romance":0,"friendship":15,"hostility":0,"tension":0,"distance":5}',
    unixepoch() * 1000, unixepoch() * 1000),
 
@@ -237,5 +246,6 @@ VALUES
    'crush',
    '["pier_coffee_shop","brookside_bookshop"]',
    NULL,
+   'male',
    '{"closeness":5,"trust":10,"romance":10,"friendship":10,"hostility":0,"tension":0,"distance":15}',
    unixepoch() * 1000, unixepoch() * 1000);

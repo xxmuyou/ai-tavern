@@ -45,14 +45,15 @@
 
 ```sql
 CREATE TABLE users (
-  id            TEXT PRIMARY KEY,              -- UUIDv7
-  email         TEXT UNIQUE NOT NULL,
-  email_verified BOOLEAN DEFAULT FALSE,
-  display_name  TEXT,
-  locale        TEXT DEFAULT 'en-US',          -- v1 仅 en-US，留字段给 v2
-  created_at    INTEGER NOT NULL,              -- unix epoch (ms)
-  last_seen_at  INTEGER NOT NULL,
-  status        TEXT DEFAULT 'active'          -- active / suspended / deleted
+  id                 TEXT PRIMARY KEY,         -- UUIDv7
+  email              TEXT UNIQUE NOT NULL,
+  email_verified     BOOLEAN DEFAULT FALSE,
+  display_name       TEXT,
+  locale             TEXT DEFAULT 'en-US',     -- v1 仅 en-US，留字段给 v2
+  created_at         INTEGER NOT NULL,         -- unix epoch (ms)
+  last_seen_at       INTEGER NOT NULL,
+  status             TEXT DEFAULT 'active',    -- active / suspended / deleted
+  romance_preference TEXT NOT NULL DEFAULT 'any'  -- 'male' / 'female' / 'any'，影响场景伴侣加权 spawn（spec-017）
 );
 
 CREATE INDEX idx_users_email ON users(email);
@@ -106,6 +107,7 @@ CREATE TABLE companions (
   created_by        TEXT REFERENCES users(id),  -- user 自创时填，official 为 NULL
   is_active         BOOLEAN DEFAULT TRUE,       -- 软删除标记
   name              TEXT NOT NULL,
+  gender            TEXT,                       -- 'male' / 'female'（spec-017，仅用于场景加权 spawn）
   appearance        TEXT,                       -- 外貌描述（注入 prompt）
   personality       TEXT,                       -- 性格描述
   background        TEXT,                       -- 背景故事
@@ -113,6 +115,7 @@ CREATE TABLE companions (
   relationship_role TEXT,                       -- colleague/neighbor/friend/crush/stranger/family
   preferred_scenes  TEXT,                       -- JSON array of scene_id
   art_url           TEXT,                       -- R2 上的立绘 URL
+  art_emotions      TEXT,                       -- JSON map: emotion -> url（spec-012）
   initial_dims      TEXT,                       -- JSON of {closeness:n, trust:n, ...} 起始数值
   created_at        INTEGER NOT NULL,
   updated_at        INTEGER NOT NULL

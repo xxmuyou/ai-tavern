@@ -17,6 +17,7 @@ type CompanionRow = {
   relationship_role: string | null;
   preferred_scenes: string | null;
   art_url: string | null;
+  gender: string | null;
   initial_dims: string | null;
   created_at: number;
   updated_at: number;
@@ -213,6 +214,7 @@ describe("companions module", () => {
     const response = await handleCompanionsRequest(
       authedRequest("http://localhost/companions", token, "POST", {
         name: "Echo",
+        gender: "female",
         personality: "Loyal and direct",
         relationship_role: "friend",
         preferred_scenes: ["cafe", "park"],
@@ -226,10 +228,12 @@ describe("companions module", () => {
       id: string;
       source: string;
       name: string;
+      gender: string;
       preferred_scenes: string[];
     };
     expect(body.source).toBe("user");
     expect(body.name).toBe("Echo");
+    expect(body.gender).toBe("female");
     expect(body.preferred_scenes).toEqual(["cafe", "park"]);
     expect(body.id.length).toBeGreaterThan(0);
   });
@@ -238,7 +242,7 @@ describe("companions module", () => {
     const env = createEnv({ companions: [], relationships: [] });
     const token = await issueDevToken(env, "player@example.com");
     const response = await handleCompanionsRequest(
-      authedRequest("http://localhost/companions", token, "POST", { personality: "x" }),
+      authedRequest("http://localhost/companions", token, "POST", { personality: "x", gender: "male" }),
       env,
       "/companions",
     );
@@ -246,6 +250,20 @@ describe("companions module", () => {
     expect(response?.status).toBe(400);
     const body = (await response?.json()) as { error: string };
     expect(body.error).toBe("name_required");
+  });
+
+  it("POST without gender returns 400", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions", token, "POST", { name: "Echo" }),
+      env,
+      "/companions",
+    );
+
+    expect(response?.status).toBe(400);
+    const body = (await response?.json()) as { error: string };
+    expect(body.error).toBe("gender_required");
   });
 
   it("POST 4th active user companion returns 402 quota_exceeded", async () => {
@@ -259,7 +277,7 @@ describe("companions module", () => {
     });
     const token = await issueDevToken(env, "player@example.com");
     const response = await handleCompanionsRequest(
-      authedRequest("http://localhost/companions", token, "POST", { name: "Echo" }),
+      authedRequest("http://localhost/companions", token, "POST", { name: "Echo", gender: "male" }),
       env,
       "/companions",
     );
@@ -282,7 +300,7 @@ describe("companions module", () => {
     });
     const token = await issueDevToken(env, "player@example.com");
     const response = await handleCompanionsRequest(
-      authedRequest("http://localhost/companions", token, "POST", { name: "Echo" }),
+      authedRequest("http://localhost/companions", token, "POST", { name: "Echo", gender: "female" }),
       env,
       "/companions",
     );
@@ -390,13 +408,14 @@ describe("companions module", () => {
 // Fixtures
 // -----------------------------------------------------------------------------
 
-function officialCompanion(id: string): CompanionRow {
+function officialCompanion(id: string, gender: "male" | "female" = "female"): CompanionRow {
   return {
     appearance: null,
     art_url: null,
     background: null,
     created_at: 1747000000000,
     created_by: null,
+    gender,
     id,
     initial_dims: null,
     is_active: 1,
@@ -410,13 +429,14 @@ function officialCompanion(id: string): CompanionRow {
   };
 }
 
-function userCompanion(id: string, ownerId: string): CompanionRow {
+function userCompanion(id: string, ownerId: string, gender: "male" | "female" = "female"): CompanionRow {
   return {
     appearance: null,
     art_url: null,
     background: null,
     created_at: 1747000000000,
     created_by: ownerId,
+    gender,
     id,
     initial_dims: null,
     is_active: 1,
@@ -665,12 +685,14 @@ function mutate(
       relationship_role,
       preferred_scenes,
       art_url,
+      gender,
       createdAt,
       updatedAt,
     ] = values as [
       string,
       string,
       string,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -687,6 +709,7 @@ function mutate(
       background,
       created_at: createdAt,
       created_by: ownerId,
+      gender,
       id,
       initial_dims: null,
       is_active: 1,
@@ -712,10 +735,12 @@ function mutate(
       relationship_role,
       preferred_scenes,
       art_url,
+      gender,
       updatedAt,
       id,
     ] = values as [
       string,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -733,6 +758,7 @@ function mutate(
         appearance,
         art_url,
         background,
+        gender,
         name,
         personality,
         preferred_scenes,

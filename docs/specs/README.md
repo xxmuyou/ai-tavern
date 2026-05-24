@@ -40,6 +40,7 @@
 | 014 | [Cloudflare custom domain 绑定](./spec-014-cloudflare-custom-domain.md) | 配置 | — | 1 天 | ⚪ todo（详细） |
 | 015 | [iOS / Android EAS Build pipeline](./spec-015-eas-build-pipeline.md) | 新建 | 012 | 3-5 天 | ⚪ todo（详细） |
 | 016 | [本地密钥管理收敛（.env.dev SOT + sync）](./spec-016-local-secrets-mgmt.md) | 新建 | — | 0.5 天 | ⚪ todo（详细） |
+| 017 | [恋爱偏好 + 加权 spawn（5 男 5 女）](./spec-017-romance-preference.md) | 新建 | 004, 007, 013 | 0.5-1 天 | 🟡 in-progress |
 
 **估时总计：** 约 45-65 工程日（不含美术、QA、市场准备）
 

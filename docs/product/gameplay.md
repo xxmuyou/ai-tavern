@@ -31,15 +31,15 @@
 | `mood` | 氛围描述（注入 LLM prompt 的场景设定） |
 | `tags` | 标签（cafe / office / bar / park / apartment...） |
 | `possible_events` | 可能发生的事件类型 ID 列表 |
-| `default_companions` | 偏好在此出现的官方角色 ID 列表 |
+| `default_companions` | 偏好在此出现的官方角色 ID 列表（实际是否 spawn 受用户 `romance_preference` 加权抽样影响，见 §2.2） |
 | `unlock_condition` | 解锁条件（可选 —— 默认全部解锁，部分场景需关系阈值） |
 
 ### 2.2 进入场景
 
 用户点击场景 → 系统判定本次进入"在场角色"：
 
-1. 抽取偏好此场景的 companion 列表
-2. 根据当前与每个角色的关系阈值、最近互动时间、用户开启的角色集，过滤候选
+1. 抽取该场景 `default_companions` 中的活跃官方伴侣 + 任何把此场景列入 `preferred_scenes` 的用户自建伴侣
+2. 用用户的 `romance_preference` 对候选做加权抽样（见 §3.3 性别偏好与加权）
 3. 0~N 个 companion 出现：
    - 0 个：场景空，触发"环境事件"（独自的氛围片段，无 AI 对话）
    - 1 个：常规模式，与该角色对话
@@ -69,6 +69,7 @@
 | `id` | string | 唯一标识 |
 | `source` | enum | `official` / `user` |
 | `name` | string | 角色名（英文） |
+| `gender` | enum | `male` / `female`（仅用于场景出现加权，不注入 LLM prompt） |
 | `appearance` | text | 外貌描述（注入 LLM prompt） |
 | `personality` | text | 性格描述 |
 | `background` | text | 背景故事 |
@@ -79,6 +80,19 @@
 | `created_by` | user_id? | 自创角色填用户 ID |
 
 **对当前代码的延续：** 现有 `companion-engine.ts` 已有"15+ 人格字段"的设计。v1 简化为以上 ~6 个核心字段；过细的人格字段在用户创角时**可选填**，不是必填项（降低门槛）。
+
+### 3.3 性别偏好与加权 spawn
+
+用户在「Me」页面设置 `romance_preference: 'male' | 'female' | 'any'`，存于 `users.romance_preference`，**随时可改、即时生效**（PATCH `/auth/me/preferences`，无频次限制）。
+
+进入场景时（`POST /scenes/{id}/enter`）：
+
+- **`any`**：不做抽样，所有候选 spawn（保留 v1 默认行为）。
+- **`male` / `female`**：对每个 official 候选做伯努利试验——偏好性别权重 0.8，非偏好 0.2（`packages/api/src/companions/gender-weight.ts:PREFERENCE_WEIGHTS`）。
+- **`source = 'user'`**：用户自建伴侣**永远 spawn**，不参与抽样。
+- **保底**：如果加权后所有 official 候选都被剔除且没有 user 伴侣，则强制保留权重最高的一个（不让场景空着）。
+
+场景列表（`GET /scenes`）始终展示场景的全集成员，仅按偏好做排序，便于用户掌握"这个场景里都有谁"。
 
 ## 4. 对话系统
 

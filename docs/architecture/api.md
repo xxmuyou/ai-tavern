@@ -160,6 +160,7 @@ Query: ?token=...
     "created_at": ...,
     "linked_providers": ["google", "email"]
   },
+  "romance_preference": "male" | "female" | "any",
   "subscription": {
     "tier": "free" | "pro",
     "status": "active" | "trialing" | "past_due" | "canceled" | "free",
@@ -175,7 +176,23 @@ Query: ?token=...
 }
 ```
 
-**说明：** `current_period_end` 为 Unix milliseconds；免费用户 `price_id/current_period_end` 为 `null`。
+**说明：** `current_period_end` 为 Unix milliseconds；免费用户 `price_id/current_period_end` 为 `null`。`romance_preference` 默认 `any`。
+
+### `PATCH /auth/me/preferences`
+
+更新用户的恋爱偏好。**无频次限制**，随时可改、即时生效——下一次进入场景立即按新偏好做加权 spawn。
+
+```json
+// Header: Authorization
+// Request
+{ "romance_preference": "male" | "female" | "any" }
+
+// Response 200
+{ "romance_preference": "female" }
+
+// 错误
+// 400 invalid_romance_preference (值不在三档之内)
+```
 
 ---
 
@@ -195,6 +212,7 @@ Query: ?token=...
       "id": "...",
       "source": "official",
       "name": "Maya",
+      "gender": "female" | "male" | null,
       "relationship_role": "crush",
       "art_url": "https://...",
       "preferred_scenes": ["pier_coffee_shop", "riverside_park"],
@@ -214,6 +232,7 @@ Query: ?token=...
   "id": "...",
   "source": "official",
   "name": "...",
+  "gender": "female" | "male" | null,
   "appearance": "...",
   "personality": "...",
   "background": "...",
@@ -246,6 +265,7 @@ Query: ?token=...
 // Request
 {
   "name": "Alex",
+  "gender": "male" | "female",     // 必填，决定场景加权 spawn 中的归属
   "appearance": "...",
   "personality": "...",
   "background": "...",
@@ -258,6 +278,8 @@ Query: ?token=...
 { "id": "...", ... }
 
 // 错误
+// 400 gender_required 当未传 gender 字段
+// 400 invalid_gender 当 gender 不是 'male'/'female'
 // 402 QUOTA_EXCEEDED 当 active companion 数 >= 3 且非订阅用户
 ```
 

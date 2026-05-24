@@ -16,12 +16,13 @@ import {
 } from 'react-native';
 
 import { clearChatHistory, getCompanion } from '@/api/companion-client';
-import type { ChatMessage } from '@/api/types';
+import type { ChatEmotionKey, ChatMessage } from '@/api/types';
 import { AuthGuard } from '@/components/AuthGuard';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
+import { PortraitBar } from '@/components/PortraitBar';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { TopBar } from '@/components/TopBar';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
@@ -34,9 +35,14 @@ const STREAMING_ID = '__streaming__';
 
 type StreamingItem = {
   __streaming: true;
-  emotion: ChatEmotion | null;
   id: typeof STREAMING_ID;
   text: string;
+};
+
+type CompanionPortraitState = {
+  art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
+  art_url: string | null;
+  name: string;
 };
 
 type ChatListItem = ChatMessage | StreamingItem;
@@ -60,7 +66,12 @@ function ChatScreenInner() {
   const router = useRouter();
   const { pushError } = useErrorBanner();
 
-  const [companionName, setCompanionName] = useState<string>('Chat');
+  const [companion, setCompanion] = useState<CompanionPortraitState>({
+    art_emotions: null,
+    art_url: null,
+    name: 'Chat',
+  });
+  const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
   const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
@@ -70,7 +81,6 @@ function ChatScreenInner() {
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const shouldScrollOnNextRef = useRef(true);
-  const lastDoneEmotionRef = useRef<ChatEmotion | null>(null);
 
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
@@ -84,11 +94,15 @@ function ChatScreenInner() {
       try {
         const detail = await getCompanion(companionId);
         if (!cancelled) {
-          setCompanionName(detail.name ?? 'Chat');
+          setCompanion({
+            art_emotions: detail.art_emotions ?? null,
+            art_url: detail.art_url ?? null,
+            name: detail.name ?? 'Chat',
+          });
         }
       } catch {
         if (!cancelled) {
-          setCompanionName('Chat');
+          setCompanion({ art_emotions: null, art_url: null, name: 'Chat' });
         }
       }
     })();
@@ -124,7 +138,6 @@ function ChatScreenInner() {
     }
     const placeholder: StreamingItem = {
       __streaming: true,
-      emotion: lastDoneEmotionRef.current,
       id: STREAMING_ID,
       text: stream.streamingText,
     };
@@ -146,7 +159,6 @@ function ChatScreenInner() {
     if (rateLimitedUntil && Date.now() < rateLimitedUntil) {
       return;
     }
-    lastDoneEmotionRef.current = null;
     const userMessage: ChatMessage = {
       companion_id: companionId,
       content: text,
@@ -161,7 +173,7 @@ function ChatScreenInner() {
     try {
       const result = await stream.send(text, {
         onEmotion: (emotion) => {
-          lastDoneEmotionRef.current = emotion;
+          setCurrentEmotion(emotion);
         },
         sceneId,
       });
@@ -224,7 +236,7 @@ function ChatScreenInner() {
       return <StreamingBubble text={item.text} />;
     }
     const role = item.role === 'assistant' ? 'companion' : item.role;
-    return <MessageBubble content={item.content} emotion={item.emotion as ChatEmotion | null | undefined} role={role} />;
+    return <MessageBubble content={item.content} role={role} />;
   }, []);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
@@ -253,7 +265,7 @@ function ChatScreenInner() {
   if (history.isLoadingInitial) {
     return (
       <View className="flex-1 bg-app-bg">
-        <TopBar showBack title={companionName} />
+        <TopBar showBack title={companion.name} />
         <LoadingScreen label="Loading conversation..." />
       </View>
     );
@@ -265,7 +277,7 @@ function ChatScreenInner() {
     <View className="flex-1 bg-app-bg">
       <TopBar
         showBack
-        title={companionName}
+        title={companion.name}
         right={
           <Pressable
             accessibilityLabel="Clear conversation"
@@ -276,6 +288,13 @@ function ChatScreenInner() {
             <Ionicons color="#11181C" name="trash-outline" size={20} />
           </Pressable>
         }
+      />
+
+      <PortraitBar
+        artEmotions={companion.art_emotions}
+        artUrl={companion.art_url}
+        emotion={currentEmotion}
+        name={companion.name}
       />
 
       <KeyboardAvoidingView

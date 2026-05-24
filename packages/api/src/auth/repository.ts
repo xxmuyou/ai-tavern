@@ -17,6 +17,7 @@ export type UserWithProviders = UserRecord & {
   display_name: string | null;
   email_verified: number;
   created_at: number;
+  romance_preference: "male" | "female" | "any";
   linked_providers: IdentityProvider[];
 };
 
@@ -69,7 +70,8 @@ export async function loadUserWithProviders(
   userId: string,
 ): Promise<UserWithProviders | null> {
   const row = await env.DB.prepare(
-    `SELECT id, email, email_verified, display_name, created_at FROM users WHERE id = ?`,
+    `SELECT id, email, email_verified, display_name, created_at, romance_preference
+     FROM users WHERE id = ?`,
   )
     .bind(userId)
     .first<{
@@ -78,6 +80,7 @@ export async function loadUserWithProviders(
       email_verified: number;
       display_name: string | null;
       created_at: number;
+      romance_preference: string | null;
     }>();
 
   if (!row) {
@@ -85,12 +88,14 @@ export async function loadUserWithProviders(
   }
 
   const linkedProviders = await listLinkedProviders(env, userId);
+  const pref = row.romance_preference;
   return {
     id: row.id,
     email: row.email,
     email_verified: row.email_verified,
     display_name: row.display_name,
     created_at: row.created_at,
+    romance_preference: pref === "male" || pref === "female" ? pref : "any",
     linked_providers: linkedProviders,
   };
 }

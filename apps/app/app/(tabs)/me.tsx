@@ -2,10 +2,10 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { fetchMe, openBillingPortal } from '@/api/companion-client';
-import type { MeResponse } from '@/api/types';
+import { fetchMe, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
+import type { MeResponse, RomancePreference } from '@/api/types';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
@@ -115,6 +115,24 @@ export default function MeScreen() {
             </View>
           </Section>
 
+          <Section title="Romance preference">
+            <Text className="text-sm leading-5 text-app-muted">
+              Affects which companions show up most often in scenes. Change anytime.
+            </Text>
+            <PreferencePicker
+              value={me?.romance_preference ?? 'any'}
+              onChange={(next) => {
+                if (!me) return;
+                const previous = me.romance_preference;
+                setMe({ ...me, romance_preference: next });
+                void updateRomancePreference(next).catch(() => {
+                  setMe({ ...me, romance_preference: previous });
+                  pushError('Could not update preference.');
+                });
+              }}
+            />
+          </Section>
+
           <Section title="Subscription">
             <InfoRow label="Plan" value={isPro ? 'Pro' : 'Free'} />
             {isPro ? (
@@ -172,4 +190,43 @@ function formatUsage(used: number, limit: number | null): string {
     return `${used} used`;
   }
   return `${used}/${limit}`;
+}
+
+const PREFERENCE_OPTIONS: Array<{ label: string; value: RomancePreference }> = [
+  { label: 'Women', value: 'female' },
+  { label: 'Men', value: 'male' },
+  { label: 'Anyone', value: 'any' },
+];
+
+function PreferencePicker({
+  value,
+  onChange,
+}: {
+  value: RomancePreference;
+  onChange: (next: RomancePreference) => void;
+}) {
+  return (
+    <View className="flex-row gap-2">
+      {PREFERENCE_OPTIONS.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <Pressable
+            key={opt.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            onPress={() => {
+              if (!active) onChange(opt.value);
+            }}
+            className={`flex-1 items-center rounded-full border px-4 py-2 ${
+              active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-app-card'
+            }`}
+          >
+            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-text'}`}>
+              {opt.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
 }
