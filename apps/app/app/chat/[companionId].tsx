@@ -27,7 +27,7 @@ import { StreamingBubble } from '@/components/StreamingBubble';
 import { TopBar } from '@/components/TopBar';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useChatHistory } from '@/hooks/use-chat-history';
-import { useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
+import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 
 const BILLING_ROUTE = '/billing' as Href;
@@ -85,6 +85,21 @@ function ChatScreenInner() {
 
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
+
+  useEffect(() => {
+    if (history.isLoadingInitial) {
+      return;
+    }
+    for (let i = history.messages.length - 1; i >= 0; i--) {
+      const msg = history.messages[i];
+      if ((msg.role === 'companion' || msg.role === 'assistant') && typeof msg.emotion === 'string') {
+        if ((CHAT_EMOTIONS as readonly string[]).includes(msg.emotion)) {
+          setCurrentEmotion(msg.emotion as ChatEmotion);
+        }
+        return;
+      }
+    }
+  }, [history.isLoadingInitial, history.messages]);
 
   useEffect(() => {
     if (!companionId) {

@@ -113,13 +113,20 @@ export function useChatStream(companionId: string): UseChatStreamResult {
           } else if (event.type === 'signals') {
             options.onSignals?.((event.data as Partial<RelationshipDimensions>) ?? {});
           } else if (event.type === 'emotion') {
-            const next = asEmotion((event.data as { value?: unknown } | undefined)?.value);
+            const rawValue = (event.data as { value?: unknown } | undefined)?.value;
+            const next = asEmotion(rawValue);
+            if (__DEV__) {
+              console.log('[chat] emotion event', { raw: rawValue, parsed: next });
+            }
             if (next) {
               emotion = next;
               options.onEmotion?.(next);
             }
           } else if (event.type === 'done') {
             const data = (event.data as { message_id?: string; warning?: string | null }) ?? {};
+            if (__DEV__ && data.warning) {
+              console.warn('[chat] stream done with warning', data.warning);
+            }
             const info: ChatStreamDoneInfo = {
               messageId: data.message_id ?? '',
               warning: data.warning ?? null,
