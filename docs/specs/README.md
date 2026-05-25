@@ -22,6 +22,8 @@
 
 **当前执行原则：** 接受 local / dev 数据库清空重建，不做旧数据平滑迁移；不接受半成品 spec 作为 done。
 
+**当前 UI 原则（2026-05）：** 从 spec-018 起，产品 UI 工作优先 Web 桌面端。Web 与 mobile 可以是完全不同的 UI；共享 API/hooks/session/types，Web 页面使用 `*.web.tsx` 和 `components/web/*`，mobile/native 页面使用默认 `.tsx`，mobile UI 日后单独规划。
+
 | # | Spec | 类型 | 依赖 | 估时 | 状态 |
 |---|------|------|------|------|------|
 | 001 | [清理 multi-app 抽象与 .orig 备份](./spec-001-cleanup-multi-app.md) | 删除 | — | 1-2 天 | 🟢 done |
@@ -41,6 +43,7 @@
 | 015 | [iOS / Android EAS Build pipeline](./spec-015-eas-build-pipeline.md) | 新建 | 012 | 3-5 天 | ⚪ todo（详细） |
 | 016 | [本地密钥管理收敛（.env.dev SOT + sync）](./spec-016-local-secrets-mgmt.md) | 新建 | — | 0.5 天 | ⚪ todo（详细） |
 | 017 | [恋爱偏好 + 加权 spawn（5 男 5 女）](./spec-017-romance-preference.md) | 新建 | 004, 007, 013 | 0.5-1 天 | 🟡 in-progress |
+| 018 | [Web 桌面工作台 UI 独立化](./spec-018-web-ui-workspace.md) | 重做 | 012 | 5-8 天 | 🟡 in-progress |
 
 **估时总计：** 约 45-65 工程日（不含美术、QA、市场准备）
 
@@ -55,6 +58,7 @@
 - **C 路径（场景）：** 003 → 007 → 008
 - **D 路径（内容）：** 003 → 004 → 013
 - **E 路径（前端）：** 等 004 + 005 + 006 + 007 + 010 完成后开 012
+- **E2 路径（Web UI）：** 012 → 018，优先把 Web 做成桌面工作台；mobile UI 另开后续 spec
 - **F 路径（部署）：** 014 + 015 可任意时间开（独立基础）
 - **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
 

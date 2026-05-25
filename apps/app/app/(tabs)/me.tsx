@@ -195,7 +195,7 @@ function formatUsage(used: number, limit: number | null): string {
   return `${used}/${limit}`;
 }
 
-const PREFERENCE_OPTIONS: Array<{ label: string; value: RomancePreference }> = [
+const PREFERENCE_OPTIONS: { label: string; value: RomancePreference }[] = [
   { label: 'Women', value: 'female' },
   { label: 'Men', value: 'male' },
   { label: 'Anyone', value: 'any' },

@@ -38,13 +38,20 @@
 
 ## 2. 模块边界
 
-### 2.1 前端：`apps/app/` （Expo 单 App）
+### 2.1 前端：`apps/app/` （Expo 单 App，Web / Mobile UI 分离）
 
 **职责：**
-- 三端 UI（Web / iOS / Android）共享一套代码
+- Web 与 iOS / Android 共用一个 Expo app、同一套路由体系与构建链路
+- API client、hooks、session、types、utils 共享；业务数据流不按平台分叉
+- Web UI 和 mobile UI 可以完全不同：Web 使用 `*.web.tsx` 与 `components/web/*`，mobile/native 使用默认 `.tsx`
 - 路由（expo-router 文件式路由）
 - 主界面（场景列表）、场景详情、对话、角色管理、订阅页
 - 调用 API（fetch）+ 流式响应处理（SSE / fetch streaming）
+
+**当前 UI 开发原则（2026-05）：**
+- 后续产品 UI 优先开发 Web 桌面体验，mobile UI 日后单独设计
+- 不为了适配 Web 去改 mobile 页面；Web 需要独立布局时新增或修改 `*.web.tsx`
+- mobile 端当前以“不破坏现状”为目标，除非明确进入 mobile 阶段
 
 **不做：**
 - 业务逻辑（关系数值变化、prompt 构造）一律在后端
