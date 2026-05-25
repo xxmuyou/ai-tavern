@@ -1,3 +1,13 @@
+import { ensureUserByEmail } from "../identity";
+import { signSession } from "./session";
+import type { AuthEnv } from "./types";
+
+export async function issueTestSessionToken(env: Env, email: string): Promise<string> {
+  const user = await ensureUserByEmail(env, email);
+  const session = await signSession(env as AuthEnv, { userId: user.id, email: user.email });
+  return session.token;
+}
+
 export type SessionFixture = {
   id: string;
   user_id: string;

@@ -3,9 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ImageBackground, Pressable, Text, TextInput, View } from 'react-native';
 
-import { isDevClientEnvironment } from '@/api/companion-client';
 import { Button } from '@/components/Button';
-import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
@@ -13,37 +11,27 @@ const HERO_IMAGE = require('../../assets/ai-companion/scenes/pier_coffee_shop.pn
 
 export function WebLanding() {
   const router = useRouter();
-  const { sendMagicLink, signInDev } = useSession();
+  const { sendMagicLink, signInGoogle } = useSession();
   const { pushError } = useErrorBanner();
-  const isDevLogin = isDevClientEnvironment();
-  const [email, setEmail] = useState(isDevLogin ? 'admin@aiappsbox.com' : '');
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [email, setEmail] = useState('');
+  const [isSendingLink, setIsSendingLink] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function handleSignIn() {
+  async function handleSendLink() {
     const trimmed = email.trim();
     if (!trimmed) {
       pushError('Enter your email address.');
       return;
     }
-    setIsSigningIn(true);
+    setIsSendingLink(true);
     setNotice(null);
     try {
-      if (isDevLogin) {
-        await signInDev(trimmed);
-        router.replace(SCENES_ROUTE);
-        return;
-      }
       const response = await sendMagicLink(trimmed);
       setNotice(response.verify_url ? `Sign-in link is ready for ${trimmed}.` : `A sign-in link has been sent to ${trimmed}.`);
-    } catch (err) {
-      if ((err as Error & { status?: number }).status === 403) {
-        pushError('This email is not allowed to sign in.');
-      } else {
-        pushError(isDevLogin ? 'Sign-in failed.' : 'Could not send the sign-in link. Please try again later.');
-      }
+    } catch {
+      pushError('Could not send the sign-in link. Please try again later.');
     } finally {
-      setIsSigningIn(false);
+      setIsSendingLink(false);
     }
   }
 
@@ -86,8 +74,14 @@ export function WebLanding() {
 
             <View className="rounded-lg border border-app-line bg-app-bg p-5">
               <Text className="text-lg font-semibold text-app-text">Sign in</Text>
-              <Text className="mt-1 text-sm text-app-muted">{isDevLogin ? 'Dev allowlist only.' : 'Magic link sign-in.'}</Text>
+              <Text className="mt-1 text-sm text-app-muted">Continue with Google or get a magic link.</Text>
               <View className="mt-5 gap-3">
+                <Button label="Continue with Google" onPress={signInGoogle} />
+                <View className="my-1 flex-row items-center gap-3">
+                  <View className="h-px flex-1 bg-app-line" />
+                  <Text className="text-xs uppercase tracking-normal text-app-muted">or email</Text>
+                  <View className="h-px flex-1 bg-app-line" />
+                </View>
                 <TextInput
                   autoCapitalize="none"
                   autoComplete="email"
@@ -98,7 +92,7 @@ export function WebLanding() {
                   value={email}
                   className="min-h-12 rounded-md border border-app-line bg-white px-4 text-base text-app-text"
                 />
-                <Button isLoading={isSigningIn} label={isDevLogin ? 'Sign in' : 'Send sign-in link'} onPress={handleSignIn} />
+                <Button isLoading={isSendingLink} label="Send sign-in link" onPress={handleSendLink} variant="secondary" />
                 {notice ? <Text className="text-sm leading-5 text-app-primary">{notice}</Text> : null}
               </View>
             </View>

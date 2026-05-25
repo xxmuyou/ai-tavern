@@ -23,7 +23,7 @@ v1 上线只发 Web（Cloudflare Pages）；iOS/Android 原生 build 是 spec-01
 3. **NativeWind 替代 StyleSheet**：本 spec 新增唯一依赖 `nativewind` + peer `tailwindcss`。所有新组件用 `className` 写样式，禁止再写 `StyleSheet.create`。色板从现有 `apps/app/constants/theme.ts` 迁移到 `tailwind.config.js` 的 `theme.extend.colors`。
 4. **状态管理不引入新库**：useState + useEffect + localStorage。跨页面的 session / quota / 当前 scene 通过 `localStorage` + 自定义 hook（`use-session.ts`、`use-quota.ts`）共享。**不**引入 Zustand、Redux、Jotai 等。
 5. **路由结构 Expo Router file-based**：见下方"改动清单 §B"。三标签：Scenes / Companions / Me。Stack 路由覆盖 scene/[id]、companion/[id]、chat/[companionId]、auth/login、auth/success、billing/index。
-6. **未登录守卫**：`<AuthGuard>` 包裹所有业务 tab。未登录访问任一业务页 → 跳 `auth/login`。`auth/login` 页同时提供 3 个入口：dev-session（dev 环境）、Google OAuth、Magic Link。
+6. **未登录守卫**：`<AuthGuard>` 包裹所有业务 tab。未登录访问任一业务页 → 跳 `auth/login`。`auth/login` 页提供两个入口：Google OIDC、Magic Link（两端统一，无 dev-session 旁路）。
 7. **错误展示统一**：API 错误（401 / 402 quota_exceeded / 429 rate_limited / 5xx）由顶部 `<ErrorBanner>` 组件展示，自动消失或手动关闭。404 / 网络错由 Expo Router 的 `+not-found.tsx` 与 `ErrorBoundary` 兜底。
 
 ---
@@ -130,7 +130,7 @@ apps/app/app/
 
 ### D. Hook 清单（`apps/app/hooks/`）
 
-- **`use-session.ts`**（替换现有 `use-auth-email.ts`）—— `{ session, signInDev, signInGoogle, sendMagicLink, signOut, isLoading, error }`。内部：localStorage 读写、token 过期判断、未登录返回 null
+- **`use-session.ts`**（替换现有 `use-auth-email.ts`）—— `{ session, signInGoogle, sendMagicLink, signOut, isLoading, error }`。内部：localStorage 读写、token 过期判断、未登录返回 null
 - **`use-api.ts`** —— 基础 fetch 包装。自动注入 `Authorization: Bearer`；统一错误处理：401 → 清 session + 跳 login、402 → 抛 `QuotaExceededError`、429 → 抛 `RateLimitedError(retryAfter)`、5xx → 抛 `ServerError`。返回 `{ data, error, isLoading, refetch }`
 - **`use-error-banner.ts`** —— 全局错误队列。`pushError(message)` / `dismissError(id)`，配合 `<ErrorBanner/>` 组件
 - **`use-scenes.ts`** —— `GET /scenes` 包装；缓存到 `useState`，刷新页面重新拉
@@ -146,7 +146,6 @@ apps/app/app/
 
 裁剪现有文件，**删**：
 
-- `createDevSession`（保留）
 - `fetchShowCharacters / fetchShowWorkspace / joinWorkspaceGuest / createShowCharacter / fetchShowCharacterPackage / updateShowCharacterPackage` —— Chapter 1 / 2 / 3 全删
 - `createChapterOneSession / fetchShowSession / answerShowTurn / answerShowTurnStream / previewShowSpeech / finalizeShowSession` —— 删
 - `createChapterTwoDateSession / fetchChapterTwoDateSession / answerChapterTwoDateTurn / fetchChapterTwoLocations` —— 删
@@ -219,11 +218,8 @@ openBillingPortal(): Promise<{ portal_url: string }>
 **布局**：居中卡片，从上到下：
 
 - Logo / 标题
-- Email 输入框 + 「发送登录链接」按钮（→ `sendMagicLink(email)`，成功后切 toast "登录链接已发送至 <email>，请在 15 分钟内点击"）
-- 「使用 Google 登录」按钮 → `startGoogleLogin(redirect='/auth/success')`
-- dev 环境额外显示「Dev Sign-In（仅开发环境）」面板：email 输入 + 按钮 → `createDevSession(email)` → `applySession()` → 跳 `/(tabs)/scenes`
-
-**dev 检测**：`process.env.EXPO_PUBLIC_API_URL` 包含 `localhost` 或 `127.0.0.1` 或 `dev` 时显示 dev 入口；prod build 隐藏。
+- 「Continue with Google」按钮 → `startGoogleLogin(redirect='/auth/success')`（主入口）
+- Email 输入框 + 「Send sign-in link」按钮 → `sendMagicLink(email)`，成功后 toast "Link sent to <email>, check your inbox."（副入口）
 
 #### F.3 Scenes 列表（区 C，`(tabs)/scenes.tsx`）
 

@@ -119,7 +119,7 @@ pnpm deploy:web:dev    # Web 到 dev (Cloudflare Pages)
 
 - dev 数据库与 prod 完全独立
 - 不会从 prod 拷贝数据到 dev（避免泄露真实用户数据）
-- dev 测试账号统一用 `*@dev.aiappsbox.com` 邮箱（v1 上线后规范）
+- dev 与 prod 注册方式相同（Magic Link + Google OIDC），不限制邮箱格式；admin 权限通过 `ADMIN_EMAILS` env var 或 `admin_user_allowlist` 表控制
 
 ---
 

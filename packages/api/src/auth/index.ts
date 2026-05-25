@@ -1,4 +1,3 @@
-import { handleDevSession } from "./dev-session";
 import { handleSendLink, handleVerify } from "./email-link";
 import { handleLogout, handleMe, handleMePreferences } from "./me";
 import { handleOAuthCallback, handleOAuthStart } from "./oauth";
@@ -6,6 +5,7 @@ import type { AuthEnv } from "./types";
 
 export {
   isAdminEmail,
+  isAdminUser,
   optionalAuthEmail,
   optionalAuthUser,
   requireAdminEmail,
@@ -21,10 +21,6 @@ export async function handleAuthRequest(
   env: Env,
   pathname: string,
 ): Promise<Response | null> {
-  if (pathname === "/auth/dev-session") {
-    return handleDevSession(request, env);
-  }
-
   if (pathname === "/auth/me") {
     return handleMe(request, env as AuthEnv);
   }

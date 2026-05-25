@@ -1,6 +1,6 @@
 # spec-009: Auth OIDC + Magic Link
 
-> **类型：** 新建  |  **依赖：** spec-003  |  **估时：** 5-7 天  |  **状态：** ✅ done
+> **类型：** 新建  |  **依赖：** spec-003  |  **估时：** 5-7 天  |  **状态：** 🚧 in-progress（后端 100%；前端 Google OIDC 按钮已接入，`/auth/dev-session` 已移除）
 
 ---
 
@@ -17,19 +17,18 @@ v1 需要真实账号体系承接后续 billing、配额、跨设备进度和 ad
 下面 8 条是 spec 评审阶段已决断的边界，实施时不必再问：
 
 1. **旧 JWT 兼容**：一刀切。`JWT_SIGNING_KEY` 上线即生效，所有现存（`AUTH_TOKEN_SECRET` 签发、无 `jti`）token 一律 401，用户重登。代码层不留 "无 jti 即跳过 sessions 查询" 的兼容分支。
-2. **dev-session 边界**：dev-session 也走新 `session.ts` 签发——生成 `jti`、写入 `sessions` 表、`logout` 同样有效。不存在"两套签发逻辑"。
+2. **dev-session 已移除**：`/auth/dev-session` 端点已删除。dev 和 prod 环境均使用 Magic Link + Google OIDC 正式登录，无旁路端点。测试 token 通过 `issueTestSessionToken()` 内部函数签发（仅测试套件用）。
 3. **verify/callback 302 时相对 redirect**：worker 用 `AUTH_SUCCESS_URL` 的 origin 拼出完整 URL 再放进 `Location` 头。`AUTH_SUCCESS_URL` 必须是绝对 URL（启动时校验，否则 500 `auth_success_url_invalid`）。
 4. **Web callback 落点页（`/auth/success`）**：整体推迟到 spec-012。本 spec 的 verify/callback 仍按既定方案 302 到 fragment URL；落点页 404 是预期，不阻塞 spec-009 完成。
 5. **fragment 字段格式**：`token`、`expires_at`、`email` 三个字段都放 fragment。`expires_at` 用 ISO 字符串（与 session response JSON 一致），需 URL-encode。
 6. **callback 失败响应**：所有 OAuth / Magic Link 流程错误一律 302 到 `${AUTH_SUCCESS_URL}?error=<code>`，前端在落点页读 query 展示。error code 枚举固定（不暴露内部异常文本）。
 7. **dev 环境数据隔离**：不需要表名/字段前缀——wrangler 已物理隔离 dev/prod 的 D1 (`xtbit-apps-dev` vs `xtbit-apps-prod`) 与 KV namespace。
-8. **dev 白名单 + 禁注册**：独立 spec（建议 spec-013 或 spec-009.5）单独处理，不在本 spec 范围。
+8. **admin 动态名单**：`dev_login_allowlist` 表已重命名为 `admin_user_allowlist`（migration 0013）。admin 身份由两部分决定：`ADMIN_EMAILS` env var（built-in，不可被 UI 删除）+ `admin_user_allowlist` DB 表（动态，可在 Admin 页面增删）。dev/prod 注册方式统一为 Magic Link + Google OIDC，不限制注册邮箱（白名单仅控制 admin 权限）。
 
 ---
 
 ## 目标
 
-- 保留 `/auth/dev-session`，继续支持 local/dev 快速生成登录 token；prod 必须禁用
 - 将现有 `packages/api/src/auth.ts` 拆成可维护的 `auth/` 模块，避免把 OIDC、Magic Link、session、identity 全塞进一个文件
 - 新增端点：
   - `GET /auth/oidc/google/start?redirect=...`
@@ -67,13 +66,13 @@ v1 需要真实账号体系承接后续 billing、配额、跨设备进度和 ad
 ```text
 packages/api/src/auth/
 ├── index.ts          # 路由聚合；导出 requireAuthUser / requireAdminUser 等公共守卫
-├── dev-session.ts    # /auth/dev-session，仅 dev/local 可用
 ├── session.ts        # JWT 签发/校验、jti、sessions 写入与 revoke
 ├── repository.ts     # users / user_identities / sessions 数据访问
 ├── oauth.ts          # OAuth state、redirect 校验、provider 分派
 ├── providers.ts      # Google provider 实现 + Apple provider contract 占位
 ├── email-link.ts     # Magic Link token、Resend 发送、verify
 ├── redirects.ts      # redirect allowlist 与成功页拼装
+├── guards.ts         # requireAuthUser / requireAdminUser / isAdminUser 守卫
 └── types.ts          # AuthEnv、AuthPayload、IdentityProvider 等共享类型
 ```
 
@@ -162,12 +161,6 @@ type AuthPayload = {
 - 上线即所有现存 token 失效（旧 token payload 无 `jti`，校验时 `sessions` 查不到 → 401）
 - 代码层**不留** "无 jti 即跳过 sessions 查询" 的兼容分支
 - ops 在发布前需公告用户重登；prod 当前几乎无活跃用户，影响面可接受
-
-**dev-session 统一走 session.ts**：
-
-- `/auth/dev-session` 不再独立签发，调用 `session.ts` 的统一签发函数
-- 生成 `jti`、写入 `sessions` 表（dev D1 与 prod 物理隔离，无副作用）
-- `logout` 对 dev-session 签发的 token 同样有效
 
 ### D. Identity Repository
 
@@ -529,8 +522,7 @@ Worker 已经会 normalize `/api/*`，所以代码中路由仍匹配 `/auth/...`
 - [ ] `pnpm --filter @xtbit/api typecheck` 通过
 - [ ] `pnpm --filter @xtbit/api test` 通过
 - [ ] `pnpm --filter @xtbit/app typecheck` 通过（如改前端 helper）
-- [ ] dev-session：dev/local `POST /auth/dev-session` 返回 token；prod 返回 403
-- [ ] dev-session：签发的 token 也含 `jti`，`sessions` 表有对应行；`logout` 可 revoke
+- [ ] ~~dev-session~~ 已移除：`POST /auth/dev-session` 返回 404
 - [ ] session：JWT payload 含 `sub/email/jti/iat/exp`
 - [ ] session：revoked `jti` 再访问 protected endpoint 返回 401
 - [ ] session：旧 `AUTH_TOKEN_SECRET` 签发的无 `jti` token → 401（**不留兼容分支**）

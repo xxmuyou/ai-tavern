@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 
 import {
-  addDevLoginAllowlistEmail,
-  listDevLoginAllowlist,
-  removeDevLoginAllowlistEmail,
+  addAdminAllowlistEmail,
+  listAdminAllowlist,
+  removeAdminAllowlistEmail,
 } from '@/api/companion-client';
-import type { DevLoginAllowlistItem } from '@/api/types';
-import { AuthGuard } from '@/components/AuthGuard';
+import type { AdminAllowlistItem } from '@/api/types';
+import { AdminGuard } from '@/components/AdminGuard';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
@@ -15,7 +15,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 
 export default function AdminScreen() {
   const { pushError } = useErrorBanner();
-  const [emails, setEmails] = useState<DevLoginAllowlistItem[]>([]);
+  const [emails, setEmails] = useState<AdminAllowlistItem[]>([]);
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -23,13 +23,13 @@ export default function AdminScreen() {
   const [removingEmail, setRemovingEmail] = useState<string | null>(null);
 
   async function refresh() {
-    const payload = await listDevLoginAllowlist();
+    const payload = await listAdminAllowlist();
     setEmails(payload.emails);
   }
 
   useEffect(() => {
     let mounted = true;
-    listDevLoginAllowlist()
+    listAdminAllowlist()
       .then((payload) => {
         if (mounted) setEmails(payload.emails);
       })
@@ -51,7 +51,7 @@ export default function AdminScreen() {
 
     setIsSaving(true);
     try {
-      await addDevLoginAllowlistEmail(trimmedEmail, note.trim());
+      await addAdminAllowlistEmail(trimmedEmail, note.trim());
       setEmail('');
       setNote('');
       await refresh();
@@ -65,7 +65,7 @@ export default function AdminScreen() {
   async function handleRemove(targetEmail: string) {
     setRemovingEmail(targetEmail);
     try {
-      await removeDevLoginAllowlistEmail(targetEmail);
+      await removeAdminAllowlistEmail(targetEmail);
       await refresh();
     } catch {
       pushError('Could not remove this email.');
@@ -76,20 +76,20 @@ export default function AdminScreen() {
 
   if (isLoading) {
     return (
-      <AuthGuard>
+      <AdminGuard>
         <LoadingScreen label="Loading admin..." />
-      </AuthGuard>
+      </AdminGuard>
     );
   }
 
   return (
-    <AuthGuard>
+    <AdminGuard>
       <View className="flex-1 bg-app-bg">
         <TopBar showBack title="Admin" />
         <ScrollView className="flex-1">
           <View className="mx-auto w-full max-w-3xl gap-4 px-4 py-6">
             <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5">
-              <Text className="text-lg font-semibold text-app-text">Dev login allowlist</Text>
+              <Text className="text-lg font-semibold text-app-text">Admin members</Text>
               <View className="gap-3">
                 <TextInput
                   autoCapitalize="none"
@@ -121,7 +121,7 @@ export default function AdminScreen() {
                         {item.email}
                       </Text>
                       <Text className="mt-1 text-sm text-app-muted">
-                        {item.source === 'builtin' ? 'Built-in admin' : item.note || 'Custom allowlist email'}
+                        {item.source === 'builtin' ? 'Built-in admin' : item.note || 'Custom admin member'}
                       </Text>
                     </View>
                     {item.source === 'custom' ? (
@@ -141,6 +141,6 @@ export default function AdminScreen() {
           </View>
         </ScrollView>
       </View>
-    </AuthGuard>
+    </AdminGuard>
   );
 }

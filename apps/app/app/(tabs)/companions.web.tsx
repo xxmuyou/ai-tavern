@@ -1,7 +1,7 @@
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
 import type { CompanionListItem } from '@/api/types';
@@ -64,8 +64,9 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
   return (
     <Pressable accessibilityRole="button" onPress={onPress} className="min-w-[220px] flex-1 rounded-lg border border-app-line bg-white p-4">
       <View className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
+        <View pointerEvents="none" style={tileStyles.portraitFloor} />
         {imageSource ? (
-          <Image accessibilityLabel={companion.name} resizeMode="contain" source={imageSource} className="h-[108%] w-[108%]" />
+          <Image accessibilityLabel={companion.name} resizeMode="contain" source={imageSource} style={tileStyles.portraitImage} />
         ) : (
           <View className="h-full w-full items-center justify-center">
             <Text className="text-5xl font-semibold text-app-primary">{companion.name.slice(0, 1).toUpperCase()}</Text>
@@ -84,3 +85,19 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
     </Pressable>
   );
 }
+
+const tileStyles = StyleSheet.create({
+  portraitFloor: {
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    bottom: 0,
+    height: 58,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  portraitImage: {
+    height: '108%',
+    transform: [{ translateY: 10 }],
+    width: '108%',
+  },
+});

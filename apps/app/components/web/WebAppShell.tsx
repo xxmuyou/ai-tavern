@@ -6,6 +6,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { AuthGuard } from '@/components/AuthGuard';
 import { QuotaBadge } from '@/components/QuotaBadge';
 import { ADMIN_ROUTE, BILLING_ROUTE, COMPANIONS_ROUTE, ME_ROUTE, SCENES_ROUTE } from '@/constants/routes';
+import { useMe } from '@/hooks/use-me';
 import { useSession } from '@/hooks/use-session';
 
 type WebAppShellProps = {
@@ -15,18 +16,23 @@ type WebAppShellProps = {
   title: string;
 };
 
-const NAV_ITEMS: { href: Href; icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
+type NavItem = { href: Href; icon: keyof typeof Ionicons.glyphMap; label: string };
+
+const BASE_NAV_ITEMS: NavItem[] = [
   { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
   { href: COMPANIONS_ROUTE, icon: 'people-outline', label: 'Companions' },
   { href: ME_ROUTE, icon: 'person-circle-outline', label: 'Me' },
   { href: BILLING_ROUTE, icon: 'card-outline', label: 'Billing' },
-  { href: ADMIN_ROUTE, icon: 'shield-checkmark-outline', label: 'Admin' },
 ];
+
+const ADMIN_NAV_ITEM: NavItem = { href: ADMIN_ROUTE, icon: 'shield-checkmark-outline', label: 'Admin' };
 
 export function WebAppShell({ actions, children, subtitle, title }: WebAppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { session, signOut } = useSession();
+  const { me } = useMe();
+  const navItems: NavItem[] = me?.is_admin ? [...BASE_NAV_ITEMS, ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
 
   return (
     <AuthGuard>
@@ -39,7 +45,7 @@ export function WebAppShell({ actions, children, subtitle, title }: WebAppShellP
             </Pressable>
 
             <View className="gap-1">
-              {NAV_ITEMS.map((item) => {
+              {navItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 return (
                   <Pressable

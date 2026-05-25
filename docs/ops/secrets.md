@@ -63,29 +63,21 @@
 | Key | dev 缺失时的实际行为 | 出处 |
 |---|---|---|
 | `AUTH_TOKEN_SECRET` / `JWT_SIGNING_KEY` | 自动回退到 `DEV_FALLBACK_SECRET = "xtbit-local-dev-auth-token-secret"`，session 仍可签发与校验 | `auth/types.ts:39` + `auth/session.ts:131` |
-| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google 登录按钮不可用；但 **dev-session 旁路端点**仍能签发 token（见 §1.5.4） | `auth/oauth.ts`（只有点 Google 登录才触发） |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google 登录按钮渲染但点击后 500；仍可走 Magic Link dry-run 登录 | `auth/oauth.ts`（只有点 Google 登录才触发） |
 | `EMAIL_PROVIDER_API_KEY` / `EMAIL_FROM_ADDRESS` | Magic Link 进 dev dry-run 分支：不真发邮件，但 magic link URL 打到 worker stdout，复制即可登录 | `auth/email-link.ts:50,80+` |
 | `ALLOWED_ORIGINS` | `wrangler.jsonc` dev `vars` 已硬编码 `http://localhost:8081,http://127.0.0.1:8081,https://dev.aiappsbox.com` | wrangler.jsonc |
 | `ADMIN_EMAILS` | `wrangler.jsonc` dev `vars` 已硬编码 `admin@aiappsbox.com` | wrangler.jsonc |
 | `AUTH_SUCCESS_URL` | `wrangler.jsonc` dev `vars` 已硬编码 `https://dev.aiappsbox.com/auth/success` | wrangler.jsonc |
 | Apple Sign-In 全套 | dev / v1 不实现 | spec-009 |
 
-### 1.5.4 dev 旁路端点：`POST /api/auth/dev-session`
+### 1.5.4 admin 动态名单
 
-实现见 `packages/api/src/auth/dev-session.ts`。仅 `isDevRuntime(env)` 为 true 时启用，否则返回 `403 dev_auth_disabled`。
+admin 身份由两层控制：
 
-```bash
-curl -X POST http://localhost:8787/api/auth/dev-session \
-  -H 'content-type: application/json' \
-  -d '{"email":"you@example.com"}'
-# → 直接返回 { user, token, expires_at, ... }
-```
+1. **Built-in admin**（不可被 UI 删除）：`ADMIN_EMAILS` env var，逗号分隔的邮箱列表，写在 `wrangler.jsonc vars`。dev 默认 `admin@aiappsbox.com`。
+2. **动态 admin**（可在 Admin 页面增删）：`admin_user_allowlist` DB 表（原 `dev_login_allowlist`，migration 0013 重命名）。
 
-用法：
-
-- 本地测 chat / scenes / companions 等需要登录态的端点，**用这个发 token**，跳过 OAuth / Magic Link
-- 浏览器调试：拿到 token 后塞 `localStorage.auth_token = "<token>"` 即可
-- TTL：`DEV_AUTH_TOKEN_TTL_SECONDS` 控制（默认 28800 秒 = 8 小时）
+`isAdminUser(env, email)` 同时检查两层，任一命中即视为 admin。dev 与 prod 注册方式相同（Magic Link + Google OIDC），不限制注册邮箱。
 
 ### 1.5.5 何时该补齐这些"可省" keys
 
@@ -105,11 +97,9 @@ vim .env.dev                  # 只填 DEEPSEEK_API_KEY / EXPO_PUBLIC_API_URL / 
 pnpm install                  # 装 husky + dev deps
 pnpm dev                      # 自动准备本地 env，再起 worker (8787) + Expo (8081)
 
-# 拿 dev token
-curl -X POST http://localhost:8787/api/auth/dev-session \
-  -H 'content-type: application/json' \
-  -d '{"email":"you@example.com"}'
-# 复制 token 到 localStorage，浏览器开 http://localhost:8081 即可
+# 登录：用 Magic Link dry-run（不需要 EMAIL_PROVIDER_API_KEY）
+# → 在 worker stdout 找 verify_url，浏览器打开即可登录
+# 或：配置 GOOGLE_OAUTH_CLIENT_ID + SECRET 后走 Google OIDC
 ```
 
 ---

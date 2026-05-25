@@ -4,7 +4,6 @@ export type AuthEnv = Env & {
   ADMIN_EMAILS?: string;
   AUTH_TOKEN_SECRET?: string;
   JWT_SIGNING_KEY?: string;
-  DEV_AUTH_TOKEN_TTL_SECONDS?: string;
   AUTH_SUCCESS_URL?: string;
   ALLOWED_ORIGINS?: string;
   GOOGLE_OAUTH_CLIENT_ID?: string;
@@ -35,7 +34,6 @@ export type SessionResponse = {
 };
 
 export const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
-export const DEFAULT_DEV_TOKEN_TTL_SECONDS = 60 * 60 * 8;
 export const DEV_FALLBACK_SECRET = "xtbit-local-dev-auth-token-secret";
 export const DEFAULT_ADMIN_EMAILS = ["admin@aiappsbox.com"];
 

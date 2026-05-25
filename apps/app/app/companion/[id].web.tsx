@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
@@ -36,8 +36,9 @@ export default function WebCompanionDetailScreen() {
       <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <WebPanel>
           <View className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
+            <View pointerEvents="none" style={portraitStyles.portraitFloor} />
             {imageSource ? (
-              <Image accessibilityLabel={data.name} resizeMode="contain" source={imageSource} className="h-[112%] w-[112%]" />
+              <Image accessibilityLabel={data.name} resizeMode="contain" source={imageSource} style={portraitStyles.portraitImage} />
             ) : (
               <View className="h-full w-full items-center justify-center">
                 <Text className="text-6xl font-semibold text-app-primary">{data.name.slice(0, 1).toUpperCase()}</Text>
@@ -70,6 +71,22 @@ export default function WebCompanionDetailScreen() {
     </WebAppShell>
   );
 }
+
+const portraitStyles = StyleSheet.create({
+  portraitFloor: {
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    bottom: 0,
+    height: 58,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  portraitImage: {
+    height: '112%',
+    transform: [{ translateY: 9 }],
+    width: '112%',
+  },
+});
 
 function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;

@@ -1,25 +1,18 @@
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
-import { isDevClientEnvironment } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
-function isDevLoginEnabled() {
-  return isDevClientEnvironment();
-}
-
 export default function LoginScreen() {
-  const router = useRouter();
-  const { isLoading, sendMagicLink, session, signInDev } = useSession();
+  const { isLoading, sendMagicLink, session, signInGoogle } = useSession();
   const { pushError } = useErrorBanner();
-  const isDevLogin = isDevLoginEnabled();
-  const [email, setEmail] = useState(isDevLogin ? 'admin@aiappsbox.com' : '');
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [email, setEmail] = useState('');
+  const [isSendingLink, setIsSendingLink] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   if (isLoading) {
@@ -30,34 +23,24 @@ export default function LoginScreen() {
     return <Redirect href={SCENES_ROUTE} />;
   }
 
-  async function handleSignIn() {
+  async function handleSendLink() {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       pushError('Enter your email address.');
       return;
     }
 
-    setIsSigningIn(true);
+    setIsSendingLink(true);
     setNotice(null);
     try {
-      if (isDevLogin) {
-        await signInDev(trimmedEmail);
-        router.replace(SCENES_ROUTE);
-        return;
-      }
-
       const response = await sendMagicLink(trimmedEmail);
       setNotice(response.verify_url
         ? `Sign-in link is ready for ${trimmedEmail}. Open it within 15 minutes.`
         : `A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
-    } catch (err) {
-      if ((err as Error & { status?: number }).status === 403) {
-        pushError('This email is not allowed to sign in.');
-      } else {
-        pushError(isDevLogin ? 'Sign-in failed.' : 'Could not send the sign-in link. Please try again later.');
-      }
+    } catch {
+      pushError('Could not send the sign-in link. Please try again later.');
     } finally {
-      setIsSigningIn(false);
+      setIsSendingLink(false);
     }
   }
 
@@ -68,6 +51,12 @@ export default function LoginScreen() {
         <Text className="mt-2 text-center text-sm leading-5 text-app-muted">Sign in to enter an urban fantasy relationship sandbox.</Text>
 
         <View className="mt-8 gap-3">
+          <Button label="Continue with Google" onPress={signInGoogle} />
+          <View className="my-2 flex-row items-center gap-3">
+            <View className="h-px flex-1 bg-app-line" />
+            <Text className="text-xs uppercase tracking-normal text-app-muted">or email</Text>
+            <View className="h-px flex-1 bg-app-line" />
+          </View>
           <Text className="text-sm font-semibold text-app-text">Email</Text>
           <TextInput
             autoCapitalize="none"
@@ -79,11 +68,7 @@ export default function LoginScreen() {
             value={email}
             className="min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text"
           />
-          <Button
-            isLoading={isSigningIn}
-            label={isDevLogin ? 'Sign in' : 'Send sign-in link'}
-            onPress={handleSignIn}
-          />
+          <Button isLoading={isSendingLink} label="Send sign-in link" onPress={handleSendLink} variant="secondary" />
           {notice ? <Text className="text-sm leading-5 text-app-primary">{notice}</Text> : null}
         </View>
       </View>
