@@ -5,7 +5,7 @@ import { createSessionsStore, type SessionsStore } from "./auth/test-fixtures";
 
 describe("dev auth token", () => {
   it("issues a token and prefers token email over request email", async () => {
-    const env = createAuthEnv("dev");
+    const env = createAuthEnv("dev", undefined, ["player@example.com"]);
     const response = await handleAuthRequest(
       new Request("http://localhost/auth/dev-session", {
         body: JSON.stringify({ email: "Player@Example.com" }),
@@ -60,8 +60,24 @@ describe("dev auth token", () => {
     }))).resolves.toMatchObject({ email: "owner@example.com" });
   });
 
+  it("rejects dev-session emails outside the dev login allowlist", async () => {
+    const env = createAuthEnv("dev", "admin@aiappsbox.com", ["player@example.com"]);
+    const response = await handleAuthRequest(
+      new Request("http://localhost/auth/dev-session", {
+        body: JSON.stringify({ email: "outsider@example.com" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+      env,
+      "/auth/dev-session",
+    );
+
+    expect(response?.status).toBe(403);
+    await expect(response?.json()).resolves.toMatchObject({ error: "dev_login_not_allowed" });
+  });
+
   it("rejects non-admin authenticated users", async () => {
-    const env = createAuthEnv("dev", "owner@example.com");
+    const env = createAuthEnv("dev", "owner@example.com", ["player@example.com"]);
     const response = await handleAuthRequest(
       new Request("http://localhost/auth/dev-session", {
         body: JSON.stringify({ email: "player@example.com" }),
@@ -79,8 +95,13 @@ describe("dev auth token", () => {
   });
 });
 
-function createAuthEnv(appEnv: "dev" | "prod", adminEmails?: string): Env & { sessionsStore: SessionsStore } {
+function createAuthEnv(
+  appEnv: "dev" | "prod",
+  adminEmails?: string,
+  devLoginEmails: string[] = [],
+): Env & { sessionsStore: SessionsStore } {
   const users = new Map<string, { email: string; id: string }>();
+  const devLoginAllowlist = new Set(devLoginEmails);
   const sessionsStore = createSessionsStore();
   return {
     ADMIN_EMAILS: adminEmails,
@@ -105,6 +126,10 @@ function createAuthEnv(appEnv: "dev" | "prod", adminEmails?: string): Env & { se
                   if (sql.includes("WHERE id = ?")) {
                     return [...users.values()].find((user) => user.id === values[0]) ?? null;
                   }
+                }
+                if (sql.includes("FROM dev_login_allowlist")) {
+                  const email = (values[0] as string) ?? "";
+                  return devLoginAllowlist.has(email) ? { email } : null;
                 }
 
                 return null;

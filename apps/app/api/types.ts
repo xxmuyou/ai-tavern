@@ -201,10 +201,24 @@ export type MeResponse = {
   email: string;
   email_verified: boolean;
   id: string;
+  is_admin?: boolean;
   linked_providers: string[];
   quota: MeQuota;
   romance_preference: RomancePreference;
   subscription: MeSubscription;
+};
+
+export type DevLoginAllowlistItem = {
+  created_at: string | null;
+  created_by: string | null;
+  created_by_email: string | null;
+  email: string;
+  note: string | null;
+  source: 'builtin' | 'custom';
+};
+
+export type DevLoginAllowlistResponse = {
+  emails: DevLoginAllowlistItem[];
 };
 
 export type AsyncState<T> =

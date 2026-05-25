@@ -39,6 +39,7 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
     display_name: userWithProviders.display_name,
     romance_preference: userWithProviders.romance_preference,
     linked_providers: userWithProviders.linked_providers,
+    is_admin: adminOverride,
     subscription: billing.subscription,
     quota: {
       messages_limit_today: billing.usage.message_limit_daily,

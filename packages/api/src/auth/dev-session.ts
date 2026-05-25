@@ -1,4 +1,5 @@
 import { jsonResponse, readJson } from "../http";
+import { isDevLoginEmailAllowed } from "../admin/dev-login-allowlist";
 import { ensureUserByEmail, normalizeEmail } from "../identity";
 import { signSession } from "./session";
 import { DEFAULT_DEV_TOKEN_TTL_SECONDS, isDevRuntime } from "./types";
@@ -21,6 +22,9 @@ export async function handleDevSession(request: Request, env: Env): Promise<Resp
   const email = normalizeEmail(body.email);
   if (!email) {
     return jsonResponse({ error: "email_required" }, { status: 400 });
+  }
+  if (!(await isDevLoginEmailAllowed(env, email))) {
+    return jsonResponse({ error: "dev_login_not_allowed" }, { status: 403 });
   }
 
   const user = await ensureUserByEmail(env, email);

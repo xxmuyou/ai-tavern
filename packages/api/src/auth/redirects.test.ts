@@ -9,7 +9,7 @@ import {
 } from "./redirects";
 import type { AuthEnv } from "./types";
 
-const SUCCESS_URL = "https://dev.xtbit-apps.pages.dev/auth/success";
+const SUCCESS_URL = "https://dev.aiappsbox.com/auth/success";
 const ALLOWED_ORIGINS = `${new URL(SUCCESS_URL).origin},https://dev.aiappsbox.com,http://localhost:8081`;
 
 function env(overrides: Record<string, unknown> = {}): AuthEnv {

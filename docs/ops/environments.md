@@ -49,7 +49,7 @@ pnpm install
 pnpm dev    # 同时启 API:8787 + App:8081
 ```
 
-启动脚本 `scripts/local-dev.mjs` 会：
+启动脚本 `scripts/local-dev.sh` 会：
 1. 启动 Wrangler dev (API)
 2. 启动 Expo Web dev (App)
 3. 监听日志（`tmp/local-dev.log`）
@@ -195,8 +195,8 @@ prod 环境**首次部署前**需要按顺序创建：
 
 参考 `_archive/2026-05/docs/cloud/environment.md`（归档后路径）中以下信息**作废**：
 
-- ❌ "Dev web preview: `https://dev.xtbit-apps.pages.dev`" —— 新 dev 域统一为 `dev.aiappsbox.com`
-- ❌ "Current dev Stripe return URLs point to `https://dev.xtbit-apps.pages.dev`" —— 切到新域后更新
+- ❌ "Dev web preview uses a Pages-generated domain" —— 新 dev 域统一为 `dev.aiappsbox.com`
+- ❌ "Current dev Stripe return URLs point to a Pages-generated domain" —— 切到新域后更新
 - ❌ "spec-002 假设 `dev.aiappsbox.com/api/*` 已配好" —— 实际未配，需走 §3.2 流程
 - ❌ "测试 Stripe key 之前粘贴过需轮换" —— 走 `secrets.md` §3 轮换流程
 

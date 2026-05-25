@@ -16,7 +16,7 @@ import {
 import { authError } from "./types";
 import type { AuthEnv } from "./types";
 
-const SUCCESS_URL = "https://dev.xtbit-apps.pages.dev/auth/success";
+const SUCCESS_URL = "https://dev.aiappsbox.com/auth/success";
 
 describe("handleOAuthStart", () => {
   it("writes state to KV and redirects to provider authorize URL", async () => {

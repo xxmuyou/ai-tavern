@@ -14,7 +14,7 @@ import {
 } from "./test-fixtures";
 import type { AuthEnv } from "./types";
 
-const SUCCESS_URL = "https://dev.xtbit-apps.pages.dev/auth/success";
+const SUCCESS_URL = "https://dev.aiappsbox.com/auth/success";
 
 describe("GET /auth/me", () => {
   it("returns 401 auth_required when no token", async () => {

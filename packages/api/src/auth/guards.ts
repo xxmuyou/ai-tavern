@@ -80,10 +80,11 @@ export async function requireAdminEmail(
 
 export function isAdminEmail(env: Env, email: string | null | undefined): boolean {
   const normalized = normalizeEmail(email);
-  return Boolean(normalized && readAdminEmails(env as AuthEnv).has(normalized));
+  return Boolean(normalized && getConfiguredAdminEmails(env).has(normalized));
 }
 
-function readAdminEmails(env: AuthEnv): Set<string> {
+export function getConfiguredAdminEmails(env: Env): Set<string> {
+  const authEnv = env as AuthEnv;
   const configured = (env.ADMIN_EMAILS ?? "")
     .split(",")
     .map((email) => normalizeEmail(email))

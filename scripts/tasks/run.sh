@@ -13,11 +13,14 @@ Available tasks:
   api:d1-migrate-local
   api:d1-migrate-prod
   api:deploy-dev
+  api:deploy-prod
   api:dev
   api:typecheck
   app:export-web-dev
+  app:export-web-prod
   app:web
   deploy:web-dev
+  deploy:web-prod
 EOF
     exit 1
 }
@@ -92,6 +95,11 @@ task_api_deploy_dev() {
     run_in "packages/api" npx wrangler deploy --config "$WRANGLER_CFG" --env=
 }
 
+task_api_deploy_prod() {
+    load_env_file "$REPO_ROOT/.env.prod"
+    run_in "packages/api" npx wrangler deploy --config "$WRANGLER_CFG" --env production
+}
+
 task_api_dev() {
     load_env_file "$REPO_ROOT/.env.dev"
     run_in "packages/api" npx wrangler dev --config "$WRANGLER_CFG"
@@ -108,6 +116,12 @@ task_app_export_web_dev() {
     run_in "apps/app" npx expo export --platform web
 }
 
+task_app_export_web_prod() {
+    load_env_file "$REPO_ROOT/.env.prod"
+    export EXPO_PUBLIC_API_URL="https://aiappsbox.com/api"
+    run_in "apps/app" npx expo export --platform web
+}
+
 task_app_web() {
     load_env_file "$REPO_ROOT/.env.dev"
     run_in "apps/app" npx expo start --web
@@ -117,10 +131,20 @@ task_deploy_web_dev() {
     task_app_export_web_dev
     run_in "." npx wrangler pages deploy apps/app/dist \
         --project-name xtbit-apps \
-        --branch prod \
+        --branch dev \
         --commit-dirty=true \
         --commit-hash local-dev \
         --commit-message "dev web deploy"
+}
+
+task_deploy_web_prod() {
+    task_app_export_web_prod
+    run_in "." npx wrangler pages deploy apps/app/dist \
+        --project-name xtbit-apps \
+        --branch main \
+        --commit-dirty=true \
+        --commit-hash local-prod \
+        --commit-message "prod web deploy"
 }
 
 case "$task" in
@@ -129,11 +153,14 @@ case "$task" in
     api:d1-migrate-local) task_api_d1_migrate_local ;;
     api:d1-migrate-prod)  task_api_d1_migrate_prod ;;
     api:deploy-dev)       task_api_deploy_dev ;;
+    api:deploy-prod)      task_api_deploy_prod ;;
     api:dev)              task_api_dev ;;
     api:typecheck)        task_api_typecheck ;;
     app:export-web-dev)   task_app_export_web_dev ;;
+    app:export-web-prod)  task_app_export_web_prod ;;
     app:web)              task_app_web ;;
     deploy:web-dev)       task_deploy_web_dev ;;
+    deploy:web-prod)      task_deploy_web_prod ;;
     *)
         echo "Unknown task '$task'." >&2
         usage

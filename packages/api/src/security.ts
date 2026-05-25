@@ -14,7 +14,6 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://127.0.0.1:8081",
   "http://localhost:19006",
   "http://127.0.0.1:19006",
-  "https://dev.xtbit-apps.pages.dev",
   "https://aiappsbox.com",
   "https://dev.aiappsbox.com",
 ];

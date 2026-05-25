@@ -7,6 +7,8 @@ import type {
   CompanionCreateInput,
   CompanionDetailResponse,
   CompanionsListResponse,
+  DevLoginAllowlistItem,
+  DevLoginAllowlistResponse,
   MeResponse,
   RelationshipResponse,
   RomancePreference,
@@ -15,12 +17,32 @@ import type {
   SseEvent,
 } from './types';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
+const CONFIGURED_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export const EMAIL_STORAGE_KEY = 'xtbit.companion.email';
 export const BILLING_EMAIL_STORAGE_KEY = 'xtbit.billing.email';
 export const AUTH_TOKEN_STORAGE_KEY = 'xtbit.companion.authToken';
 export const AUTH_EXPIRES_STORAGE_KEY = 'xtbit.companion.authExpiresAt';
+
+function resolveApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'dev.aiappsbox.com' || hostname === 'aiappsbox.com') {
+      return '/api';
+    }
+  }
+  return CONFIGURED_API_BASE_URL;
+}
+
+export function isDevClientEnvironment(): boolean {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    return hostname === 'dev.aiappsbox.com' || hostname === 'localhost' || hostname === '127.0.0.1';
+  }
+  return /localhost|127\.0\.0\.1|dev/i.test(CONFIGURED_API_BASE_URL);
+}
 
 export type AuthSession = {
   email: string;
@@ -151,6 +173,27 @@ export async function sendMagicLink(
 
 export async function fetchMe(): Promise<MeResponse> {
   return requestJson<MeResponse>('/auth/me');
+}
+
+export async function listDevLoginAllowlist(): Promise<DevLoginAllowlistResponse> {
+  return requestJson<DevLoginAllowlistResponse>('/admin/dev-login-allowlist');
+}
+
+export async function addDevLoginAllowlistEmail(
+  email: string,
+  note?: string,
+): Promise<DevLoginAllowlistItem> {
+  return requestJson<DevLoginAllowlistItem>('/admin/dev-login-allowlist', {
+    body: JSON.stringify({ email, note }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function removeDevLoginAllowlistEmail(email: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/dev-login-allowlist/${encodeURIComponent(email)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function updateRomancePreference(

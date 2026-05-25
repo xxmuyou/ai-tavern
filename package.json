@@ -3,9 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "sync-env": "node ./scripts/sync-env.mjs",
-    "sync-env:prod": "node ./scripts/sync-env.mjs --env=prod",
-    "predev": "pnpm sync-env",
+    "local-env:dev": "./scripts/prepare-local-env.sh dev",
+    "local-env:prod": "./scripts/prepare-local-env.sh prod",
     "dev": "./scripts/local-dev.sh",
     "dev:app": "./scripts/tasks/run.sh app:web",
     "dev:api": "./scripts/tasks/run.sh api:dev",
@@ -17,9 +16,14 @@
     "cf:d1:migrate:local": "./scripts/tasks/run.sh api:d1-migrate-local",
     "cf:d1:migrate:dev": "./scripts/tasks/run.sh api:d1-migrate-dev",
     "cf:d1:migrate:prod": "./scripts/tasks/run.sh api:d1-migrate-prod",
-    "cf:secrets:dev": "./scripts/cloudflare/upload-dev-secrets.sh",
+    "cf:secrets:dev": "./scripts/sync-wrangler-secrets.sh dev",
+    "cf:secrets:prod": "./scripts/sync-wrangler-secrets.sh prod",
+    "deploy:dev": "./scripts/deploy.sh dev",
+    "deploy:prod": "./scripts/deploy.sh prod",
     "deploy:api:dev": "./scripts/tasks/run.sh api:deploy-dev",
+    "deploy:api:prod": "./scripts/tasks/run.sh api:deploy-prod",
     "deploy:web:dev": "./scripts/tasks/run.sh deploy:web-dev",
+    "deploy:web:prod": "./scripts/tasks/run.sh deploy:web-prod",
     "prepare": "husky"
   },
   "devDependencies": {

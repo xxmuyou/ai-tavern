@@ -282,7 +282,7 @@ Apple provider 本 spec 只预留：
 6. **302 到成功 URL**（见下方 **302 redirect 规则**）：
 
 ```text
-https://dev.xtbit-apps.pages.dev/auth/success#token=eyJ...&expires_at=2026-06-20T00%3A00%3A00.000Z&email=player%40example.com
+https://dev.aiappsbox.com/auth/success#token=eyJ...&expires_at=2026-06-20T00%3A00%3A00.000Z&email=player%40example.com
 ```
 
 fragment 不会被浏览器发送给服务端，比 query 更适合承载 bearer token。落点页 `/auth/success` 不在本 spec 范围（spec-012 实现），fragment URL 落到 404 是预期。
@@ -302,7 +302,7 @@ fragment 不会被浏览器发送给服务端，比 query 更适合承载 bearer
 
 ### F.2 302 redirect 规则
 
-worker 不能直接把相对路径写进 `Location` 头——浏览器会基于**请求 URL（API 域）**解析，落到错的 origin（比如 dev 环境 API 在 `dev.aiappsbox.com/api`，前端在 `dev.xtbit-apps.pages.dev`）。
+worker 不能直接把相对路径写进 `Location` 头——浏览器会基于**请求 URL（API 域）**解析，落到错的 origin（比如 dev 环境 API 在 `dev.aiappsbox.com/api`，前端落点必须显式使用 `AUTH_SUCCESS_URL`）。
 
 统一处理：
 
@@ -382,7 +382,7 @@ https://dev.aiappsbox.com/api/auth/email/verify?token=...
 4. 302 到 redirect（按 §F.2 规则用 `AUTH_SUCCESS_URL.origin` 补全相对路径），fragment 字段格式与 OAuth callback 一致：
 
 ```text
-https://dev.xtbit-apps.pages.dev/auth/success#token=eyJ...&expires_at=2026-06-20T00%3A00%3A00.000Z&email=player%40example.com
+https://dev.aiappsbox.com/auth/success#token=eyJ...&expires_at=2026-06-20T00%3A00%3A00.000Z&email=player%40example.com
 ```
 
 Resend 配置：
@@ -481,7 +481,7 @@ Worker 已经会 normalize `/api/*`，所以代码中路由仍匹配 `/auth/...`
 `AUTH_SUCCESS_URL`（前端落点页面，必须是绝对 URL；本 spec verify/callback 用其 origin 补全相对路径）各环境示例：
 
 - local：`http://localhost:8081/auth/success`
-- dev：`https://dev.xtbit-apps.pages.dev/auth/success`（若前端迁到 `dev.aiappsbox.com`，同步更新）
+- dev：`https://dev.aiappsbox.com/auth/success`
 - prod：`https://aiappsbox.com/auth/success`
 
 启动时校验 `AUTH_SUCCESS_URL`：

@@ -315,6 +315,10 @@ function queryFirst<T>(
   fixtures: Fixtures,
   users: Map<string, { id: string; email: string }>,
 ): T | null {
+  if (sql.includes("FROM dev_login_allowlist")) {
+    return { email: values[0] as string } as T;
+  }
+
   if (sql.includes("FROM users")) {
     if (sql.includes("romance_preference") && sql.includes("WHERE id = ?")) {
       // Scenes module reads the user's preference; tests default to 'any'.

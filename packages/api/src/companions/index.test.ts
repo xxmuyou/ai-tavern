@@ -597,6 +597,10 @@ function queryFirst<T>(
   users: Map<string, { id: string; email: string }>,
   proUserIds: Set<string>,
 ): T | null {
+  if (sql.includes("FROM dev_login_allowlist")) {
+    return { email: values[0] as string } as T;
+  }
+
   if (sql.includes("FROM users")) {
     if (sql.includes("WHERE email = ?")) {
       return (users.get(values[0] as string) ?? null) as T | null;

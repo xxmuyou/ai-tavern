@@ -62,7 +62,7 @@ Prod deploys and prod migrations still require explicit manual confirmation in t
 Use the local dev launcher when you want to restart both the API and web app after changing `.env.dev`.
 
 ```bash
-node scripts/local-dev.mjs
+scripts/local-dev.sh
 ```
 
 The launcher stops existing local listeners on ports `8081` and `8787`, then starts:
@@ -101,7 +101,7 @@ The Expo web app exports static assets to `apps/app/dist`.
 
 ## Current dev routing
 
-- Dev web preview: `https://dev.xtbit-apps.pages.dev`
+- Dev web domain: `https://dev.aiappsbox.com`
 - Planned dev custom domain: `https://dev.aiappsbox.com`
 - Dev API route: `https://dev.aiappsbox.com/api/*`
 - Production domain: `https://aiappsbox.com`
@@ -112,7 +112,7 @@ Bind `dev.aiappsbox.com` to the `xtbit-apps` Pages project in Cloudflare before 
 
 The public Stripe test publishable key and test price ID are configured in Wrangler vars. Do not store secret keys in tracked files.
 
-Current dev Stripe return URLs point to `https://dev.xtbit-apps.pages.dev` because `dev.aiappsbox.com/api/*` is routed to Workers and the Pages root custom domain still needs a clean dev-only mapping.
+Current dev Stripe return URLs point to `https://dev.aiappsbox.com`; Pages-generated preview domains must not be used for billing or auth redirects.
 
 Local development loads `.env.dev` through the task runner. Wrangler-only workflows may also use `.dev.vars`, but the preferred shared machine workflow is `.env.dev` for local commands and `tmp/cloudflare-dev-secrets.env` for uploading dev Worker secrets:
 

@@ -9,7 +9,7 @@ import type { MeResponse, RomancePreference } from '@/api/types';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
-import { BILLING_ROUTE } from '@/constants/routes';
+import { ADMIN_ROUTE, BILLING_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
@@ -157,6 +157,9 @@ export default function MeScreen() {
 
           <Section title="Other">
             <InfoRow label="Version" value={version} />
+            {me?.is_admin ? (
+              <Button label="Admin workspace" onPress={() => router.push(ADMIN_ROUTE)} variant="secondary" />
+            ) : null}
             <Button isLoading={isSigningOut} label="Sign out" onPress={handleSignOut} variant="secondary" />
           </Section>
         </View>

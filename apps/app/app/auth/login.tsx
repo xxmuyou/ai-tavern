@@ -1,8 +1,8 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 
-import { API_BASE_URL } from '@/api/companion-client';
+import { isDevClientEnvironment } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SCENES_ROUTE } from '@/constants/routes';
@@ -10,18 +10,16 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
 function isDevLoginEnabled() {
-  return /localhost|127\.0\.0\.1|dev/i.test(API_BASE_URL);
+  return isDevClientEnvironment();
 }
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { isLoading, sendMagicLink, session, signInDev, signInGoogle } = useSession();
+  const { isLoading, sendMagicLink, session, signInDev } = useSession();
   const { pushError } = useErrorBanner();
-  const [email, setEmail] = useState('');
-  const [devEmail, setDevEmail] = useState('dev@example.com');
-  const [isSendingLink, setIsSendingLink] = useState(false);
-  const [isSigningInDev, setIsSigningInDev] = useState(false);
-  const [devVerifyUrl, setDevVerifyUrl] = useState<string | null>(null);
+  const isDevLogin = isDevLoginEnabled();
+  const [email, setEmail] = useState(isDevLogin ? 'admin@aiappsbox.com' : '');
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   if (isLoading) {
@@ -32,46 +30,34 @@ export default function LoginScreen() {
     return <Redirect href={SCENES_ROUTE} />;
   }
 
-  async function handleMagicLink() {
+  async function handleSignIn() {
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       pushError('Enter your email address.');
       return;
     }
 
-    setIsSendingLink(true);
+    setIsSigningIn(true);
     setNotice(null);
-    setDevVerifyUrl(null);
     try {
-      const response = await sendMagicLink(trimmedEmail);
-      if (response.verify_url) {
-        setDevVerifyUrl(response.verify_url);
-        setNotice(`Dev sign-in link is ready for ${trimmedEmail}. Open it within 15 minutes.`);
-      } else {
-        setNotice(`A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
+      if (isDevLogin) {
+        await signInDev(trimmedEmail);
+        router.replace(SCENES_ROUTE);
+        return;
       }
-    } catch {
-      pushError('Could not send the sign-in link. Please try again later.');
-    } finally {
-      setIsSendingLink(false);
-    }
-  }
 
-  async function handleDevSignIn() {
-    const trimmedEmail = devEmail.trim();
-    if (!trimmedEmail) {
-      pushError('Enter a dev email address.');
-      return;
-    }
-
-    setIsSigningInDev(true);
-    try {
-      await signInDev(trimmedEmail);
-      router.replace(SCENES_ROUTE);
-    } catch {
-      pushError('Dev sign-in failed.');
+      const response = await sendMagicLink(trimmedEmail);
+      setNotice(response.verify_url
+        ? `Sign-in link is ready for ${trimmedEmail}. Open it within 15 minutes.`
+        : `A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
+    } catch (err) {
+      if ((err as Error & { status?: number }).status === 403) {
+        pushError('This email is not allowed to sign in.');
+      } else {
+        pushError(isDevLogin ? 'Sign-in failed.' : 'Could not send the sign-in link. Please try again later.');
+      }
     } finally {
-      setIsSigningInDev(false);
+      setIsSigningIn(false);
     }
   }
 
@@ -82,7 +68,7 @@ export default function LoginScreen() {
         <Text className="mt-2 text-center text-sm leading-5 text-app-muted">Sign in to enter an urban fantasy relationship sandbox.</Text>
 
         <View className="mt-8 gap-3">
-          <Text className="text-sm font-semibold text-app-text">Email sign-in</Text>
+          <Text className="text-sm font-semibold text-app-text">Email</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="email"
@@ -93,34 +79,13 @@ export default function LoginScreen() {
             value={email}
             className="min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text"
           />
-          <Button isLoading={isSendingLink} label="Send sign-in link" onPress={handleMagicLink} />
+          <Button
+            isLoading={isSigningIn}
+            label={isDevLogin ? 'Sign in' : 'Send sign-in link'}
+            onPress={handleSignIn}
+          />
           {notice ? <Text className="text-sm leading-5 text-app-primary">{notice}</Text> : null}
-          {devVerifyUrl ? (
-            <Button label="Open dev sign-in link" onPress={() => void Linking.openURL(devVerifyUrl)} variant="secondary" />
-          ) : null}
         </View>
-
-        <View className="mt-5">
-          <Button label="Continue with Google" onPress={signInGoogle} variant="secondary" />
-        </View>
-
-        {isDevLoginEnabled() ? (
-          <View className="mt-6 rounded-lg border border-app-line bg-app-bg p-4">
-            <Text className="text-sm font-semibold text-app-text">Dev Sign-In</Text>
-            <TextInput
-              autoCapitalize="none"
-              inputMode="email"
-              onChangeText={setDevEmail}
-              placeholder="dev@example.com"
-              placeholderTextColor="#8B949E"
-              value={devEmail}
-              className="mt-3 min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text"
-            />
-            <View className="mt-3">
-              <Button isLoading={isSigningInDev} label="Dev Sign-In" onPress={handleDevSignIn} variant="secondary" />
-            </View>
-          </View>
-        ) : null}
       </View>
     </View>
   );

@@ -1,5 +1,6 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
+import { handleAdminRequest } from "./admin";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
 import { handleChatRequest } from "./chat";
@@ -55,6 +56,11 @@ export default {
       const adminLlmResponse = await handleAdminLlmRequest(request, env, pathname);
       if (adminLlmResponse) {
         return withCors(request, env, adminLlmResponse);
+      }
+
+      const adminResponse = await handleAdminRequest(request, env, pathname);
+      if (adminResponse) {
+        return withCors(request, env, adminResponse);
       }
 
       const billingResponse = await handleBillingRequest(request, env, ctx, pathname);

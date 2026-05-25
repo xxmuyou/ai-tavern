@@ -66,7 +66,7 @@ Global billing foundation. The default app key is `platform`; future apps can pa
 - Apply remote dev D1 migrations.
 - Deploy dev API and web.
 - Use Stripe test card after webhook is configured.
-- Until `dev.aiappsbox.com` serves Pages root, Stripe return URLs use `https://dev.xtbit-apps.pages.dev`.
+- Stripe return URLs use `https://dev.aiappsbox.com`; Pages-generated preview domains must not be used for billing redirects.
 - Confirm a sandbox payment creates D1 customer, subscription, and webhook event rows.
 - Confirm the public subscription status endpoint returns `active` and `currentPeriodEnd`.
 

@@ -96,6 +96,12 @@ cleanup() {
 
 stop_ports
 
+echo "Preparing local env files..."
+if ! "$SCRIPT_DIR/prepare-local-env.sh" dev; then
+    echo "Local env preparation failed. Refusing to start with stale env files." >&2
+    exit 1
+fi
+
 if [ "$SKIP_MIGRATE" -eq 1 ]; then
     echo "Skipping D1 migration (--skip-migrate)."
 else
