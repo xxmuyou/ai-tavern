@@ -72,8 +72,8 @@ if [ "$target" = "prod" ]; then
     fi
 
     pnpm cf:d1:migrate:prod
-    ./scripts/tasks/run.sh api:deploy-prod
-    ./scripts/tasks/run.sh deploy:web-prod
+    bash ./scripts/tasks/run.sh api:deploy-prod
+    bash ./scripts/tasks/run.sh deploy:web-prod
     curl -fsS "https://aiappsbox.com/api/health" >/dev/null
     curl -fsSI "https://aiappsbox.com" >/dev/null
     assert_web_entry_matches "https://aiappsbox.com"

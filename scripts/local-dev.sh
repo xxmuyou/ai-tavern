@@ -97,7 +97,7 @@ cleanup() {
 stop_ports
 
 echo "Preparing local env files..."
-if ! "$SCRIPT_DIR/prepare-local-env.sh" dev; then
+if ! bash "$SCRIPT_DIR/prepare-local-env.sh" dev; then
     echo "Local env preparation failed. Refusing to start with stale env files." >&2
     exit 1
 fi
@@ -106,7 +106,7 @@ if [ "$SKIP_MIGRATE" -eq 1 ]; then
     echo "Skipping D1 migration (--skip-migrate)."
 else
     echo "Applying pending D1 migrations (local)..."
-    if ! "$SCRIPT_DIR/tasks/run.sh" api:d1-migrate-local; then
+    if ! bash "$SCRIPT_DIR/tasks/run.sh" api:d1-migrate-local; then
         echo "D1 migration failed. Refusing to start with a stale schema." >&2
         echo "Re-run after fixing the migration, or pass --skip-migrate to bypass." >&2
         exit 1

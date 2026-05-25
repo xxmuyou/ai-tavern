@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ImageBackground, Pressable, Text, TextInput, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -36,7 +36,7 @@ export function WebLanding() {
   }
 
   return (
-    <View className="min-h-screen flex-1 bg-[#F2F5F6]">
+    <ScrollView className="h-screen bg-[#F2F5F6]" contentContainerStyle={{ flexGrow: 1 }}>
       <View className="mx-auto min-h-screen w-full max-w-[1440px] px-8 py-8">
         <View className="mb-8 flex-row items-center justify-between">
           <Text className="text-2xl font-semibold text-app-text">AI Apps Box</Text>
@@ -99,6 +99,6 @@ export function WebLanding() {
           </View>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }

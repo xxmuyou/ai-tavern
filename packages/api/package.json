@@ -4,15 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "../../scripts/tasks/run.sh api:dev",
-    "deploy": "../../scripts/tasks/run.sh api:deploy-dev",
-    "deploy:dev": "../../scripts/tasks/run.sh api:deploy-dev",
-    "cf:types": "../../scripts/tasks/run.sh api:cf-types",
-    "d1:migrate:local": "../../scripts/tasks/run.sh api:d1-migrate-local",
-    "d1:migrate:dev": "../../scripts/tasks/run.sh api:d1-migrate-dev",
-    "d1:migrate:prod": "../../scripts/tasks/run.sh api:d1-migrate-prod",
+    "dev": "bash ../../scripts/tasks/run.sh api:dev",
+    "deploy": "bash ../../scripts/tasks/run.sh api:deploy-dev",
+    "deploy:dev": "bash ../../scripts/tasks/run.sh api:deploy-dev",
+    "cf:types": "bash ../../scripts/tasks/run.sh api:cf-types",
+    "d1:migrate:local": "bash ../../scripts/tasks/run.sh api:d1-migrate-local",
+    "d1:migrate:dev": "bash ../../scripts/tasks/run.sh api:d1-migrate-dev",
+    "d1:migrate:prod": "bash ../../scripts/tasks/run.sh api:d1-migrate-prod",
     "test": "vitest run",
-    "typecheck": "../../scripts/tasks/run.sh api:typecheck"
+    "typecheck": "bash ../../scripts/tasks/run.sh api:typecheck"
   },
   "dependencies": {
     "@xtbit/shared": "file:../shared",

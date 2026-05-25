@@ -36,9 +36,9 @@ export function WebAppShell({ actions, children, subtitle, title }: WebAppShellP
 
   return (
     <AuthGuard>
-      <View className="min-h-screen flex-1 bg-[#F3F5F7]">
-        <View className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-row">
-          <View className="w-72 border-r border-app-line bg-white px-5 py-6">
+      <View className="h-screen min-h-0 flex-1 overflow-hidden bg-[#F3F5F7]">
+        <View className="mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-row">
+          <View className="h-full w-72 border-r border-app-line bg-white px-5 py-6">
             <Pressable accessibilityRole="button" onPress={() => router.push(SCENES_ROUTE)} className="mb-8">
               <Text className="text-2xl font-semibold text-app-text">AI Apps Box</Text>
               <Text className="mt-1 text-sm text-app-muted">Relationship sandbox</Text>
@@ -73,7 +73,7 @@ export function WebAppShell({ actions, children, subtitle, title }: WebAppShellP
             </View>
           </View>
 
-          <View className="min-w-0 flex-1">
+          <View className="min-h-0 min-w-0 flex-1">
             <View className="border-b border-app-line bg-white px-8 py-5">
               <View className="flex-row items-start justify-between gap-6">
                 <View className="min-w-0 flex-1">
@@ -86,7 +86,7 @@ export function WebAppShell({ actions, children, subtitle, title }: WebAppShellP
                 </View>
               </View>
             </View>
-            <ScrollView className="flex-1" contentContainerStyle={{ padding: 32 }}>
+            <ScrollView className="min-h-0 flex-1" contentContainerStyle={{ flexGrow: 1, padding: 32 }}>
               {children}
             </ScrollView>
           </View>

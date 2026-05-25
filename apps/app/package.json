@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "export:web": "expo export --platform web",
-    "export:web:dev": "../../scripts/tasks/run.sh app:export-web-dev",
+    "export:web:dev": "bash ../../scripts/tasks/run.sh app:export-web-dev",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint"
   },
