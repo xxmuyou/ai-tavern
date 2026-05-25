@@ -3,7 +3,6 @@ import { createContext, createElement, PropsWithChildren, useCallback, useContex
 import {
   applySessionFragment,
   clearStoredAuthSession,
-  createDevSession,
   logout,
   readStoredAuthSession,
   sendMagicLink as sendMagicLinkRequest,
@@ -12,6 +11,7 @@ import {
   type AuthSession,
   type MagicLinkResponse,
 } from '@/api/companion-client';
+import { invalidateMeCache } from '@/hooks/use-me';
 
 type SessionContextValue = {
   acceptSessionFragment: (hash: string) => AuthSession | null;
@@ -19,7 +19,6 @@ type SessionContextValue = {
   isLoading: boolean;
   sendMagicLink: (email: string) => Promise<MagicLinkResponse>;
   session: AuthSession | null;
-  signInDev: (email: string) => Promise<AuthSession>;
   signInGoogle: () => void;
   signOut: () => Promise<void>;
   storeSession: (session: AuthSession) => void;
@@ -63,13 +62,6 @@ export function SessionProvider({ children }: PropsWithChildren) {
     return nextSession;
   }, []);
 
-  const signInDev = useCallback(async (email: string) => {
-    setError(null);
-    const nextSession = await createDevSession(email);
-    storeSession(nextSession);
-    return nextSession;
-  }, [storeSession]);
-
   const signInGoogle = useCallback(() => {
     startGoogleLogin('/auth/success');
   }, []);
@@ -82,6 +74,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     setError(null);
     await logout();
+    invalidateMeCache();
     setSession(null);
   }, []);
 
@@ -92,12 +85,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
       isLoading,
       sendMagicLink,
       session,
-      signInDev,
       signInGoogle,
       signOut,
       storeSession,
     }),
-    [acceptSessionFragment, error, isLoading, sendMagicLink, session, signInDev, signInGoogle, signOut, storeSession],
+    [acceptSessionFragment, error, isLoading, sendMagicLink, session, signInGoogle, signOut, storeSession],
   );
 
   return createElement(SessionContext.Provider, { value }, children);

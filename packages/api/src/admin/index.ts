@@ -1,11 +1,9 @@
-import { handleDevLoginAllowlistRequest } from "./dev-login-allowlist";
+import { handleAdminAllowlistRequest } from "./user-allowlist";
 
 export async function handleAdminRequest(
   request: Request,
   env: Env,
   pathname: string,
 ): Promise<Response | null> {
-  return handleDevLoginAllowlistRequest(request, env, pathname);
+  return handleAdminAllowlistRequest(request, env, pathname);
 }
-
-export { isDevLoginEmailAllowed } from "./dev-login-allowlist";

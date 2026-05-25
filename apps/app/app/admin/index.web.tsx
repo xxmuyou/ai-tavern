@@ -2,19 +2,28 @@ import { useEffect, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
 import {
-  addDevLoginAllowlistEmail,
-  listDevLoginAllowlist,
-  removeDevLoginAllowlistEmail,
+  addAdminAllowlistEmail,
+  listAdminAllowlist,
+  removeAdminAllowlistEmail,
 } from '@/api/companion-client';
-import type { DevLoginAllowlistItem } from '@/api/types';
+import type { AdminAllowlistItem } from '@/api/types';
+import { AdminGuard } from '@/components/AdminGuard';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { WebAppShell, WebPanel } from '@/components/web/WebAppShell';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 
 export default function WebAdminScreen() {
+  return (
+    <AdminGuard>
+      <WebAdminContent />
+    </AdminGuard>
+  );
+}
+
+function WebAdminContent() {
   const { pushError } = useErrorBanner();
-  const [emails, setEmails] = useState<DevLoginAllowlistItem[]>([]);
+  const [emails, setEmails] = useState<AdminAllowlistItem[]>([]);
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -22,13 +31,13 @@ export default function WebAdminScreen() {
   const [removingEmail, setRemovingEmail] = useState<string | null>(null);
 
   async function refresh() {
-    const payload = await listDevLoginAllowlist();
+    const payload = await listAdminAllowlist();
     setEmails(payload.emails);
   }
 
   useEffect(() => {
     let mounted = true;
-    listDevLoginAllowlist()
+    listAdminAllowlist()
       .then((payload) => {
         if (mounted) setEmails(payload.emails);
       })
@@ -49,7 +58,7 @@ export default function WebAdminScreen() {
     }
     setIsSaving(true);
     try {
-      await addDevLoginAllowlistEmail(trimmedEmail, note.trim());
+      await addAdminAllowlistEmail(trimmedEmail, note.trim());
       setEmail('');
       setNote('');
       await refresh();
@@ -63,7 +72,7 @@ export default function WebAdminScreen() {
   async function handleRemove(targetEmail: string) {
     setRemovingEmail(targetEmail);
     try {
-      await removeDevLoginAllowlistEmail(targetEmail);
+      await removeAdminAllowlistEmail(targetEmail);
       await refresh();
     } catch {
       pushError('Could not remove this email.');
@@ -77,12 +86,12 @@ export default function WebAdminScreen() {
   }
 
   return (
-    <WebAppShell title="Admin" subtitle="Manage dev-only operational controls.">
+    <WebAppShell title="Admin" subtitle="Manage admin members and operational controls.">
       <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <WebPanel>
-          <Text className="text-xl font-semibold text-app-text">Dev login allowlist</Text>
+          <Text className="text-xl font-semibold text-app-text">Admin members</Text>
           <Text className="mt-2 text-sm leading-6 text-app-muted">
-            Only allowlisted emails can use direct dev sign-in. Built-in admins cannot be removed here.
+            Add emails to grant admin access. Built-in admins (from environment config) cannot be removed here.
           </Text>
           <View className="mt-6 gap-3">
             <TextInput
@@ -113,7 +122,7 @@ export default function WebAdminScreen() {
                 <View className="min-w-0 flex-1">
                   <Text className="text-lg font-semibold text-app-text">{item.email}</Text>
                   <Text className="mt-1 text-sm text-app-muted">
-                    {item.source === 'builtin' ? 'Built-in admin' : item.note || 'Custom allowlist email'}
+                    {item.source === 'builtin' ? 'Built-in admin' : item.note || 'Custom admin member'}
                   </Text>
                   {item.created_by_email ? <Text className="mt-1 text-xs text-app-muted">Added by {item.created_by_email}</Text> : null}
                 </View>

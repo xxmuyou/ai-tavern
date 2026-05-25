@@ -15,12 +15,12 @@ type AllowlistCreateRequest = {
   note?: string | null;
 };
 
-export async function handleDevLoginAllowlistRequest(
+export async function handleAdminAllowlistRequest(
   request: Request,
   env: Env,
   pathname: string,
 ): Promise<Response | null> {
-  if (pathname === "/admin/dev-login-allowlist") {
+  if (pathname === "/admin/admin-allowlist") {
     try {
       if (request.method === "GET") return handleList(request, env);
       if (request.method === "POST") return handleCreate(request, env);
@@ -31,7 +31,7 @@ export async function handleDevLoginAllowlistRequest(
     }
   }
 
-  const deleteMatch = pathname.match(/^\/admin\/dev-login-allowlist\/([^/]+)$/);
+  const deleteMatch = pathname.match(/^\/admin\/admin-allowlist\/([^/]+)$/);
   if (deleteMatch) {
     try {
       if (request.method !== "DELETE") {
@@ -47,26 +47,12 @@ export async function handleDevLoginAllowlistRequest(
   return null;
 }
 
-export async function isDevLoginEmailAllowed(env: Env, email: string): Promise<boolean> {
-  const normalized = normalizeEmail(email);
-  if (!normalized) return false;
-
-  if (getConfiguredAdminEmails(env).has(normalized)) {
-    return true;
-  }
-
-  const row = await env.DB.prepare("SELECT email FROM dev_login_allowlist WHERE email = ?")
-    .bind(normalized)
-    .first<{ email: string }>();
-  return Boolean(row);
-}
-
 async function handleList(request: Request, env: Env): Promise<Response> {
   await requireAdminUser(env, request);
 
   const result = await env.DB.prepare(
     `SELECT a.email, a.note, a.created_at, a.created_by, u.email AS created_by_email
-     FROM dev_login_allowlist a
+     FROM admin_user_allowlist a
      LEFT JOIN users u ON u.id = a.created_by
      ORDER BY a.created_at DESC, a.email ASC`,
   ).all<AllowlistRow>();
@@ -74,7 +60,7 @@ async function handleList(request: Request, env: Env): Promise<Response> {
   const builtInEmails = getConfiguredAdminEmails(env);
   const builtIn = [...builtInEmails].map((email) => ({
     email,
-    note: "Built-in admin login",
+    note: "Built-in admin",
     created_at: null,
     created_by: null,
     created_by_email: null,
@@ -105,7 +91,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   if (getConfiguredAdminEmails(env).has(email)) {
     return jsonResponse({
       email,
-      note: "Built-in admin login",
+      note: "Built-in admin",
       created_at: null,
       created_by: null,
       created_by_email: null,
@@ -116,7 +102,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   const note = typeof body.note === "string" && body.note.trim() ? body.note.trim() : null;
   const now = Date.now();
   await env.DB.prepare(
-    `INSERT INTO dev_login_allowlist (email, note, created_at, created_by)
+    `INSERT INTO admin_user_allowlist (email, note, created_at, created_by)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(email) DO UPDATE SET note = excluded.note`,
   )
@@ -143,6 +129,6 @@ async function handleDelete(request: Request, env: Env, rawEmail: string): Promi
     return jsonResponse({ error: "builtin_email_cannot_be_removed" }, { status: 400 });
   }
 
-  await env.DB.prepare("DELETE FROM dev_login_allowlist WHERE email = ?").bind(email).run();
+  await env.DB.prepare("DELETE FROM admin_user_allowlist WHERE email = ?").bind(email).run();
   return jsonResponse({ ok: true });
 }

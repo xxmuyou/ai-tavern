@@ -63,7 +63,7 @@ export async function requireAdminUser(
   fallbackEmail?: string | null,
 ): Promise<UserRecord> {
   const user = await requireAuthUser(env, request, fallbackEmail);
-  if (!isAdminEmail(env, user.email)) {
+  if (!(await isAdminUser(env, user.email))) {
     throw authError("admin_required", 403);
   }
 
@@ -81,6 +81,16 @@ export async function requireAdminEmail(
 export function isAdminEmail(env: Env, email: string | null | undefined): boolean {
   const normalized = normalizeEmail(email);
   return Boolean(normalized && getConfiguredAdminEmails(env).has(normalized));
+}
+
+export async function isAdminUser(env: Env, email: string | null | undefined): Promise<boolean> {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  if (isAdminEmail(env, normalized)) return true;
+  const row = await env.DB.prepare("SELECT email FROM admin_user_allowlist WHERE email = ?")
+    .bind(normalized)
+    .first<{ email: string }>();
+  return Boolean(row);
 }
 
 export function getConfiguredAdminEmails(env: Env): Set<string> {

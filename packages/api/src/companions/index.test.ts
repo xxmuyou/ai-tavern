@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { handleAuthRequest } from "../auth";
-import { createSessionsStore, type SessionsStore } from "../auth/test-fixtures";
+import { createSessionsStore, issueTestSessionToken, type SessionsStore } from "../auth/test-fixtures";
 import { handleCompanionsRequest } from "./index";
 
 type CompanionRow = {
@@ -455,18 +454,7 @@ function userCompanion(id: string, ownerId: string, gender: "male" | "female" = 
 // -----------------------------------------------------------------------------
 
 async function issueDevToken(env: Env, email: string): Promise<string> {
-  const response = await handleAuthRequest(
-    new Request("http://localhost/auth/dev-session", {
-      body: JSON.stringify({ email }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    }),
-    env,
-    "/auth/dev-session",
-  );
-  if (!response) throw new Error("auth handler returned null");
-  const payload = (await response.json()) as { token: string };
-  return payload.token;
+  return issueTestSessionToken(env, email);
 }
 
 function authedRequest(
@@ -597,7 +585,7 @@ function queryFirst<T>(
   users: Map<string, { id: string; email: string }>,
   proUserIds: Set<string>,
 ): T | null {
-  if (sql.includes("FROM dev_login_allowlist")) {
+  if (sql.includes("FROM admin_user_allowlist")) {
     return { email: values[0] as string } as T;
   }
 

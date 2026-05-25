@@ -208,7 +208,7 @@ export type MeResponse = {
   subscription: MeSubscription;
 };
 
-export type DevLoginAllowlistItem = {
+export type AdminAllowlistItem = {
   created_at: string | null;
   created_by: string | null;
   created_by_email: string | null;
@@ -217,8 +217,8 @@ export type DevLoginAllowlistItem = {
   source: 'builtin' | 'custom';
 };
 
-export type DevLoginAllowlistResponse = {
-  emails: DevLoginAllowlistItem[];
+export type AdminAllowlistResponse = {
+  emails: AdminAllowlistItem[];
 };
 
 export type AsyncState<T> =

@@ -1,4 +1,4 @@
-import { isAdminEmail } from "../auth/guards";
+import { isAdminUser } from "../auth/guards";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
@@ -64,7 +64,7 @@ export async function handlePostMessage(
   }
 
   const now = Date.now();
-  const isAdmin = isAdminEmail(env, user.email);
+  const isAdmin = await isAdminUser(env, user.email);
 
   if (!isAdmin) {
     const rateCheck = await checkRateLimit(env, user.id, now);

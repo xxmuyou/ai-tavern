@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
 import type { ChatEmotionKey, ChatMessage, CompanionDetail } from '@/api/types';
@@ -149,7 +149,8 @@ export default function WebChatScreen() {
       <View className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         <WebPanel className="xl:col-span-1">
           <View className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
-            {portrait ? <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" /> : null}
+            <View pointerEvents="none" style={chatPortraitStyles.portraitFloor} />
+            {portrait ? <Image source={portrait} resizeMode="contain" style={chatPortraitStyles.portraitImage} /> : null}
           </View>
           <Text className="mt-4 text-xl font-semibold text-app-text">{companion?.name ?? 'Companion'}</Text>
           <Text className="mt-1 text-sm uppercase tracking-normal text-app-muted">{companion?.relationship_role ?? 'companion'}</Text>
@@ -226,3 +227,19 @@ export default function WebChatScreen() {
     </WebAppShell>
   );
 }
+
+const chatPortraitStyles = StyleSheet.create({
+  portraitFloor: {
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    bottom: 0,
+    height: 58,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
+  portraitImage: {
+    height: '112%',
+    transform: [{ translateY: 9 }],
+    width: '112%',
+  },
+});

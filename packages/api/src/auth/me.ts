@@ -1,6 +1,6 @@
 import { jsonResponse, readJson } from "../http";
 import { getBillingStatus } from "../billing/entitlements";
-import { isAdminEmail } from "./guards";
+import { isAdminUser } from "./guards";
 import { loadUserWithProviders } from "./repository";
 import { revokeSession, verifyAuthToken, verifyRequestAuth } from "./session";
 import { authError } from "./types";
@@ -29,7 +29,7 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
     return authError("invalid_token", 401);
   }
 
-  const adminOverride = isAdminEmail(env, userWithProviders.email);
+  const adminOverride = await isAdminUser(env, userWithProviders.email);
   const billing = await getBillingStatus(env, payload.sub, undefined, { adminOverride });
 
   return jsonResponse({

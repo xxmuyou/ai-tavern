@@ -1,14 +1,14 @@
 import { Linking, type ImageSourcePropType } from 'react-native';
 
 import type {
+  AdminAllowlistItem,
+  AdminAllowlistResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
   ChatMessageInput,
   CompanionCreateInput,
   CompanionDetailResponse,
   CompanionsListResponse,
-  DevLoginAllowlistItem,
-  DevLoginAllowlistResponse,
   MeResponse,
   RelationshipResponse,
   RomancePreference,
@@ -34,14 +34,6 @@ function resolveApiBaseUrl(): string {
     }
   }
   return CONFIGURED_API_BASE_URL;
-}
-
-export function isDevClientEnvironment(): boolean {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    return hostname === 'dev.aiappsbox.com' || hostname === 'localhost' || hostname === '127.0.0.1';
-  }
-  return /localhost|127\.0\.0\.1|dev/i.test(CONFIGURED_API_BASE_URL);
 }
 
 export type AuthSession = {
@@ -130,18 +122,6 @@ const LOCAL_MEDIA: Record<string, ImageSourcePropType> = {
   'portraits/sora/warm.webp': require('../assets/ai-companion/portraits/sora/warm.webp'),
 };
 
-export async function createDevSession(email: string): Promise<AuthSession> {
-  return requestJson<AuthSession>(
-    '/auth/dev-session',
-    {
-      body: JSON.stringify({ email }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    },
-    { skipAuth: true },
-  );
-}
-
 export function startGoogleLogin(redirectPath?: string): void {
   const params = new URLSearchParams();
   if (redirectPath) {
@@ -175,23 +155,23 @@ export async function fetchMe(): Promise<MeResponse> {
   return requestJson<MeResponse>('/auth/me');
 }
 
-export async function listDevLoginAllowlist(): Promise<DevLoginAllowlistResponse> {
-  return requestJson<DevLoginAllowlistResponse>('/admin/dev-login-allowlist');
+export async function listAdminAllowlist(): Promise<AdminAllowlistResponse> {
+  return requestJson<AdminAllowlistResponse>('/admin/admin-allowlist');
 }
 
-export async function addDevLoginAllowlistEmail(
+export async function addAdminAllowlistEmail(
   email: string,
   note?: string,
-): Promise<DevLoginAllowlistItem> {
-  return requestJson<DevLoginAllowlistItem>('/admin/dev-login-allowlist', {
+): Promise<AdminAllowlistItem> {
+  return requestJson<AdminAllowlistItem>('/admin/admin-allowlist', {
     body: JSON.stringify({ email, note }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });
 }
 
-export async function removeDevLoginAllowlistEmail(email: string): Promise<{ ok: true }> {
-  return requestJson<{ ok: true }>(`/admin/dev-login-allowlist/${encodeURIComponent(email)}`, {
+export async function removeAdminAllowlistEmail(email: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/admin-allowlist/${encodeURIComponent(email)}`, {
     method: 'DELETE',
   });
 }
