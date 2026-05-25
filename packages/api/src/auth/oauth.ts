@@ -146,10 +146,11 @@ function stateKey(state: string): string {
 }
 
 function buildProviderRedirectUri(request: Request, providerId: string): string {
-  // Use the incoming request URL to determine our callback origin.
-  // The actual path is always /auth/oidc/{provider}/callback (worker normalizes /api/*).
+  // Preserve the /api prefix when present — the worker is bound to dev.aiappsbox.com/api/*,
+  // and Google must call back to a URL that routes back to us.
   const url = new URL(request.url);
-  url.pathname = `/auth/oidc/${providerId}/callback`;
+  const apiPrefix = url.pathname.startsWith("/api/") || url.pathname === "/api" ? "/api" : "";
+  url.pathname = `${apiPrefix}/auth/oidc/${providerId}/callback`;
   url.search = "";
   url.hash = "";
   return url.toString();
