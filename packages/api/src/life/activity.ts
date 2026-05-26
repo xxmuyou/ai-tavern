@@ -152,8 +152,8 @@ async function createActivity(env: Env, user: UserRecord, raw: unknown): Promise
     .bind(id, user.id, companionId, sceneId, at, JSON.stringify(snapshot), nowMs)
     .run();
 
-  return jsonResponse(
-    serializeActivity({
+  return serializeActivity(
+    {
       id,
       user_id: user.id,
       companion_id: companionId,
@@ -164,7 +164,7 @@ async function createActivity(env: Env, user: UserRecord, raw: unknown): Promise
       started_at: nowMs,
       completed_at: null,
       canceled_at: null,
-    }),
+    },
     { status: 201 },
   );
 }
@@ -197,7 +197,7 @@ async function completeActivity(env: Env, user: UserRecord, id: string): Promise
     console.error(JSON.stringify({ message: "memory_hook_failed", id, error: String(err) }));
   }
 
-  return jsonResponse(serializeActivity({ ...row, status: "completed", completed_at: now }));
+  return serializeActivity({ ...row, status: "completed", completed_at: now });
 }
 
 async function cancelActivity(env: Env, user: UserRecord, id: string): Promise<Response> {
@@ -213,7 +213,7 @@ async function cancelActivity(env: Env, user: UserRecord, id: string): Promise<R
     .bind(now, id)
     .run();
 
-  return jsonResponse(serializeActivity({ ...row, status: "canceled", canceled_at: now }));
+  return serializeActivity({ ...row, status: "canceled", canceled_at: now });
 }
 
 // -----------------------------------------------------------------------------
