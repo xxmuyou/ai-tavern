@@ -10,6 +10,7 @@ import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleActivityRequest } from "./life/activity";
 import { handleMemoryRequest } from "./life/memory";
+import { handlePushRequest } from "./life/push";
 import { handleTodayRequest } from "./life/today";
 import { handleAdminLlmRequest } from "./llm";
 import { handleRelationshipsRequest } from "./relationships";
@@ -109,6 +110,11 @@ export default {
       const memoryResponse = await handleMemoryRequest(request, env, pathname);
       if (memoryResponse) {
         return withCors(request, env, memoryResponse);
+      }
+
+      const pushResponse = await handlePushRequest(request, env, pathname);
+      if (pushResponse) {
+        return withCors(request, env, pushResponse);
       }
 
       if (isRetiredPath(pathname)) {
