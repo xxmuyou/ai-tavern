@@ -9,6 +9,7 @@ import { handleCompanionsRequest } from "./companions";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleActivityRequest } from "./life/activity";
+import { handleMemoryRequest } from "./life/memory";
 import { handleTodayRequest } from "./life/today";
 import { handleAdminLlmRequest } from "./llm";
 import { handleRelationshipsRequest } from "./relationships";
@@ -103,6 +104,11 @@ export default {
       const activityResponse = await handleActivityRequest(request, env, pathname);
       if (activityResponse) {
         return withCors(request, env, activityResponse);
+      }
+
+      const memoryResponse = await handleMemoryRequest(request, env, pathname);
+      if (memoryResponse) {
+        return withCors(request, env, memoryResponse);
       }
 
       if (isRetiredPath(pathname)) {
