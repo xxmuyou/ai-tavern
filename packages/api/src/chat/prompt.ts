@@ -20,9 +20,17 @@ export type HistoryMessage = {
   content: string;
 };
 
+export type ActivityForPrompt = {
+  type: string;
+  mood: string;
+  availability: string;
+  activity_hint: string;
+} | null;
+
 export type ChatPromptInput = {
   companion: CompanionForPrompt;
   scene: SceneForPrompt;
+  activity?: ActivityForPrompt;
   narrative: string;
   threadSummary: string | null;
   recentMessages: HistoryMessage[];
@@ -45,7 +53,7 @@ export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
 }
 
 function buildSystemPrompt(input: ChatPromptInput): string {
-  const { companion, scene, narrative, threadSummary } = input;
+  const { companion, scene, activity, narrative, threadSummary } = input;
 
   const lines: string[] = [];
   const role = companion.relationship_role ?? "companion";
@@ -66,6 +74,18 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     if (scene.tags.length > 0) {
       lines.push(`Tags: ${scene.tags.join(", ")}`);
     }
+  }
+
+  if (activity) {
+    lines.push("");
+    lines.push("# Current Activity");
+    lines.push(`Activity type: ${activity.type}`);
+    lines.push(`Your mood right now: ${activity.mood}`);
+    lines.push(`Your availability: ${activity.availability}`);
+    if (activity.activity_hint) {
+      lines.push(`What you were doing before the user arrived: ${activity.activity_hint}`);
+    }
+    lines.push("Respond in a way that honours the activity and your current mood. Do not teleport to a different scene.");
   }
 
   lines.push("");

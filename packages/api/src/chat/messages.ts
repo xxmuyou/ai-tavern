@@ -3,6 +3,7 @@ import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
 import { maybeCreateConflictEvent } from "../events/conflict";
+import { loadActiveActivityForChat } from "../life/activity";
 import { applySignals, ensureRelationship, loadRelationship } from "../relationships/engine";
 import type { DimensionValues } from "../relationships/level";
 import { ZERO_DIMENSIONS } from "../relationships/level";
@@ -30,7 +31,7 @@ import { formatDateUtc, recordUsage } from "./usage";
 
 const RECENT_MESSAGES_LIMIT = 50;
 
-type PostBody = { text?: unknown; scene_id?: unknown };
+type PostBody = { text?: unknown; scene_id?: unknown; activity_id?: unknown };
 
 type HistoryRow = { role: "user" | "companion"; content: string };
 
@@ -53,7 +54,19 @@ export async function handlePostMessage(
   if (!userText) {
     return jsonResponse({ error: "invalid_request", field: "text" }, { status: 400 });
   }
-  const sceneIdInput = typeof body.scene_id === "string" && body.scene_id.length > 0 ? body.scene_id : null;
+  let sceneIdInput = typeof body.scene_id === "string" && body.scene_id.length > 0 ? body.scene_id : null;
+  const activityIdInput = typeof body.activity_id === "string" && body.activity_id.length > 0 ? body.activity_id : null;
+  const activity = activityIdInput
+    ? await loadActiveActivityForChat(env, user.id, activityIdInput)
+    : null;
+  if (activityIdInput && !activity) {
+    return jsonResponse({ error: "activity_not_active" }, { status: 422 });
+  }
+  // When chat is locked to an activity, force the scene to match so the
+  // companion does not "teleport" mid-conversation.
+  if (activity) {
+    sceneIdInput = activity.scene_id;
+  }
 
   const companion = await loadCompanionForChat(env, companionId);
   if (!companion) {
@@ -107,6 +120,14 @@ export async function handlePostMessage(
     recentMessages,
     scene: scene
       ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
+      : null,
+    activity: activity
+      ? {
+          type: activity.activity_type,
+          mood: activity.daily_state_snapshot.mood,
+          availability: activity.daily_state_snapshot.availability,
+          activity_hint: activity.daily_state_snapshot.activity_hint,
+        }
       : null,
     threadSummary: thread.summary,
     userText,
