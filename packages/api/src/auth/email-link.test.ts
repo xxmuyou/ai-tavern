@@ -54,7 +54,11 @@ describe("POST /auth/email/send-link", () => {
     const call = sender.mock.calls[0]![0];
     expect(call.to).toBe("player@example.com");
     expect(call.from).toBe("no-reply@x.com");
+    expect(call.subject).toBe("Your AI Apps Box sign-in link");
     expect(call.html).toContain("/auth/email/verify?token=");
+    expect(call.html).toContain("Sign in or create your account");
+    expect(call.text).toContain("/auth/email/verify?token=");
+    expect(call.text).toContain("This sign-in link expires in 15 minutes");
 
     const kvKeys = [...env.kvStore.raw.keys()];
     expect(kvKeys.some((k) => k.startsWith("magic:"))).toBe(true);
