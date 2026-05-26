@@ -1,8 +1,10 @@
-# 美术清单（场景图 + 角色立绘 + 情绪表情）
+# 美术清单（场景图 + 角色立绘 + 情绪表情 + 里程碑 CG）
 
 > 单页对照表，照抄即可。所有资产的最终命名 / 路径以本表为准；上传到 R2 后把 URL 填回数据库（`scenes.art_url` / `companions.art_url` / `companions.art_emotions`）。
 >
 > 路径前缀：本地预览放在 `apps/app/assets/ai-companion/scenes/`、`apps/app/assets/ai-companion/portraits/` 下；正式资源传 R2 `companions/v1/` bucket。
+>
+> **设计边界：** 里程碑 CG 是 memory album 的奖励资产，不替代场景图，不替代聊天表情，也不改变 companion 的基础设定。
 
 ---
 
@@ -111,12 +113,69 @@ portraits/maya/maya_annoyed.png
 - ✅ 10 张场景图（必须，否则 SceneCard 显示占位绿）
 - ✅ 10 张角色默认立绘（必须，否则聊天界面 PortraitBar 显示首字母+表情符号占位）
 - ⏳ 60 张情绪立绘（可后补；缺哪个 key 就自动回退到默认立绘）
+- ⏳ 里程碑 CG（可后补；缺 CG 时 memory album 仍显示日记卡）
 
-**总量统计：** 必做 20 张，理想 80 张（10 场景 + 70 角色资产）。
+**总量统计：** 必做 20 张，理想基础 80 张（10 场景 + 70 角色资产）。里程碑 CG 单独排期，不纳入基础可玩集。
 
 ---
 
-## 4. 上线后接入
+## 4. 里程碑 CG（Memory Album 奖励）
+
+里程碑 CG 用于强化"关系真的发生过"的收藏感。它出现在 memory album 和 companion 详情页时间线，不在普通聊天中频繁切换。
+
+### 4.1 优先级
+
+| Priority | Memory type | 说明 |
+|---|---|---|
+| P0 | `first_date` | 第一次明确约会，是最直观的付费感奖励 |
+| P1 | `confession` | 告白 / 明确心意，关系推进的高峰 |
+| P2 | `repair` | 修复冲突后的脆弱时刻，增强关系真实感 |
+| P3 | `anniversary` | 认识 N 天或互动 N 次，支撑长期留存 |
+
+### 4.2 文件命名模板
+
+建议路径：
+
+```
+memories/<companion_id>/<memory_type>_01.png
+```
+
+示例：
+
+```
+memories/maya/first_date_01.png
+memories/maya/confession_01.png
+memories/theo/first_date_01.png
+```
+
+### 4.3 画面规则
+
+- 画面必须服从现有 companion 外貌、服装气质、年龄感与性格
+- 场景必须来自现有 scene，或明确看得出是现有 scene 的延伸
+- PG-13：暧昧、牵手、拥抱、靠近、告白、情绪亲密；不做露骨成人内容
+- 不做复杂多人构图，优先 1 个 companion + 环境情绪
+- 如果需要表现用户，使用局部视角（手、肩、背影）或第一人称构图，避免定义主角外貌
+
+### 4.4 首批建议
+
+不按固定剧情批次制作，而按通用里程碑制作。每个官方 companion 可先补 1 张 `first_date` CG；后续根据数据再补 `confession` / `repair` / `anniversary`。
+
+| Companion | `first_date` | `confession` | `repair` | `anniversary` |
+|---|---|---|---|---|
+| maya | ☐ | ☐ | ☐ | ☐ |
+| ryan | ☐ | ☐ | ☐ | ☐ |
+| lila | ☐ | ☐ | ☐ | ☐ |
+| ethan | ☐ | ☐ | ☐ | ☐ |
+| sora | ☐ | ☐ | ☐ | ☐ |
+| marcus | ☐ | ☐ | ☐ | ☐ |
+| aiko | ☐ | ☐ | ☐ | ☐ |
+| jordan | ☐ | ☐ | ☐ | ☐ |
+| iris | ☐ | ☐ | ☐ | ☐ |
+| theo | ☐ | ☐ | ☐ | ☐ |
+
+---
+
+## 5. 上线后接入
 
 1. 把图片传到 R2 `companions/v1/scenes/...` 和 `companions/v1/portraits/<id>/...`。
 2. 跑一次 update：
@@ -129,3 +188,4 @@ portraits/maya/maya_annoyed.png
    WHERE id = 'maya';
    ```
 3. App 端 `mediaUrl()` 会自动把相对路径补成 R2 完整 URL，不用改代码。
+4. 里程碑 CG 上传到 R2 `companions/v1/memories/<companion_id>/...`，由 memory 记录通过 `cg_url` 引用；缺失时 UI 显示纯日记卡。
