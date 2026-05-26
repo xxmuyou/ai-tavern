@@ -121,3 +121,14 @@ CREATE TABLE push_tokens (
 );
 
 CREATE INDEX idx_push_tokens_active ON push_tokens(user_id, revoked_at);
+
+-- ============================================================
+-- llm_config seeds for the new system tasks introduced by life-core.
+-- Both are system-initiated (do NOT consume user quota) and default to the
+-- cheap path: cloudflare workers AI primary, deepseek fallback. Admin
+-- console can re-route post-launch.
+-- ============================================================
+INSERT INTO llm_config (task, provider, model, fallback_provider, fallback_model, updated_at, updated_by)
+VALUES
+  ('daily_state_flavor', 'cloudflare', '@cf/meta/llama-3.1-8b-instruct', 'deepseek', 'deepseek-chat', unixepoch() * 1000, NULL),
+  ('memory_summary',     'cloudflare', '@cf/meta/llama-3.1-8b-instruct', 'deepseek', 'deepseek-chat', unixepoch() * 1000, NULL);

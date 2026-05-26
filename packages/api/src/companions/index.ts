@@ -4,6 +4,8 @@ import { QUOTA_LIMITS } from "../billing/quota";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
+import { getOrComputeDailyState, getOrGenerateFlavorText } from "../life/daily-state";
+import { computeDateLocal, computeTimeSlot } from "../life/time-slot";
 import type { Gender } from "./gender-weight";
 import { handleCompanionArtUpload } from "./upload-art";
 
@@ -91,6 +93,21 @@ export async function handleCompanionsRequest(
     return handleCompanionArtUpload(request, env);
   }
 
+  const dailyStateMatch = pathname.match(/^\/companions\/([^/]+)\/daily-state$/);
+  if (dailyStateMatch) {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const companionId = decodeURIComponent(dailyStateMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    const user = await requireAuthUser(env, request);
+    const url = new URL(request.url);
+    const includeFlavor = url.searchParams.get("include_flavor") === "1";
+    return getDailyState(env, user, companionId, includeFlavor);
+  }
+
   const idMatch = pathname.match(/^\/companions\/([^/]+)$/);
   if (idMatch) {
     const companionId = decodeURIComponent(idMatch[1] ?? "");
@@ -170,6 +187,41 @@ async function listCompanions(env: Env, user: UserRecord, source: string): Promi
   }));
 
   return jsonResponse({ items });
+}
+
+async function getDailyState(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+  includeFlavor: boolean,
+): Promise<Response> {
+  const companion = await loadCompanion(env, companionId);
+  if (!companion) return notFound();
+  if (!canRead(companion, user)) return notFound();
+
+  const tz = await loadUserTimezone(env, user.id);
+  const now = new Date();
+  const dateLocal = computeDateLocal(now, tz);
+  const slot = computeTimeSlot(now, tz);
+
+  const state = await getOrComputeDailyState(env, companionId, dateLocal, slot);
+  if (!state) return notFound();
+
+  let flavor_text: string | null = null;
+  if (includeFlavor) {
+    flavor_text = await getOrGenerateFlavorText(env, user.id, state, companion.name);
+  }
+
+  return jsonResponse({ ...state, flavor_text });
+}
+
+async function loadUserTimezone(env: Env, userId: string): Promise<string> {
+  const row = await env.DB.prepare(
+    `SELECT timezone FROM users WHERE id = ?`,
+  )
+    .bind(userId)
+    .first<{ timezone: string | null }>();
+  return row?.timezone ?? "UTC";
 }
 
 async function getCompanion(env: Env, user: UserRecord, companionId: string): Promise<Response> {
