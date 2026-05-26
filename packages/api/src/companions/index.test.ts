@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createSessionsStore, issueTestSessionToken, type SessionsStore } from "../auth/test-fixtures";
 import { handleCompanionsRequest } from "./index";
@@ -16,6 +16,7 @@ type CompanionRow = {
   relationship_role: string | null;
   preferred_scenes: string | null;
   art_url: string | null;
+  art_emotions: string | null;
   gender: string | null;
   initial_dims: string | null;
   created_at: number;
@@ -237,6 +238,35 @@ describe("companions module", () => {
     expect(body.id.length).toBeGreaterThan(0);
   });
 
+  it("POST maps a single uploaded art_url to every emotion portrait", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions", token, "POST", {
+        art_url: "companions/user/user-1/portrait.webp",
+        gender: "female",
+        name: "Echo",
+      }),
+      env,
+      "/companions",
+    );
+
+    expect(response?.status).toBe(201);
+    const body = (await response?.json()) as {
+      art_emotions: Record<string, string>;
+      art_url: string;
+    };
+    expect(body.art_url).toBe("companions/user/user-1/portrait.webp");
+    expect(body.art_emotions).toEqual({
+      annoyed: "companions/user/user-1/portrait.webp",
+      guarded: "companions/user/user-1/portrait.webp",
+      neutral: "companions/user/user-1/portrait.webp",
+      playful: "companions/user/user-1/portrait.webp",
+      tense: "companions/user/user-1/portrait.webp",
+      warm: "companions/user/user-1/portrait.webp",
+    });
+  });
+
   it("POST without name returns 400", async () => {
     const env = createEnv({ companions: [], relationships: [] });
     const token = await issueDevToken(env, "player@example.com");
@@ -326,6 +356,36 @@ describe("companions module", () => {
     expect(body.personality).toBe("Updated personality");
   });
 
+  it("PUT maps a replaced art_url to every emotion portrait", async () => {
+    const env = createEnv({
+      companions: [userCompanion("alex", "user-1")],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/alex", token, "PUT", {
+        art_url: "companions/user/user-1/replacement.png",
+      }),
+      env,
+      "/companions/alex",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as {
+      art_emotions: Record<string, string>;
+      art_url: string;
+    };
+    expect(body.art_url).toBe("companions/user/user-1/replacement.png");
+    expect(body.art_emotions).toEqual({
+      annoyed: "companions/user/user-1/replacement.png",
+      guarded: "companions/user/user-1/replacement.png",
+      neutral: "companions/user/user-1/replacement.png",
+      playful: "companions/user/user-1/replacement.png",
+      tense: "companions/user/user-1/replacement.png",
+      warm: "companions/user/user-1/replacement.png",
+    });
+  });
+
   it("PUT on official companion returns 403", async () => {
     const env = createEnv({
       companions: [officialCompanion("maya")],
@@ -401,6 +461,79 @@ describe("companions module", () => {
 
     expect(response?.status).toBe(403);
   });
+
+  it("POST /companions/upload-art stores an authenticated image in R2", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+    const form = new FormData();
+    form.set("file", new File(["image"], "portrait.webp", { type: "image/webp" }));
+
+    const response = await handleCompanionsRequest(
+      new Request("http://localhost/companions/upload-art", {
+        body: form,
+        headers: { authorization: `Bearer ${token}` },
+        method: "POST",
+      }),
+      env,
+      "/companions/upload-art",
+    );
+
+    expect(response?.status).toBe(201);
+    const body = (await response?.json()) as { key: string };
+    expect(body.key).toMatch(/^companions\/user\/user-1\/.+\.webp$/);
+    expect(env.ASSETS.put).toHaveBeenCalledWith(
+      body.key,
+      expect.anything(),
+      expect.objectContaining({
+        httpMetadata: { contentType: "image/webp" },
+      }),
+    );
+  });
+
+  it("POST /companions/upload-art rejects missing, oversized, and invalid files", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const missing = await handleCompanionsRequest(
+      new Request("http://localhost/companions/upload-art", {
+        body: new FormData(),
+        headers: { authorization: `Bearer ${token}` },
+        method: "POST",
+      }),
+      env,
+      "/companions/upload-art",
+    );
+    expect(missing?.status).toBe(400);
+    expect(await missing?.json()).toMatchObject({ error: "file_required" });
+
+    const invalidForm = new FormData();
+    invalidForm.set("file", new File(["not image"], "portrait.gif", { type: "image/gif" }));
+    const invalid = await handleCompanionsRequest(
+      new Request("http://localhost/companions/upload-art", {
+        body: invalidForm,
+        headers: { authorization: `Bearer ${token}` },
+        method: "POST",
+      }),
+      env,
+      "/companions/upload-art",
+    );
+    expect(invalid?.status).toBe(400);
+    expect(await invalid?.json()).toMatchObject({ error: "invalid_file_type" });
+
+    const oversizedForm = new FormData();
+    oversizedForm.set("file", new File([new Uint8Array((5 * 1024 * 1024) + 1)], "portrait.png", { type: "image/png" }));
+    const oversized = await handleCompanionsRequest(
+      new Request("http://localhost/companions/upload-art", {
+        body: oversizedForm,
+        headers: { authorization: `Bearer ${token}` },
+        method: "POST",
+      }),
+      env,
+      "/companions/upload-art",
+    );
+    expect(oversized?.status).toBe(400);
+    expect(await oversized?.json()).toMatchObject({ error: "file_too_large" });
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -410,6 +543,7 @@ describe("companions module", () => {
 function officialCompanion(id: string, gender: "male" | "female" = "female"): CompanionRow {
   return {
     appearance: null,
+    art_emotions: null,
     art_url: null,
     background: null,
     created_at: 1747000000000,
@@ -431,6 +565,7 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
 function userCompanion(id: string, ownerId: string, gender: "male" | "female" = "female"): CompanionRow {
   return {
     appearance: null,
+    art_emotions: null,
     art_url: null,
     background: null,
     created_at: 1747000000000,
@@ -492,6 +627,10 @@ function createEnv(fixtures: Fixtures): Env {
 
   return {
     APP_ENV: "dev",
+    ASSETS: {
+      get: vi.fn(),
+      put: vi.fn().mockResolvedValue({}),
+    },
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
@@ -677,6 +816,7 @@ function mutate(
       relationship_role,
       preferred_scenes,
       art_url,
+      art_emotions,
       gender,
       createdAt,
       updatedAt,
@@ -692,11 +832,13 @@ function mutate(
       string | null,
       string | null,
       string | null,
+      string | null,
       number,
       number,
     ];
     companions.set(id, {
       appearance,
+      art_emotions,
       art_url,
       background,
       created_at: createdAt,
@@ -727,11 +869,13 @@ function mutate(
       relationship_role,
       preferred_scenes,
       art_url,
+      art_emotions,
       gender,
       updatedAt,
       id,
     ] = values as [
       string,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -748,6 +892,7 @@ function mutate(
       companions.set(id, {
         ...existing,
         appearance,
+        art_emotions,
         art_url,
         background,
         gender,

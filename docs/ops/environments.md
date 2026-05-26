@@ -55,7 +55,20 @@ pnpm dev    # 同时启 API:8787 + App:8081
 3. 监听日志（`tmp/local-dev.log`）
 4. 进程退出时清理两个子进程
 
-### 2.4 本地数据
+### 2.4 本地登录
+
+localhost 不走 Google OIDC，也不发送真实 Magic Link 邮件。打开 `http://localhost:8081/auth/login` 后使用同一套邮箱登录表单：
+
+| 邮箱 | 本地身份 |
+|------|----------|
+| `admin@test.com` | admin + Pro，可进入后台 |
+| `vip@test.com` | 普通 Pro/VIP 用户，不是 admin |
+| `custom@test.com` | 普通 free 用户 |
+| 其他合法邮箱 | 普通 free 用户 |
+
+直登只在 API 请求 host 为 `localhost` / `127.0.0.1` / `[::1]` 且 `APP_ENV !== "prod"` 时生效。`dev.aiappsbox.com` 和 `aiappsbox.com` 仍走真实 Google OIDC + Magic Link。
+
+### 2.5 本地数据
 
 - D1：使用 Wrangler 本地 SQLite 文件（`.wrangler/state/d1/`）
 - R2：本地模拟（Wrangler 内置）
@@ -119,7 +132,7 @@ pnpm deploy:web:dev    # Web 到 dev (Cloudflare Pages)
 
 - dev 数据库与 prod 完全独立
 - 不会从 prod 拷贝数据到 dev（避免泄露真实用户数据）
-- dev 与 prod 注册方式相同（Magic Link + Google OIDC），不限制邮箱格式；admin 权限通过 `ADMIN_EMAILS` env var 或 `admin_user_allowlist` 表控制
+- dev 与 prod 注册方式相同（Magic Link + Google OIDC），不启用 localhost 邮箱直登；admin 权限通过 `ADMIN_EMAILS` env var 或 `admin_user_allowlist` 表控制
 
 ---
 

@@ -117,12 +117,27 @@ Query: ?code=...&state=...
 // Request
 { "email": "user@example.com" }
 
-// Response 200
+// dev/prod Response 200
 { "ok": true, "expires_in": 900 }   // 15 分钟
 ```
 
-服务端生成一次性 token，发邮件，邮件正文含 `https://aiappsbox.com/api/auth/email/verify?token=...`。
+dev/prod 域名下，服务端生成一次性 token，发邮件，邮件正文含 `https://aiappsbox.com/api/auth/email/verify?token=...`。
 token 只以 SHA-256 hash 存入 KV `magic:{hash}`，TTL 15 分钟，一次性使用。邮件 provider v1 使用 Resend。
+
+localhost 下，`POST /auth/email/send-link` 不发邮件，而是直接签发 session。该行为只允许 API 请求 host 为 `localhost` / `127.0.0.1` / `[::1]` 且 `APP_ENV !== "prod"`：
+
+```json
+{
+  "ok": true,
+  "expires_in": 2592000,
+  "token": "...",
+  "expiresAt": "2026-06-25T00:00:00.000Z",
+  "email": "admin@test.com",
+  "user": { "id": "...", "email": "admin@test.com" }
+}
+```
+
+本地固定测试邮箱：`admin@test.com` 为 admin + Pro，`vip@test.com` 为普通 Pro/VIP，`custom@test.com` 与其他合法邮箱为普通 free。
 
 ### `GET /auth/email/verify`
 

@@ -304,7 +304,7 @@ export async function handleChatRequest(
 
 **手动 dev：**
 - [ ] `/chat/{cid}/messages` 在未带 token 时 401
-- [ ] dev-session 后 POST → SSE 流：先若干 `event: chunk`，再 `event: signals`、`event: emotion`、`event: done`
+- [ ] localhost 邮箱直登后 POST → SSE 流：先若干 `event: chunk`，再 `event: signals`、`event: emotion`、`event: done`
 - [ ] `GET /chat/{cid}/history` 返回刚写入的 2 条
 - [ ] 连发 30 条 → 第 31 条 402 `QUOTA_EXCEEDED`
 - [ ] 同分钟 11 条 → 第 11 条 429 `RATE_LIMITED` + `Retry-After: 60`

@@ -68,8 +68,18 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const sendMagicLink = useCallback(async (email: string) => {
     setError(null);
-    return sendMagicLinkRequest(email, '/auth/success');
-  }, []);
+    const response = await sendMagicLinkRequest(email, '/auth/success');
+    if (response.token && response.expiresAt && response.email) {
+      storeSession({
+        email: response.email,
+        expiresAt: response.expiresAt,
+        token: response.token,
+        user: response.user ?? { email: response.email, id: '' },
+      });
+      invalidateMeCache();
+    }
+    return response;
+  }, [storeSession]);
 
   const signOut = useCallback(async () => {
     setError(null);

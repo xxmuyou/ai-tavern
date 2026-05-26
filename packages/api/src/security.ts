@@ -134,6 +134,7 @@ function shouldRateLimit(request: Request, pathname: string): boolean {
 function isAssetUploadRequest(request: Request, pathname: string): boolean {
   const method = request.method.toUpperCase();
   return (method === "PUT" && pathname.startsWith("/objects/")) ||
+    (method === "POST" && pathname === "/companions/upload-art") ||
     (method === "POST" && /^\/shows\/[^/]+\/admin\/system-assets\//.test(pathname));
 }
 

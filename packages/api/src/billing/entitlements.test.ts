@@ -56,6 +56,24 @@ describe("billing entitlements", () => {
       },
     });
   });
+
+  it("returns pro status for admin override even without a subscription row", async () => {
+    const env = createEnv();
+
+    await expect(getBillingStatus(env, "u-1", NOW, { adminOverride: true })).resolves.toMatchObject({
+      entitlements: {
+        custom_companion_limit: null,
+        message_limit_daily: null,
+        tier: "pro",
+      },
+      subscription: {
+        current_period_end: null,
+        price_id: null,
+        status: "active",
+        tier: "pro",
+      },
+    });
+  });
 });
 
 function createEnv(row: BillingSubscriptionRow | null = null): Env {

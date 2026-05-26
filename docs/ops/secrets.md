@@ -30,7 +30,7 @@
 | `APPLE_SIGNIN_PRIVATE_KEY` | Apple Sign-In `.p8` 私钥内容 | developer.apple.com 下载 | Wrangler secret（base64 编码） | 独立或共享 |
 | `APPLE_SIGNIN_CLIENT_ID` | Apple Sign-In client/service id | App Store Connect / Apple Developer | wrangler.jsonc `vars` | 独立或共享 |
 | `EMAIL_PROVIDER_API_KEY` | Magic Link 邮件发送（Resend） | resend.com | Wrangler secret | 独立 |
-| `EMAIL_FROM_ADDRESS` | 发件邮箱（如 `no-reply@aiappsbox.com`） | 团队邮箱配置 | wrangler.jsonc `vars` | 通常共享 |
+| `EMAIL_FROM_ADDRESS` | 发件邮箱（如 `no-reply@aiappsbox.com`） | 团队邮箱配置 | Wrangler secret | 通常共享 |
 | `AUTH_SUCCESS_URL` | OAuth / Magic Link 成功后的 Web 回调页 | app 域名 | wrangler.jsonc `vars` | 独立 |
 | `SUPPORT_EMAIL` | 用户支持邮箱（退款、客诉） | 团队邮箱 | wrangler.jsonc `vars` + 前端 | 共享 |
 | `ADMIN_INIT_EMAIL` | 首次部署 seed admin 用户的邮箱 | 团队约定（`admin@aiappsbox.com`） | wrangler.jsonc `vars` | 共享 |
@@ -39,7 +39,7 @@
 
 ## 1.5 Dev 阶段最小密钥集（开发期 vs 验证期）
 
-> **结论：开发阶段 `.env.dev` 只需要 LLM key。** 其他大部分密钥都有 dev 自动回退或可走 dev 旁路端点。
+> **结论：开发阶段 `.env.dev` 只需要 LLM key。** 其他大部分密钥都有 dev 自动回退；localhost 登录通过邮箱直登，不需要 OIDC 或邮件服务。
 >
 > 这一节回答："本地起 worker 跑代码，到底必填哪些？"
 
@@ -63,8 +63,8 @@
 | Key | dev 缺失时的实际行为 | 出处 |
 |---|---|---|
 | `AUTH_TOKEN_SECRET` / `JWT_SIGNING_KEY` | 自动回退到 `DEV_FALLBACK_SECRET = "xtbit-local-dev-auth-token-secret"`，session 仍可签发与校验 | `auth/types.ts:39` + `auth/session.ts:131` |
-| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | Google 登录按钮渲染但点击后 500；仍可走 Magic Link dry-run 登录 | `auth/oauth.ts`（只有点 Google 登录才触发） |
-| `EMAIL_PROVIDER_API_KEY` / `EMAIL_FROM_ADDRESS` | Magic Link 进 dev dry-run 分支：不真发邮件，但 magic link URL 打到 worker stdout，复制即可登录 | `auth/email-link.ts:50,80+` |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | localhost 不需要；dev/prod 域名走真实 Google 登录时才需要 | `auth/oauth.ts`（只有点 Google 登录才触发） |
+| `EMAIL_PROVIDER_API_KEY` / `EMAIL_FROM_ADDRESS` | localhost 不需要；dev/prod 域名走真实 Magic Link 邮件时才需要 | `auth/email-link.ts` |
 | `ALLOWED_ORIGINS` | `wrangler.jsonc` dev `vars` 已硬编码 `http://localhost:8081,http://127.0.0.1:8081,https://dev.aiappsbox.com` | wrangler.jsonc |
 | `ADMIN_EMAILS` | `wrangler.jsonc` dev `vars` 已硬编码 `admin@aiappsbox.com` | wrangler.jsonc |
 | `AUTH_SUCCESS_URL` | `wrangler.jsonc` dev `vars` 已硬编码 `https://dev.aiappsbox.com/auth/success` | wrangler.jsonc |
@@ -83,7 +83,7 @@ admin 身份由两层控制：
 
 | 触发场景 | 应补的 keys |
 |---|---|
-| 要在浏览器走真实 Google 登录流程 | `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET`（在 Google Cloud Console 配 redirect URI = `http://localhost:8787/api/auth/oidc/google/callback`） |
+| 要在 dev/prod 域名走真实 Google 登录流程 | `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET`（redirect URI 使用对应域名的 `/api/auth/oidc/google/callback`） |
 | 要测真实 Magic Link 邮件 | `EMAIL_PROVIDER_API_KEY` + `EMAIL_FROM_ADDRESS`（Resend dev 用 `onboarding@resend.dev` 默认 sender，仅能发到 verify 过的邮箱） |
 | 要测 Stripe 订阅流程 | `STRIPE_SECRET_KEY`（test mode）+ `STRIPE_WEBHOOK_SECRET`（Stripe CLI listen 转发 webhook 时给出）|
 | 准备发布到 prod | 全部按 §1 表格逐项准备，且独立 dev / prod |
@@ -97,9 +97,11 @@ vim .env.dev                  # 只填 DEEPSEEK_API_KEY / EXPO_PUBLIC_API_URL / 
 pnpm install                  # 装 husky + dev deps
 pnpm dev                      # 自动准备本地 env，再起 worker (8787) + Expo (8081)
 
-# 登录：用 Magic Link dry-run（不需要 EMAIL_PROVIDER_API_KEY）
-# → 在 worker stdout 找 verify_url，浏览器打开即可登录
-# 或：配置 GOOGLE_OAUTH_CLIENT_ID + SECRET 后走 Google OIDC
+# 登录：打开 http://localhost:8081/auth/login
+# 输入 admin@test.com  → 本地 admin + Pro
+# 输入 vip@test.com    → 本地普通 Pro/VIP 用户
+# 输入 custom@test.com → 本地普通 free 用户
+# 其他合法邮箱          → 本地普通 free 用户
 ```
 
 ---
@@ -177,6 +179,7 @@ eas secret:create --scope project --name SENTRY_DSN --value "..."
 **白名单维护：** `scripts/prepare-local-env.sh` 顶部 `WORKER_KEYS` 数组定义哪些 key 派生到 `.dev.vars`。新增 worker key 需同时改：
 - `.env.example`（schema）
 - `scripts/prepare-local-env.sh` 的 `WORKER_KEYS`
+- `scripts/sync-wrangler-secrets.sh` 的 `ALLOWED_SECRET_KEYS`
 
 **常用命令：**
 

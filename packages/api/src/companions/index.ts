@@ -5,6 +5,7 @@ import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
 import type { Gender } from "./gender-weight";
+import { handleCompanionArtUpload } from "./upload-art";
 
 const MAX_FREE_USER_COMPANIONS = QUOTA_LIMITS.FREE_CUSTOM_COMPANIONS;
 const NAME_MAX = 80;
@@ -84,6 +85,10 @@ export async function handleCompanionsRequest(
     }
 
     return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+  }
+
+  if (pathname === "/companions/upload-art") {
+    return handleCompanionArtUpload(request, env);
   }
 
   const idMatch = pathname.match(/^\/companions\/([^/]+)$/);
@@ -235,8 +240,8 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
     `INSERT INTO companions
       (id, source, created_by, is_active, name, appearance, personality,
        background, speech_style, relationship_role, preferred_scenes,
-       art_url, gender, initial_dims, created_at, updated_at)
-     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       art_url, art_emotions, gender, initial_dims, created_at, updated_at)
+     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   )
     .bind(
       id,
@@ -249,6 +254,7 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
       input.value.relationship_role ?? null,
       input.value.preferred_scenes ? JSON.stringify(input.value.preferred_scenes) : null,
       input.value.art_url ?? null,
+      input.value.art_url ? JSON.stringify(singleArtEmotionMap(input.value.art_url)) : null,
       input.value.gender,
       now,
       now,
@@ -301,12 +307,15 @@ async function updateCompanion(
     relationship_role: patch.value.relationship_role ?? existing.relationship_role,
     speech_style: patch.value.speech_style ?? existing.speech_style,
   };
+  const artEmotions = patch.value.art_url !== undefined && merged.art_url
+    ? JSON.stringify(singleArtEmotionMap(merged.art_url))
+    : existing.art_emotions;
 
   await env.DB.prepare(
     `UPDATE companions
      SET name = ?, appearance = ?, personality = ?, background = ?,
          speech_style = ?, relationship_role = ?, preferred_scenes = ?,
-         art_url = ?, gender = ?, updated_at = ?
+         art_url = ?, art_emotions = ?, gender = ?, updated_at = ?
      WHERE id = ?`,
   )
     .bind(
@@ -318,6 +327,7 @@ async function updateCompanion(
       merged.relationship_role,
       merged.preferred_scenes,
       merged.art_url,
+      artEmotions,
       merged.gender,
       Date.now(),
       companionId,
@@ -600,4 +610,8 @@ function parseEmotionArt(raw: string | null | undefined): Record<string, string>
   } catch {
     return null;
   }
+}
+
+function singleArtEmotionMap(artUrl: string): Record<string, string> {
+  return Object.fromEntries([...KNOWN_EMOTIONS].map((emotion) => [emotion, artUrl]));
 }

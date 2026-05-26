@@ -1,12 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { CompanionCard } from '@/components/CompanionCard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
+import { useBilling } from '@/hooks/use-billing';
 import { type CompanionSourceFilter, useCompanions } from '@/hooks/use-companions';
 
 const FILTERS: { label: string; value: CompanionSourceFilter }[] = [
@@ -19,15 +21,45 @@ export default function CompanionsScreen() {
   const router = useRouter();
   const [source, setSource] = useState<CompanionSourceFilter>('all');
   const { data, error, isLoading, refetch } = useCompanions(source);
+  const userCompanions = useCompanions('user');
+  const billing = useBilling();
 
   function openCompanion(id: string) {
     router.push(`/companion/${encodeURIComponent(id)}` as Href);
   }
 
+  function createCompanion() {
+    const limit = billing.data?.entitlements.custom_companion_limit;
+    const count = userCompanions.data?.items.length ?? 0;
+    if (typeof limit === 'number' && count >= limit) {
+      Alert.alert(
+        "You've reached the free limit",
+        'Free accounts can create up to 3 custom companions. Upgrade to Pro for unlimited companion creation.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Upgrade to Pro', onPress: () => router.push('/billing' as Href) },
+        ],
+      );
+      return;
+    }
+    router.push('/companion-create' as Href);
+  }
+
   return (
     <View className="flex-1 bg-app-bg">
-      <TopBar showQuota title="Companions" />
+      <TopBar
+        right={(
+          <Pressable accessibilityRole="button" onPress={createCompanion} className="h-10 w-10 items-center justify-center rounded-lg bg-app-primary">
+            <Ionicons color="#FFFFFF" name="add" size={22} />
+          </Pressable>
+        )}
+        showQuota
+        title="Companions"
+      />
       <View className="mx-auto w-full max-w-4xl px-4 pt-4">
+        <Text className="mb-3 text-sm font-semibold text-app-muted">
+          {formatCompanionCount(userCompanions.data?.items.length ?? 0, billing.data?.entitlements.custom_companion_limit)}
+        </Text>
         <View className="flex-row rounded-lg border border-app-line bg-app-card p-1">
           {FILTERS.map((filter) => {
             const isActive = filter.value === source;
@@ -80,4 +112,11 @@ export default function CompanionsScreen() {
       )}
     </View>
   );
+}
+
+function formatCompanionCount(count: number, limit: number | null | undefined): string {
+  if (limit === null) {
+    return `${count} custom companions`;
+  }
+  return `${count}/${limit ?? 3} custom companions`;
 }

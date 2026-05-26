@@ -6,7 +6,7 @@
 
 ## Context
 
-> **配套阅读：** `.env.dev` 里 dev 阶段到底哪些必填、哪些可省（含 dev-session 旁路端点用法），见 [`docs/ops/secrets.md §1.5 Dev 阶段最小密钥集`](../ops/secrets.md#15-dev-阶段最小密钥集开发期-vs-验证期)。本 spec 只解决"密钥文件管理机制"，不涉及"代码层面哪些 key 必填"。
+> **配套阅读：** `.env.dev` 里 dev 阶段到底哪些必填、哪些可省（含 localhost 邮箱直登用法），见 [`docs/ops/secrets.md §1.5 Dev 阶段最小密钥集`](../ops/secrets.md#15-dev-阶段最小密钥集开发期-vs-验证期)。本 spec 只解决"密钥文件管理机制"，不涉及"代码层面哪些 key 必填"。
 
 当前 dev 环境密钥分散在 4 处管理：
 

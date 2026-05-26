@@ -19,7 +19,7 @@ v1 主界面是「场景列表 → 选择场景 → 在场角色」的循环（[
   - `GET /scenes`：返回当前用户可见的场景列表（含解锁状态、在场可能角色）
   - `POST /scenes/{scene_id}/enter`：进入场景，返回场景详情 + 在场 companion 列表 + 触发的事件（v1 事件先返 null）
 - 端点契约严格按 [`architecture/api.md §4`](../architecture/api.md#4-scenes-端点)
-- 接入现有 auth middleware（`requireAuthUser`），非 prod 环境支持 dev-session fallback
+- 接入现有 auth middleware（`requireAuthUser`）。localhost 本地开发通过邮箱直登获取真实 session token；dev/prod 使用正式登录。
 - 解锁判定：解析 `scenes.unlock_condition` JSON（v1 仅支持 `min_relationship` 模式），未满足条件返回 `unlocked=false` + `unlock_hint`
 - 在场判定：抽 companion 的 `preferred_scenes` 字段，过滤已与用户建立 relationships 的角色
 - 单元测试覆盖 happy path + 错误路径
@@ -87,7 +87,7 @@ JSON parse 失败 → 视为 unconditional unlocked（防御性）。
 至少覆盖：
 
 - GET /scenes 未带 token → 401
-- GET /scenes 带有效 dev-session token，scenes 表为空 → 200 + `{ scenes: [] }`
+- GET /scenes 带有效本地邮箱直登 token，scenes 表为空 → 200 + `{ scenes: [] }`
 - GET /scenes 带 1 条已解锁场景 + 1 条未解锁场景 → 200 + 各自的 `unlocked`/`unlock_hint`
 - POST /scenes/missing/enter → 404
 - POST /scenes/{id}/enter 未解锁 → 403 + `error: scene_locked`
@@ -115,7 +115,7 @@ JSON parse 失败 → 视为 unconditional unlocked（防御性）。
 - [ ] `pnpm typecheck` 通过
 - [ ] `pnpm test` 通过（新增 6+ 测试）
 - [ ] `curl http://localhost:8787/scenes`（无 token）→ 401
-- [ ] dev-session 拿 token 后 `curl -H "Authorization: Bearer ..." http://localhost:8787/scenes` → 200 + `{ scenes: [] }`
+- [ ] localhost 邮箱直登拿 token 后 `curl -H "Authorization: Bearer ..." http://localhost:8787/scenes` → 200 + `{ scenes: [] }`
 - [ ] 手插 1 条 scene 记录，curl 列表 → 看到该场景，unlocked=true
 - [ ] `curl -X POST http://localhost:8787/scenes/{id}/enter` → 200 + scene 详情
 

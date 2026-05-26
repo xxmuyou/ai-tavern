@@ -47,8 +47,15 @@ export type AuthSession = {
 };
 
 export type MagicLinkResponse = {
+  email?: string;
+  expiresAt?: string;
   ok: boolean;
   expires_in: number;
+  token?: string;
+  user?: {
+    email: string;
+    id: string;
+  };
   verify_url?: string;
 };
 
@@ -242,6 +249,34 @@ export async function createCompanion(input: CompanionCreateInput): Promise<Comp
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });
+}
+
+export type CompanionArtUpload = Blob | File | { name: string; type: string; uri: string };
+
+export async function uploadCompanionArt(file: CompanionArtUpload): Promise<{ key: string }> {
+  const form = new FormData();
+  form.append('file', file as Blob);
+
+  const token = readStoredAuthToken();
+  const headers = new Headers();
+  if (token) {
+    headers.set('authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/companions/upload-art`, {
+    body: form,
+    headers,
+    method: 'POST',
+  });
+  const payload = (await response.json().catch(() => ({}))) as { error?: string; key?: string };
+
+  if (!response.ok) {
+    const error = new Error(payload.error ?? `HTTP ${response.status}`);
+    (error as Error & { status?: number }).status = response.status;
+    throw error;
+  }
+
+  return { key: payload.key ?? '' };
 }
 
 export async function updateCompanion(

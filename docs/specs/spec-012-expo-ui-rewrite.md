@@ -23,7 +23,7 @@ v1 上线只发 Web（Cloudflare Pages）；iOS/Android 原生 build 是 spec-01
 3. **NativeWind 替代 StyleSheet**：本 spec 新增唯一依赖 `nativewind` + peer `tailwindcss`。所有新组件用 `className` 写样式，禁止再写 `StyleSheet.create`。色板从现有 `apps/app/constants/theme.ts` 迁移到 `tailwind.config.js` 的 `theme.extend.colors`。
 4. **状态管理不引入新库**：useState + useEffect + localStorage。跨页面的 session / quota / 当前 scene 通过 `localStorage` + 自定义 hook（`use-session.ts`、`use-quota.ts`）共享。**不**引入 Zustand、Redux、Jotai 等。
 5. **路由结构 Expo Router file-based**：见下方"改动清单 §B"。三标签：Scenes / Companions / Me。Stack 路由覆盖 scene/[id]、companion/[id]、chat/[companionId]、auth/login、auth/success、billing/index。
-6. **未登录守卫**：`<AuthGuard>` 包裹所有业务 tab。未登录访问任一业务页 → 跳 `auth/login`。`auth/login` 页提供两个入口：Google OIDC、Magic Link（两端统一，无 dev-session 旁路）。
+6. **未登录守卫**：`<AuthGuard>` 包裹所有业务 tab。未登录访问任一业务页 → 跳 `auth/login`。`auth/login` 页提供 Google OIDC 与邮箱登录；localhost 邮箱登录由后端直签 session，dev/prod 邮箱登录走 Magic Link。
 7. **错误展示统一**：API 错误（401 / 402 quota_exceeded / 429 rate_limited / 5xx）由顶部 `<ErrorBanner>` 组件展示，自动消失或手动关闭。404 / 网络错由 Expo Router 的 `+not-found.tsx` 与 `ErrorBoundary` 兜底。
 
 ---
@@ -33,7 +33,7 @@ v1 上线只发 Web（Cloudflare Pages）；iOS/Android 原生 build 是 spec-01
 明确落地 8 个区域：
 
 - **A. `auth/success` 页**：消化 spec-009 fragment（`#token=...&expires_at=...&email=...`）和 error query（`?error=<code>`），写入 localStorage，跳首页
-- **B. `auth/login` 页**：3 个登录入口（dev / Google / Magic Link）
+- **B. `auth/login` 页**：同一套邮箱登录 + Google OIDC；localhost 邮箱登录由后端直签 session，dev/prod 邮箱登录发送 Magic Link
 - **C. Scenes 列表 + scene/[id]**：消费 spec-007 `GET /scenes`、`POST /scenes/{id}/enter`
 - **D. Companions 列表 + companion/[id]**：消费 spec-004 `GET /companions`、`GET /companions/{id}`，含 7 维度进度条
 - **E. Chat 页 `chat/[companionId]`**：消费 spec-006 SSE `POST /chat/{id}/messages`、`GET /chat/{id}/history`
@@ -91,7 +91,7 @@ apps/app/app/
 ├── _layout.tsx                    # 根布局；挂 <ErrorBanner/> + import global.css
 ├── +not-found.tsx                 # 404 兜底页
 ├── auth/
-│   ├── login.tsx                  # 登录页：dev / Google / Magic Link 三入口
+│   ├── login.tsx                  # 登录页：邮箱登录 + Google OIDC；localhost 邮箱直登
 │   └── success.tsx                # 落点页：fragment 解析 + error 展示 + 跳首页
 ├── (tabs)/
 │   ├── _layout.tsx                # 三标签布局：Scenes / Companions / Me
@@ -390,7 +390,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 5. 路由骨架：`_layout.tsx`、`(tabs)/_layout.tsx`、三个 tab index 占位、`auth/login`、`auth/success`、`+not-found`
 6. `<AuthGuard/>` + `<ErrorBanner/>` + `<TopBar/>` + `<Button/>`
 7. `me/index.tsx` 占位实现（接 fetchMe，只显示 email + 登出按钮）
-8. 验证：本地 + dev pages 走 Google → success → tabs；dev-sign-in → success → tabs；Magic Link → email → success → tabs
+8. 验证：localhost 邮箱直登 → tabs；dev pages 走 Google → success → tabs；Magic Link → email → success → tabs
 
 ### P2（负责人 B；依赖 spec-004 + 005 + 007；约 3 天）
 
@@ -426,7 +426,7 @@ openBillingPortal(): Promise<{ portal_url: string }>
 - [ ] `pnpm --filter @xtbit/app build` 干净（web build 产物在 `dist/`）
 - [ ] `pnpm --filter @xtbit/app typecheck` 干净
 - [ ] 本地开发 server `pnpm --filter @xtbit/app web` 启动，访问 `localhost:8081` 看到登录页
-- [ ] 三种登录方式各跑一次端到端（dev / Google / Magic Link）
+- [ ] 登录方式各跑一次端到端（localhost 邮箱直登 / Google / Magic Link）
 - [ ] 部署 dev Cloudflare Pages 一次验证
 - [ ] 主动失效 token 后访问业务页 → 跳登录
 

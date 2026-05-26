@@ -1,14 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { mediaSource } from '@/api/companion-client';
+import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
 import { useCompanion } from '@/hooks/use-companions';
+import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
 
 export default function CompanionDetailScreen() {
@@ -16,6 +18,7 @@ export default function CompanionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const companionId = Array.isArray(id) ? id[0] : id;
   const { data, error, isLoading, refetch } = useCompanion(companionId);
+  const { pushError } = useErrorBanner();
 
   if (isLoading) {
     return <LoadingScreen label="Loading companion..." />;
@@ -35,11 +38,54 @@ export default function CompanionDetailScreen() {
     );
   }
 
-  const imageSource = mediaSource(data.art_url);
+  const companion = data;
+  const imageSource = mediaSource(companion.art_url);
+  const canEdit = companion.source === 'user';
+
+  function confirmDelete() {
+    Alert.alert(
+      `Delete ${companion.name}?`,
+      `This will remove ${companion.name} from your companions. Your conversation history remains in your records.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          onPress: () => {
+            void deleteCompanion(companion.id)
+              .then(() => router.replace('/companions' as Href))
+              .catch((nextError) => pushError(nextError instanceof Error ? nextError.message : 'Companion could not be deleted.'));
+          },
+          style: 'destructive',
+          text: 'Delete',
+        },
+      ],
+    );
+  }
 
   return (
     <View className="flex-1 bg-app-bg">
-      <TopBar showBack showQuota title={data.name} />
+      <TopBar
+        right={canEdit ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
+              className="h-10 w-10 items-center justify-center rounded-lg border border-app-line"
+            >
+              <Ionicons color="#11181C" name="create-outline" size={20} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={confirmDelete}
+              className="h-10 w-10 items-center justify-center rounded-lg border border-app-line"
+            >
+              <Ionicons color="#B3261E" name="trash-outline" size={20} />
+            </Pressable>
+          </>
+        ) : null}
+        showBack
+        showQuota
+        title={companion.name}
+      />
       <ScrollView className="flex-1">
         <View className="mx-auto w-full max-w-4xl gap-5 px-4 py-6">
           <View className="rounded-lg border border-app-line bg-app-card p-5">
@@ -51,52 +97,52 @@ export default function CompanionDetailScreen() {
                 <View pointerEvents="none" style={styles.portraitFloor} />
                 {imageSource ? (
                   <Image
-                    accessibilityLabel={data.name}
+                    accessibilityLabel={companion.name}
                     resizeMode="contain"
                     source={imageSource}
                     style={styles.portraitImage}
                   />
                 ) : (
                   <View className="h-full w-full items-center justify-center">
-                    <Text className="text-5xl font-semibold text-app-primary">{data.name.slice(0, 1).toUpperCase()}</Text>
+                    <Text className="text-5xl font-semibold text-app-primary">{companion.name.slice(0, 1).toUpperCase()}</Text>
                   </View>
                 )}
               </View>
               <View className="min-w-0 flex-1 justify-center gap-2">
                 <View className="flex-row flex-wrap items-center gap-2">
-                  <Text className="text-3xl font-semibold text-app-text">{data.name}</Text>
+                  <Text className="text-3xl font-semibold text-app-text">{companion.name}</Text>
                   <View className="rounded-full bg-app-primarySoft px-3 py-1">
-                    <Text className="text-sm font-semibold text-app-primary">{data.relationship.level}</Text>
+                    <Text className="text-sm font-semibold text-app-primary">{companion.relationship.level}</Text>
                   </View>
                 </View>
-                {data.relationship_role ? <Text className="text-sm uppercase tracking-normal text-app-muted">{data.relationship_role}</Text> : null}
-                {data.personality ? <Text className="text-base leading-6 text-app-muted">{data.personality}</Text> : null}
+                {companion.relationship_role ? <Text className="text-sm uppercase tracking-normal text-app-muted">{companion.relationship_role}</Text> : null}
+                {companion.personality ? <Text className="text-base leading-6 text-app-muted">{companion.personality}</Text> : null}
               </View>
             </View>
           </View>
 
-          <DimensionBoard dimensions={data.relationship.dimensions} level={data.relationship.level} />
+          <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
 
           <View className="rounded-lg border border-app-line bg-app-card p-5">
             <Text className="text-lg font-semibold text-app-text">Timeline</Text>
             <View className="mt-4 gap-3">
-              <InfoRow label="First met" value={formatDateTime(data.relationship.first_met_at)} />
-              <InfoRow label="Last interaction" value={formatDateTime(data.relationship.last_interaction_at)} />
+              <InfoRow label="First met" value={formatDateTime(companion.relationship.first_met_at)} />
+              <InfoRow label="Last interaction" value={formatDateTime(companion.relationship.last_interaction_at)} />
             </View>
           </View>
 
-          {data.background || data.appearance || data.speech_style ? (
+          {companion.background || companion.appearance || companion.speech_style ? (
             <View className="rounded-lg border border-app-line bg-app-card p-5">
               <Text className="text-lg font-semibold text-app-text">Profile</Text>
               <View className="mt-4 gap-4">
-                {data.background ? <TextBlock label="Background" value={data.background} /> : null}
-                {data.appearance ? <TextBlock label="Appearance" value={data.appearance} /> : null}
-                {data.speech_style ? <TextBlock label="Speech style" value={data.speech_style} /> : null}
+                {companion.background ? <TextBlock label="Background" value={companion.background} /> : null}
+                {companion.appearance ? <TextBlock label="Appearance" value={companion.appearance} /> : null}
+                {companion.speech_style ? <TextBlock label="Speech style" value={companion.speech_style} /> : null}
               </View>
             </View>
           ) : null}
 
-          <Button label="Start chat" onPress={() => router.push(`/chat/${encodeURIComponent(data.id)}` as Href)} />
+          <Button label="Start chat" onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)} />
         </View>
       </ScrollView>
     </View>

@@ -25,7 +25,9 @@ export default function RootLayout() {
             <Stack.Screen name="admin/index" />
             <Stack.Screen name="billing/index" />
             <Stack.Screen name="chat/[companionId]" />
+            <Stack.Screen name="companion-create" />
             <Stack.Screen name="companion/[id]" />
+            <Stack.Screen name="companion/[id]/edit" />
             <Stack.Screen name="scene/[id]" />
           </Stack>
           <ErrorBanner />

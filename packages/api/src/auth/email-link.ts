@@ -1,6 +1,7 @@
 import { jsonResponse, readJson } from "../http";
 import { normalizeEmail } from "../identity";
 import { buildErrorTarget, buildSuccessTarget, normalizeRedirect, redirectResponse } from "./redirects";
+import { createLocalEmailSession, isLocalEmailSessionRequest } from "./local-email-session";
 import { upsertUserFromIdentity } from "./repository";
 import { signSession } from "./session";
 import { isDevRuntime } from "./types";
@@ -43,6 +44,10 @@ export async function handleSendLink(
   const email = normalizeEmail(body.email);
   if (!email) {
     return jsonResponse({ error: "email_required" }, { status: 400 });
+  }
+
+  if (isLocalEmailSessionRequest(request, env)) {
+    return jsonResponse(await createLocalEmailSession(env, email));
   }
 
   const redirect = normalizeRedirect(env, body.redirect);

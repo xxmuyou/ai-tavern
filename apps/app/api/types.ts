@@ -60,14 +60,15 @@ export type CompanionDetail = {
 };
 
 export type CompanionCreateInput = {
-  appearance: string;
-  background: string;
+  appearance?: string;
+  art_url: string;
+  background?: string;
   gender: Gender;
   name: string;
-  personality: string;
+  personality?: string;
   preferred_scenes?: string[];
   relationship_role?: string;
-  speech_style: string;
+  speech_style?: string;
 };
 
 export type CompanionsListResponse = {

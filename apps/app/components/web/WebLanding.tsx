@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ImageBackground, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/Button';
+import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
@@ -27,6 +28,10 @@ export function WebLanding() {
     setNotice(null);
     try {
       const response = await sendMagicLink(trimmed);
+      if (response.token) {
+        router.replace(SCENES_ROUTE);
+        return;
+      }
       setNotice(response.verify_url ? `Sign-in link is ready for ${trimmed}.` : `A sign-in link has been sent to ${trimmed}.`);
     } catch {
       pushError('Could not send the sign-in link. Please try again later.');

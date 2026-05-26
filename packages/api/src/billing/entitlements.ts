@@ -38,8 +38,8 @@ function subscriptionDto(
       cancel_at_period_end: false,
       current_period_end: null,
       price_id: null,
-      status: "free",
-      tier: "free",
+      status: tier === "pro" ? "active" : "free",
+      tier,
     };
   }
 

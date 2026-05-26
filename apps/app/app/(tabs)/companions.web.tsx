@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -7,7 +8,9 @@ import { mediaSource } from '@/api/companion-client';
 import type { CompanionListItem } from '@/api/types';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { Button } from '@/components/Button';
 import { WebAppShell } from '@/components/web/WebAppShell';
+import { useBilling } from '@/hooks/use-billing';
 import { type CompanionSourceFilter, useCompanions } from '@/hooks/use-companions';
 import { formatLevel } from '@/utils/format';
 
@@ -21,14 +24,30 @@ export default function WebCompanionsScreen() {
   const router = useRouter();
   const [source, setSource] = useState<CompanionSourceFilter>('all');
   const { data, error, isLoading, refetch } = useCompanions(source);
+  const userCompanions = useCompanions('user');
+  const billing = useBilling();
+
+  function createCompanion() {
+    const limit = billing.data?.entitlements.custom_companion_limit;
+    const count = userCompanions.data?.items.length ?? 0;
+    if (typeof limit === 'number' && count >= limit) {
+      window.alert('Free accounts can create up to 3 custom companions. Upgrade to Pro for unlimited companion creation.');
+      return;
+    }
+    router.push('/companion-create' as Href);
+  }
 
   if (isLoading) {
     return <LoadingScreen label="Loading companions..." />;
   }
 
   return (
-    <WebAppShell title="Companions" subtitle="Scan official and custom companions with desktop-density cards.">
-      <View className="mb-6 flex-row gap-2">
+    <WebAppShell
+      actions={<Button label="Create" onPress={createCompanion} />}
+      title="Companions"
+      subtitle="Scan official and custom companions with desktop-density cards."
+    >
+      <View className="mb-6 flex-row flex-wrap items-center gap-2">
         {FILTERS.map((filter) => {
           const active = filter.value === source;
           return (
@@ -42,6 +61,12 @@ export default function WebCompanionsScreen() {
             </Pressable>
           );
         })}
+        <View className="ml-auto flex-row items-center gap-2 rounded-full bg-white px-3 py-2">
+          <Ionicons color="#687076" name="sparkles-outline" size={16} />
+          <Text className="text-sm font-semibold text-app-muted">
+            {formatCompanionCount(userCompanions.data?.items.length ?? 0, billing.data?.entitlements.custom_companion_limit)}
+          </Text>
+        </View>
       </View>
 
       {error ? (
@@ -57,6 +82,13 @@ export default function WebCompanionsScreen() {
       )}
     </WebAppShell>
   );
+}
+
+function formatCompanionCount(count: number, limit: number | null | undefined): string {
+  if (limit === null) {
+    return `${count} custom companions`;
+  }
+  return `${count}/${limit ?? 3} custom companions`;
 }
 
 function CompanionTile({ companion, onPress }: { companion: CompanionListItem; onPress: () => void }) {

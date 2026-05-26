@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
@@ -9,6 +9,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const { isLoading, sendMagicLink, session, signInGoogle } = useSession();
   const { pushError } = useErrorBanner();
   const [email, setEmail] = useState('');
@@ -34,6 +35,10 @@ export default function LoginScreen() {
     setNotice(null);
     try {
       const response = await sendMagicLink(trimmedEmail);
+      if (response.token) {
+        router.replace(SCENES_ROUTE);
+        return;
+      }
       setNotice(response.verify_url
         ? `Sign-in link is ready for ${trimmedEmail}. Open it within 15 minutes.`
         : `A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);

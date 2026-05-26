@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { EmailSender } from "./email-link";
 import { handleSendLink, handleVerify } from "./email-link";
+import { LOCAL_ADMIN_EMAIL, LOCAL_VIP_EMAIL } from "./local-email-session";
+import { handleMe } from "./me";
 import {
   createIdentitiesStore,
   createKvStore,
@@ -13,8 +15,10 @@ import {
   type UsersStore,
 } from "./test-fixtures";
 import type { AuthEnv } from "./types";
+import type { BillingSubscriptionRow } from "../billing/types";
 
 const SUCCESS_URL = "https://dev.aiappsbox.com/auth/success";
+const LOCAL_CUSTOM_EMAIL = "custom@test.com";
 
 describe("POST /auth/email/send-link", () => {
   it("rejects invalid email with 400 email_required", async () => {
@@ -96,6 +100,82 @@ describe("POST /auth/email/send-link", () => {
     expect(body.ok).toBe(true);
     expect(body.verify_url).toContain("/auth/email/verify?token=");
     expect(sender).not.toHaveBeenCalled();
+  });
+
+  it("localhost admin email signs in directly as admin + pro", async () => {
+    const env = createEnv();
+    const response = await handleSendLink(localJsonRequest({ email: LOCAL_ADMIN_EMAIL }), env);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { email: string; token: string; verify_url?: string };
+    expect(body.email).toBe(LOCAL_ADMIN_EMAIL);
+    expect(body.token).toBeTruthy();
+    expect(body.verify_url).toBeUndefined();
+
+    const me = await fetchMe(env, body.token);
+    expect(me.email).toBe(LOCAL_ADMIN_EMAIL);
+    expect(me.is_admin).toBe(true);
+    expect(me.subscription.tier).toBe("pro");
+  });
+
+  it("localhost direct login also works when Wrangler exposes localhost through Host header", async () => {
+    const env = createEnv();
+    const response = await handleSendLink(
+      new Request("http://api.example.com/auth/email/send-link", {
+        method: "POST",
+        headers: { "content-type": "application/json", host: "127.0.0.1:8787" },
+        body: JSON.stringify({ email: LOCAL_ADMIN_EMAIL }),
+      }),
+      env,
+    );
+
+    const body = (await response.json()) as { email: string; token: string };
+    expect(body.email).toBe(LOCAL_ADMIN_EMAIL);
+    expect(body.token).toBeTruthy();
+  });
+
+  it("localhost vip email signs in directly as non-admin pro", async () => {
+    const env = createEnv();
+    const response = await handleSendLink(localJsonRequest({ email: LOCAL_VIP_EMAIL }), env);
+    const body = (await response.json()) as { token: string };
+
+    const me = await fetchMe(env, body.token);
+    expect(me.email).toBe(LOCAL_VIP_EMAIL);
+    expect(me.is_admin).toBe(false);
+    expect(me.subscription).toMatchObject({
+      price_id: "price_local_pro",
+      status: "active",
+      tier: "pro",
+    });
+  });
+
+  it("localhost custom and arbitrary emails sign in directly as free users", async () => {
+    const env = createEnv();
+    for (const email of [LOCAL_CUSTOM_EMAIL, "someone@example.com"]) {
+      const response = await handleSendLink(localJsonRequest({ email }), env);
+      const body = (await response.json()) as { token: string };
+
+      const me = await fetchMe(env, body.token);
+      expect(me.email).toBe(email);
+      expect(me.is_admin).toBe(false);
+      expect(me.subscription.tier).toBe("free");
+    }
+  });
+
+  it("dev domain still uses magic-link behavior instead of direct session", async () => {
+    const env = createEnv();
+    const response = await handleSendLink(
+      new Request("https://dev.aiappsbox.com/api/auth/email/send-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: LOCAL_ADMIN_EMAIL }),
+      }),
+      env,
+    );
+
+    const body = (await response.json()) as { token?: string; verify_url?: string };
+    expect(body.token).toBeUndefined();
+    expect(body.verify_url).toContain("/auth/email/verify?token=");
   });
 
   it("prod w/o EMAIL_PROVIDER_API_KEY: returns 500 email_provider_not_configured", async () => {
@@ -226,6 +306,115 @@ function jsonRequest(body: unknown): Request {
   });
 }
 
+function localJsonRequest(body: unknown): Request {
+  return new Request("http://localhost:8787/auth/email/send-link", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function fetchMe(
+  env: AuthEnv,
+  token: string,
+): Promise<{
+  email: string;
+  is_admin: boolean;
+  subscription: { price_id: string | null; status: string; tier: "free" | "pro" };
+}> {
+  const response = await handleMe(
+    new Request("http://localhost:8787/auth/me", {
+      headers: { authorization: `Bearer ${token}` },
+    }),
+    env,
+  );
+  expect(response.status).toBe(200);
+  return response.json();
+}
+
+type AdminAllowlistFixture = {
+  created_at: number;
+  created_by: string | null;
+  email: string;
+  note: string | null;
+};
+
+function createAdminAllowlistStore() {
+  const byEmail = new Map<string, AdminAllowlistFixture>();
+
+  return {
+    handle(sql: string, values: unknown[]) {
+      if (sql.includes("INSERT INTO admin_user_allowlist")) {
+        const [email, note, createdAt, createdBy] = values as [string, string | null, number, string | null];
+        byEmail.set(email, { email, note, created_at: createdAt, created_by: createdBy });
+        return { kind: "run" as const, result: { meta: { changes: 1 } } };
+      }
+      if (sql.includes("FROM admin_user_allowlist") && sql.includes("WHERE email = ?")) {
+        const [email] = values as [string];
+        return { kind: "first" as const, result: byEmail.get(email) ?? null };
+      }
+      return null;
+    },
+  };
+}
+
+function createBillingStore() {
+  const subscriptions = new Map<string, BillingSubscriptionRow>();
+
+  return {
+    handle(sql: string, values: unknown[]) {
+      if (sql.includes("INSERT INTO billing_customers")) {
+        return { kind: "run" as const, result: { meta: { changes: 1 } } };
+      }
+      if (sql.includes("INSERT INTO billing_subscriptions")) {
+        const [
+          id,
+          userId,
+          stripeCustomerId,
+          status,
+          priceId,
+          currentPeriodStart,
+          currentPeriodEnd,
+          cancelAtPeriodEnd,
+          canceledAt,
+          livemode,
+          rawJson,
+          createdAt,
+          updatedAt,
+        ] = values as [string, string, string, string, string, number, number, number, number | null, number, string, number, number];
+        subscriptions.set(id, {
+          cancel_at_period_end: cancelAtPeriodEnd,
+          canceled_at: canceledAt,
+          created_at: createdAt,
+          current_period_end: currentPeriodEnd,
+          current_period_start: currentPeriodStart,
+          id,
+          livemode,
+          price_id: priceId,
+          raw_json: rawJson,
+          status,
+          stripe_customer_id: stripeCustomerId,
+          updated_at: updatedAt,
+          user_id: userId,
+        });
+        return { kind: "run" as const, result: { meta: { changes: 1 } } };
+      }
+      if (sql.includes("FROM billing_subscriptions")) {
+        const [userId, now] = values as [string, number | undefined];
+        const rows = [...subscriptions.values()]
+          .filter((row) => row.user_id === userId)
+          .filter((row) => {
+            if (!sql.includes("current_period_end > ?")) return true;
+            return (row.status === "active" || row.status === "trialing") && row.current_period_end > (now ?? 0);
+          })
+          .sort((a, b) => b.current_period_end - a.current_period_end);
+        return { kind: "first" as const, result: rows[0] ?? null };
+      }
+      return null;
+    },
+  };
+}
+
 function createEnv(
   overrides: Record<string, unknown> = {},
 ): AuthEnv & {
@@ -238,6 +427,8 @@ function createEnv(
   const identitiesStore = createIdentitiesStore();
   const sessionsStore = createSessionsStore();
   const kvStore = createKvStore();
+  const adminAllowlistStore = createAdminAllowlistStore();
+  const billingStore = createBillingStore();
 
   const base = {
     APP_ENV: "dev" as const,
@@ -257,6 +448,10 @@ function createEnv(
                 if (idResult?.kind === "first") return idResult.result;
                 const sessionResult = sessionsStore.handle(sql, values);
                 if (sessionResult?.kind === "first") return sessionResult.result;
+                const adminResult = adminAllowlistStore.handle(sql, values);
+                if (adminResult?.kind === "first") return adminResult.result;
+                const billingResult = billingStore.handle(sql, values);
+                if (billingResult?.kind === "first") return billingResult.result;
                 return null;
               },
               async all() {
@@ -271,6 +466,10 @@ function createEnv(
                 if (idResult?.kind === "run") return idResult.result;
                 const sessionResult = sessionsStore.handle(sql, values);
                 if (sessionResult?.kind === "run") return sessionResult.result;
+                const adminResult = adminAllowlistStore.handle(sql, values);
+                if (adminResult?.kind === "run") return adminResult.result;
+                const billingResult = billingStore.handle(sql, values);
+                if (billingResult?.kind === "run") return billingResult.result;
                 return { meta: { changes: 1 } };
               },
             };
