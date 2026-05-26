@@ -1,10 +1,10 @@
-# 美术清单（场景图 + 角色立绘 + 情绪表情 + 里程碑 CG）
+# 美术清单（场景图 + 角色立绘 + 情绪表情 + 里程碑装饰层）
 
 > 单页对照表，照抄即可。所有资产的最终命名 / 路径以本表为准；上传到 R2 后把 URL 填回数据库（`scenes.art_url` / `companions.art_url` / `companions.art_emotions`）。
 >
-> 路径前缀：本地预览放在 `apps/app/assets/ai-companion/scenes/`、`apps/app/assets/ai-companion/portraits/` 下；正式资源传 R2 `companions/v1/` bucket。
+> 路径前缀：本地预览放在 `apps/app/assets/ai-companion/scenes/`、`apps/app/assets/ai-companion/portraits/`、`apps/app/assets/ai-companion/milestones/` 下；正式资源传 R2 `companions/v1/` bucket。
 >
-> **设计边界：** 里程碑 CG 是 memory album 的奖励资产，不替代场景图，不替代聊天表情，也不改变 companion 的基础设定。
+> **设计边界：** v1 不做手绘专属里程碑 CG。里程碑画面由现有立绘 + 场景图 + 通用装饰层程序合成（见 §4）。装饰层只增强视觉记忆点，不替代场景图、不替代聊天表情、也不改变 companion 的基础设定。手绘专属 CG 留给 v2+。
 
 ---
 
@@ -112,66 +112,70 @@ portraits/maya/maya_annoyed.png
 
 - ✅ 10 张场景图（必须，否则 SceneCard 显示占位绿）
 - ✅ 10 张角色默认立绘（必须，否则聊天界面 PortraitBar 显示首字母+表情符号占位）
+- ✅ **4 套通用 milestone 装饰层模板**（first_date / confession / repair / anniversary 各一套）
 - ⏳ 60 张情绪立绘（可后补；缺哪个 key 就自动回退到默认立绘）
-- ⏳ 里程碑 CG（可后补；缺 CG 时 memory album 仍显示日记卡）
 
-**总量统计：** 必做 20 张，理想基础 80 张（10 场景 + 70 角色资产）。里程碑 CG 单独排期，不纳入基础可玩集。
+**总量统计：** v1 必做 24 张（10 场景 + 10 立绘 + 4 装饰层），理想基础 84 张（再加 60 情绪立绘）。**v1 不做任何手绘专属 milestone CG**。
 
 ---
 
-## 4. 里程碑 CG（Memory Album 奖励）
+## 4. 里程碑装饰层（程序化合成方案）
 
-里程碑 CG 用于强化"关系真的发生过"的收藏感。它出现在 memory album 和 companion 详情页时间线，不在普通聊天中频繁切换。
-
-### 4.1 优先级
-
-| Priority | Memory type | 说明 |
-|---|---|---|
-| P0 | `first_date` | 第一次明确约会，是最直观的付费感奖励 |
-| P1 | `confession` | 告白 / 明确心意，关系推进的高峰 |
-| P2 | `repair` | 修复冲突后的脆弱时刻，增强关系真实感 |
-| P3 | `anniversary` | 认识 N 天或互动 N 次，支撑长期留存 |
-
-### 4.2 文件命名模板
-
-建议路径：
+**v1 不做手绘专属 milestone CG。** 里程碑画面在运行时由现有资产合成：
 
 ```
-memories/<companion_id>/<memory_type>_01.png
+最终画面 = 现有 scene 图（背景） + companion neutral 立绘（主体） + 装饰层（边框/光效/标题卡） + 动态文字
 ```
 
-示例：
+10 角色 × 4 milestone × N 场景全自动覆盖，包括用户自创角色。
+
+### 4.1 装饰层模板（4 套，v1 必做）
+
+每套装饰层是一组**透明背景 PNG**，按图层叠在合成画面上。建议比例 16:9（匹配场景图），分辨率至少 1600×900。
+
+| Milestone | 文件名 | 装饰基调 | 备注 |
+|---|---|---|---|
+| `first_date` | `milestone_first_date.png` | 暖金色光晕、柔光边框、星点粒子 | 浪漫开端的"特别瞬间"感 |
+| `confession` | `milestone_confession.png` | 玫红 / 樱色渐变边框、心形或羽毛轻点缀 | 心意明朗化的高光 |
+| `repair` | `milestone_repair.png` | 蓝紫色柔光、雨后初晴质感 | 脆弱后的和解 |
+| `anniversary` | `milestone_anniversary.png` | 暖橙色 + 金箔风、纪念邮票感边框 | 长期陪伴的仪式感 |
+
+### 4.2 装饰层制作规则
+
+- **透明背景**，让 scene 图和立绘穿透
+- **不出现具体角色或人物**——避免和 companion 立绘冲突
+- 中心区域要"让位"给立绘（避免装饰挡脸或挡身体）
+- 标题卡区域固定在画面顶部或底部（程序合成时叠文字）
+- 装饰强度适中：要"特别"但不要"喧宾夺主"
+
+### 4.3 标题文字（动态生成）
+
+合成时由前端按模板填充，不需要美术制作。示例：
 
 ```
-memories/maya/first_date_01.png
-memories/maya/confession_01.png
-memories/theo/first_date_01.png
+First Date with Maya
+An evening at Pier Coffee Shop
+2026-05-26
 ```
 
-### 4.3 画面规则
+### 4.4 文件命名与路径
 
-- 画面必须服从现有 companion 外貌、服装气质、年龄感与性格
-- 场景必须来自现有 scene，或明确看得出是现有 scene 的延伸
-- PG-13：暧昧、牵手、拥抱、靠近、告白、情绪亲密；不做露骨成人内容
-- 不做复杂多人构图，优先 1 个 companion + 环境情绪
-- 如果需要表现用户，使用局部视角（手、肩、背影）或第一人称构图，避免定义主角外貌
+装饰层文件传到 R2：
 
-### 4.4 首批建议
+```
+companions/v1/milestones/milestone_first_date.png
+companions/v1/milestones/milestone_confession.png
+companions/v1/milestones/milestone_repair.png
+companions/v1/milestones/milestone_anniversary.png
+```
 
-不按固定剧情批次制作，而按通用里程碑制作。每个官方 companion 可先补 1 张 `first_date` CG；后续根据数据再补 `confession` / `repair` / `anniversary`。
+### 4.5 自创 companion 适配
 
-| Companion | `first_date` | `confession` | `repair` | `anniversary` |
-|---|---|---|---|---|
-| maya | ☐ | ☐ | ☐ | ☐ |
-| ryan | ☐ | ☐ | ☐ | ☐ |
-| lila | ☐ | ☐ | ☐ | ☐ |
-| ethan | ☐ | ☐ | ☐ | ☐ |
-| sora | ☐ | ☐ | ☐ | ☐ |
-| marcus | ☐ | ☐ | ☐ | ☐ |
-| aiko | ☐ | ☐ | ☐ | ☐ |
-| jordan | ☐ | ☐ | ☐ | ☐ |
-| iris | ☐ | ☐ | ☐ | ☐ |
-| theo | ☐ | ☐ | ☐ | ☐ |
+用户自传的立绘自动用同一套装饰层合成 milestone 画面，零额外工作量。
+
+### 4.6 v2+ 扩展（不在 v1 范围）
+
+高付费意愿用户可解锁手绘专属 CG（如 Maya 的 `first_kiss` 独家版）作为收藏。v1 完全不做这一层，相关 memory `cg_url` 字段保留 nullable，给未来留接口。
 
 ---
 
@@ -188,4 +192,4 @@ memories/theo/first_date_01.png
    WHERE id = 'maya';
    ```
 3. App 端 `mediaUrl()` 会自动把相对路径补成 R2 完整 URL，不用改代码。
-4. 里程碑 CG 上传到 R2 `companions/v1/memories/<companion_id>/...`，由 memory 记录通过 `cg_url` 引用；缺失时 UI 显示纯日记卡。
+4. 4 套装饰层上传到 R2 `companions/v1/milestones/`，前端按 milestone 类型加载叠图；缺装饰层时 memory album 显示纯日记卡。

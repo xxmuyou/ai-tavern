@@ -10,7 +10,7 @@
 
 ## 1. 虚构都市设定
 
-**名称：** **Aurelia City** *(暂定)*
+**v1 默认名：** **Aurelia City**
 
 一座虚构的现代都市，地理与文化上糅合东京 / 旧金山 / 巴塞罗那的元素，但不锁定任一真实城市。
 
@@ -23,6 +23,17 @@
 - 角色无明确国籍设定（避免刻板印象，姓名多元）
 
 **为什么虚构：** 不锁定真实城市避免文化敏感问题，又能融合多种美学。
+
+### 1.1 命名机制（实现要求）
+
+城市名通过 **`city_config` 单变量**引用，**禁止在代码、UI 文案、prompt 模板里硬编码 "Aurelia"**。
+
+- v1：`city_config` 全局可配置，用户改不了
+- v1.x：用户在「Me」可改自己的 `world.city_name`；只让 `name` 可改，tagline / 设定描述固定（避免角色性格失真）
+- 用户改名只影响未来生成的内容，历史对话 / memory 不回溯改写
+- 美术资产不绑定城市名（不在画面上写招牌或路标），改名零美术成本
+
+**字段：** `name` / `tagline` / `description`（后两者用于 prompt 注入世界观）。所有 LLM prompt 模板从这里读 `{{city.name}}`。
 
 ---
 
@@ -229,18 +240,13 @@
 
 ## 5. 日常活动与关系阶段映射
 
-本文档不新增角色剧情线，只定义通用玩法如何使用现有内容。
+本文档不新增角色剧情线，只说明 v1 内容如何使用通用玩法。
 
 ### 5.1 活动类型
 
-| Activity | 内容来源 | 说明 |
-|---|---|---|
-| `check_in` | daily state + companion card | 简短问候，建立每日陪伴感 |
-| `hang_out` | scene tags + mood + companion personality | 一起做当前场景自然发生的小活动 |
-| `invite` | relationship dimensions + scene unlock | 邀请角色去另一个地点或未来活动 |
-| `date` | romance/trust/closeness + scene fit | 明确恋爱向约会，仍由 AI 按人设表达 |
-| `gift` | event template + relationship state | 礼物事件，不要求复杂背包系统 |
-| `repair` | tension/hostility/distance | 修复误会、道歉、重建边界 |
+活动类型的完整定义（条件、流程、信号权重）见 [`gameplay.md §4 活动系统`](./gameplay.md#4-活动系统)；活动在日常生活中如何配合 daily state 见 [`daily-life-sim.md §5 活动系统`](./daily-life-sim.md#5-活动系统)。
+
+本文档关注的是 v1 角色 / 场景的活动适配（每个场景"适配活动"列已在 §2 场景细节里给出）。
 
 ### 5.2 关系阶段
 
@@ -320,7 +326,7 @@
 
 ## 8. v1 上线内容 checklist
 
-- [ ] 都市 Aurelia City 命名最终确认（或换名）
+- [x] 都市 Aurelia City：v1 默认名定为 "Aurelia City"，通过 `city_config` 引用；v1.x 支持用户自改
 - [ ] 10 个场景的 mood prompt 终稿
 - [ ] 10 个场景插图（横幅 + 缩略图）
 - [ ] 10 个官方角色的扩写角色卡
@@ -328,7 +334,7 @@
 - [ ] 场景 × 活动映射确认
 - [ ] 关系阶段阈值确认
 - [ ] Memory 类型与触发条件确认
-- [ ] 首批 milestone CG 清单确认
+- [x] 首批 milestone：v1 用程序合成（neutral 立绘 + 场景 + 4 套通用装饰层），不做手绘专属 CG。详见 [`art-checklist.md §4`](./art-checklist.md)
 - [ ] 解锁矩阵完整填写
 - [ ] 内容 migration seed SQL（`0004_seed_scenes_v1.sql`、`0005_seed_official_companions_v1.sql`）
 
@@ -336,7 +342,7 @@
 
 ## 9. 待最终敲定
 
-- [ ] 都市名 `Aurelia City` 还是其他
+- [x] 都市名 `Aurelia City`（v1 默认，通过 `city_config` 引用，v1.x 用户可自改）
 - [x] 角色性别比定为 5 男 5 女；用户通过 `romance_preference` 调出现权重（spec-017）
 - [ ] 角色姓氏命名风格（v1 用国际混合姓 vs 锁定某文化）
 - [ ] 关系定位 `crush` 角色是否过多（4 个 vs 总 10 个）
