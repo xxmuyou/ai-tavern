@@ -4,6 +4,7 @@ import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS } from "../relationships";
 import { deriveStage } from "../relationships/stage";
 
+import { emitDueAnniversariesForUser } from "./anniversary";
 import { getCityConfig } from "./city-config";
 import { getOrComputeDailyState } from "./daily-state";
 import { computeDateLocal, computeTimeSlot } from "./time-slot";
@@ -63,6 +64,14 @@ async function buildTodayResponse(env: Env, user: UserRecord): Promise<Response>
   const now = new Date();
   const dateLocal = computeDateLocal(now, tz);
   const slot = computeTimeSlot(now, tz);
+
+  // Lazy anniversary catch-up. Cheap when none are due; bounded by the
+  // number of companions the user has played with.
+  try {
+    await emitDueAnniversariesForUser(env, user.id);
+  } catch (err) {
+    console.error(JSON.stringify({ message: "anniversary_emit_failed", error: String(err) }));
+  }
 
   const candidates = await loadCandidateCompanions(env, user.id);
   const relationships = await loadRelationshipsForUser(env, user.id);

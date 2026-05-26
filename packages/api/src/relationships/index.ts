@@ -2,6 +2,7 @@ import { requireAuthUser } from "../auth";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 
+import { maybeEmitAnniversaries } from "../life/anniversary";
 import { applyCommittedDecayIfDue } from "./decay";
 import { loadRelationship } from "./engine";
 import { ZERO_DIMENSIONS, computeLevel } from "./level";
@@ -82,6 +83,13 @@ async function getRelationship(env: Env, user: UserRecord, companionId: string):
       recommended_activity: stage.recommended_activity,
       milestones: [],
     });
+  }
+
+  // Lazy anniversary emit for this companion. Skipped silently on error.
+  try {
+    await maybeEmitAnniversaries(env, user.id, companionId, relationship.first_met_at);
+  } catch {
+    // Don't block the relationship payload if memory writes fail.
   }
 
   const stage = deriveStage(relationship.dimensions);
