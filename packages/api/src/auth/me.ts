@@ -38,6 +38,8 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
     email_verified: userWithProviders.email_verified === 1,
     display_name: userWithProviders.display_name,
     romance_preference: userWithProviders.romance_preference,
+    timezone: userWithProviders.timezone,
+    push_enabled: userWithProviders.push_enabled,
     linked_providers: userWithProviders.linked_providers,
     is_admin: adminOverride,
     subscription: billing.subscription,
@@ -47,6 +49,16 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
       subscriber_soft_threshold_exceeded: billing.usage.subscriber_soft_threshold_exceeded,
     },
   });
+}
+
+function isValidIanaTimezone(tz: string): boolean {
+  if (!tz || tz.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function handleMePreferences(request: Request, env: AuthEnv): Promise<Response> {
@@ -69,17 +81,52 @@ export async function handleMePreferences(request: Request, env: AuthEnv): Promi
   if (!body || typeof body !== "object") {
     return jsonResponse({ error: "invalid_body" }, { status: 400 });
   }
+  const input = body as Record<string, unknown>;
 
-  const raw = (body as Record<string, unknown>).romance_preference;
-  if (typeof raw !== "string" || !KNOWN_PREFERENCES.has(raw)) {
-    return jsonResponse({ error: "invalid_romance_preference" }, { status: 400 });
+  const updates: string[] = [];
+  const binds: unknown[] = [];
+  const echoed: Record<string, unknown> = {};
+
+  if ("romance_preference" in input) {
+    const raw = input.romance_preference;
+    if (typeof raw !== "string" || !KNOWN_PREFERENCES.has(raw)) {
+      return jsonResponse({ error: "invalid_romance_preference" }, { status: 400 });
+    }
+    updates.push("romance_preference = ?");
+    binds.push(raw);
+    echoed.romance_preference = raw;
   }
 
-  await env.DB.prepare(`UPDATE users SET romance_preference = ? WHERE id = ?`)
-    .bind(raw, payload.sub)
+  if ("timezone" in input) {
+    const raw = input.timezone;
+    if (raw !== null && (typeof raw !== "string" || !isValidIanaTimezone(raw))) {
+      return jsonResponse({ error: "invalid_timezone" }, { status: 400 });
+    }
+    updates.push("timezone = ?");
+    binds.push(raw);
+    echoed.timezone = raw ?? null;
+  }
+
+  if ("push_enabled" in input) {
+    const raw = input.push_enabled;
+    if (typeof raw !== "boolean") {
+      return jsonResponse({ error: "invalid_push_enabled" }, { status: 400 });
+    }
+    updates.push("push_enabled = ?");
+    binds.push(raw ? 1 : 0);
+    echoed.push_enabled = raw;
+  }
+
+  if (updates.length === 0) {
+    return jsonResponse({ error: "no_supported_fields" }, { status: 400 });
+  }
+
+  binds.push(payload.sub);
+  await env.DB.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`)
+    .bind(...binds)
     .run();
 
-  return jsonResponse({ romance_preference: raw });
+  return jsonResponse(echoed);
 }
 
 export async function handleLogout(request: Request, env: AuthEnv): Promise<Response> {
