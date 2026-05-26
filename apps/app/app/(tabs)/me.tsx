@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { fetchMe, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
 import type { MeResponse, RomancePreference } from '@/api/types';
@@ -12,6 +12,7 @@ import { TopBar } from '@/components/TopBar';
 import { ADMIN_ROUTE, BILLING_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { usePush } from '@/hooks/use-push';
 import { useSession } from '@/hooks/use-session';
 import { formatDateTime, formatProvider } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
@@ -22,6 +23,7 @@ export default function MeScreen() {
   const { session, signOut } = useSession();
   const { data: billing, refetch: refetchBilling } = useBilling();
   const [me, setMe] = useState<MeResponse | null>(null);
+  const push = usePush(me?.push_enabled);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
@@ -153,6 +155,29 @@ export default function MeScreen() {
             {isPro && billing?.usage.subscriber_soft_threshold_exceeded ? (
               <Text className="text-sm text-app-warning">High usage detected today.</Text>
             ) : null}
+          </Section>
+
+          <Section title="Push notifications">
+            <View className="flex-row items-center justify-between gap-4">
+              <View className="min-w-0 flex-1">
+                <Text className="text-base font-semibold text-app-text">Daily relationship prompts</Text>
+                <Text className="mt-1 text-sm leading-5 text-app-muted">
+                  {Platform.OS === 'web' ? 'Browser push is not enabled for web.' : push.permissionStatus === 'denied' ? 'Permission was denied.' : 'One mobile notification per day at most.'}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: push.enabled }}
+                disabled={push.isLoading || Platform.OS === 'web'}
+                onPress={() => void push.setPushEnabled(!push.enabled)}
+                className={`h-8 w-14 justify-center rounded-full px-1 ${push.enabled ? 'bg-app-primary' : 'bg-app-line'} ${
+                  push.isLoading || Platform.OS === 'web' ? 'opacity-50' : 'opacity-100'
+                }`}
+              >
+                <View className={`h-6 w-6 rounded-full bg-white ${push.enabled ? 'self-end' : 'self-start'}`} />
+              </Pressable>
+            </View>
+            {push.error ? <Text className="text-sm text-app-warning">{push.error}</Text> : null}
           </Section>
 
           <Section title="Other">

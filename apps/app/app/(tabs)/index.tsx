@@ -1,7 +1,13 @@
-import { Redirect } from 'expo-router';
+import { View } from 'react-native';
 
-import { SCENES_ROUTE } from '@/constants/routes';
+import { TodayHub } from '@/components/TodayHub';
+import { TopBar } from '@/components/TopBar';
 
 export default function TabsIndex() {
-  return <Redirect href={SCENES_ROUTE} />;
+  return (
+    <View className="flex-1 bg-app-bg">
+      <TopBar showQuota title="Today" />
+      <TodayHub />
+    </View>
+  );
 }

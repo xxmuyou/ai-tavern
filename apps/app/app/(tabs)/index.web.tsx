@@ -1,8 +1,7 @@
-import { Redirect } from 'expo-router';
-
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { TodayHub } from '@/components/TodayHub';
+import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebLanding } from '@/components/web/WebLanding';
-import { SCENES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
 export default function WebIndex() {
@@ -13,7 +12,11 @@ export default function WebIndex() {
   }
 
   if (session) {
-    return <Redirect href={SCENES_ROUTE} />;
+    return (
+      <WebAppShell title="Today" subtitle="Daily visits, activities, relationship goals, and memories.">
+        <TodayHub web />
+      </WebAppShell>
+    );
   }
 
   return <WebLanding />;

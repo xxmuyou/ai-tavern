@@ -15,6 +15,10 @@ export type RelationshipSummary = {
   last_interaction_at: number | null;
   level: string;
   milestones?: unknown[];
+  next_goal?: string | null;
+  recommended_activity?: ActivityType | null;
+  stage?: string | null;
+  stage_progress?: number | null;
 };
 
 export type CompanionSource = 'official' | 'user';
@@ -22,6 +26,127 @@ export type CompanionSource = 'official' | 'user';
 export type Gender = 'male' | 'female';
 
 export type RomancePreference = Gender | 'any';
+
+export type TimeSlot = 'morning' | 'afternoon' | 'evening' | 'night';
+
+export type ActivityType = 'check_in' | 'hang_out' | 'invite' | 'date' | 'gift' | 'repair';
+
+export type ActivityStatus = 'active' | 'completed' | 'canceled';
+
+export type Availability = 'available' | 'busy' | 'away';
+
+export type MemoryType =
+  | 'first_meeting'
+  | 'first_hangout'
+  | 'first_date'
+  | 'gift_received'
+  | 'confession'
+  | 'repair'
+  | 'anniversary';
+
+export type City = {
+  description?: string;
+  name: string;
+  tagline?: string;
+  timezone?: string | null;
+};
+
+export type SceneRef = {
+  art_url: string | null;
+  id: string;
+  mood?: string | null;
+  name: string;
+};
+
+export type RelationshipGoal = {
+  label: string;
+  recommended_activity?: ActivityType | null;
+  stage: string;
+  stage_progress: number;
+};
+
+export type DailyState = {
+  activity_hint: string;
+  availability: Availability;
+  companion_id: string;
+  date_local: string;
+  flavor_text?: string | null;
+  mood: string;
+  scene: SceneRef;
+  time_slot: TimeSlot;
+};
+
+export type TodayRecommendation = {
+  activity_hint: string;
+  availability: Availability;
+  companion: {
+    art_url: string | null;
+    id: string;
+    name: string;
+    relationship_role: string | null;
+  };
+  daily_state: DailyState;
+  mood: string;
+  next_goal: RelationshipGoal;
+  scene: SceneRef;
+  suggested_activity: ActivityType;
+};
+
+export type TodayResponse = {
+  city: City;
+  date_local: string;
+  recommendations: TodayRecommendation[];
+  time_slot: TimeSlot;
+};
+
+export type ActivityContext = {
+  companion: {
+    art_url: string | null;
+    id: string;
+    name: string;
+  };
+  created_at: string;
+  daily_state: DailyState;
+  id: string;
+  scene: SceneRef;
+  status: ActivityStatus;
+  type: ActivityType;
+};
+
+export type ActivityCreateInput = {
+  companion_id: string;
+  scene_id?: string;
+  type: ActivityType;
+};
+
+export type ActivityResponse = {
+  activity: ActivityContext;
+};
+
+export type Memory = {
+  cg_template: string | null;
+  cg_url: string | null;
+  companion_id: string;
+  created_at: string;
+  date: string;
+  id: string;
+  key_choice: string | null;
+  relationship_delta: string | null;
+  scene: SceneRef | null;
+  summary: string;
+  title: string;
+  type: MemoryType;
+};
+
+export type MemoriesResponse = {
+  album_limit: number | null;
+  items: Memory[];
+  tier: 'free' | 'pro';
+};
+
+export type PushPreferenceResponse = {
+  enabled: boolean;
+};
 
 export type CompanionListItem = {
   art_url: string | null;
@@ -151,6 +276,7 @@ export type ChatHistoryResponse = {
 };
 
 export type ChatMessageInput = {
+  activity_id?: string;
   scene_id?: string;
   text: string;
 };
@@ -204,9 +330,11 @@ export type MeResponse = {
   id: string;
   is_admin?: boolean;
   linked_providers: string[];
+  push_enabled: boolean;
   quota: MeQuota;
   romance_preference: RomancePreference;
   subscription: MeSubscription;
+  timezone: string | null;
 };
 
 export type AdminAllowlistItem = {

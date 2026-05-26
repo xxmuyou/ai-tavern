@@ -5,13 +5,17 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 
 import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
+import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
+import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
 import { TopBar } from '@/components/TopBar';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
+import { relationshipGoalFromSummary } from '@/utils/relationship';
 
 export default function CompanionDetailScreen() {
   const router = useRouter();
@@ -41,6 +45,7 @@ export default function CompanionDetailScreen() {
   const companion = data;
   const imageSource = mediaSource(companion.art_url);
   const canEdit = companion.source === 'user';
+  const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
 
   function confirmDelete() {
     Alert.alert(
@@ -122,6 +127,8 @@ export default function CompanionDetailScreen() {
           </View>
 
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
+          <RelationshipGoalPanel goal={relationshipGoal} />
+          <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
 
           <View className="rounded-lg border border-app-line bg-app-card p-5">
             <Text className="text-lg font-semibold text-app-text">Timeline</Text>
@@ -141,6 +148,8 @@ export default function CompanionDetailScreen() {
               </View>
             </View>
           ) : null}
+
+          <CompanionMemoriesPreview companionId={companion.id} portraitUrl={companion.art_url} />
 
           <Button label="Start chat" onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)} />
         </View>

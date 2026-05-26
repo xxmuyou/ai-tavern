@@ -6,6 +6,7 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { mediaSource } from '@/api/companion-client';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { SceneDailyCompanion } from '@/components/SceneDailyCompanion';
 import { WebAppShell, WebPanel } from '@/components/web/WebAppShell';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -93,6 +94,12 @@ export default function WebSceneDetailScreen() {
             )}
           </View>
         </WebPanel>
+      </View>
+
+      <View className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {data.companions_present.map((companion) => (
+          <SceneDailyCompanion key={companion.id} companion={companion} sceneArt={scene.art_url} sceneId={scene.id} />
+        ))}
       </View>
     </WebAppShell>
   );

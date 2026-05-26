@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SceneCompanionCard } from '@/components/SceneCompanionCard';
+import { SceneDailyCompanion } from '@/components/SceneDailyCompanion';
 import { TopBar } from '@/components/TopBar';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -121,6 +122,26 @@ export default function SceneDetailScreen() {
           {companions.length === 1 ? (
             <Button label={`Chat with ${companions[0].name}`} onPress={() => openChat(companions[0].id)} />
           ) : null}
+
+          <View>
+            <Text className="mb-3 text-lg font-semibold text-app-text">Today here</Text>
+            {companions.length ? (
+              <View className="gap-3">
+                {companions.map((companion) => (
+                  <SceneDailyCompanion
+                    key={companion.id}
+                    companion={companion}
+                    sceneArt={scene.art_url}
+                    sceneId={scene.id}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View className="rounded-lg border border-app-line bg-app-card p-5">
+                <Text className="text-sm text-app-muted">No activity options are available in this scene yet.</Text>
+              </View>
+            )}
+          </View>
         </View>
       </ScrollView>
     </View>

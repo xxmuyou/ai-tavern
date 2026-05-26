@@ -1,6 +1,8 @@
 import { Linking, type ImageSourcePropType } from 'react-native';
 
 import type {
+  ActivityCreateInput,
+  ActivityResponse,
   AdminAllowlistItem,
   AdminAllowlistResponse,
   BillingStatusResponse,
@@ -9,17 +11,23 @@ import type {
   CompanionCreateInput,
   CompanionDetailResponse,
   CompanionsListResponse,
+  DailyState,
+  Memory,
   MeResponse,
+  MemoriesResponse,
+  PushPreferenceResponse,
   RelationshipResponse,
   RomancePreference,
   SceneEnterResponse,
   ScenesListResponse,
   SseEvent,
+  TodayResponse,
 } from './types';
 
 const CONFIGURED_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
 
 export const API_BASE_URL = resolveApiBaseUrl();
+const ACTIVE_ACTIVITIES = new Map<string, ActivityResponse['activity']>();
 
 export const EMAIL_STORAGE_KEY = 'xtbit.companion.email';
 export const BILLING_EMAIL_STORAGE_KEY = 'xtbit.billing.email';
@@ -193,6 +201,15 @@ export async function updateRomancePreference(
   });
 }
 
+export async function updatePushPreference(enabled: boolean): Promise<PushPreferenceResponse> {
+  const payload = await requestJson<LifePushPreferenceWire>('/auth/me/preferences', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ push_enabled: enabled }),
+  });
+  return { enabled: payload.push_enabled };
+}
+
 export async function logout(): Promise<void> {
   try {
     await requestJson('/auth/logout', { method: 'POST' });
@@ -298,6 +315,264 @@ export async function deleteCompanion(id: string): Promise<{ ok: true }> {
 
 export async function getRelationship(companionId: string): Promise<RelationshipResponse> {
   return requestJson<RelationshipResponse>(`/relationships/${encodeURIComponent(companionId)}`);
+}
+
+export async function getToday(): Promise<TodayResponse> {
+  return normalizeToday(await requestJson<LifeTodayWire>('/today'));
+}
+
+export async function getDailyState(companionId: string, includeFlavor = false): Promise<DailyState> {
+  const query = includeFlavor ? '?include_flavor=1' : '';
+  return normalizeDailyState(await requestJson<LifeDailyStateWire>(`/companions/${encodeURIComponent(companionId)}/daily-state${query}`));
+}
+
+export async function createActivity(input: ActivityCreateInput): Promise<ActivityResponse> {
+  const payload = await requestJson<LifeActivityWire>('/activities', {
+    body: JSON.stringify({
+      companion_id: input.companion_id,
+      scene_id: input.scene_id,
+      activity_type: input.type,
+    }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+  const activity = normalizeActivity(payload);
+  ACTIVE_ACTIVITIES.set(activity.id, activity);
+  return { activity };
+}
+
+export async function getActivity(activityId: string): Promise<ActivityResponse> {
+  const cached = ACTIVE_ACTIVITIES.get(activityId);
+  if (cached) {
+    return { activity: cached };
+  }
+  throw new Error('activity_not_cached');
+}
+
+export async function completeActivity(activityId: string): Promise<ActivityResponse> {
+  const payload = await requestJson<LifeActivityWire>(`/activities/${encodeURIComponent(activityId)}/complete`, {
+    method: 'POST',
+  });
+  const activity = normalizeActivity(payload);
+  ACTIVE_ACTIVITIES.set(activity.id, activity);
+  return { activity };
+}
+
+export async function cancelActivity(activityId: string): Promise<ActivityResponse> {
+  const payload = await requestJson<LifeActivityWire>(`/activities/${encodeURIComponent(activityId)}/cancel`, {
+    method: 'POST',
+  });
+  const activity = normalizeActivity(payload);
+  ACTIVE_ACTIVITIES.set(activity.id, activity);
+  return { activity };
+}
+
+export async function getMemories(companionId?: string): Promise<MemoriesResponse> {
+  const params = new URLSearchParams();
+  if (companionId) {
+    params.set('companion_id', companionId);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return normalizeMemories(await requestJson<LifeMemoriesWire>(`/memories${query}`));
+}
+
+export async function registerPushToken(token: string, platform: string): Promise<PushPreferenceResponse> {
+  await requestJson<{ ok: true }>('/push/tokens', {
+    body: JSON.stringify({ platform, token }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+  return { enabled: true };
+}
+
+export async function deletePushToken(token: string): Promise<PushPreferenceResponse> {
+  await requestJson<{ ok: true }>(`/push/tokens/${encodeURIComponent(token)}`, {
+    method: 'DELETE',
+  });
+  return { enabled: false };
+}
+
+type LifePushPreferenceWire = {
+  push_enabled: boolean;
+};
+
+type LifeTodayWire = {
+  city: { description: string; name: string; tagline: string };
+  date_local: string;
+  recommendations: Array<{
+    activity_hint: string;
+    availability: TodayResponse['recommendations'][number]['availability'];
+    companion: { art_url: string | null; gender: string | null; id: string; name: string };
+    mood: string;
+    next_goal: { description: string; target_dim: string; target_value: number } | null;
+    relationship_stage: string;
+    scene: { id: string; mood: string; name: string };
+    stage_progress: number;
+    suggested_activity: { activity_type: ActivityCreateInput['type']; reason: string } | null;
+  }>;
+  time_slot: TodayResponse['time_slot'];
+};
+
+type LifeDailyStateWire = {
+  activity_hint: string;
+  availability: DailyState['availability'];
+  companion_id: string;
+  date_local: string;
+  flavor_text?: string | null;
+  mood: string;
+  scene_id: string;
+  time_slot: DailyState['time_slot'];
+};
+
+type LifeActivityWire = {
+  canceled_at: number | null;
+  companion_id: string;
+  completed_at: number | null;
+  daily_state_snapshot: {
+    activity_hint: string;
+    availability: DailyState['availability'];
+    mood: string;
+    scene_id: string;
+  };
+  id: string;
+  scene_id: string;
+  started_at: number;
+  status: ActivityResponse['activity']['status'];
+  activity_type: ActivityCreateInput['type'];
+};
+
+type LifeMemoriesWire = {
+  capacity_limit: number | null;
+  memories: Array<{
+    activity_id: string | null;
+    cg_template: string | null;
+    cg_url: string | null;
+    companion_id: string;
+    created_at: number;
+    id: string;
+    key_choice: string | null;
+    memory_type: Memory['type'];
+    relationship_delta: Record<string, number> | null;
+    scene_id: string | null;
+    summary: string;
+    title: string;
+  }>;
+  total: number;
+  truncated: boolean;
+};
+
+function normalizeToday(payload: LifeTodayWire): TodayResponse {
+  return {
+    city: payload.city,
+    date_local: payload.date_local,
+    recommendations: payload.recommendations.map((item) => {
+      const suggested = item.suggested_activity?.activity_type ?? null;
+      return {
+        activity_hint: item.activity_hint,
+        availability: item.availability,
+        companion: {
+          art_url: item.companion.art_url,
+          id: item.companion.id,
+          name: item.companion.name,
+          relationship_role: item.companion.gender,
+        },
+        daily_state: {
+          activity_hint: item.activity_hint,
+          availability: item.availability,
+          companion_id: item.companion.id,
+          date_local: payload.date_local,
+          flavor_text: null,
+          mood: item.mood,
+          scene: { art_url: null, id: item.scene.id, mood: item.scene.mood, name: item.scene.name },
+          time_slot: payload.time_slot,
+        },
+        mood: item.mood,
+        next_goal: {
+          label: item.next_goal?.description ?? 'Keep building this stage through shared time.',
+          recommended_activity: suggested,
+          stage: item.relationship_stage,
+          stage_progress: item.stage_progress,
+        },
+        scene: { art_url: null, id: item.scene.id, mood: item.scene.mood, name: item.scene.name },
+        suggested_activity: suggested ?? 'check_in',
+      };
+    }),
+    time_slot: payload.time_slot,
+  };
+}
+
+function normalizeDailyState(payload: LifeDailyStateWire): DailyState {
+  return {
+    activity_hint: payload.activity_hint,
+    availability: payload.availability,
+    companion_id: payload.companion_id,
+    date_local: payload.date_local,
+    flavor_text: payload.flavor_text ?? null,
+    mood: payload.mood,
+    scene: sceneFromId(payload.scene_id),
+    time_slot: payload.time_slot,
+  };
+}
+
+function normalizeActivity(payload: LifeActivityWire): ActivityResponse['activity'] {
+  const scene = sceneFromId(payload.scene_id);
+  return {
+    companion: { art_url: null, id: payload.companion_id, name: payload.companion_id },
+    created_at: new Date(payload.started_at).toISOString(),
+    daily_state: {
+      activity_hint: payload.daily_state_snapshot.activity_hint,
+      availability: payload.daily_state_snapshot.availability,
+      companion_id: payload.companion_id,
+      date_local: new Date(payload.started_at).toISOString().slice(0, 10),
+      flavor_text: null,
+      mood: payload.daily_state_snapshot.mood,
+      scene: sceneFromId(payload.daily_state_snapshot.scene_id),
+      time_slot: 'morning',
+    },
+    id: payload.id,
+    scene,
+    status: payload.status,
+    type: payload.activity_type,
+  };
+}
+
+function normalizeMemories(payload: LifeMemoriesWire): MemoriesResponse {
+  return {
+    album_limit: payload.capacity_limit,
+    items: payload.memories.map((item) => ({
+      cg_template: item.cg_template,
+      cg_url: item.cg_url,
+      companion_id: item.companion_id,
+      created_at: new Date(item.created_at).toISOString(),
+      date: new Date(item.created_at).toISOString().slice(0, 10),
+      id: item.id,
+      key_choice: item.key_choice,
+      relationship_delta: item.relationship_delta ? formatRelationshipDelta(item.relationship_delta) : null,
+      scene: item.scene_id ? sceneFromId(item.scene_id) : null,
+      summary: item.summary,
+      title: item.title,
+      type: item.memory_type,
+    })),
+    tier: payload.capacity_limit === null ? 'pro' : 'free',
+  };
+}
+
+function sceneFromId(id: string) {
+  return { art_url: `scenes/${id}.png`, id, name: titleize(id) };
+}
+
+function titleize(value: string): string {
+  return value
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatRelationshipDelta(delta: Record<string, number>): string {
+  return Object.entries(delta)
+    .map(([key, value]) => `${value > 0 ? '+' : ''}${value} ${key.replace(/_/g, ' ')}`)
+    .join(', ');
 }
 
 export async function getChatHistory(

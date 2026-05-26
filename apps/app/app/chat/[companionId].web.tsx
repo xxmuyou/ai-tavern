@@ -5,6 +5,7 @@ import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'reac
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
 import type { ChatEmotionKey, ChatMessage, CompanionDetail } from '@/api/types';
+import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
@@ -12,6 +13,7 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { WebAppShell, WebPanel } from '@/components/web/WebAppShell';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
+import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -31,19 +33,27 @@ function isStreamingItem(item: ChatListItem): item is StreamingItem {
 }
 
 export default function WebChatScreen() {
-  const params = useLocalSearchParams<{ companionId?: string; sceneId?: string }>();
+  const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneId?: string }>();
   const companionId = typeof params.companionId === 'string' ? params.companionId : '';
+  const activityId = typeof params.activityId === 'string' ? params.activityId : undefined;
   const sceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
   const router = useRouter();
   const { pushError } = useErrorBanner();
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
+  const activityState = useActivity(activityId);
+  const activityActions = useActivities();
+  const { activity, refresh: refreshActivity, setActivity } = activityState;
   const [companion, setCompanion] = useState<CompanionDetail | null>(null);
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    void refreshActivity();
+  }, [refreshActivity]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +114,7 @@ export default function WebChatScreen() {
 
     try {
       const result = await stream.send(text, {
+        activityId,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         sceneId,
       });
@@ -128,7 +139,27 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [companionId, draft, history, pushError, remainingSeconds, sceneId, stream]);
+  }, [activityId, companionId, draft, history, pushError, remainingSeconds, sceneId, stream]);
+
+  const handleCompleteActivity = useCallback(async () => {
+    if (!activityId) return;
+    try {
+      const payload = await activityActions.complete(activityId);
+      setActivity(payload.activity);
+    } catch (error) {
+      pushError(error instanceof Error ? error.message : 'Activity could not be completed.');
+    }
+  }, [activityActions, activityId, pushError, setActivity]);
+
+  const handleCancelActivity = useCallback(async () => {
+    if (!activityId) return;
+    try {
+      const payload = await activityActions.cancel(activityId);
+      setActivity(payload.activity);
+    } catch (error) {
+      pushError(error instanceof Error ? error.message : 'Activity could not be cancelled.');
+    }
+  }, [activityActions, activityId, pushError, setActivity]);
 
   if (history.isLoadingInitial) {
     return <LoadingScreen label="Loading chat..." />;
@@ -163,6 +194,12 @@ export default function WebChatScreen() {
         </WebPanel>
 
         <View className="overflow-hidden rounded-lg border border-app-line bg-white xl:col-span-3">
+          <ActivityContextBanner
+            activity={activity}
+            isMutating={activityActions.isMutating}
+            onCancel={handleCancelActivity}
+            onComplete={handleCompleteActivity}
+          />
           <View className="h-[620px] justify-end bg-app-bg">
             <View className="gap-2 px-2 py-4">
               {history.hasMore ? (

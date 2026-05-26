@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { ErrorBanner } from '@/components/ErrorBanner';
+import { PushRegistrar } from '@/components/PushRegistrar';
 import { ErrorBannerProvider } from '@/hooks/use-error-banner';
 import { SessionProvider } from '@/hooks/use-session';
 
@@ -28,8 +29,10 @@ export default function RootLayout() {
             <Stack.Screen name="companion-create" />
             <Stack.Screen name="companion/[id]" />
             <Stack.Screen name="companion/[id]/edit" />
+            <Stack.Screen name="memories" />
             <Stack.Screen name="scene/[id]" />
           </Stack>
+          <PushRegistrar />
           <ErrorBanner />
           <StatusBar style="dark" />
         </ErrorBannerProvider>

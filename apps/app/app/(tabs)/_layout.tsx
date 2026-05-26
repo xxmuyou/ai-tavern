@@ -7,7 +7,7 @@ export default function TabLayout() {
   return (
     <AuthGuard>
       <Tabs
-        initialRouteName="scenes"
+        initialRouteName="index"
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: '#1E6B52',
@@ -20,6 +20,13 @@ export default function TabLayout() {
           },
         }}
       >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: 'Today',
+            tabBarIcon: ({ color, size }) => <Ionicons color={color} name="sunny-outline" size={size} />,
+          }}
+        />
         <Tabs.Screen
           name="scenes"
           options={{
@@ -41,7 +48,6 @@ export default function TabLayout() {
             tabBarIcon: ({ color, size }) => <Ionicons color={color} name="person-circle-outline" size={size} />,
           }}
         />
-        <Tabs.Screen name="index" options={{ href: null }} />
       </Tabs>
     </AuthGuard>
   );

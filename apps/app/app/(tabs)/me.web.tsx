@@ -11,6 +11,7 @@ import { WebAppShell, WebInfoRow, WebPanel } from '@/components/web/WebAppShell'
 import { ADMIN_ROUTE, BILLING_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { usePush } from '@/hooks/use-push';
 import { useSession } from '@/hooks/use-session';
 import { formatDateTime, formatProvider } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
@@ -21,6 +22,7 @@ export default function WebMeScreen() {
   const { session, signOut } = useSession();
   const { data: billing, refetch: refetchBilling } = useBilling();
   const [me, setMe] = useState<MeResponse | null>(null);
+  const push = usePush(me?.push_enabled);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
@@ -117,6 +119,22 @@ export default function WebMeScreen() {
               ) : (
                 <Button label="Upgrade to Pro" onPress={() => router.push(BILLING_ROUTE)} />
               )}
+            </View>
+          </WebPanel>
+
+          <WebPanel>
+            <Text className="mb-3 text-xl font-semibold text-app-text">Push notifications</Text>
+            <Text className="text-sm leading-6 text-app-muted">Mobile push can be enabled in the native app. Browser push is not part of v1.</Text>
+            <View className="mt-4 flex-row items-center justify-between gap-4">
+              <Text className="text-sm font-semibold text-app-text">Daily relationship prompts</Text>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: push.enabled }}
+                disabled
+                className="h-8 w-14 justify-center rounded-full bg-app-line px-1 opacity-50"
+              >
+                <View className="h-6 w-6 self-start rounded-full bg-white" />
+              </Pressable>
             </View>
           </WebPanel>
         </View>

@@ -4,13 +4,17 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
+import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
+import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
 import { WebAppShell, WebInfoRow, WebPanel } from '@/components/web/WebAppShell';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
+import { relationshipGoalFromSummary } from '@/utils/relationship';
 
 export default function WebCompanionDetailScreen() {
   const router = useRouter();
@@ -34,6 +38,7 @@ export default function WebCompanionDetailScreen() {
   const companion = data;
   const imageSource = mediaSource(companion.art_url);
   const canEdit = companion.source === 'user';
+  const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
 
   async function removeCompanion() {
     if (!window.confirm(`Delete ${companion.name}? This will remove the custom companion from your list.`)) {
@@ -79,6 +84,8 @@ export default function WebCompanionDetailScreen() {
 
         <View className="gap-6 xl:col-span-2">
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
+          <RelationshipGoalPanel goal={relationshipGoal} />
+          <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
           <WebPanel>
             <Text className="mb-3 text-xl font-semibold text-app-text">Timeline</Text>
             <WebInfoRow label="First met" value={formatDateTime(companion.relationship.first_met_at)} />
@@ -91,6 +98,7 @@ export default function WebCompanionDetailScreen() {
             <TextBlock label="Appearance" value={companion.appearance} />
             <TextBlock label="Speech style" value={companion.speech_style} />
           </WebPanel>
+          <CompanionMemoriesPreview companionId={companion.id} portraitUrl={companion.art_url} />
         </View>
       </View>
     </WebAppShell>
