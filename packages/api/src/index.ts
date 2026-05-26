@@ -8,6 +8,7 @@ import { handleQueueBatch } from "./chat/summary-consumer";
 import { handleCompanionsRequest } from "./companions";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
+import { handleTodayRequest } from "./life/today";
 import { handleAdminLlmRequest } from "./llm";
 import { handleRelationshipsRequest } from "./relationships";
 import { handleScenesRequest } from "./scenes";
@@ -91,6 +92,11 @@ export default {
       const eventsResponse = await handleEventsRequest(request, env, pathname);
       if (eventsResponse) {
         return withCors(request, env, eventsResponse);
+      }
+
+      const todayResponse = await handleTodayRequest(request, env, pathname);
+      if (todayResponse) {
+        return withCors(request, env, todayResponse);
       }
 
       if (isRetiredPath(pathname)) {
