@@ -2,8 +2,10 @@ import { requireAuthUser } from "../auth";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 
+import { applyCommittedDecayIfDue } from "./decay";
 import { loadRelationship } from "./engine";
 import { ZERO_DIMENSIONS, computeLevel } from "./level";
+import { deriveStage } from "./stage";
 
 export { applySignals, ensureRelationship, loadRelationship } from "./engine";
 export {
@@ -61,25 +63,38 @@ async function getRelationship(env: Env, user: UserRecord, companionId: string):
     return notFound();
   }
 
+  // Apply committed-stage decay lazily on read. Cheap no-op for everyone
+  // who is not in committed + idle longer than the threshold.
+  await applyCommittedDecayIfDue(env, user.id, companionId);
   const relationship = await loadRelationship(env, user.id, companionId);
 
   if (!relationship) {
+    const stage = deriveStage(ZERO_DIMENSIONS);
     return jsonResponse({
       companion_id: companionId,
       dimensions: { ...ZERO_DIMENSIONS },
       first_met_at: null,
       last_interaction_at: null,
       level: computeLevel(ZERO_DIMENSIONS),
+      stage: stage.stage,
+      stage_progress: stage.stage_progress,
+      next_goal: stage.next_goal,
+      recommended_activity: stage.recommended_activity,
       milestones: [],
     });
   }
 
+  const stage = deriveStage(relationship.dimensions);
   return jsonResponse({
     companion_id: companionId,
     dimensions: relationship.dimensions,
     first_met_at: relationship.first_met_at,
     last_interaction_at: relationship.last_interaction_at,
     level: relationship.level,
+    stage: stage.stage,
+    stage_progress: stage.stage_progress,
+    next_goal: stage.next_goal,
+    recommended_activity: stage.recommended_activity,
     milestones: [{ at: relationship.first_met_at, type: "first_met" }],
   });
 }
