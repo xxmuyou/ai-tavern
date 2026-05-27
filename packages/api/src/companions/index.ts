@@ -6,6 +6,11 @@ import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
 import { getOrComputeDailyState, getOrGenerateFlavorText } from "../life/daily-state";
 import { computeDateLocal, computeTimeSlot } from "../life/time-slot";
+import {
+  neutralOnlyArtEmotions,
+  parseArtEmotions,
+} from "./emotion-art";
+import { handleCompanionEmotionArtRequest } from "./emotion-art-routes";
 import type { Gender } from "./gender-weight";
 import { handleCompanionArtUpload } from "./upload-art";
 
@@ -91,6 +96,11 @@ export async function handleCompanionsRequest(
 
   if (pathname === "/companions/upload-art") {
     return handleCompanionArtUpload(request, env);
+  }
+
+  const emotionArtResponse = await handleCompanionEmotionArtRequest(request, env, pathname);
+  if (emotionArtResponse) {
+    return emotionArtResponse;
   }
 
   const dailyStateMatch = pathname.match(/^\/companions\/([^/]+)\/daily-state$/);
@@ -249,7 +259,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
 
   const body = {
     appearance: row.appearance,
-    art_emotions: parseEmotionArt(row.art_emotions),
+    art_emotions: serializeArtEmotions(row.art_emotions),
     art_url: row.art_url,
     background: row.background,
     gender: normalizeGender(row.gender),
@@ -306,7 +316,9 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
       input.value.relationship_role ?? null,
       input.value.preferred_scenes ? JSON.stringify(input.value.preferred_scenes) : null,
       input.value.art_url ?? null,
-      input.value.art_url ? JSON.stringify(singleArtEmotionMap(input.value.art_url)) : null,
+      input.value.art_url
+        ? JSON.stringify(neutralOnlyArtEmotions(input.value.art_url))
+        : null,
       input.value.gender,
       now,
       now,
@@ -359,9 +371,19 @@ async function updateCompanion(
     relationship_role: patch.value.relationship_role ?? existing.relationship_role,
     speech_style: patch.value.speech_style ?? existing.speech_style,
   };
-  const artEmotions = patch.value.art_url !== undefined && merged.art_url
-    ? JSON.stringify(singleArtEmotionMap(merged.art_url))
-    : existing.art_emotions;
+  // spec-020: when the neutral art_url changes, drop all non-neutral
+  // emotion entries — they were generated against the old base image and
+  // would drift from the new one. New variations must be regenerated.
+  const artUrlChanged =
+    patch.value.art_url !== undefined && patch.value.art_url !== existing.art_url;
+  let artEmotions: string | null;
+  if (artUrlChanged) {
+    artEmotions = merged.art_url
+      ? JSON.stringify(neutralOnlyArtEmotions(merged.art_url))
+      : null;
+  } else {
+    artEmotions = existing.art_emotions;
+  }
 
   await env.DB.prepare(
     `UPDATE companions
@@ -474,7 +496,7 @@ async function countActiveUserCompanions(env: Env, userId: string): Promise<numb
 function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
   return {
     appearance: row.appearance,
-    art_emotions: parseEmotionArt(row.art_emotions),
+    art_emotions: serializeArtEmotions(row.art_emotions),
     art_url: row.art_url,
     background: row.background,
     created_at: row.created_at,
@@ -638,32 +660,7 @@ function parseStringArray(raw: string | null | undefined): string[] {
   }
 }
 
-const KNOWN_EMOTIONS: ReadonlySet<string> = new Set([
-  "warm",
-  "neutral",
-  "guarded",
-  "playful",
-  "tense",
-  "annoyed",
-]);
-
-function parseEmotionArt(raw: string | null | undefined): Record<string, string> | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const out: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-      if (KNOWN_EMOTIONS.has(key) && typeof value === "string" && value.length > 0) {
-        out[key] = value;
-      }
-    }
-    return Object.keys(out).length > 0 ? out : null;
-  } catch {
-    return null;
-  }
-}
-
-function singleArtEmotionMap(artUrl: string): Record<string, string> {
-  return Object.fromEntries([...KNOWN_EMOTIONS].map((emotion) => [emotion, artUrl]));
+function serializeArtEmotions(raw: string | null | undefined): Record<string, string> | null {
+  const map = parseArtEmotions(raw);
+  return Object.keys(map).length > 0 ? map : null;
 }

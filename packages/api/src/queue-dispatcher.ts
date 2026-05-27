@@ -1,0 +1,74 @@
+import { LLMError } from "./llm";
+import { processSummary } from "./chat/summary-consumer";
+import type { SummaryJobPayload } from "./chat/summary-queue";
+import { isArtJobPayload, processArtJob } from "./companions/art-consumer";
+
+function isSummaryPayload(value: unknown): value is SummaryJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return obj.type === "chat.summary" && typeof obj.thread_id === "string";
+}
+
+/**
+ * Top-level queue consumer dispatcher.
+ *
+ * Routes each message to the right per-feature handler based on its `type`
+ * discriminator. Unrecognized messages are ack'd silently — that lets
+ * unknown legacy / control messages drain without blocking the queue.
+ */
+export async function dispatchQueueBatch(
+  batch: MessageBatch<unknown>,
+  env: Env,
+): Promise<void> {
+  for (const message of batch.messages) {
+    const body = message.body;
+
+    if (isSummaryPayload(body)) {
+      try {
+        await processSummary(env, body);
+        message.ack();
+      } catch (err) {
+        if (err instanceof LLMError && !err.retryable) {
+          console.warn(
+            JSON.stringify({
+              error: err.message,
+              error_code: err.code,
+              message: "Summary job dropped (non-retryable LLM config error)",
+              thread_id: body.thread_id,
+            }),
+          );
+          message.ack();
+          continue;
+        }
+        console.error(
+          JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+            message: "Summary job failed, will retry",
+            thread_id: body.thread_id,
+          }),
+        );
+        message.retry();
+      }
+      continue;
+    }
+
+    if (isArtJobPayload(body)) {
+      try {
+        await processArtJob(env, body);
+        message.ack();
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+            job_id: body.job_id,
+            message: "Companion art job failed, will retry",
+          }),
+        );
+        message.retry();
+      }
+      continue;
+    }
+
+    message.ack();
+  }
+}
