@@ -44,8 +44,11 @@
 | 016 | [本地密钥管理收敛（.env.dev SOT + sync）](./spec-016-local-secrets-mgmt.md) | 新建 | — | 0.5 天 | ⚪ todo（详细） |
 | 017 | [恋爱偏好 + 加权 spawn（5 男 5 女）](./spec-017-romance-preference.md) | 新建 | 004, 007, 013 | 0.5-1 天 | 🟡 in-progress |
 | 018 | [Web 桌面工作台 UI 独立化](./spec-018-web-ui-workspace.md) | 重做 | 012 | 5-8 天 | 🟡 in-progress |
+| 019 | [User/VIP Companion Creation UI](./spec-019-companion-create-ui.md) | 新建 | 004, 010, 018 | 5-7 天 | 📝 draft |
+| 020 | [Companion Emotion Art Generation](./spec-020-companion-emotion-art-generation.md) | 新建 | 004, 006, 010, 019, 021 | 5-8 天 | 📝 draft |
+| 021 | [Credits Ledger and Metering](./spec-021-credits-ledger-and-metering.md) | 新建 | 010 | 5-8 天 | 📝 draft |
 
-**估时总计：** 约 45-65 工程日（不含美术、QA、市场准备）
+**估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
 
 ---
 
@@ -61,6 +64,7 @@
 - **E2 路径（Web UI）：** 012 → 018，优先把 Web 做成桌面工作台；mobile UI 另开后续 spec
 - **F 路径（部署）：** 014 + 015 可任意时间开（独立基础）
 - **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
+- **H 路径（自创角色商业化）：** 019 → 021 → 020，先完成创建 UI 和积分账本，再接表情图生成
 
 ---
 
