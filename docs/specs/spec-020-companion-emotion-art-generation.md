@@ -1,6 +1,6 @@
 # spec-020: Companion Emotion Art Generation
 
-> **类型：** 新建  |  **依赖：** spec-004, spec-006, spec-010, spec-019, spec-021  |  **估时：** 5-8 天  |  **状态：** 📝 draft
+> **类型：** 新建  |  **依赖：** spec-004, spec-006, spec-010, spec-019, spec-021, spec-022  |  **估时：** 5-8 天  |  **状态：** 📝 draft
 
 ---
 
@@ -137,6 +137,8 @@ POST /admin/companions/{id}/emotion-art/prewarm
 
 ### D. 异步生成流程
 
+> Provider 默认 mock（仅用于跑通链路），首个真实 provider 接入见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
+
 使用 Worker queue 或现有 `JOB_QUEUE` 处理 `companion.emotion_art.generate`：
 
 1. API 校验权限、emotion、neutral 图、缓存命中和积分余额。
@@ -251,3 +253,4 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 - [`spec-010`](./spec-010-billing-entitlements-quota.md)：订阅权益和 Stripe 基础能力。
 - [`spec-019`](./spec-019-companion-create-ui.md)：用户创建/编辑 companion 与 neutral 图上传入口。
 - [`spec-021`](./spec-021-credits-ledger-and-metering.md)：积分账本、扣费、退款和充值。
+- [`spec-022`](./spec-022-image-gen-runninghub-integration.md)：首个真实 image gen provider（RunningHub）接入；本 spec 默认 mock，真实 provider 由 spec-022 提供。
