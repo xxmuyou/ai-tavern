@@ -38,7 +38,7 @@
 - 生图必须使用 neutral 图作为 reference/image-to-image，优先保证角色一致性。
 - 生图能力抽成独立模块，支持 `text_to_image`、`image_to_image`、`edit` 三类任务。
 - Provider 切换成本必须低：切换模型优先通过配置完成；新增 provider 只新增 adapter，不改 companion workflow。
-- 支持 OpenAI `gpt-image-1.5` 作为 v1 默认 provider，同时预留 RunningHub、ComfyUI 反代、FLUX、Seedream 等 provider adapter。
+- 支持 RunningHub 作为 v1 默认 provider，同时预留 OpenAI `gpt-image-1.5`、ComfyUI 反代、FLUX、Seedream 等 provider adapter；RunningHub 具体接入由 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 落地。
 - 模块能力声明必须覆盖：WebP 输出、透明背景、reference image、mask image、异步 provider task。
 
 ### 非目标
@@ -194,10 +194,12 @@ v1 默认配置：
 
 | task | provider | model | output |
 |---|---|---|---|
-| `companion_emotion_art` | `openai` | `gpt-image-1.5` | `webp` |
-| `generic_text_to_image` | `openai` | `gpt-image-1.5` | `webp` |
-| `generic_image_to_image` | `openai` | `gpt-image-1.5` | `webp` |
-| `generic_edit` | `openai` | `gpt-image-1.5` | `webp` |
+| `companion_emotion_art` | `runninghub` | `companion-expression-pack-v1` | `webp` |
+| `generic_text_to_image` | `runninghub` | `generic-text-to-image-v1` | `webp` |
+| `generic_image_to_image` | `runninghub` | `generic-image-to-image-v1` | `webp` |
+| `generic_edit` | `runninghub` | `generic-edit-v1` | `webp` |
+
+> `model` 字段记录的是逻辑 workflow 名（与 v1 阶段使用的 ComfyUI workflow 一一对应）；实际 `workflowId` 与节点映射放在 `provider_options` JSON，由 spec-022 在 RunningHub 平台搭好 workflow 后填回。
 
 ### D. Provider Adapter 策略
 
@@ -240,13 +242,14 @@ type ImageProvider = {
 
 v1 provider 策略：
 
-- OpenAI `gpt-image-1.5` 作为默认 provider。
-- OpenAI adapter 优先使用 image edit / image-to-image 能力，输出 `image/webp`，需要透明背景时请求透明背景。
-- RunningHub adapter 作为 workflow provider 预留，按异步任务处理：
+- RunningHub 作为 v1 默认 provider，所有 task 默认走 RunningHub workflow（见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)）。
+- RunningHub adapter 是异步 workflow provider：
   - 通过 `provider_options.workflow_id` 与节点映射提交任务。
   - 保存 `provider_task_id`。
   - queue 后续轮询任务状态，或接收 webhook 后补齐 job。
   - provider 返回图片 URL 后由 Worker 下载并转存 R2。
+  - 通过 ComfyUI workflow 节点配置实现 image-to-image、reference image、WebP 输出和角色一致性方案。
+- OpenAI `gpt-image-1.5` adapter 预留，作为 RunningHub 不可用 / 验证基准时的 fallback；启用与否由 `image_generation_config.fallback_provider` 控制，本期不强制实施。
 - 反代 provider 使用同一 adapter 形态，只允许通过配置切换 `base_url`、`workflow_id`、`model`、节点参数，不允许 companion 模块感知这些差异。
 - Provider 不支持 WebP 或透明背景时，不在 companion 层写特殊逻辑；adapter 记录 `capability_miss`，实际输出格式写入 `actual_format` 和 `output_content_type`。
 
@@ -421,8 +424,8 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 1. 新增 migration：创建 `image_generation_jobs`、`image_generation_config`、`companion_art_jobs`。
 2. 调整 companion create/update：上传图只写 `art_url` 和 `art_emotions.neutral`。
 3. 新增 `packages/api/src/images/` 通用模块，封装 job 创建、配置解析、queue 处理、R2 写入和 `asset_objects` 记录。
-4. 新增 OpenAI image provider adapter，v1 默认使用 `gpt-image-1.5`。
-5. 新增 RunningHub/workflow provider adapter 结构，支持 `provider_task_id`、轮询、结果 URL 转存 R2；实际生产开关由配置控制。
+4. 新增 RunningHub workflow provider adapter，v1 默认；支持 `provider_task_id`、轮询、webhook 接收、结果 URL 转存 R2。详细接入和 workflow 能力清单见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
+5. 新增 OpenAI image provider adapter 结构（fallback 用），本期不强制启用；接口形状对齐 `ImageProvider`。
 6. 新增 companion expression pack service：解析/更新 `art_emotions` JSON，封装 cache hit、job 去重和 stale 判断。
 7. 新增用户 pack endpoint、单张 retry endpoint 和 admin prewarm endpoint。
 8. 接入 spec-021 的 reserve/commit/refund 接口；在 spec-021 未完成前允许 admin/system bypass，普通用户端点返回 `501 credits_not_ready` 或使用 feature flag 关闭。
@@ -437,8 +440,8 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 ### 通用 Image Generation 模块
 
 - `image_generation_config` 能按 task 解析 provider/model/default output。
-- OpenAI adapter 能把 `image_to_image` 请求映射为 WebP 输出和透明背景请求。
-- RunningHub adapter 能提交 workflow task，保存 `provider_task_id`，并在轮询成功后写入 R2。
+- RunningHub adapter 能提交 workflow task，保存 `provider_task_id`，并在 webhook / 轮询成功后写入 R2。
+- OpenAI adapter（fallback，预留）单元测试覆盖：能把 `image_to_image` 请求映射为 WebP 输出和透明背景请求；本期不要求在生产路径启用。
 - Provider 不支持 WebP/透明背景时，job 记录 `capability_miss`，并正确保存 `actual_format`。
 - Provider 输出成功后 R2 有对象，`asset_objects` 有对应记录。
 - Provider 失败后 job 为 failed，错误码和错误消息可查询。
@@ -475,4 +478,4 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 - [`spec-010`](./spec-010-billing-entitlements-quota.md)：订阅权益和 Stripe 基础能力。
 - [`spec-019`](./spec-019-companion-create-ui.md)：用户创建/编辑 companion 与 neutral 图上传入口。
 - [`spec-021`](./spec-021-credits-ledger-and-metering.md)：积分账本、扣费、退款和充值。
-- [`spec-022`](./spec-022-image-gen-runninghub-integration.md)：首个真实 image gen provider（RunningHub）接入；本 spec 默认 mock，真实 provider 由 spec-022 提供。
+- [`spec-022`](./spec-022-image-gen-runninghub-integration.md)：v1 默认 image gen provider（RunningHub）接入；workflow 搭建、签名 URL、webhook 接收等具体集成由 spec-022 落地。

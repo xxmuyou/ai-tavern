@@ -17,7 +17,7 @@
 - **多模型并存**：同账户可挂多个 workflow（不同风格 / 不同质量档），后端通过 `workflowId` 切换
 - **异步 webhook**：避免 Worker 占用 CPU 长轮询
 
-本 spec **不替换 mock**。mock 留作本地开发 + CI 默认，runninghub 通过 env 切换启用，便于 staging / production 分别配置。
+本 spec 把 RunningHub 定位为 **v1 生产环境默认 provider**（与 [`spec-020`](./spec-020-companion-emotion-art-generation.md) v1 默认配置一致）。mock provider 保留作为本地开发 + CI 测试默认，避免空配置时意外烧钱；staging / production 的 wrangler 配置必须显式设为 `runninghub`。
 
 ---
 
@@ -26,7 +26,7 @@
 ### 目标
 
 - 在 spec-020 的 `ImageGenProvider` 抽象下实现首个真实 provider `RunningHubImageGenProvider`
-- 通过环境变量 `IMAGE_GEN_PROVIDER` 在 mock / runninghub 之间切换，默认 mock
+- 通过环境变量 `IMAGE_GEN_PROVIDER` 在 mock / runninghub 之间切换；本地 / CI 默认 mock，staging / production 显式配 `runninghub`
 - 通过 R2 签名 URL 把 neutral 图安全分发给 runninghub，无需公开 bucket
 - 通过 webhook 异步接收任务结果，写回 R2 和 DB；不依赖长轮询
 - 提供 cron 兜底，避免 webhook 丢失导致 job 永久 `processing`
