@@ -4,8 +4,8 @@ import { handleAdminRequest } from "./admin";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
 import { handleChatRequest } from "./chat";
-import { handleQueueBatch } from "./chat/summary-consumer";
 import { handleCompanionsRequest } from "./companions";
+import { dispatchQueueBatch } from "./queue-dispatcher";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
 import { handleActivityRequest } from "./life/activity";
@@ -194,7 +194,7 @@ export default {
     }
   },
   async queue(batch, env): Promise<void> {
-    await handleQueueBatch(batch, env);
+    await dispatchQueueBatch(batch, env);
   },
 } satisfies ExportedHandler<Env>;
 

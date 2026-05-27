@@ -238,7 +238,9 @@ describe("companions module", () => {
     expect(body.id.length).toBeGreaterThan(0);
   });
 
-  it("POST maps a single uploaded art_url to every emotion portrait", async () => {
+  it("POST seeds art_emotions with only the neutral key from uploaded art_url", async () => {
+    // spec-020: uploading a single image only seeds the neutral key;
+    // non-neutral emotions are filled in by the AI generation pipeline.
     const env = createEnv({ companions: [], relationships: [] });
     const token = await issueDevToken(env, "player@example.com");
     const response = await handleCompanionsRequest(
@@ -258,12 +260,7 @@ describe("companions module", () => {
     };
     expect(body.art_url).toBe("companions/user/user-1/portrait.webp");
     expect(body.art_emotions).toEqual({
-      annoyed: "companions/user/user-1/portrait.webp",
-      guarded: "companions/user/user-1/portrait.webp",
       neutral: "companions/user/user-1/portrait.webp",
-      playful: "companions/user/user-1/portrait.webp",
-      tense: "companions/user/user-1/portrait.webp",
-      warm: "companions/user/user-1/portrait.webp",
     });
   });
 
@@ -356,7 +353,10 @@ describe("companions module", () => {
     expect(body.personality).toBe("Updated personality");
   });
 
-  it("PUT maps a replaced art_url to every emotion portrait", async () => {
+  it("PUT replacing art_url resets art_emotions to neutral-only", async () => {
+    // spec-020: when the neutral base image changes, drop any previously
+    // generated non-neutral portraits — they were generated against the
+    // old base and would no longer match.
     const env = createEnv({
       companions: [userCompanion("alex", "user-1")],
       relationships: [],
@@ -377,12 +377,7 @@ describe("companions module", () => {
     };
     expect(body.art_url).toBe("companions/user/user-1/replacement.png");
     expect(body.art_emotions).toEqual({
-      annoyed: "companions/user/user-1/replacement.png",
-      guarded: "companions/user/user-1/replacement.png",
       neutral: "companions/user/user-1/replacement.png",
-      playful: "companions/user/user-1/replacement.png",
-      tense: "companions/user/user-1/replacement.png",
-      warm: "companions/user/user-1/replacement.png",
     });
   });
 
