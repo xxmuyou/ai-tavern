@@ -54,6 +54,7 @@
 - 视觉 polish：统一桌面间距、字号、按钮层级、表格/列表密度。
 - Web chat 优化：消息区滚动、右侧关系状态、角色上下文与 scene context。
 - Web admin 扩展：LLM 配置、usage、用户/订阅查询、运行状态。
+- Web admin 用户积分面板：搜用户 → 看余额/流水 → 增加积分，消费 [`spec-023`](./spec-023-admin-workspace.md) 的管理员积分端点。
 - Web billing 完整 QA：checkout、portal、success/cancel return。
 - 增加浏览器级 smoke 或 Playwright 检查。
 

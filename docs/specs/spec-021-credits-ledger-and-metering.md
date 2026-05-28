@@ -314,6 +314,7 @@ Admin/system：
 
 - admin prewarm 和后台系统任务不扣用户 credits。
 - 仍记录 provider cost 到 LLM/image usage 日志。
+- 管理员查看/调整指定用户积分（写 `adjustment` ledger，只增不减）由 [`spec-023`](./spec-023-admin-workspace.md) 承载；本 spec 只暴露 ledger helper，不定义管理员端点。
 
 ### G. 前端展示
 
