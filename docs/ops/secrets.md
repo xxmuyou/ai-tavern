@@ -19,6 +19,8 @@
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook 签名验证 | Stripe webhook endpoint 创建后获取 | Wrangler secret | 独立 |
 | `STRIPE_PUBLISHABLE_KEY` | 前端用的 Stripe key | stripe.com | wrangler.jsonc `vars`（公开） | 独立 |
 | `STRIPE_PRICE_PRO_MONTHLY` | Pro Monthly Stripe Price ID | Stripe Dashboard | wrangler.jsonc `vars`（公开） | 独立 |
+| `STRIPE_PRICE_CREDITS_SMALL` / `_MEDIUM` / `_LARGE` | 积分包一次性 Price ID（spec-021） | Stripe Dashboard | 同 `STRIPE_PRICE_PRO_MONTHLY`（sync 脚本按 secret 处理） | 独立 |
+| `STRIPE_CREDITS_SUCCESS_URL` / `_CANCEL_URL` | 积分 Checkout 成功/取消回跳 URL（缺省回退到 `STRIPE_SUCCESS_URL`/`_CANCEL_URL`） | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
 | `STRIPE_SUCCESS_URL` | Checkout 成功后回跳 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
 | `STRIPE_CANCEL_URL` | Checkout 取消后回跳 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
 | `STRIPE_PORTAL_RETURN_URL` | Customer Portal 返回 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |

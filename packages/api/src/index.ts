@@ -5,6 +5,7 @@ import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
 import { handleChatRequest } from "./chat";
 import { handleCompanionsRequest } from "./companions";
+import { handleCreditsRequest } from "./credits";
 import { dispatchQueueBatch } from "./queue-dispatcher";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
@@ -80,6 +81,11 @@ export default {
       const billingResponse = await handleBillingRequest(request, env, ctx, pathname);
       if (billingResponse) {
         return withCors(request, env, billingResponse);
+      }
+
+      const creditsResponse = await handleCreditsRequest(request, env, pathname);
+      if (creditsResponse) {
+        return withCors(request, env, creditsResponse);
       }
 
       const scenesResponse = await handleScenesRequest(request, env, pathname);

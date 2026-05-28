@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { handleCreditsCheckoutCompleted, isCreditsCheckoutSession } from "../credits/webhooks";
 import {
   beginWebhookEvent,
   finishWebhookEvent,
@@ -62,6 +63,10 @@ async function handleCheckoutCompleted(
   now: number,
   livemode: boolean,
 ): Promise<boolean> {
+  if (isCreditsCheckoutSession(session)) {
+    return handleCreditsCheckoutCompleted(env, session, now);
+  }
+
   const userId = session.client_reference_id ?? session.metadata?.user_id ?? null;
   const customerId = stripeId(session.customer);
   if (!userId || !customerId) {
