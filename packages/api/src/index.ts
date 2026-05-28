@@ -8,6 +8,11 @@ import { handleCompanionsRequest } from "./companions";
 import { dispatchQueueBatch } from "./queue-dispatcher";
 import { handleEventsRequest } from "./events";
 import { jsonResponse, notFound, readJson } from "./http";
+import {
+  handleRunningHubWebhookRequest,
+  pollStaleRunningHubArtJobs,
+} from "./image-gen/runninghub-results";
+import { verifySignedObjectRequest } from "./image-gen/signed-url";
 import { handleActivityRequest } from "./life/activity";
 import { handleMemoryRequest } from "./life/memory";
 import { handlePushRequest } from "./life/push";
@@ -50,6 +55,11 @@ export default {
       const rateLimitResponse = await enforceRateLimit(env, request, pathname);
       if (rateLimitResponse) {
         return rateLimitResponse;
+      }
+
+      const runningHubWebhookResponse = await handleRunningHubWebhookRequest(request, env, pathname);
+      if (runningHubWebhookResponse) {
+        return withCors(request, env, runningHubWebhookResponse);
       }
 
       const authResponse = await handleAuthRequest(request, env, pathname);
@@ -158,6 +168,16 @@ export default {
         return jsonCorsResponse(request, env, { ok: true }, { status: 202 });
       }
 
+      const signedObjectMatch = pathname.match(/^\/objects\/signed\/(.+)$/);
+      if (signedObjectMatch) {
+        const objectKey = signedObjectMatch[1];
+        if (!objectKey) {
+          return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
+        }
+
+        return handleSignedObjectRequest(request, env, decodeURIComponent(objectKey));
+      }
+
       const objectMatch = pathname.match(/^\/objects\/(.+)$/);
       if (objectMatch) {
         const objectKey = objectMatch[1];
@@ -195,6 +215,9 @@ export default {
   },
   async queue(batch, env): Promise<void> {
     await dispatchQueueBatch(batch, env);
+  },
+  async scheduled(_controller, env, ctx): Promise<void> {
+    ctx.waitUntil(pollStaleRunningHubArtJobs(env));
   },
 } satisfies ExportedHandler<Env>;
 
@@ -264,6 +287,33 @@ async function handleObjectRequest(
   }
 
   return jsonCorsResponse(request, env, { error: "method_not_allowed" }, { status: 405 });
+}
+
+async function handleSignedObjectRequest(
+  request: Request,
+  env: Env,
+  key: string,
+): Promise<Response> {
+  const normalizedKey = normalizeObjectKey(key);
+  if (!normalizedKey) {
+    return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
+  }
+
+  const signedObject = await verifySignedObjectRequest(env, request, normalizedKey);
+  if (!signedObject) {
+    return jsonCorsResponse(request, env, { error: "invalid_or_expired_signature" }, { status: 401 });
+  }
+
+  const object = await env.ASSETS.get(signedObject.key);
+  if (!object) {
+    return notFound();
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "private, max-age=60");
+  return new Response(object.body, { headers });
 }
 
 async function recordAsset(env: Env, key: string, metadata: UploadMetadata): Promise<void> {

@@ -40,7 +40,8 @@ export type ImageGenRequest = {
   companion: CompanionPromptContext;
 };
 
-export type ImageGenResponse = {
+export type CompletedImageGenResponse = {
+  type?: "completed";
   /** Generated image bytes ready to upload to R2. */
   image_bytes: Uint8Array;
   /** MIME type, e.g. "image/webp". */
@@ -50,6 +51,18 @@ export type ImageGenResponse = {
   /** Model identifier inside the provider (free-form). */
   model: string;
 };
+
+export type PendingImageGenResponse = {
+  type: "pending";
+  /** External provider task id, used by webhook/polling finalization. */
+  external_task_id: string;
+  /** Provider identifier (e.g. "runninghub"). */
+  provider: string;
+  /** Model identifier inside the provider (free-form). */
+  model: string;
+};
+
+export type ImageGenResponse = CompletedImageGenResponse | PendingImageGenResponse;
 
 export interface ImageGenProvider {
   readonly name: string;

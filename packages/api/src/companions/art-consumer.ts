@@ -8,6 +8,7 @@ import {
   type ArtJobRow,
   getJob,
   isArtJobPayload,
+  isNonNeutralEmotion,
   setEmotionArt,
   updateJob,
 } from "./emotion-art";
@@ -48,15 +49,12 @@ export async function processArtJob(env: Env, payload: ArtJobQueuePayload): Prom
 
   const companion = await loadCompanionForJob(env, payload.companion_id);
   if (!companion) {
-    await markFailed(env, job, "companion_not_found", "Companion no longer exists");
+    await markArtJobFailed(env, job, "companion_not_found", "Companion no longer exists");
     return;
   }
 
   await updateJob(env, job.id, { status: "processing" });
 
-  let outputKey: string;
-  let provider: string;
-  let model: string;
   try {
     const imageProvider = getImageGenProvider(env);
     const request: ImageGenRequest = {
@@ -73,47 +71,36 @@ export async function processArtJob(env: Env, payload: ArtJobQueuePayload): Prom
     };
     const response = await imageProvider.generate(request, env);
 
-    outputKey = buildOutputKey(companion, payload.emotion, response.content_type);
-    provider = response.provider;
-    model = response.model;
-
-    await env.ASSETS.put(outputKey, response.image_bytes, {
-      customMetadata: {
-        companion_id: companion.id,
-        emotion: payload.emotion,
-        job_id: job.id,
+    if (response.type === "pending") {
+      await updateJob(env, job.id, {
+        external_task_id: response.external_task_id,
+        model: response.model,
         provider: response.provider,
-        source: "companion-emotion-art",
-      },
-      httpMetadata: {
-        contentType: response.content_type,
-      },
+        status: "processing",
+      });
+      return;
+    }
+
+    await completeArtJobWithImage(env, job, {
+      contentType: response.content_type,
+      emotion: payload.emotion,
+      imageBytes: response.image_bytes,
+      model: response.model,
+      provider: response.provider,
     });
-    await recordAsset(env, outputKey, response.content_type, response.image_bytes.byteLength);
   } catch (err) {
     if (err instanceof ImageGenError && !err.retryable) {
-      await markFailed(env, job, err.code, err.message);
+      await markArtJobFailed(env, job, err.code, err.message);
       return;
     }
     const message = err instanceof Error ? err.message : String(err);
     const code = err instanceof ImageGenError ? err.code : "provider_error";
-    await markFailed(env, job, code, message);
+    await markArtJobFailed(env, job, code, message);
     throw err;
   }
-
-  await setEmotionArt(env, companion.id, payload.emotion, outputKey);
-  await updateJob(env, job.id, {
-    completed_at: Date.now(),
-    error_code: null,
-    error_message: null,
-    model,
-    output_key: outputKey,
-    provider,
-    status: "succeeded",
-  });
 }
 
-async function markFailed(
+export async function markArtJobFailed(
   env: Env,
   job: ArtJobRow,
   errorCode: string,
@@ -124,6 +111,55 @@ async function markFailed(
     error_code: errorCode,
     error_message: errorMessage.slice(0, 1000),
     status: "failed",
+  });
+}
+
+export async function completeArtJobWithImage(
+  env: Env,
+  job: ArtJobRow,
+  input: {
+    contentType: string;
+    emotion: string;
+    imageBytes: Uint8Array;
+    model: string;
+    provider: string;
+  },
+): Promise<void> {
+  if (!isNonNeutralEmotion(input.emotion)) {
+    await markArtJobFailed(env, job, "invalid_emotion", "Art job has invalid emotion");
+    return;
+  }
+
+  const companion = await loadCompanionForJob(env, job.companion_id);
+  if (!companion) {
+    await markArtJobFailed(env, job, "companion_not_found", "Companion no longer exists");
+    return;
+  }
+
+  const outputKey = buildOutputKey(companion, input.emotion, input.contentType);
+  await env.ASSETS.put(outputKey, input.imageBytes, {
+    customMetadata: {
+      companion_id: companion.id,
+      emotion: input.emotion,
+      job_id: job.id,
+      provider: input.provider,
+      source: "companion-emotion-art",
+    },
+    httpMetadata: {
+      contentType: input.contentType,
+    },
+  });
+  await recordAsset(env, outputKey, input.contentType, input.imageBytes.byteLength);
+
+  await setEmotionArt(env, companion.id, input.emotion, outputKey);
+  await updateJob(env, job.id, {
+    completed_at: Date.now(),
+    error_code: null,
+    error_message: null,
+    model: input.model,
+    output_key: outputKey,
+    provider: input.provider,
+    status: "succeeded",
   });
 }
 

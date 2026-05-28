@@ -26,6 +26,13 @@
     "STRIPE_WEBHOOK_BODY_LIMIT_BYTES": "1048576",
     "RATE_LIMIT_PER_MINUTE": "120",
     "LLM_RATE_LIMIT_PER_MINUTE": "30",
+    "IMAGE_GEN_PROVIDER": "runninghub",
+    "IMAGE_GEN_PUBLIC_BASE_URL": "https://dev.aiappsbox.com/api",
+    "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
+    "RUNNINGHUB_WORKFLOW_ID": "",
+    "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
+    "RUNNINGHUB_PROMPT_NODE_ID": "",
+    "RUNNINGHUB_WEBHOOK_URL": "https://dev.aiappsbox.com/api/webhooks/runninghub",
     "STRIPE_PUBLISHABLE_KEY": "",
     "STRIPE_SUCCESS_URL": "https://dev.aiappsbox.com/?billing=success",
     "STRIPE_CANCEL_URL": "https://dev.aiappsbox.com/?billing=cancelled",
@@ -69,6 +76,11 @@
       }
     ]
   },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -103,6 +115,13 @@
         "STRIPE_WEBHOOK_BODY_LIMIT_BYTES": "1048576",
         "RATE_LIMIT_PER_MINUTE": "120",
         "LLM_RATE_LIMIT_PER_MINUTE": "30",
+        "IMAGE_GEN_PROVIDER": "runninghub",
+        "IMAGE_GEN_PUBLIC_BASE_URL": "https://aiappsbox.com/api",
+        "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
+        "RUNNINGHUB_WORKFLOW_ID": "",
+        "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
+        "RUNNINGHUB_PROMPT_NODE_ID": "",
+        "RUNNINGHUB_WEBHOOK_URL": "https://aiappsbox.com/api/webhooks/runninghub",
         "STRIPE_PUBLISHABLE_KEY": "",
         "STRIPE_SUCCESS_URL": "https://aiappsbox.com/?billing=success",
         "STRIPE_CANCEL_URL": "https://aiappsbox.com/?billing=cancelled",
@@ -144,6 +163,11 @@
             "max_batch_timeout": 30,
             "max_retries": 3
           }
+        ]
+      },
+      "triggers": {
+        "crons": [
+          "*/5 * * * *"
         ]
       },
       "durable_objects": {

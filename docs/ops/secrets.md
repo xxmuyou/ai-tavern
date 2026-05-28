@@ -31,6 +31,9 @@
 | `APPLE_SIGNIN_CLIENT_ID` | Apple Sign-In client/service id | App Store Connect / Apple Developer | wrangler.jsonc `vars` | 独立或共享 |
 | `EMAIL_PROVIDER_API_KEY` | Magic Link 邮件发送（Resend） | resend.com | Wrangler secret | 独立 |
 | `EMAIL_FROM_ADDRESS` | 发件邮箱（如 `no-reply@aiappsbox.com`） | 团队邮箱配置 | Wrangler secret | 通常共享 |
+| `RUNNINGHUB_API_KEY` | RunningHub 生图任务创建与结果查询 | RunningHub 个人菜单 / API 设置 | Wrangler secret | 独立 |
+| `RUNNINGHUB_WEBHOOK_SECRET` | RunningHub webhook 回调校验 | 本地生成（`openssl rand`） | Wrangler secret | 独立 |
+| `R2_SIGNING_KEY` | Worker 生成 R2 源图临时签名 URL | 本地生成（`openssl rand`） | Wrangler secret | 独立 |
 | `AUTH_SUCCESS_URL` | OAuth / Magic Link 成功后的 Web 回调页 | app 域名 | wrangler.jsonc `vars` | 独立 |
 | `SUPPORT_EMAIL` | 用户支持邮箱（退款、客诉） | 团队邮箱 | wrangler.jsonc `vars` + 前端 | 共享 |
 | `ADMIN_INIT_EMAIL` | 首次部署 seed admin 用户的邮箱 | 团队约定（`admin@aiappsbox.com`） | wrangler.jsonc `vars` | 共享 |
@@ -86,6 +89,7 @@ admin 身份由两层控制：
 | 要在 dev/prod 域名走真实 Google 登录流程 | `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET`（redirect URI 使用对应域名的 `/api/auth/oidc/google/callback`） |
 | 要测真实 Magic Link 邮件 | `EMAIL_PROVIDER_API_KEY` + `EMAIL_FROM_ADDRESS`（Resend dev 用 `onboarding@resend.dev` 默认 sender，仅能发到 verify 过的邮箱） |
 | 要测 Stripe 订阅流程 | `STRIPE_SECRET_KEY`（test mode）+ `STRIPE_WEBHOOK_SECRET`（Stripe CLI listen 转发 webhook 时给出）|
+| 要测真实 RunningHub 生图 | `RUNNINGHUB_API_KEY` + `RUNNINGHUB_WEBHOOK_SECRET` + `R2_SIGNING_KEY`，并在 `wrangler.jsonc` 填 workflow/node id |
 | 准备发布到 prod | 全部按 §1 表格逐项准备，且独立 dev / prod |
 
 ### 1.5.6 dev 启动最快路径

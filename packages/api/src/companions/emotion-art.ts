@@ -20,6 +20,7 @@ export type ArtJobRow = {
   status: ArtJobStatus;
   source_art_url: string;
   output_key: string | null;
+  external_task_id: string | null;
   provider: string | null;
   model: string | null;
   prompt: string;
@@ -159,6 +160,38 @@ export async function getJob(env: Env, jobId: string): Promise<ArtJobRow | null>
     .first<ArtJobRow>();
 }
 
+export async function getJobByExternalTaskId(
+  env: Env,
+  externalTaskId: string,
+): Promise<ArtJobRow | null> {
+  return env.DB.prepare(
+    `SELECT * FROM companion_art_jobs
+     WHERE external_task_id = ?
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+  )
+    .bind(externalTaskId)
+    .first<ArtJobRow>();
+}
+
+export async function listStaleExternalJobs(
+  env: Env,
+  beforeUpdatedAt: number,
+  limit = 20,
+): Promise<ArtJobRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM companion_art_jobs
+     WHERE status = 'processing'
+       AND external_task_id IS NOT NULL
+       AND updated_at < ?
+     ORDER BY updated_at ASC
+     LIMIT ?`,
+  )
+    .bind(beforeUpdatedAt, limit)
+    .all<ArtJobRow>();
+  return results ?? [];
+}
+
 export async function listJobsForCompanion(
   env: Env,
   companionId: string,
@@ -217,6 +250,7 @@ export async function enqueueGenerationJob(
        user_id = excluded.user_id,
        prompt = excluded.prompt,
        output_key = NULL,
+       external_task_id = NULL,
        provider = NULL,
        model = NULL,
        error_code = NULL,
@@ -267,6 +301,7 @@ export type UpdateJobInput = {
   output_key?: string | null;
   provider?: string | null;
   model?: string | null;
+  external_task_id?: string | null;
   error_code?: string | null;
   error_message?: string | null;
   completed_at?: number | null;

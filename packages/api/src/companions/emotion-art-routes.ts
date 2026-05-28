@@ -178,6 +178,7 @@ export function serializeJob(row: ArtJobRow): Record<string, unknown> {
     emotion: row.emotion,
     error_code: row.error_code,
     error_message: row.error_message,
+    external_task_id: row.external_task_id,
     id: row.id,
     output_key: row.output_key,
     provider: row.provider,

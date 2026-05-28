@@ -1,12 +1,15 @@
 import { mockImageGenProvider } from "./mock-provider";
+import { runningHubImageGenProvider } from "./runninghub-provider";
 import type { ImageGenProvider } from "./types";
 
 export {
   type CompanionPromptContext,
+  type CompletedImageGenResponse,
   type ImageGenProvider,
   type ImageGenRequest,
   type ImageGenResponse,
   type NonNeutralEmotion,
+  type PendingImageGenResponse,
   ImageGenError,
   NON_NEUTRAL_EMOTIONS,
 } from "./types";
@@ -15,10 +18,12 @@ export { buildEmotionPrompt } from "./prompts";
 /**
  * Return the active image-gen provider for the current environment.
  *
- * Currently always returns the mock provider (spec-020 first cut). When a
- * real provider lands (OpenAI gpt-image-1, etc.), this can branch on
- * env.IMAGE_GEN_PROVIDER or similar without callers having to change.
+ * Defaults to mock for local/CI unless explicitly configured otherwise.
  */
-export function getImageGenProvider(_env: Env): ImageGenProvider {
+export function getImageGenProvider(env: Env): ImageGenProvider {
+  const provider = (env as { IMAGE_GEN_PROVIDER?: string }).IMAGE_GEN_PROVIDER?.trim();
+  if (provider === "runninghub") {
+    return runningHubImageGenProvider;
+  }
   return mockImageGenProvider;
 }
