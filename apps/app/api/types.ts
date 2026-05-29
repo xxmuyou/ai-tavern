@@ -196,6 +196,28 @@ export type CompanionCreateInput = {
   speech_style?: string;
 };
 
+export type ArtStyle = 'realistic' | 'anime_jp' | 'anime_kr';
+
+export type BaseArtJobStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
+
+export type BaseArtGenerateInput = {
+  source: 'text' | 'upload';
+  style: ArtStyle;
+  prompt?: string;
+  upload_key?: string;
+};
+
+export type BaseArtGenerateResponse = {
+  job_id: string;
+  status: 'queued';
+};
+
+export type BaseArtJobResponse = {
+  status: BaseArtJobStatus;
+  art_key?: string;
+  error_code?: string;
+};
+
 export type CompanionsListResponse = {
   items: CompanionListItem[];
 };
@@ -306,6 +328,49 @@ export type BillingStatusResponse = {
     messages_used_today: number;
     subscriber_soft_threshold_exceeded: boolean;
   };
+};
+
+export type CreditPackageId = 'small' | 'medium' | 'large';
+
+export type CreditLedgerType =
+  | 'grant_monthly'
+  | 'purchase'
+  | 'reserve'
+  | 'commit'
+  | 'release'
+  | 'refund'
+  | 'expire'
+  | 'adjustment';
+
+export type CreditMonthlyGrant = {
+  amount: number;
+  granted: boolean;
+  period: string;
+  tier: 'free' | 'pro';
+};
+
+export type CreditBalanceResponse = {
+  available_credits: number;
+  monthly_grant: CreditMonthlyGrant | null;
+  reserved_credits: number;
+};
+
+export type CreditLedgerEntry = {
+  amount: number;
+  balance_after: number | null;
+  created_at: number;
+  expires_at: number | null;
+  id: string;
+  metadata: Record<string, unknown> | null;
+  reference_id: string | null;
+  reference_type: string | null;
+  reserved_after: number | null;
+  task_type: string | null;
+  type: CreditLedgerType;
+};
+
+export type CreditLedgerResponse = {
+  entries: CreditLedgerEntry[];
 };
 
 export type MeQuota = {

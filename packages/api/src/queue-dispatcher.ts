@@ -2,6 +2,7 @@ import { LLMError } from "./llm";
 import { processSummary } from "./chat/summary-consumer";
 import type { SummaryJobPayload } from "./chat/summary-queue";
 import { isArtJobPayload, processArtJob } from "./companions/art-consumer";
+import { isBaseArtJobPayload, processBaseArtJob } from "./image-gen/base-art";
 
 function isSummaryPayload(value: unknown): value is SummaryJobPayload {
   if (!value || typeof value !== "object") return false;
@@ -62,6 +63,23 @@ export async function dispatchQueueBatch(
             error: err instanceof Error ? err.message : String(err),
             job_id: body.job_id,
             message: "Companion art job failed, will retry",
+          }),
+        );
+        message.retry();
+      }
+      continue;
+    }
+
+    if (isBaseArtJobPayload(body)) {
+      try {
+        await processBaseArtJob(env, body.job_id);
+        message.ack();
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+            job_id: body.job_id,
+            message: "Base-art job failed, will retry",
           }),
         );
         message.retry();

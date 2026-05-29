@@ -1,6 +1,13 @@
 # spec-022: Image Gen Provider — RunningHub Integration
 
-> **类型：** 新建  |  **依赖：** spec-020, spec-021  |  **估时：** 3-5 天（不含 workflow 搭建周期）  |  **状态：** 📝 draft
+> **类型：** 新建  |  **依赖：** spec-020, spec-021  |  **估时：** 3-5 天（不含 workflow 搭建周期）  |  **状态：** 🟡 in-progress（WF-1 create 文生图切片已落地：通用 `image_generation_jobs` 表 + provider `create` 模式 + base-art 端点 + webhook/cron 识别 + 前端生成面板；待 RunningHub 回填 workflowId/promptNodeId 后端到端验证。WF-2 variation / WF-3 edit 仍待做）
+
+> **本期落地偏差（v1 WF-1 create 切片）：**
+> - 仅 `create`（txt2img）路径落地；provider 只覆盖 **prompt 节点**（底模固定在 workflow 里，本期不切 checkpoint）。配置用 `RUNNINGHUB_CREATE_WORKFLOWS`（风格→`{workflowId, promptNodeId, checkpointNodeId?, ckptName?}` JSON map），新增风格只加 map 条目，代码同时兼容「一风格一 workflow」与「一 workflow 切 checkpoint」。
+> - 落地了 spec-020 §C 的通用 `image_generation_jobs` 表（migration `0018`）；**未建** `image_generation_config` 表——provider 配置暂从 env 读，与现有 `runninghub-provider.ts` 一致。
+> - base-art 草稿走 spec-020 §F 的 `POST /companions/base-art/generate` + `GET /companions/base-art/jobs/{jobId}`；结果落 `user-art/{user_id}/base-art/{uuid}.{ext}` + `asset_objects`。webhook（`/webhooks/runninghub`）与 cron 兜底（`pollStaleRunningHubArtJobs`）均已扩展为识别 `image_generation_jobs`。
+> - **本期不接积分**（spec-021 扣费后续再接）。
+> - **产品范围收敛（2026-05-29）**：上传图创建角色先不做“尽量保真”。上传图只作为风格化参考 / img2img 重画输入，不承诺像原人；MVP 不为 WF-1 增加 InstantID / FaceID / IPAdapter 等真人身份保真能力。
 
 ---
 
@@ -8,16 +15,30 @@
 
 [`spec-020`](./spec-020-companion-emotion-art-generation.md) 完成了 companion emotion art 生成的后端核心链路（jobs 表、queue consumer、`ImageGenProvider` 抽象、admin / system 端点），但目前只接了 mock provider —— mock 把 neutral 图原样复制到所有 5 个非 neutral emotion，仅用于跑通链路，不产生真实表情变化。
 
-本 spec 把第一个**真实** image generation provider 接入：**RunningHub**（https://www.runninghub.ai/）。RunningHub 是一个托管 ComfyUI workflow 的云平台，提供 API 远程调用、按 RH Coins 计费、支持 image-to-image + 自定义节点参数覆盖，适合本项目对"角色一致性 + 可控 prompt + 多模型试错"的需求。
+本 spec 把第一个**真实** image generation provider 接入：**RunningHub**（https://www.runninghub.ai/）。RunningHub 是一个托管 ComfyUI workflow 的云平台，提供 API 远程调用、按 RH Coins 计费、支持 image-to-image + 自定义节点参数覆盖，适合本项目对"同一 companion 变体一致性 + 可控 prompt + 多模型试错"的需求。
 
 为什么选 RunningHub 作为首个 provider：
 
-- **ComfyUI workflow 自由度**：可以用 IPAdapter / InstantID / ControlNet 等节点组合，把角色一致性方案做进 workflow，而不是依赖 API 厂商黑箱
+- **ComfyUI workflow 自由度**：可以用 reference / ControlNet / 去背等节点组合，把 companion 变体一致性和透明立绘输出做进 workflow，而不是依赖 API 厂商黑箱
 - **成本可控**：消费版按 RH Coins 计费，企业版可洽谈
 - **多模型并存**：同账户可挂多个 workflow（不同风格 / 不同质量档），后端通过 `workflowId` 切换
 - **异步 webhook**：避免 Worker 占用 CPU 长轮询
 
 本 spec 把 RunningHub 定位为 **v1 生产环境默认 provider**（与 [`spec-020`](./spec-020-companion-emotion-art-generation.md) v1 默认配置一致）。mock provider 保留作为本地开发 + CI 测试默认，避免空配置时意外烧钱；staging / production 的 wrangler 配置必须显式设为 `runninghub`。
+
+### 范围（与早期草案的差异）
+
+本 spec 承载的是一条**角色美术创建流水线**，不再是「单 workflow 只做表情包」。产品规划固定为 **3 个 ComfyUI workflow**，但 MVP 交付顺序是先跑通 WF-1 create 与 WF-2 variation；WF-3 edit 只保留接口和方向，等创角闭环稳定后再接。风格优先通过 checkpoint 参数在同一 workflow 内切换；如果 RunningHub 实操上用“一风格一 workflow”更稳定，也允许由 env map 承载。
+
+| Workflow | 用途 | 入口 mode |
+|---|---|---|
+| **WF-1 角色生成** | 文生图创建基础图，或上传图走 img2img 重画 | `create` |
+| **WF-2 变体 + 抠图** | 从确认的基础图生成 5 个非 neutral 情绪变体，尾部去背输出透明背景 | `variation` |
+| **WF-3 编辑** | 按 prompt（+可选 mask）换装 / 换姿势；MVP 暂不交付 | `edit` |
+
+风格固定 3 种：`realistic`（写实）/ `anime_jp`（日漫）/ `anime_kr`（韩漫）。目标形态是三种风格共用同一套 workflow，后端通过覆盖 checkpoint 节点的 `ckpt_name` 切换；当前代码也兼容 `RUNNINGHUB_CREATE_WORKFLOWS` 的“一风格一 workflow”过渡配置。
+
+> 术语统一：[`spec-020`](./spec-020-companion-emotion-art-generation.md) 的「6 emotion 变体」就是产品语境里说的「6 个姿势/立绘」，本 spec 的 WF-2 即生成这套变体，不是额外的姿势集合。
 
 ---
 
@@ -26,8 +47,10 @@
 ### 目标
 
 - 在 spec-020 的 `ImageGenProvider` 抽象下实现首个真实 provider `RunningHubImageGenProvider`
+- 规划支持 **3 个 workflow（create / variation / edit）**；MVP 先支持 create + variation，edit 接口可先返回 `501 edit_not_ready`
+- 支持 **3 种风格（realistic / anime_jp / anime_kr）**；目标形态按 `style` 覆盖 checkpoint 节点的 `ckpt_name`，当前 create 切片也允许一风格一 workflow 的 env map
 - 通过环境变量 `IMAGE_GEN_PROVIDER` 在 mock / runninghub 之间切换；本地 / CI 默认 mock，staging / production 显式配 `runninghub`
-- 通过 R2 签名 URL 把 neutral 图安全分发给 runninghub，无需公开 bucket
+- 通过 R2 签名 URL 把源图安全分发给 runninghub，无需公开 bucket
 - 通过 webhook 异步接收任务结果，写回 R2 和 DB；不依赖长轮询
 - 提供 cron 兜底，避免 webhook 丢失导致 job 永久 `processing`
 - 失败路径与 spec-020 的 `markFailed` 复用，spec-021 落地后接退款
@@ -38,7 +61,8 @@
 - ❌ 不做多 provider 同时启用 / 路由 / 故障转移（仅二选一切换）
 - ❌ 不做积分价格定档（属 spec-021）
 - ❌ 不实现 workflow 本身（属 runninghub 网页上的人工 + 美术工作）
-- ❌ 不做按模型 / 按风格的 workflow 路由（一期一个 workflowId）
+- ❌ **上传人像创建角色时不做身份保真**：WF-1 的上传路径只做按所选风格的 img2img 重画，不挂 IPAdapter / InstantID 去贴合上传者长相（产品已确认接受不保真）
+- ❌ 不做超过 3 种风格 / 超过 3 个 workflow 的扩展（一期固定）
 - ❌ 不接入除 runninghub 之外的 provider
 
 ---
@@ -47,48 +71,60 @@
 
 ### A. Workflow 能力清单（**本 spec 的核心交付物之一**）
 
-实施前提：在 RunningHub 网页上搭出一个满足以下能力的 ComfyUI workflow，并跑通至少一次（RunningHub 要求 workflow 必须有过一次成功执行才能被 API 调用）。
+实施前提：在 RunningHub 网页上按规划搭出 **3 个** ComfyUI workflow，每个都跑通至少一次（RunningHub 要求 workflow 必须有过一次成功执行才能被 API 调用）。MVP 阶段只阻塞于 WF-1 / WF-2；WF-3 可暂缓。目标形态下三个 workflow 都接受一个 **checkpoint 节点**，后端按 `style` 覆盖 `ckpt_name` 实现风格切换；当前 create 切片允许用 `RUNNINGHUB_CREATE_WORKFLOWS` 过渡。
 
-#### A.1 输入节点
+#### A.0 三个 workflow 的可覆盖节点总览
 
-| 节点用途 | 节点类型示例 | 后端如何使用 |
+| Workflow | mode | 必须可覆盖的节点（fieldName）|
 |---|---|---|
-| 加载 neutral 图 | `LoadImageFromURL` 或同等 | 通过 `nodeInfoList` 把 `fieldValue` 覆盖为短期签名 URL |
-| Positive prompt | `CLIPTextEncode` 或同等 | 通过 `nodeInfoList` 把 `text` 覆盖为 spec-020 §E 的 emotion-specific prompt |
-| Negative prompt | `CLIPTextEncode` 或同等 | workflow 内置默认值，后端**不覆盖** |
-| Seed | `KSampler` / `RandomNoise` | 可选；后端可固定 seed 保证可复现，或留空让 workflow 随机 |
+| WF-1 角色生成 | `create` | prompt（`text`）、checkpoint（`ckpt_name`）、**可选** load-image（`url`，仅上传 img2img 时）|
+| WF-2 变体 + 抠图 | `variation` | load-image（`url`，基础图）、prompt（`text`，emotion 变体）、checkpoint（`ckpt_name`）|
+| WF-3 编辑（后续） | `edit` | load-image（`url`，基础图）、prompt（`text`，编辑指令）、checkpoint（`ckpt_name`）、**可选** mask（`url`）|
 
-#### A.2 处理能力（保证角色一致性）
+公共约定：
+- **Negative prompt**：每个 workflow 内置默认值，后端**不覆盖**。
+- **Seed**：可选；后端可固定保证可复现，或留空随机。
+- **checkpoint 节点**：风格切换的关键。后端用 `RUNNINGHUB_STYLE_CHECKPOINTS`（§C.7）把 `style` 映射成 `ckpt_name` 字符串覆盖进去。
+- **输出节点**：统一用 `SaveImageWithoutMetadata`（runninghub 官方建议，避免 EXIF 元数据泄露）。
 
-workflow 必须包含以下能力中至少**一项**用于人脸 / 角色一致性，**至少一项**用于姿态 / 构图保持：
+#### A.1 WF-1 角色生成
 
-- **角色一致性**：IPAdapter / InstantID / FaceID / Reference Only
-- **构图保持**：ControlNet（OpenPose / Depth / Canny / Reference Only）
+- **能力**：txt2img（MVP 必需）+ img2img（上传路径，后续接入）。无上传图时只用 prompt 文生图；有上传图时把上传图接 img2img（中等 denoise），按所选风格 checkpoint 重画。
+- **不要求身份保真**：上传路径**不挂** IPAdapter / InstantID / FaceID，接受重画后不贴合上传者长相（见 §非目标）。上传图是风格化参考，不是“生成本人头像”。
+- **输出**：1 张基础图（即 companion 的 neutral 立绘）。
 
-模型 + LoRA 选型留给 workflow 搭建阶段决定，要求覆盖二次元 + 半写实 + 写实三档（如果一个 workflow 难以兼容，再开第二个 workflow，通过 companion 字段路由的能力留到后续 spec）。
+#### A.2 WF-2 变体 + 抠图（角色一致性 + 透明背景）
 
-#### A.3 输出节点
+- **角色一致性（必需）**：以确认的基础图为参考，保证 5 张变体与基础图是**同一 companion**。这里的一致性是“同一张基础角色图的表情变体一致”，不是“贴合用户上传真人”。可用 Reference Only / IPAdapter / ControlNet 等参考方案，但不要求 FaceID / InstantID 级别的真人身份保真。
+- **抠图**：workflow **尾部接去背节点**（rembg / RMBG / SAM 等），输出**透明背景** webp 或 png（带 alpha）。这里的“背景”指角色立绘背景去除，不包含场景背景生成。
+- **调用方式**：后端按 5 个非 neutral emotion **调用 5 次**，每次只换 prompt（emotion 变体），不在 workflow 内部循环。
 
-- 使用 `SaveImageWithoutMetadata` 节点（runninghub 官方建议，避免 workflow 元数据写入图片 EXIF 泄露给下游）
-- 输出格式 webp 或 png 均可；后端按 HTTP `content-type` 头探测
-- 输出分辨率与 neutral 图一致或 1024×1024，由 workflow 决定
+#### A.3 WF-3 编辑（换装 / 换姿势，后续）
+
+- **能力**：inpainting（带 mask 局部重绘换装）或 prompt 驱动的整体编辑。
+- **mask 可选**：带 mask 走局部重绘；不带 mask 走整体 prompt 编辑。
+- **优先级最低**：留接口，MVP 可返回 `501 edit_not_ready`；跑通 WF-1 / WF-2 后再做。
 
 #### A.4 workflow 验收测试
 
-workflow 搭建完成后必须用以下样本通过肉眼验收：
+每个 workflow 搭好后按下表肉眼验收：
 
-- 5 类不同风格的 neutral 图（少年 / 御姐 / 大叔 / 萝莉 / 中性）× 5 个 emotion = 25 张
-- **一致性**：同一 neutral + 同一 prompt 多次跑，脸 / 发型 / 服装 / 镜头基本保持
-- **表情区分度**：5 个 emotion 表情明显可辨（warm vs guarded vs annoyed 不能糊在一起）
-- **性能**：单次 workflow 执行 ≤ 30 秒为目标，超过考虑换模型 / 简化节点
+| Workflow | 验收样本 | 验收点 |
+|---|---|---|
+| WF-1 | 3 风格 × {文生图, 上传 img2img} | 风格正确；上传路径产出可用基础图（不要求像原人）|
+| WF-2 | 3 风格基础图 × 5 emotion = 15 张 | **一致性**（脸/发/服装/镜头保持）；**表情区分度**（warm vs guarded vs annoyed 可辨）；**背景透明**（alpha 正确）|
+| WF-3 | 后续：3 风格基础图 × {带 mask 换装, 无 mask 换姿势} | 编辑生效且角色不崩 |
 
-#### A.5 交付清单（workflow 搭好后填回）
+性能目标：单次 workflow 执行 ≤ 30 秒，超过考虑换模型 / 简化节点。
 
-- `workflowId`（runninghub 平台分配）
-- 各可覆盖节点的 `nodeId`：
-  - `LOAD_IMAGE_NODE_ID`
-  - `POSITIVE_PROMPT_NODE_ID`
-- 验收测试样本截图（5×5）
+#### A.5 交付清单（已接入 workflow 搭好后填回）
+
+每个已接入 workflow 回填：
+
+- `workflowId`（runninghub 平台分配）→ 目标形态对应 `RUNNINGHUB_{CREATE,VARIATION,EDIT}_WORKFLOW_ID`；当前 create 切片可先填 `RUNNINGHUB_CREATE_WORKFLOWS`
+- 各可覆盖节点的 `nodeId`：`*_LOAD_IMAGE_NODE_ID` / `*_PROMPT_NODE_ID` / `*_CHECKPOINT_NODE_ID`（按 §A.0 总览，WF-1 的 load-image、WF-3 的 mask 为可选）
+- 3 种风格各自的 checkpoint 文件名 → `RUNNINGHUB_STYLE_CHECKPOINTS`
+- 验收测试样本截图
 
 ### B. API 集成规格
 
@@ -112,17 +148,25 @@ Content-Type: application/json
 
 #### B.3 创建任务请求体（推测，待客服确认）
 
+目标形态下 `workflowId` 按请求 `mode` 选（create/variation/edit 各一个）；`nodeInfoList` 按 mode 拼装，并始终注入 checkpoint 覆盖。当前 create 切片从 `RUNNINGHUB_CREATE_WORKFLOWS` 读取 workflow/prompt/checkpoint 映射。下例为 `variation` mode：
+
 ```json
 {
   "apiKey": "...",
-  "workflowId": "...",
+  "workflowId": "<RUNNINGHUB_VARIATION_WORKFLOW_ID>",
   "nodeInfoList": [
-    { "nodeId": "<LOAD_IMAGE_NODE_ID>", "fieldName": "url", "fieldValue": "<signed neutral url>" },
-    { "nodeId": "<POSITIVE_PROMPT_NODE_ID>", "fieldName": "text", "fieldValue": "<emotion prompt>" }
+    { "nodeId": "<VARIATION_LOAD_IMAGE_NODE_ID>", "fieldName": "url", "fieldValue": "<signed base-art url>" },
+    { "nodeId": "<VARIATION_PROMPT_NODE_ID>", "fieldName": "text", "fieldValue": "<emotion prompt>" },
+    { "nodeId": "<VARIATION_CHECKPOINT_NODE_ID>", "fieldName": "ckpt_name", "fieldValue": "<style → ckpt_name>" }
   ],
   "webhookUrl": "https://api.<our-domain>/webhooks/runninghub"
 }
 ```
+
+各 mode 的 `nodeInfoList` 差异：
+- `create`：prompt + checkpoint（必）；load-image（仅上传 img2img 时）。
+- `variation`：load-image（基础图）+ prompt + checkpoint（均必）。
+- `edit`：load-image（基础图）+ prompt + checkpoint（必）；mask（可选）；MVP 未接入时返回 `501 edit_not_ready`。
 
 #### B.4 响应（推测）
 
@@ -145,15 +189,40 @@ Content-Type: application/json
 
 ### C. 后端代码改动
 
-#### C.1 新建 `packages/api/src/image-gen/runninghub-provider.ts`
+#### C.0 扩展 `packages/api/src/image-gen/types.ts` 的 `ImageGenRequest`
+
+目标形态把 `ImageGenRequest` 扩展为三 mode。当前已落地的窄版支持 `create | variation`；`edit` 与 `mask_url` 是后续扩展：
+
+```ts
+type ImageGenMode = "create" | "variation" | "edit"; // 当前代码先支持 create | variation
+type ArtStyle = "realistic" | "anime_jp" | "anime_kr";
+
+type ImageGenRequest = {
+  mode: ImageGenMode;
+  style: ArtStyle;
+  prompt: string;
+  /** variation/edit 必填；create 仅上传 img2img 时有值 */
+  source_art_url?: string;
+  /** 仅 edit 局部重绘时有值 */
+  mask_url?: string;
+  /** 仅 variation：目标 emotion */
+  emotion?: NonNeutralEmotion;
+  companion: CompanionPromptContext;
+};
+```
+
+mock provider 与既有 variation 路径保持兼容（mode 缺省视为 `variation`）。
+
+#### C.1 改写 `packages/api/src/image-gen/runninghub-provider.ts`
 
 实现 `ImageGenProvider` 接口。`generate()` 内：
 
-1. 读 env 配置（apiKey、workflowId、节点 id 映射、webhookUrl）；缺失任一抛 `ImageGenError("provider_not_configured", retryable=false)`
-2. 用 `signed-url.ts` 把 `source_art_url` 转成短期签名 URL
-3. 拼接 `nodeInfoList`：load-image 节点覆盖 URL，positive-prompt 节点覆盖 emotion prompt
-4. `POST .../task/openapi/create` 创建任务，收到 `taskId`
-5. **不下载图、不写 R2、不标 succeeded**；返回特殊结果让 consumer 知道"已委托给 runninghub，等 webhook"
+1. 读 env 配置（apiKey、**按 mode 选的 workflowId + 该 workflow 的节点 id 映射**、`RUNNINGHUB_STYLE_CHECKPOINTS` 或 `RUNNINGHUB_CREATE_WORKFLOWS` 过渡配置、webhookUrl）；缺失任一抛 `ImageGenError("provider_not_configured", retryable=false)`
+2. 若有 `source_art_url`，用 `signed-url.ts` 转成短期签名 URL（create 文生图时跳过）
+3. 拼接 `nodeInfoList`：按 mode 覆盖 load-image / prompt / mask，并**始终注入 checkpoint 覆盖**（`ckpt_name` = `RUNNINGHUB_STYLE_CHECKPOINTS[style]`；style 无映射抛 `provider_config_error`）
+4. `POST .../task/openapi/create`（workflowId = 按 mode 选）创建任务，收到 `taskId`
+5. **不下载图、不写 R2、不标 succeeded**；返回 `{ type: "pending", external_task_id, ... }`，consumer 等 webhook
+6. `MODEL` 写死值改为按 mode 派生（如 `companion-create-v1` / `companion-variation-v1` / `companion-edit-v1`），写入 job 便于审计
 
 > **架构调整**：spec-020 的 consumer 模式是"调 provider 直到拿到图 bytes 然后写 R2 标 succeeded"。runninghub 是异步的，无法在 consumer 单次执行内完成。两个选择：
 > - 方案 1：consumer 调 `create`，把 `taskId` 写入 `companion_art_jobs.external_task_id`，job 留在 `processing`，ack 消息，等 webhook
@@ -207,18 +276,39 @@ export function getImageGenProvider(env: Env): ImageGenProvider {
 
 #### C.7 修改 `wrangler.jsonc`
 
-新增配置：
+> **配置过渡态**：当前实现已使用 `RUNNINGHUB_CREATE_WORKFLOWS` 支持 WF-1 create 文生图切片；旧的 `RUNNINGHUB_WORKFLOW_ID` / `RUNNINGHUB_LOAD_IMAGE_NODE_ID` / `RUNNINGHUB_PROMPT_NODE_ID` 仍用于 variation 路径。下面的 per-mode 配置是目标形态，后续统一时再改代码和 env。
+
+新增配置（3 个 workflow + 各自节点 id + 风格 checkpoint map）：
 
 ```jsonc
 {
   "vars": {
     "IMAGE_GEN_PROVIDER": "mock",
-    "RUNNINGHUB_WORKFLOW_ID": "",
-    "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
-    "RUNNINGHUB_PROMPT_NODE_ID": ""
+
+    "RUNNINGHUB_CREATE_WORKFLOW_ID": "",
+    "RUNNINGHUB_CREATE_PROMPT_NODE_ID": "",
+    "RUNNINGHUB_CREATE_CHECKPOINT_NODE_ID": "",
+    "RUNNINGHUB_CREATE_LOAD_IMAGE_NODE_ID": "",
+
+    "RUNNINGHUB_VARIATION_WORKFLOW_ID": "",
+    "RUNNINGHUB_VARIATION_LOAD_IMAGE_NODE_ID": "",
+    "RUNNINGHUB_VARIATION_PROMPT_NODE_ID": "",
+    "RUNNINGHUB_VARIATION_CHECKPOINT_NODE_ID": "",
+
+    "RUNNINGHUB_EDIT_WORKFLOW_ID": "",
+    "RUNNINGHUB_EDIT_LOAD_IMAGE_NODE_ID": "",
+    "RUNNINGHUB_EDIT_PROMPT_NODE_ID": "",
+    "RUNNINGHUB_EDIT_CHECKPOINT_NODE_ID": "",
+    "RUNNINGHUB_EDIT_MASK_NODE_ID": "",
+
+    "RUNNINGHUB_STYLE_CHECKPOINTS": "{\"realistic\":\"\",\"anime_jp\":\"\",\"anime_kr\":\"\"}"
   }
 }
 ```
+
+> 所有值**部署前留空**；生产切 `runninghub` 前，至少需要对应已开放能力的 workflow 在 RunningHub 平台搭好、跑通、回填 id / 节点 / checkpoint 名。空配置时切 `runninghub` 会抛 `provider_not_configured`（不烧钱）。
+>
+> 旧的单 `RUNNINGHUB_WORKFLOW_ID` / `RUNNINGHUB_LOAD_IMAGE_NODE_ID` / `RUNNINGHUB_PROMPT_NODE_ID` 三项会在后续被分 mode 配置取代；当前文档不能假设它们已经废弃。
 
 secrets（不入仓库，`wrangler secret put`）：
 
@@ -273,14 +363,14 @@ CREATE INDEX idx_companion_art_jobs_external_task_id ON companion_art_jobs(exter
 > **前置**：本 spec **不能仅靠写代码完成**。前 2 步是阻塞性人工 / 通信任务。
 
 1. **联系 runninghub 客服**（`jason@runninghub.ai`）落实 Open Questions 1-4
-2. **搭建 workflow** 并按 §A.4 通过验收；填回 §A.5 交付清单
-3. 新增 migration 0016 增 `external_task_id` 列
+2. **先搭建 WF-1 / WF-2** 并按 §A.4 验收；WF-3 edit 后续再接。最终仍按 §A.5 回填已接入 workflow 的交付清单（含 3 风格 checkpoint 名或 create workflow map）
+3. 新增 migration 0016 增 `external_task_id` 列（已存在）
 4. 实现 `signed-url.ts`（先 R2 原生 presign，落不通走自建路由）
-5. 实现 `runninghub-provider.ts` + env 切换 + wrangler.jsonc 配置
+5. 扩展 `ImageGenRequest`（§C.0）+ 改写 `runninghub-provider.ts`（MVP 先按 create/variation 选 workflow、按 style 注入 checkpoint或读取 create workflow map）+ env 切换 + wrangler.jsonc 配置
 6. 实现 `/webhooks/runninghub` 路由 + 签名验证
 7. 重构 `art-consumer.ts` 支持 async 委托结果 + 把 succeeded / failed 落地路径抽成 helper 供 webhook 复用
 8. 配置 Cloudflare Cron Trigger 兜底轮询
-9. dev 环境端到端验证（admin prewarm 一个 official companion，跑通 5 个 emotion）
+9. dev 环境端到端验证：先跑通 **WF-1 create 文生图**（3 风格），再 admin prewarm 一个 companion 跑通 **WF-2 variation** 的 5 个 emotion（透明背景）；上传 img2img 与 **WF-3 edit** 后续再接
 10. spec-021 落地后，开放普通用户端点，把 501 改为正常流程
 11. 将 spec 状态从 📝 draft 推到 🟡 in-progress → 🟢 done
 
@@ -296,12 +386,14 @@ CREATE INDEX idx_companion_art_jobs_external_task_id ON companion_art_jobs(exter
 
 ### 端到端（dev 环境）
 
-1. 配置 `IMAGE_GEN_PROVIDER=runninghub` + `RUNNINGHUB_API_KEY` + `RUNNINGHUB_WORKFLOW_ID` + 节点 id 映射
-2. 对一个有 neutral 图的 companion 调 `POST /admin/companions/{id}/emotion-art/prewarm`
+0. 配置 `IMAGE_GEN_PROVIDER=runninghub` + `RUNNINGHUB_API_KEY` + 已接入 workflow 的 id / 节点映射；WF-1 create 当前可用 `RUNNINGHUB_CREATE_WORKFLOWS`
+1. **WF-1 create**：先用 3 风格做文生图创建，预期产出基础图写入 `art_url`/`art_emotions.neutral`；上传 img2img 后续验证，且不要求像原人
+2. **WF-2 variation**：对一个有基础图的 companion 调 `POST /admin/companions/{id}/emotion-art/prewarm`
 3. 预期：5 个 job 创建，每个写入 `external_task_id`，状态 `processing`
 4. 等 ≤ 5 分钟，webhook 应陆续触发，5 个 job 全部 succeeded
-5. R2 存在 5 个 emotion 输出 key；`companions.art_emotions` 含 6 个 key
-6. 肉眼验收：5 张图角色一致、表情可辨
+5. R2 存在 5 个 emotion 输出 key（**透明背景**）；`companions.art_emotions` 含 6 个 key
+6. 肉眼验收：5 张图角色一致、表情可辨、背景透明
+7. **WF-3 edit**（后续接好后）：对基础图发一次换装 / 换姿势编辑，预期产出编辑图且角色不崩；未接入时 API 返回 `501 edit_not_ready`
 
 ### 失败路径
 
@@ -333,7 +425,7 @@ CREATE INDEX idx_companion_art_jobs_external_task_id ON companion_art_jobs(exter
 
 实施阶段必须落实以下 7 项；落实方式见 §实施步骤 step 1-2。
 
-1. **workflow 注册流程**：用户 / 客服去搭符合 §A 的 workflow，跑通至少一次，回填 `workflowId` 和各可覆盖节点 `nodeId`
+1. **workflow 注册流程**：用户 / 客服先搭符合 §A 的 **WF-1 / WF-2**，各跑通至少一次，回填每个 `workflowId`、各可覆盖节点 `nodeId` 以及 3 风格 checkpoint 名或 create workflow map；WF-3 edit 后续再补
 2. **webhook 注册方式**：创建 task 时带 `webhookUrl`，还是 workflow / 账户级全局设置？联系 `jason@runninghub.ai`
 3. **webhook payload 结构**：`taskId`、`status`、`outputs`、`imageUrl` 字段的确切名字 / 层级
 4. **webhook 签名验证**：runninghub 是否提供 HMAC 签名头？若无则走 secret query param + 白名单 IP

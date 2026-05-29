@@ -1,5 +1,12 @@
 import { getJobByExternalTaskId, listStaleExternalJobs, type ArtJobRow } from "../companions/emotion-art";
 import { completeArtJobWithImage, markArtJobFailed } from "../companions/art-consumer";
+import {
+  completeImageJobWithImage,
+  failImageJob,
+  getImageJobByProviderTaskId,
+  listStaleImageJobs,
+  type ImageGenJobRow,
+} from "./base-art";
 import { jsonResponse } from "../http";
 
 type RunningHubResultEnv = Env & {
@@ -51,7 +58,18 @@ export async function handleRunningHubWebhookRequest(
 
   const job = await getJobByExternalTaskId(env, taskId);
   if (!job) {
-    return jsonResponse({ error: "unknown_task_id" }, { status: 404 });
+    // Not a companion emotion-art job — maybe a generic image_generation_jobs
+    // task (e.g. companion base-art draft, spec-022 WF-1 create).
+    const imageJob = await getImageJobByProviderTaskId(env, taskId);
+    if (!imageJob) {
+      return jsonResponse({ error: "unknown_task_id" }, { status: 404 });
+    }
+    const directResult = parseTaskResult(payload);
+    const result = directResult.status === "pending"
+      ? await fetchRunningHubTaskResult(env, taskId)
+      : directResult;
+    await applyRunningHubImageJobResult(env, imageJob, result);
+    return jsonResponse({ ok: true });
   }
 
   const directResult = parseTaskResult(payload);
@@ -88,6 +106,54 @@ export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
       );
     }
   }
+
+  // Generic image_generation_jobs (base-art drafts, etc.) — same fallback so a
+  // missed webhook doesn't strand a job in `processing`.
+  const staleImageJobs = await listStaleImageJobs(env, now - 5 * 60 * 1000);
+  for (const job of staleImageJobs) {
+    if (!job.provider_task_id) continue;
+    if (now - job.updated_at > 15 * 60 * 1000) {
+      await failImageJob(env, job, "timeout", "RunningHub task exceeded 15 minutes");
+      continue;
+    }
+
+    try {
+      const result = await fetchRunningHubTaskResult(env, job.provider_task_id);
+      await applyRunningHubImageJobResult(env, job, result);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+          job_id: job.id,
+          message: "RunningHub image-job poll failed; will retry on next cron",
+          provider_task_id: job.provider_task_id,
+        }),
+      );
+    }
+  }
+}
+
+async function applyRunningHubImageJobResult(
+  env: Env,
+  job: ImageGenJobRow,
+  result: RunningHubTaskResult,
+): Promise<void> {
+  if (job.status === "succeeded" || job.status === "failed" || job.status === "cancelled") {
+    return;
+  }
+  if (result.status === "pending") return;
+  if (result.status === "failed") {
+    await failImageJob(env, job, result.errorCode, result.errorMessage);
+    return;
+  }
+
+  const downloaded = await downloadResultImage(result.output);
+  await completeImageJobWithImage(env, job, {
+    bytes: downloaded.bytes,
+    contentType: downloaded.contentType,
+    model: job.model ?? "companion-create-v1",
+    provider: job.provider ?? "runninghub",
+  });
 }
 
 async function applyRunningHubTaskResult(

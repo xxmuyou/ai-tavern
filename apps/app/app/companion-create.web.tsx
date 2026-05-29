@@ -3,7 +3,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { createCompanion, uploadCompanionArt } from '@/api/companion-client';
-import type { CompanionCreateInput } from '@/api/types';
+import type { ArtStyle, CompanionCreateInput } from '@/api/types';
+import { BaseArtPanel } from '@/components/BaseArtPanel';
 import { CompanionForm } from '@/components/CompanionForm';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -14,6 +15,7 @@ export default function WebCompanionCreateScreen() {
   const { pushError } = useErrorBanner();
   const scenes = useScenes();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [artKey, setArtKey] = useState<string | null>(null);
 
   async function submit(input: CompanionCreateInput) {
     setIsSubmitting(true);
@@ -27,15 +29,27 @@ export default function WebCompanionCreateScreen() {
     }
   }
 
+  function confirmArt(key: string, _style: ArtStyle) {
+    setArtKey(key);
+  }
+
   return (
-    <WebAppShell title="Create companion" subtitle="Build a private character card and upload a portrait.">
-      <CompanionForm
-        isSubmitting={isSubmitting}
-        mode="create"
-        onPickArt={pickWebArt}
-        onSubmit={submit}
-        scenes={scenes.data?.scenes}
-      />
+    <WebAppShell
+      title="Create companion"
+      subtitle={artKey ? 'Fill in the character card to finish.' : 'Pick a style and describe the portrait to generate.'}
+    >
+      {artKey ? (
+        <CompanionForm
+          initialArtUrl={artKey}
+          isSubmitting={isSubmitting}
+          mode="create"
+          onPickArt={pickWebArt}
+          onSubmit={submit}
+          scenes={scenes.data?.scenes}
+        />
+      ) : (
+        <BaseArtPanel onConfirm={confirmArt} />
+      )}
     </WebAppShell>
   );
 }

@@ -105,6 +105,7 @@ export function buildChatPrompt(input: {
 
 输出 `messages[]`：
 - 一条 system message（角色卡 + 场景 + 关系叙事 + 摘要 + 规则）
+  - 规则段首条为**语言跟随**：始终用用户当前输入的语言回复（用户写中文→回中文），不受 prompt / 角色卡语言影响（详见 [`llm.md §5.1`](../architecture/llm.md#51-对话-prompt-模板核心)）
 - 历史消息按 ASC 时间拼成 user / assistant 交替
 - 最末追加 `{role: 'user', content: userText}`
 

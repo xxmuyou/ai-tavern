@@ -5,12 +5,18 @@ import type {
   ActivityResponse,
   AdminAllowlistItem,
   AdminAllowlistResponse,
+  BaseArtGenerateInput,
+  BaseArtGenerateResponse,
+  BaseArtJobResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
   ChatMessageInput,
   CompanionCreateInput,
   CompanionDetailResponse,
   CompanionsListResponse,
+  CreditBalanceResponse,
+  CreditLedgerResponse,
+  CreditPackageId,
   DailyState,
   Memory,
   MeResponse,
@@ -294,6 +300,22 @@ export async function uploadCompanionArt(file: CompanionArtUpload): Promise<{ ke
   }
 
   return { key: payload.key ?? '' };
+}
+
+export async function generateBaseArt(
+  input: BaseArtGenerateInput,
+): Promise<BaseArtGenerateResponse> {
+  return requestJson<BaseArtGenerateResponse>('/companions/base-art/generate', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function getBaseArtJob(jobId: string): Promise<BaseArtJobResponse> {
+  return requestJson<BaseArtJobResponse>(
+    `/companions/base-art/jobs/${encodeURIComponent(jobId)}`,
+  );
 }
 
 export async function updateCompanion(
@@ -661,6 +683,34 @@ export async function startCheckout(): Promise<{ checkout_url: string }> {
 
 export async function openBillingPortal(): Promise<{ portal_url: string }> {
   return requestJson<{ portal_url: string }>('/billing/portal', { method: 'POST' });
+}
+
+export async function getCreditBalance(): Promise<CreditBalanceResponse> {
+  return requestJson<CreditBalanceResponse>('/credits/balance');
+}
+
+export async function getCreditLedger(
+  opts: { beforeId?: string; limit?: number } = {},
+): Promise<CreditLedgerResponse> {
+  const params = new URLSearchParams();
+  if (opts.limit) {
+    params.set('limit', String(opts.limit));
+  }
+  if (opts.beforeId) {
+    params.set('before_id', opts.beforeId);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return requestJson<CreditLedgerResponse>(`/credits/ledger${query}`);
+}
+
+export async function startCreditsCheckout(
+  pkg: CreditPackageId,
+): Promise<{ checkout_url: string }> {
+  return requestJson<{ checkout_url: string }>('/credits/checkout', {
+    body: JSON.stringify({ package: pkg }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
 }
 
 export function readStoredAuthToken(): string {

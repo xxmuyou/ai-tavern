@@ -1,41 +1,95 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
-import { openBillingPortal, startCheckout } from '@/api/companion-client';
+import {
+  getCreditLedger,
+  openBillingPortal,
+  startCheckout,
+  startCreditsCheckout,
+} from '@/api/companion-client';
+import type { CreditLedgerEntry, CreditLedgerType, CreditPackageId } from '@/api/types';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
+import { useCredits } from '@/hooks/use-credits';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
 
 const PRO_FEATURES = ['Unlimited conversations', 'Unlimited custom companions', 'Priority access to new scenes'];
 
+const CREDIT_PACKAGES: { id: CreditPackageId; label: string; credits: number; price: string }[] = [
+  { id: 'small', label: 'Small', credits: 500, price: '$4.99' },
+  { id: 'medium', label: 'Medium', credits: 1200, price: '$9.99' },
+  { id: 'large', label: 'Large', credits: 3000, price: '$19.99' },
+];
+
+const LEDGER_LABELS: Record<CreditLedgerType, string> = {
+  adjustment: 'Adjustment',
+  commit: 'Spent',
+  expire: 'Expired',
+  grant_monthly: 'Monthly grant',
+  purchase: 'Purchase',
+  refund: 'Refund',
+  release: 'Released',
+  reserve: 'Reserved',
+};
+
 export default function BillingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ status?: string }>();
   const { pushError } = useErrorBanner();
   const { data, error, isLoading, refetch } = useBilling();
+  const credits = useCredits();
+  const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
+  const [checkoutPackage, setCheckoutPackage] = useState<CreditPackageId | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
   const isSuccess = params.status === 'success';
+
+  const loadLedger = useCallback(async () => {
+    try {
+      const payload = await getCreditLedger({ limit: 20 });
+      setLedger(payload.entries);
+    } catch {
+      // Ledger is best-effort; the balance card still renders without it.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLedger();
+  }, [loadLedger]);
 
   useEffect(() => {
     if (!isSuccess) {
       return;
     }
     void refetch();
+    void credits.refetch();
+    void loadLedger();
     const timeout = setTimeout(() => {
       router.replace(SCENES_ROUTE);
     }, 5000);
     return () => clearTimeout(timeout);
-  }, [isSuccess, refetch, router]);
+  }, [isSuccess, refetch, credits, loadLedger, router]);
+
+  async function handleCreditsCheckout(pkg: CreditPackageId) {
+    setCheckoutPackage(pkg);
+    try {
+      const payload = await startCreditsCheckout(pkg);
+      openExternalUrl(payload.checkout_url);
+    } catch {
+      pushError('Credit purchase could not be started.');
+    } finally {
+      setCheckoutPackage(null);
+    }
+  }
 
   async function handleCheckout() {
     setIsCheckingOut(true);
@@ -138,6 +192,63 @@ export default function BillingScreen() {
                 <BillingRow label="Status" value={data.subscription.status} />
                 <BillingRow label="Messages today" value={formatUsage(data.usage.messages_used_today, data.usage.message_limit_daily)} />
                 <BillingRow label="Next billing date" value={formatDateTime(data.subscription.current_period_end)} />
+              </View>
+            </View>
+          ) : null}
+
+          <View className="rounded-lg border border-app-line bg-app-card p-5">
+            <Text className="text-lg font-semibold text-app-text">Credits</Text>
+            <View className="mt-4 gap-3">
+              {credits.data ? (
+                <>
+                  <BillingRow label="Available" value={String(credits.data.available_credits)} />
+                  <BillingRow label="Reserved" value={String(credits.data.reserved_credits)} />
+                  {credits.data.monthly_grant ? (
+                    <BillingRow
+                      label="This month's grant"
+                      value={`${credits.data.monthly_grant.amount} (${credits.data.monthly_grant.tier === 'pro' ? 'Pro' : 'Free'})`}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <Text className="text-sm text-app-muted">
+                  {credits.isLoading ? 'Loading credits...' : 'Credits are unavailable right now.'}
+                </Text>
+              )}
+            </View>
+
+            <Text className="mb-3 mt-6 text-sm font-semibold uppercase tracking-normal text-app-primary">Buy credits</Text>
+            <View className="gap-3">
+              {CREDIT_PACKAGES.map((pkg) => (
+                <View key={pkg.id} className="flex-row items-center justify-between gap-3 rounded-lg border border-app-line p-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-base font-semibold text-app-text">{pkg.label}</Text>
+                    <Text className="text-sm text-app-muted">{pkg.credits} credits · {pkg.price}</Text>
+                  </View>
+                  <View className="w-24">
+                    <Button
+                      isLoading={checkoutPackage === pkg.id}
+                      label="Buy"
+                      onPress={() => handleCreditsCheckout(pkg.id)}
+                      variant="secondary"
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {ledger.length ? (
+            <View className="rounded-lg border border-app-line bg-app-card p-5">
+              <Text className="text-lg font-semibold text-app-text">Recent activity</Text>
+              <View className="mt-4 gap-3">
+                {ledger.map((entry) => (
+                  <BillingRow
+                    key={entry.id}
+                    label={`${LEDGER_LABELS[entry.type]} · ${formatDateTime(entry.created_at)}`}
+                    value={`${entry.amount > 0 ? '+' : ''}${entry.amount}`}
+                  />
+                ))}
               </View>
             </View>
           ) : null}

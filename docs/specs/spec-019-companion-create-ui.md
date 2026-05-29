@@ -18,6 +18,8 @@
 
 **Emotion 立绘约定（2026-05-25 用户确认）：** 用户上传一张图，后端在 `companions` 表的 6 个 emotion 列（`art_emotion_warm/neutral/guarded/playful/tense/annoyed`）全部写入该 URL。用户不需要在 UI 感知"多 emotion"——只上传一张。
 
+> **⚠️ 已被 [`spec-020`](./spec-020-companion-emotion-art-generation.md) 修订**：基础图来源不止"上传一张"，还可**文生图创建**（填 prompt + 选 3 风格 `realistic`/`anime_jp`/`anime_kr`）；上传/文生图只写 `art_url` + `art_emotions.neutral`（**不再填满 6 列**），其余 5 个 emotion 变体由 spec-020 异步生成（透明背景）。本 spec 的 UI 需提供「文生图 / 上传」二选一入口 + 风格选择 + 「生成表情」入口；生图后端契约（含 `POST /companions/base-art/generate`、`art/edit`）见 spec-020 §F，provider 见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
+
 ---
 
 ## 范围
@@ -35,7 +37,7 @@
 - 6 emotion 分别上传不同图
 - 角色公开 / 社区分享
 - 角色 import/export
-- AI 生成立绘
+- ~~AI 生成立绘~~ → 已纳入 [`spec-020`](./spec-020-companion-emotion-art-generation.md)（文生图创建 + 表情变体生成）；本 spec 负责其创建/风格选择 UI 入口
 
 ---
 
@@ -66,6 +68,40 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 - `companion/[id].tsx`（native 详情页）：右上角 overflow 菜单（`…`）→ Edit / Delete
 - `companion/[id].web.tsx`（web 详情页）：同样的 overflow 或 footer 操作栏
 - 官方角色（`source === 'official'`）：隐藏 Edit / Delete 按钮（server 也会返回 403，前端是 defensive）
+
+---
+
+## 创建流程（浮窗 → 属性 → 完成）
+
+> 2026-05-28 用户确认的实际顺序：**先拿到基础图，再填属性，点「完成」才建角色**。基础图先于 companion 记录存在；详见 [`spec-020`](./spec-020-companion-emotion-art-generation.md) §A「创建流程顺序」与 §F。
+
+### 第 1 步：基础图浮窗
+
+点「+ 创建」弹浮窗（未达配额时；达上限走 QuotaModal）：
+
+1. **选风格**：3 选 1 —— 写实 `realistic` / 日漫 `anime_jp` / 韩漫 `anime_kr`。风格同时决定文生图和后续变体用哪个 checkpoint，必选。
+2. **二选一拿基础图**：
+   - **上传本地人像**：`upload-art` 拿原图 key → 调 `POST /companions/base-art/generate`（`source:"upload"` + `upload_key` + `style`），后端按风格 img2img 重画（**不保真**）。
+   - **文生图**：填一段外貌描述 prompt → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `style`）。
+3. **积分提示**：文生图（及上传重画）消耗积分，浮窗内明确告知本次消耗与余额，由用户确认后再发起（消耗规则见 spec-021）。
+4. **异步预览 / 重抽**：`base-art/generate` 返回 `job_id`，前端轮询 `GET /companions/base-art/jobs/{jobId}`：
+   - `processing` → 显示「生成中」spinner。
+   - `succeeded` → 预览风格化基础图；满意则「下一步」，不满意可「重新生成」（重抽 = 再次调用 = 再次扣分）。
+   - `failed` → toast 错误，可重试。
+5. 拿到满意的基础图后，把 `art_key` + `style` 暂存到创建表单 state，进入第 2 步。
+
+### 第 2 步：属性表单
+
+填 name / gender / personality / background 等（见下文表单字段映射）。**这些属性只喂 chat 人设，不参与立绘出图**，所以放在图之后无影响。
+
+### 第 3 步：点「完成」建角色
+
+`POST /companions` 带 `{属性 + art_key/art_url + art_style}` 落库（spec-004 扩展接受这几个字段）：
+
+- 后端写 `art_url` + `art_emotions.neutral`（= 风格化基础图）+ `art_style`，**不填满 6 列**。
+- 落库后**自动异步**触发 5 个非 neutral 变体 + 抠图透明（无需前端再调 expression pack）。
+- 此步也消耗积分，「完成」按钮处应提示这一步会再扣分。
+- 角色立即可用：变体没出齐前，PortraitBar 用 neutral fallback；出齐后自动命中。
 
 ---
 
@@ -105,23 +141,20 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 ## Emotion 填充逻辑（后端）
 
+> **⚠️ 已被 [`spec-020`](./spec-020-companion-emotion-art-generation.md) 修订**：不再「一张图填满 6 列」。基础图只写 `neutral`，其余 5 个非 neutral 变体由 spec-020 异步生成（透明背景）。
+
 在 `companions/index.ts` 的 `createCompanion()` 函数中（INSERT 前）：
 
 ```typescript
 if (input.art_url && !input.art_emotions) {
-  // fill all 6 emotions with the single uploaded art_url
-  input.art_emotions = {
-    warm: input.art_url,
-    neutral: input.art_url,
-    guarded: input.art_url,
-    playful: input.art_url,
-    tense: input.art_url,
-    annoyed: input.art_url,
-  };
+  // 基础图只写 neutral；其余 5 个 emotion 由 spec-020 异步生成后回填
+  input.art_emotions = { neutral: input.art_url };
 }
 ```
 
-`PUT /companions/{id}`（编辑）同理处理：若 `body.art_url` 更新了但 `body.art_emotions` 未传，则全量覆盖 6 个 emotion 列。
+- `art_emotions.neutral` 等于 `art_url`（风格化基础图）；`warm/playful/guarded/tense/annoyed` 留空，等异步变体生成。
+- 创建成功后由后端自动异步触发变体生成（见 spec-020 §A / §F）。
+- `PUT /companions/{id}`（编辑）：若更新 `art_url` 或 `art_style`，清空或标记 stale 旧的非 neutral 变体，避免新基础图 / 新风格与旧变体串味。
 
 ---
 
@@ -247,9 +280,9 @@ Native 端将 `expo-image-picker` 返回的 `uri` 转为 `Blob` 后调用。
 
 ### 单元测试（`companions/index.test.ts`）
 
-- [ ] emotion 填充：POST 只给 `art_url` → 所有 6 emotion 列均写入该 URL
-- [ ] emotion 填充：PUT 更新 `art_url` 但不传 `art_emotions` → 覆盖全部 emotion 列
-- [ ] emotion 填充：POST 同时给 `art_url` + `art_emotions` → 不覆盖，以 `art_emotions` 为准
+- [ ] emotion 填充：POST 只给 `art_url` → 仅 `art_emotions.neutral` 写入该 URL，其余 5 列留空
+- [ ] emotion 填充：POST 同时给 `art_url` + `art_emotions` → 以传入 `art_emotions` 为准
+- [ ] 创建带 `art_key` + `art_style` → 落库后自动异步触发非 neutral 变体（mock provider 下验证 job 入队）
 
 ### 单元测试（`companions/upload-art.test.ts`）
 

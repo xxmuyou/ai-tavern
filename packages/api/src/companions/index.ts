@@ -10,6 +10,7 @@ import {
   neutralOnlyArtEmotions,
   parseArtEmotions,
 } from "./emotion-art";
+import { handleBaseArtRequest } from "./base-art-routes";
 import { handleCompanionEmotionArtRequest } from "./emotion-art-routes";
 import type { Gender } from "./gender-weight";
 import { handleCompanionArtUpload } from "./upload-art";
@@ -96,6 +97,11 @@ export async function handleCompanionsRequest(
 
   if (pathname === "/companions/upload-art") {
     return handleCompanionArtUpload(request, env);
+  }
+
+  const baseArtResponse = await handleBaseArtRequest(request, env, pathname);
+  if (baseArtResponse) {
+    return baseArtResponse;
   }
 
   const emotionArtResponse = await handleCompanionEmotionArtRequest(request, env, pathname);

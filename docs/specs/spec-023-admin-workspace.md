@@ -1,6 +1,6 @@
 # spec-023: Admin Workspace（管理员工作台）
 
-> **类型：** 新建  |  **依赖：** spec-009, spec-021  |  **估时：** 2-3 天  |  **状态：** 📝 draft
+> **类型：** 新建  |  **依赖：** spec-009, spec-021  |  **估时：** 2-3 天  |  **状态：** 🟡 in-progress（后端 3 端点 + `adjustCredits` helper + 单测已落地；admin「用户积分」UI 归 spec-018，待做）
 
 ---
 

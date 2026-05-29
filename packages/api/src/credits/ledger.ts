@@ -247,6 +247,28 @@ export async function refundCredits(
   });
 }
 
+export async function adjustCredits(
+  env: Env,
+  input: {
+    userId: string;
+    amount: number;
+    adminId: string;
+    reason: string;
+  },
+): Promise<{ balance_after: number; entry: CreditLedgerRow }> {
+  assertPositiveInt(input.amount);
+  const { ledger } = await applyCreditMutation(env, {
+    amount: input.amount,
+    availableDelta: input.amount,
+    metadata: { admin_id: input.adminId, reason: input.reason },
+    now: Date.now(),
+    reservedDelta: 0,
+    type: "adjustment",
+    userId: input.userId,
+  });
+  return { balance_after: ledger.balance_after ?? 0, entry: ledger };
+}
+
 export async function grantCredits(
   env: Env,
   input: {

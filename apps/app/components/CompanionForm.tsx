@@ -21,6 +21,7 @@ type CompanionFormValues = {
 
 type CompanionFormProps = {
   initial?: CompanionDetail | null;
+  initialArtUrl?: string;
   isSubmitting?: boolean;
   mode: 'create' | 'edit';
   onPickArt: () => Promise<string | null>;
@@ -28,8 +29,8 @@ type CompanionFormProps = {
   scenes?: Scene[];
 };
 
-export function CompanionForm({ initial, isSubmitting, mode, onPickArt, onSubmit, scenes = [] }: CompanionFormProps) {
-  const [values, setValues] = useCompanionFormValues(initial);
+export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPickArt, onSubmit, scenes = [] }: CompanionFormProps) {
+  const [values, setValues] = useCompanionFormValues(initial, initialArtUrl);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -205,20 +206,20 @@ export function CompanionForm({ initial, isSubmitting, mode, onPickArt, onSubmit
   );
 }
 
-function useCompanionFormValues(initial?: CompanionDetail | null) {
-  const [values, setValues] = useState<CompanionFormValues>(() => initialValues(initial));
+function useCompanionFormValues(initial?: CompanionDetail | null, initialArtUrl?: string) {
+  const [values, setValues] = useState<CompanionFormValues>(() => initialValues(initial, initialArtUrl));
 
   useEffect(() => {
-    setValues(initialValues(initial));
-  }, [initial]);
+    setValues(initialValues(initial, initialArtUrl));
+  }, [initial, initialArtUrl]);
 
   return [values, setValues] as const;
 }
 
-function initialValues(initial?: CompanionDetail | null): CompanionFormValues {
+function initialValues(initial?: CompanionDetail | null, initialArtUrl?: string): CompanionFormValues {
   return {
     appearance: initial?.appearance ?? '',
-    art_url: initial?.art_url ?? '',
+    art_url: initial?.art_url ?? initialArtUrl ?? '',
     background: initial?.background ?? '',
     gender: initial?.gender ?? 'female',
     name: initial?.name ?? '',

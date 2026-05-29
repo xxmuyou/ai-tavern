@@ -22,6 +22,36 @@
 
 积分扣费、余额、充值、退款由 [`spec-021`](./spec-021-credits-ledger-and-metering.md) 定义。本 spec 只定义表情包生成链路、通用生图模块以及与积分系统的对接点。
 
+### 本次范围补充（角色美术创建流水线）
+
+在表情包之外，本 spec 把 companion 的**基础图来源**和**风格**也纳入：
+
+1. **基础图来源新增「文生图创建」**：创建 companion 时，用户可以**不上传**，改为填提示词由后端文生图生成基础图；上传仍保留（走 img2img 按所选风格重画，**不要求像原人**）。
+2. **新增 `art_style` 风格属性**：3 种固定风格 `realistic`（写实）/ `anime_jp`（日漫）/ `anime_kr`（韩漫），决定生图用哪个 checkpoint。
+3. **变体输出统一透明背景**：5 个非 neutral 变体由生图链路对**角色立绘去背**，输出透明背景。这里的“背景抠图”不是生成场景背景图。
+4. **新增编辑接口**：按 prompt（+可选 mask）换装 / 换姿势，**留接口、优先级最低**。
+
+#### 创建流程顺序（重要）
+
+用户创建 companion 的实际顺序是 **「先出基础图 → 再填属性 → 点完成才建角色」**，基础图先于 companion 记录存在：
+
+1. 点「创建」弹浮窗，先选 `style`（3 风格），再二选一拿到基础图：
+   - **上传**：上传本地人像 → 走 WF-1 `create` 的 img2img 按风格重画（**不保真**）。
+   - **文生图**：填 prompt → 走 WF-1 `create` 的 txt2img。可选是否消耗积分由 UI 决定（见 spec-019）。
+   - 文生图是异步的：浮窗里「生成中 → 预览 → 满意进下一步 / 不满意重抽（重抽再扣分）」。
+2. 拿到满意的基础图后进入属性表单（name/gender/personality 等，**不参与出图**，只喂 chat 人设）。
+3. 点「完成」才 `POST /companions` 建角色，把 `{属性 + 基础图 key + style}` 一起提交；建完记录后**后台异步**触发 5 个非 neutral 变体 + 抠图透明。
+
+因此基础图生成是一个**不绑 companion id 的草稿步骤**（companion 此时还不存在），不能挂在 `/companions/{id}/` 下；见 §F 端点设计。
+
+> **基础图风格一致性**：无论上传还是文生图，neutral 槽存的都是**按所选风格出/重画后的基础图**，不是用户上传的原图。否则 neutral（原图）与 5 个风格化变体会串味。上传路径默认重画统一风格。
+>
+> **上传图非保真规则（MVP 决策）**：上传图只作为风格化参考 / 重画输入，不承诺贴合上传者长相，不为 WF-1 增加 InstantID / FaceID / IPAdapter 等真人身份保真节点。需要“像原人”的产品能力以后作为独立增强评估，不进入当前创角闭环。
+
+> **术语统一**：产品语境里说的「6 个姿势 / 立绘」就是本 spec 的「6 个 emotion 变体」（`neutral` + 5 个非 neutral），是同一套图，喂给 chat 的 `PortraitBar`，不是另一套独立的姿势集合。
+>
+> 上述生图能力按 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 规划为 3 个 RunningHub workflow（create / variation / edit）。MVP 优先跑通 create + variation；edit 保留接口和方向，不阻塞创角闭环。
+
 ---
 
 ## 目标 / 非目标
@@ -55,7 +85,7 @@
 
 ## 改动清单
 
-### A. Emotion 资产语义
+### A. Emotion 资产语义与风格字段
 
 `art_url` 与 `art_emotions` 的语义调整如下：
 
@@ -63,15 +93,32 @@
 - `art_emotions.neutral`：必须等于 `art_url`，或在读取时视为 `art_url`。
 - `art_emotions.<non-neutral>`：只有真正生成成功或人工填入对应 emotion 图时才存在。
 
+**新增 `art_style` 字段**（migration `0018_companion_art_style.sql`）：
+
+```sql
+ALTER TABLE companions ADD COLUMN art_style TEXT; -- 'realistic' | 'anime_jp' | 'anime_kr'
+```
+
+- 创建 companion 时确定 `art_style`，决定生图（create / variation / edit）用哪个 checkpoint。
+- 历史 seed companion 的 `art_style` 可为空；生图时缺省按一个默认风格（如 `anime_jp`）处理或要求显式选择。
+
+**基础图来源**（`art_url` / `art_emotions.neutral` 二选一来源）—— 都在 companion **创建之前**作为草稿步骤产出，最终 neutral 槽存的是**风格化后的基础图**：
+
+- **(a) 上传**：先 `POST /companions/upload-art` 拿到原图 key，再调 `POST /companions/base-art/generate`（`source: "upload"` + `style` + `upload_key`），走 WF-1 的 img2img 按风格重画（**不保真**，不挂 IPAdapter/InstantID）。neutral 存重画后的图，不存原图。
+- **(b) 文生图**：调 `POST /companions/base-art/generate`（`source: "text"` + `prompt` + `style`），走 WF-1 txt2img 生成基础图（见 §F）。
+
+两条路都返回一个**草稿生图任务**（异步），前端轮询拿到风格化基础图的 R2 key，预览满意后带进创建表单。
+
 用户创建/编辑 companion 时：
 
-- 上传图片只写入 `art_url` 和 `art_emotions.neutral`。
+- 基础图（风格化后）只写入 `art_url` 和 `art_emotions.neutral`，由 `POST /companions` 在「完成」时落库。
 - 不再把同一张图片填充到 `warm/playful/guarded/tense/annoyed`。
-- 若更新了 `art_url`，应清空旧的非 neutral 自动生成图，或将它们标记为 stale，避免新基础图与旧表情图不一致。
+- companion 建好后，后端**自动异步**触发 5 个非 neutral 变体 + 抠图（等价于内部调用 expression pack）。
+- 若之后更新了 `art_url` 或 `art_style`，应清空旧的非 neutral 自动生成图，或将它们标记为 stale，避免新基础图 / 新风格与旧表情图不一致。
 
 ### B. 通用 Image Generation 模块
 
-新增 `packages/api/src/images/` 模块，作为后端唯一的生图抽象层。Companion 表情包、后续活动图、场景图、用户自定义图片等都通过该模块创建任务。
+新增 / 演进 `packages/api/src/image-gen/` 模块，作为后端唯一的生图抽象层。Companion 表情包、后续活动图、场景图、用户自定义图片等都通过该模块创建任务。
 
 模块职责：
 
@@ -172,7 +219,9 @@ CREATE INDEX idx_image_generation_jobs_task_status ON image_generation_jobs(task
 CREATE INDEX idx_image_generation_jobs_provider_task ON image_generation_jobs(provider, provider_task_id);
 ```
 
-新增 D1 表 `image_generation_config`，用于模型路由和 provider 切换。
+后续可新增 D1 表 `image_generation_config`，用于模型路由和 provider 切换。
+
+> **当前实现状态**：已落地 `image_generation_jobs`（migration `0018`），但尚未创建 `image_generation_config`。RunningHub provider 配置当前从 env 读取（见 spec-022 的 `RUNNINGHUB_CREATE_WORKFLOWS` 与旧 variation 配置），下表是后续演进方向，不是当前必做项。
 
 ```sql
 CREATE TABLE image_generation_config (
@@ -242,14 +291,16 @@ type ImageProvider = {
 
 v1 provider 策略：
 
-- RunningHub 作为 v1 默认 provider，所有 task 默认走 RunningHub workflow（见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)）。
+- RunningHub 作为 v1 默认 provider，真实生图 task 默认走 RunningHub workflow（见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)）；本地 / CI 仍使用 mock。
 - RunningHub adapter 是异步 workflow provider：
-  - 通过 `provider_options.workflow_id` 与节点映射提交任务。
+  - 后续统一后通过 `provider_options.workflow_id` 与节点映射提交任务；当前过渡态仍从 env 读取 RunningHub 节点配置，详见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) §A/§C。
+  - **风格**：按 `companions.art_style` 覆盖 workflow 的 checkpoint 节点（`ckpt_name`），三风格共用 workflow。
   - 保存 `provider_task_id`。
   - queue 后续轮询任务状态，或接收 webhook 后补齐 job。
   - provider 返回图片 URL 后由 Worker 下载并转存 R2。
-  - 通过 ComfyUI workflow 节点配置实现 image-to-image、reference image、WebP 输出和角色一致性方案。
-- OpenAI `gpt-image-1.5` adapter 预留，作为 RunningHub 不可用 / 验证基准时的 fallback；启用与否由 `image_generation_config.fallback_provider` 控制，本期不强制实施。
+  - 通过 ComfyUI workflow 节点配置实现 image-to-image、reference image、角色立绘去背、WebP 输出和同一 companion 变体一致性。
+- **产品 mode ↔ 生成 mode 映射**：本 spec 通用 `ImageGenerationMode`（`text_to_image` / `image_to_image` / `edit`）是底层操作；spec-022 的产品 mode 是 `create` / `variation` / `edit`，对应关系：`create` → 文生图（或上传时 image_to_image）、`variation` → image_to_image（参考基础图 + 角色一致性）、`edit` → edit。当前代码里的窄版 `ImageGenRequest` 已支持 `create | variation`，`edit` 仍是后续。
+- OpenAI `gpt-image-1.5` adapter 预留，作为 RunningHub 不可用 / 验证基准时的 fallback；启用与否后续可由 `image_generation_config.fallback_provider` 控制，本期不强制实施。
 - 反代 provider 使用同一 adapter 形态，只允许通过配置切换 `base_url`、`workflow_id`、`model`、节点参数，不允许 companion 模块感知这些差异。
 - Provider 不支持 WebP 或透明背景时，不在 companion 层写特殊逻辑；adapter 记录 `capability_miss`，实际输出格式写入 `actual_format` 和 `output_content_type`。
 
@@ -295,11 +346,16 @@ CREATE INDEX idx_companion_art_jobs_status ON companion_art_jobs(status, updated
 新增或扩展 companion art API：
 
 ```txt
+POST /companions/base-art/generate               # 新增：创建前的基础图草稿（文生图/上传重画），不绑 companion id
+GET  /companions/base-art/jobs/{jobId}            # 新增：轮询基础图草稿任务状态
 POST /companions/{id}/expression-pack/generate
 POST /companions/{id}/emotion-art/{emotion}/generate
+POST /companions/{id}/art/edit                    # 新增：换装/换姿势编辑（留接口）
 GET  /companions/{id}/emotion-art/jobs
 POST /admin/companions/{id}/emotion-art/prewarm
 ```
+
+> **顺序说明**：`base-art/generate` 在 companion **创建之前**调用（companion 还不存在，故不带 `{id}`），产出风格化基础图草稿；`POST /companions`（spec-004）在「完成」时带 `art_key`/`art_url` + `art_style` 落库，并**自动**为 5 个非 neutral emotion 异步触发变体（等价于内部调用 expression pack）。`expression-pack/generate` 保留供后续 retry / 手动重生成。
 
 `POST /companions/{id}/expression-pack/generate`
 
@@ -335,6 +391,35 @@ POST /admin/companions/{id}/emotion-art/prewarm
 - 为指定 official/user companion 生成所有缺失情绪图。
 - 默认只补缺失项，不覆盖已有图。
 - 请求可选 `{ "force": true }`，强制重新生成并替换非 neutral 图。
+
+> **实施进度（spec-022 WF-1 create 切片已落地）：** `base-art/generate` + `base-art/jobs/{jobId}` 两个端点、通用 `image_generation_jobs` 表（migration `0018`）、provider `create`（txt2img）模式、webhook/cron 识别均已实现并跑通（mock + 单测）。本期只落 `create` 文生图路径；`upload` 走 img2img 重画、变体生成、积分扣费仍待做。详见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 状态说明。
+
+`POST /companions/base-art/generate`（新增，创建前的基础图草稿，**不绑 companion id**）
+
+- Auth required（`requireAuthUser`）。companion 此时还不存在，所以不挂在 `/companions/{id}/` 下。
+- body：`{ "source": "text" | "upload", "style": "realistic" | "anime_jp" | "anime_kr", "prompt"?: "...", "upload_key"?: "<r2 key>" }`。
+  - `source: "text"`：必须带 `prompt`，走 WF-1 `create` 的 txt2img（无 `source_art_url`）。
+  - `source: "upload"`：必须带 `upload_key`（先经 `POST /companions/upload-art` 拿到），走 WF-1 `create` 的 img2img 按风格重画（**不保真**）。
+- 校验：`source` 非法 → `400 invalid_source`；text 缺 `prompt` → `400 prompt_required`；upload 缺 `upload_key` → `400 upload_key_required`；`style` 非法 → `400 invalid_style`。
+- 异步返回 `202 { status: "queued", job_id }`（`job_id` 为 `image_generation_jobs` 任务）。前端用 `GET /companions/base-art/jobs/{jobId}` 轮询。
+- **不写任何 companion 字段**（companion 尚不存在）；产出仅为一张风格化基础图的 R2 key，由前端带进创建表单。
+- 积分系统启用后透传 spec-021 的 `402 credits_insufficient`；重抽 = 再次调用 = 再次扣费。
+
+`GET /companions/base-art/jobs/{jobId}`（新增，轮询基础图草稿任务）
+
+- Auth required；仅任务发起者可查。
+- 返回 `{ status, art_key?, error_code? }`：`processing`（生成中）/ `succeeded`（带 `art_key`，风格化基础图）/ `failed`（带 `error_code`）。
+- `art_key` 即创建 companion 时提交的 `art_url`/`art_key` 来源。
+
+> **落库时机**：基础图草稿成功后，前端把 `art_key` + 用户选的 `style` 暂存在创建表单；用户填完属性点「完成」时由 `POST /companions`（spec-004）一并写入 `art_url` / `art_emotions.neutral` / `art_style`，并自动异步触发 5 个非 neutral 变体。基础图草稿任务本身不落 companion 字段。
+
+`POST /companions/{id}/art/edit`（新增，换装/换姿势，**留接口、优先级最低**）
+
+- Auth required；权限同上。
+- body：`{ "prompt": "...", "mask"?: "<r2 key>", "target"?: "<emotion|new key>" }`。
+- 未来走 WF-3 `edit` mode；带 `mask` 走局部重绘换装，不带走整体 prompt 编辑。
+- 风格沿用 `companions.art_style`。
+- MVP 可先返回 `501 edit_not_ready`，等 WF-3 workflow 接好再开放——这是范围声明，不是占位 hack。
 
 ### G. 异步生成流程
 
@@ -381,7 +466,7 @@ Expression Pack 流程：
 Create a consistent portrait variation of the same companion using the provided neutral portrait as the visual reference.
 Keep the same identity, face structure, hairstyle, body type, outfit style, color palette, camera angle, and portrait composition.
 Only change facial expression and subtle body posture to match the requested emotion.
-Transparent or clean simple background. No text. No extra characters. No age change. No style change.
+Transparent background for the character portrait. No text. No extra characters. No age change. No style change.
 ```
 
 Emotion 差异：
@@ -421,13 +506,13 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 
 ## 实施步骤
 
-1. 新增 migration：创建 `image_generation_jobs`、`image_generation_config`、`companion_art_jobs`。
-2. 调整 companion create/update：上传图只写 `art_url` 和 `art_emotions.neutral`。
-3. 新增 `packages/api/src/images/` 通用模块，封装 job 创建、配置解析、queue 处理、R2 写入和 `asset_objects` 记录。
-4. 新增 RunningHub workflow provider adapter，v1 默认；支持 `provider_task_id`、轮询、webhook 接收、结果 URL 转存 R2。详细接入和 workflow 能力清单见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
-5. 新增 OpenAI image provider adapter 结构（fallback 用），本期不强制启用；接口形状对齐 `ImageProvider`。
+1. 新增 migration：创建 `image_generation_jobs`、`companion_art_jobs`；并补齐 `art_style` 字段。`image_generation_config` 暂不作为 MVP 必需项，当前配置走 env。
+2. 调整 companion create/update：`POST /companions` 接受 `art_key`/`art_url` + `art_style`，只写 `art_url` 和 `art_emotions.neutral`，并记录 `art_style`；创建成功后自动异步触发 5 个非 neutral 变体（内部调用 expression pack）。基础图草稿在创建之前由 `base-art/generate` 单独产出。
+3. 演进 `packages/api/src/image-gen/` 通用模块，封装 job 创建、配置解析、queue 处理、R2 写入和 `asset_objects` 记录。
+4. 新增 RunningHub workflow provider adapter，v1 默认；MVP 先支持 WF-1 create 与 WF-2 variation，WF-3 edit 保留接口和文档方向。详细接入见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
+5. OpenAI image provider adapter 仅作为后续 fallback 方向，本期不强制启用。
 6. 新增 companion expression pack service：解析/更新 `art_emotions` JSON，封装 cache hit、job 去重和 stale 判断。
-7. 新增用户 pack endpoint、单张 retry endpoint 和 admin prewarm endpoint。
+7. 新增端点：`base-art/generate`（创建前的基础图草稿，文生图/上传重画，不绑 id）+ `base-art/jobs/{jobId}`（轮询）、pack endpoint、单张 retry endpoint、admin prewarm endpoint；`art/edit`（WF-3，可先 `501 edit_not_ready`）。
 8. 接入 spec-021 的 reserve/commit/refund 接口；在 spec-021 未完成前允许 admin/system bypass，普通用户端点返回 `501 credits_not_ready` 或使用 feature flag 关闭。
 9. 扩展 queue consumer：处理 `image.generate` 和 `companion.emotion_art.finalize`。
 10. 前端 chat/detail/edit 页面接入生成状态、pack 入口与 retry UI。
@@ -439,16 +524,19 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 
 ### 通用 Image Generation 模块
 
-- `image_generation_config` 能按 task 解析 provider/model/default output。
+- 当前 env 配置能按 task/mode 解析 provider/model/default output；后续若引入 `image_generation_config`，再补配置表解析测试。
 - RunningHub adapter 能提交 workflow task，保存 `provider_task_id`，并在 webhook / 轮询成功后写入 R2。
-- OpenAI adapter（fallback，预留）单元测试覆盖：能把 `image_to_image` 请求映射为 WebP 输出和透明背景请求；本期不要求在生产路径启用。
+- OpenAI adapter 为后续 fallback 方向；本期不要求实现或测试。
 - Provider 不支持 WebP/透明背景时，job 记录 `capability_miss`，并正确保存 `actual_format`。
 - Provider 输出成功后 R2 有对象，`asset_objects` 有对应记录。
 - Provider 失败后 job 为 failed，错误码和错误消息可查询。
 
 ### Companion Expression Pack
 
-- 创建用户 companion 并上传 neutral 图后，`art_emotions` 只包含 `neutral`。
+- **基础图草稿（创建前）**：`source:"text"` + prompt + style 调 `base-art/generate` 返回 202 + `job_id`，轮询 `base-art/jobs/{jobId}` 最终 `succeeded` 带 `art_key`；此时**不写任何 companion 字段**。空 prompt / 非法 source / 非法 style 返回对应 400。
+- **上传重画草稿**：先 `upload-art` 拿 key，再 `source:"upload"` + upload_key + style 调 `base-art/generate`，产出风格化基础图（neutral 存重画后的图、非原图）。
+- **完成建角色**：带 `art_key` + `style` 调 `POST /companions`，落库后 `art_url`/`art_emotions.neutral` 有图、`companions.art_style` = 所选风格，且 `art_emotions` 只包含 `neutral`，并自动异步触发 5 个变体。
+- 5 个变体生成后**背景透明**（alpha 正确），且风格与 `art_style` 一致。
 - Chat 中 emotion 变为 `warm` 且缺图时，前端仍显示 neutral，不报错。
 - 触发 expression pack 后返回 202，并为缺失 emotion 插入 pending jobs。
 - 已有 emotion 图返回 cached，不创建 image job。
@@ -466,8 +554,8 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 - 前端回滚到只使用 `art_url` fallback 时，已有 `art_emotions` 不影响基础聊天。
 - 后端可以关闭 expression pack 端点，保留历史生成图和 `art_emotions` 缓存。
 - 若 provider 故障，queue job 置为 failed，不删除 neutral 图。
-- 若切换 provider 失败，只需回滚 `image_generation_config` 或关闭对应 provider adapter。
-- migration 回滚时可删除 `companion_art_jobs`、`image_generation_jobs`、`image_generation_config`；R2 中已生成对象可保留为孤儿资产，后续批处理清理。
+- 若切换 provider 失败，只需回滚 env provider 配置或关闭对应 provider adapter；后续若引入 `image_generation_config` 再支持表配置回滚。
+- migration 回滚时可删除 `companion_art_jobs`、`image_generation_jobs`；R2 中已生成对象可保留为孤儿资产，后续批处理清理。
 
 ---
 

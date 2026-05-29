@@ -3,15 +3,19 @@ import { runningHubImageGenProvider } from "./runninghub-provider";
 import type { ImageGenProvider } from "./types";
 
 export {
+  type ArtStyle,
   type CompanionPromptContext,
   type CompletedImageGenResponse,
+  type ImageGenMode,
   type ImageGenProvider,
   type ImageGenRequest,
   type ImageGenResponse,
   type NonNeutralEmotion,
   type PendingImageGenResponse,
+  ART_STYLES,
   ImageGenError,
   NON_NEUTRAL_EMOTIONS,
+  isArtStyle,
 } from "./types";
 export { buildEmotionPrompt } from "./prompts";
 

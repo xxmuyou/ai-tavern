@@ -113,8 +113,10 @@ function parseMetadata(value: string | null): Record<string, unknown> | null {
 }
 
 export {
+  adjustCredits,
   commitReservation,
   getCreditBalance,
+  listLedger,
   refundCredits,
   releaseReservation,
   reserveCredits,

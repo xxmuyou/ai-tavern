@@ -58,6 +58,60 @@ describe("runningHubImageGenProvider", () => {
     );
   });
 
+  it("creates a WF-1 create task overriding only the prompt node", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-create-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "runninghub-api-key",
+      RUNNINGHUB_BASE_URL: "https://www.runninghub.ai",
+      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
+        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+      }),
+      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
+    } as unknown as Env;
+
+    const result = await getImageGenProvider(env).generate(
+      { mode: "create", prompt: "a calm girl in a sweater", style: "anime_kr" },
+      env,
+    );
+
+    expect(result).toEqual({
+      external_task_id: "rh-create-1",
+      model: "companion-create-anime_kr",
+      provider: "runninghub",
+      type: "pending",
+    });
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.workflowId).toBe("kr-workflow");
+    expect(body.nodeInfoList).toEqual([
+      { fieldName: "text", fieldValue: "a calm girl in a sweater", nodeId: "6" },
+    ]);
+  });
+
+  it("fails create when the style has no configured workflow", async () => {
+    const env = {
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "runninghub-api-key",
+      RUNNINGHUB_CREATE_WORKFLOWS: "{}",
+    } as unknown as Env;
+
+    await expect(
+      getImageGenProvider(env).generate(
+        { mode: "create", prompt: "x", style: "anime_kr" },
+        env,
+      ),
+    ).rejects.toMatchObject({ code: "provider_not_configured", retryable: false });
+  });
+
   it("fails as non-retryable when required config is missing", async () => {
     const provider = getImageGenProvider({ IMAGE_GEN_PROVIDER: "runninghub" } as Env);
 

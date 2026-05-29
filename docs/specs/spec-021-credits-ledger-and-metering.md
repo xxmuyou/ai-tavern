@@ -1,6 +1,6 @@
 # spec-021: Credits Ledger and Metering
 
-> **类型：** 新建  |  **依赖：** spec-010  |  **估时：** 5-8 天  |  **状态：** 🟡 in-progress（后端 + 单测已落地；前端 Billing/Me 积分面板待做）
+> **类型：** 新建  |  **依赖：** spec-010  |  **估时：** 5-8 天  |  **状态：** 🟢 done（后端 + 单测；前端 Billing 积分面板：余额/购买包/最近流水，web + native。402 `credits_insufficient` 拦截无 v1 触发点——chat 不扣费、生图未接线——随 spec-020 生图入口落地）
 
 ---
 

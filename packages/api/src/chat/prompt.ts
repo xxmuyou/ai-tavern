@@ -100,6 +100,7 @@ function buildSystemPrompt(input: ChatPromptInput): string {
 
   lines.push("");
   lines.push("# Rules");
+  lines.push("Always reply in the same language the user writes in. If the user writes in Chinese, reply in Chinese; if in English, reply in English. Match the user's language for every turn, regardless of the language used in this prompt or the character description.");
   lines.push("Stay strictly in character. Output prose only — no JSON, no meta-commentary.");
   lines.push("Keep replies under 220 words unless the user explicitly invites length.");
   lines.push("Do not break the fourth wall or reference being an AI.");

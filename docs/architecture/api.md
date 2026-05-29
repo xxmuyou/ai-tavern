@@ -613,9 +613,56 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 { "response": "...", "latency_ms": 1230, "cost_usd": 0.0001 }
 ```
 
-### `GET /admin/users` / `GET /admin/usage` / ... *(v1.x)*
+### `GET /admin/users?search=<email>` (spec-023)
 
-后台统计与用户管理接口（v1 暂不实现完整 dashboard）。
+按邮箱精确或前缀匹配用户，供管理员定位 userId。结果上限 20 条。
+
+```json
+// Response 200
+{ "users": [ { "user_id": "usr_abc", "email": "user@example.com", "tier": "pro" } ] }
+```
+
+错误：`search` 为空 → 400 `search_required`；无匹配 → 200 空数组。
+
+### `GET /admin/users/{user_id}/credits` (spec-023)
+
+查指定用户积分余额 + 最近 20 条流水。
+
+```json
+// Response 200
+{
+  "user_id": "usr_abc",
+  "available_credits": 320,
+  "reserved_credits": 0,
+  "recent_ledger": [
+    { "id": "led_1", "type": "adjustment", "amount": 200, "balance_after": 320,
+      "reason": "compensation for failed generation", "created_at": "2026-05-28T10:00:00.000Z" }
+  ]
+}
+```
+
+错误：用户不存在 → 404 `user_not_found`。
+
+### `POST /admin/users/{user_id}/credits/adjustment` (spec-023)
+
+给用户**增加**积分（只增不减），写 `adjustment` ledger，metadata 记 `admin_id` + `reason`。
+
+```json
+// Request
+{ "amount": 200, "reason": "compensation for failed generation" }
+
+// Response 200
+{
+  "user_id": "usr_abc",
+  "available_credits": 320,
+  "entry": { "id": "led_1", "type": "adjustment", "amount": 200, "balance_after": 320,
+             "reason": "compensation for failed generation", "created_at": "2026-05-28T10:00:00.000Z" }
+}
+```
+
+错误：`amount` 非正整数 → 400 `invalid_amount`；`reason` 为空 → 400 `reason_required`；用户不存在 → 404 `user_not_found`。
+
+> 三个端点均走 `requireAdminUser`（401 `auth_required` / 403 `admin_required`），与 §9 其余 admin 端点一致。其他后台统计接口（`GET /admin/usage` 等）v1 暂不实现完整 dashboard。
 
 ---
 

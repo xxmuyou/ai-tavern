@@ -45,10 +45,10 @@
 | 017 | [恋爱偏好 + 加权 spawn（5 男 5 女）](./spec-017-romance-preference.md) | 新建 | 004, 007, 013 | 0.5-1 天 | 🟡 in-progress |
 | 018 | [Web 桌面工作台 UI 独立化](./spec-018-web-ui-workspace.md) | 重做 | 012 | 5-8 天 | 🟡 in-progress |
 | 019 | [User/VIP Companion Creation UI](./spec-019-companion-create-ui.md) | 新建 | 004, 010, 018 | 5-7 天 | 📝 draft |
-| 020 | [Companion Emotion Art Generation](./spec-020-companion-emotion-art-generation.md) | 新建 | 004, 006, 010, 019, 021 | 5-8 天 | 📝 draft |
-| 021 | [Credits Ledger and Metering](./spec-021-credits-ledger-and-metering.md) | 新建 | 010 | 5-8 天 | 🟡 in-progress |
-| 022 | [Image Gen Provider: RunningHub Integration](./spec-022-image-gen-runninghub-integration.md) | 新建 | 020, 021 | 3-5 天 | 📝 draft |
-| 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 📝 draft |
+| 020 | [Companion 美术生成（文生图创建 + 风格 + 表情变体 + 透明 + 编辑接口）](./spec-020-companion-emotion-art-generation.md) | 新建 | 004, 006, 010, 019, 021 | 5-8 天 | 📝 draft |
+| 021 | [Credits Ledger and Metering](./spec-021-credits-ledger-and-metering.md) | 新建 | 010 | 5-8 天 | 🟢 done |
+| 022 | [Image Gen Provider: RunningHub（3 workflow + 风格 checkpoint）](./spec-022-image-gen-runninghub-integration.md) | 新建 | 020, 021 | 3-5 天 | 🟡 in-progress（WF-1 create 切片落地，待回填 workflow id 端到端验证；WF-2/3 待做） |
+| 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 🟡 in-progress（后端 3 端点 + 单测已落地；admin UI 归 spec-018） |
 
 **估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
 
@@ -66,7 +66,7 @@
 - **E2 路径（Web UI）：** 012 → 018，优先把 Web 做成桌面工作台；mobile UI 另开后续 spec
 - **F 路径（部署）：** 014 + 015 可任意时间开（独立基础）
 - **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
-- **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接表情图生成；spec-020 用 mock provider 跑通链路，spec-022 接入首个真实 image gen provider（RunningHub）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
+- **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，3 个 workflow create/variation/edit + 3 风格 checkpoint 参数）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
 - **I 路径（管理员后端）：** 011（LLM 端点，已 done）+ 023（积分查看/调整），管理员后端能力统一沿用 `requireAdminUser` 与 `admin/` 分派模式，UI 归 spec-018
 
 ---

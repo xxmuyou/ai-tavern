@@ -29,15 +29,41 @@ export type CompanionPromptContext = {
   relationship_role: string | null;
 };
 
+/**
+ * Product-level generation mode (spec-022 §C.0).
+ *
+ * - `create`: base portrait (txt2img, or img2img when a source upload exists)
+ * - `variation`: emotion variant from a confirmed base portrait (img2img)
+ */
+export type ImageGenMode = "create" | "variation";
+
+export type ArtStyle = "realistic" | "anime_jp" | "anime_kr";
+
+export const ART_STYLES: readonly ArtStyle[] = ["realistic", "anime_jp", "anime_kr"];
+
+export function isArtStyle(value: unknown): value is ArtStyle {
+  return typeof value === "string" && (ART_STYLES as readonly string[]).includes(value);
+}
+
 export type ImageGenRequest = {
-  /** R2 object key OR full URL of the neutral source portrait. */
-  source_art_url: string;
+  /**
+   * Product mode. Defaults to `variation` for backward compatibility with the
+   * existing companion emotion-art pipeline (which never sets it).
+   */
+  mode?: ImageGenMode;
+  /** Art style; drives checkpoint/workflow selection in real providers. */
+  style?: ArtStyle;
+  /**
+   * R2 object key OR full URL of the source portrait. Required for
+   * `variation`; for `create` only set when re-painting an uploaded image.
+   */
+  source_art_url?: string;
   /** Full prompt text already composed with companion fields. */
   prompt: string;
-  /** Target emotion the generated portrait should depict. */
-  emotion: NonNeutralEmotion;
+  /** Target emotion (only meaningful for `variation`). */
+  emotion?: NonNeutralEmotion;
   /** Companion fields included for providers that accept structured context. */
-  companion: CompanionPromptContext;
+  companion?: CompanionPromptContext;
 };
 
 export type CompletedImageGenResponse = {

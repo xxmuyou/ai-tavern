@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { createCompanion, uploadCompanionArt } from '@/api/companion-client';
-import type { CompanionCreateInput } from '@/api/types';
+import type { ArtStyle, CompanionCreateInput } from '@/api/types';
+import { BaseArtPanel } from '@/components/BaseArtPanel';
 import { CompanionForm } from '@/components/CompanionForm';
 import { TopBar } from '@/components/TopBar';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -16,6 +17,7 @@ export default function CompanionCreateScreen() {
   const { pushError } = useErrorBanner();
   const scenes = useScenes();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [artKey, setArtKey] = useState<string | null>(null);
 
   async function submit(input: CompanionCreateInput) {
     setIsSubmitting(true);
@@ -29,16 +31,25 @@ export default function CompanionCreateScreen() {
     }
   }
 
+  function confirmArt(key: string, _style: ArtStyle) {
+    setArtKey(key);
+  }
+
   return (
     <View className="flex-1 bg-app-bg">
       <TopBar showBack title="Create companion" />
-      <CompanionForm
-        isSubmitting={isSubmitting}
-        mode="create"
-        onPickArt={pickNativeArt}
-        onSubmit={submit}
-        scenes={scenes.data?.scenes}
-      />
+      {artKey ? (
+        <CompanionForm
+          initialArtUrl={artKey}
+          isSubmitting={isSubmitting}
+          mode="create"
+          onPickArt={pickNativeArt}
+          onSubmit={submit}
+          scenes={scenes.data?.scenes}
+        />
+      ) : (
+        <BaseArtPanel onConfirm={confirmArt} />
+      )}
     </View>
   );
 }
