@@ -57,6 +57,14 @@ function generateCreate(req: ImageGenRequest, cfg: ImageGenConfig): Promise<Imag
       fieldValue: ckptName,
       nodeId: config.checkpointNodeId,
     });
+  } else if (ckptName && !config.checkpointNodeId) {
+    // ckpt_name is set but the workflow has no checkpoint node to override —
+    // the model silently falls back to the workflow's built-in checkpoint.
+    // The admin workspace flags this; log it here as a runtime safety net.
+    console.warn(
+      `[runninghub] ckpt_name "${ckptName}" ignored for style "${req.style}": ` +
+        `create workflow has no checkpointNodeId; using the workflow's built-in checkpoint.`,
+    );
   }
   return submitTask(cfg, config.workflowId, nodeInfoList, `companion-create-${req.style}`);
 }

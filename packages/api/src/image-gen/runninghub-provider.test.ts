@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getImageGenProvider } from ".";
+import { getImageGenProvider, styleHasCheckpointNode } from ".";
 import { ImageGenError, type ImageGenRequest } from "./types";
 
 describe("runningHubImageGenProvider", () => {
@@ -97,6 +97,67 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
+  it("overrides the checkpoint node when checkpointNodeId is configured", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-create-2", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "runninghub-api-key",
+      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
+        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow", checkpointNodeId: "4" },
+      }),
+      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
+    } as unknown as Env;
+
+    await (await getImageGenProvider(env)).generate(
+      { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.nodeInfoList).toEqual([
+      { fieldName: "text", fieldValue: "x", nodeId: "6" },
+      { fieldName: "ckpt_name", fieldValue: "myCustom.safetensors", nodeId: "4" },
+    ]);
+  });
+
+  it("ignores ckpt_name without throwing when checkpointNodeId is missing", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-create-3", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = {
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "runninghub-api-key",
+      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
+        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+      }),
+      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
+    } as unknown as Env;
+
+    await (await getImageGenProvider(env)).generate(
+      { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.nodeInfoList).toEqual([{ fieldName: "text", fieldValue: "x", nodeId: "6" }]);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
   it("fails create when the style has no configured workflow", async () => {
     const env = {
       IMAGE_GEN_PROVIDER: "runninghub",
@@ -120,6 +181,25 @@ describe("runningHubImageGenProvider", () => {
         code: "provider_not_configured",
         retryable: false,
       } satisfies Partial<ImageGenError>);
+  });
+});
+
+describe("styleHasCheckpointNode", () => {
+  it("is true only when the style has a non-empty checkpointNodeId", () => {
+    const raw = JSON.stringify({
+      anime_kr: { promptNodeId: "6", workflowId: "kr", checkpointNodeId: "4" },
+      anime_jp: { promptNodeId: "6", workflowId: "jp" },
+      realistic: { promptNodeId: "6", workflowId: "r", checkpointNodeId: "  " },
+    });
+    expect(styleHasCheckpointNode(raw, "anime_kr")).toBe(true);
+    expect(styleHasCheckpointNode(raw, "anime_jp")).toBe(false);
+    expect(styleHasCheckpointNode(raw, "realistic")).toBe(false);
+    expect(styleHasCheckpointNode(raw, "missing")).toBe(false);
+  });
+
+  it("returns false for null or malformed JSON", () => {
+    expect(styleHasCheckpointNode(null, "anime_kr")).toBe(false);
+    expect(styleHasCheckpointNode("not json", "anime_kr")).toBe(false);
   });
 });
 

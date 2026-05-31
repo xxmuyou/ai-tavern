@@ -72,6 +72,13 @@ function ModelRow({
   return (
     <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-4">
       <ModelFields draft={draft} setDraft={setDraft} />
+      {!model.checkpoint_applies ? (
+        <Text className="text-xs font-semibold text-app-danger">
+          ⚠ Checkpoint won&apos;t apply: style &quot;{model.style_tag}&quot; has no checkpoint node configured.
+          Set its checkpoint node id under Settings → Image generation → WF1 create workflows, or this model
+          falls back to the workflow&apos;s built-in checkpoint.
+        </Text>
+      ) : null}
       <View className="flex-row gap-2">
         <View className="flex-1">
           <Button

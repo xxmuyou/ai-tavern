@@ -1,12 +1,14 @@
 import { requireAdminUser } from "../../auth";
 import { jsonResponse } from "../../http";
 import { loadUpdatedByEmails } from "../../llm/admin/repo";
+import { resolveImageGenConfig } from "../../settings/store";
 import {
   createImageModel,
   deleteImageModel,
   isExpressionGender,
   listExpressionPrompts,
   listImageModelRows,
+  styleHasCheckpointNode,
   updateImageModel,
   upsertExpressionPrompt,
   type ImageModelInput,
@@ -44,10 +46,15 @@ async function handleImageModels(
       env,
       rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
     );
+    // Flag models whose ckpt_name would be silently ignored: the create
+    // workflow for that style has no checkpoint node configured, so generation
+    // falls back to the workflow's built-in checkpoint.
+    const { createWorkflows } = await resolveImageGenConfig(env);
     const models = rows.map((r) => ({
       ...r,
       is_active: r.is_active === 1,
       updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
+      checkpoint_applies: styleHasCheckpointNode(createWorkflows, r.style_tag),
     }));
     return jsonResponse({ models });
   }

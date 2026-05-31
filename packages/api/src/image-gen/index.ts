@@ -38,6 +38,7 @@ export {
   getImageModel,
   listActiveImageModels,
   listImageModelRows,
+  styleHasCheckpointNode,
   updateImageModel,
 } from "./models";
 

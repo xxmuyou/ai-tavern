@@ -34,6 +34,7 @@
 - [`ops/environments.md`](./ops/environments.md) — 本地 / dev / prod 环境
 - [`ops/deployment.md`](./ops/deployment.md) — 三端部署流程
 - [`ops/secrets.md`](./ops/secrets.md) — 密钥清单与管理
+- [`ops/admin-settings-workspace.md`](./ops/admin-settings-workspace.md) — 管理员运行时运营设置（DB 覆盖层、生图/checkpoint 配置）
 
 ### 实施任务
 - [`specs/`](./specs/) — 按功能模块切分的实施 spec（重新规划中，旧 spec 已归档）

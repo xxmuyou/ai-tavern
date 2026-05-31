@@ -630,6 +630,12 @@ export type AdminImageModel = {
   sort_order: number;
   updated_at: number;
   updated_by_email: string | null;
+  /**
+   * False when this model's style has no checkpoint node configured in the WF1
+   * create workflows, so its ckpt_name is ignored at generation time (falls back
+   * to the workflow's built-in checkpoint).
+   */
+  checkpoint_applies: boolean;
 };
 
 export type AdminImageModelsResponse = {

@@ -45,6 +45,31 @@ function toImageModel(row: ImageModelRow): ImageModel | null {
   };
 }
 
+/**
+ * Lenient check: does the WF1 create workflow for `style` declare a checkpoint
+ * node? When it does not, a model's `ckpt_name` is silently ignored at
+ * generation time — `runninghub-provider` only injects the ckpt override when
+ * `checkpointNodeId` is set, so the model falls back to the workflow's built-in
+ * checkpoint. The admin workspace uses this to warn on such models. Never throws
+ * on malformed JSON (returns false).
+ */
+export function styleHasCheckpointNode(
+  createWorkflowsRaw: string | null | undefined,
+  style: string,
+): boolean {
+  if (!createWorkflowsRaw) return false;
+  try {
+    const parsed = JSON.parse(createWorkflowsRaw) as Record<
+      string,
+      { checkpointNodeId?: unknown } | undefined
+    >;
+    const node = parsed[style]?.checkpointNodeId;
+    return node != null && String(node).trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Active models, ordered for display, with a valid style tag. */
 export async function listActiveImageModels(env: Env): Promise<ImageModel[]> {
   const { results } = await env.DB.prepare(

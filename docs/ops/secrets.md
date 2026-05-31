@@ -3,6 +3,8 @@
 > 本文档定义所有 secret / API key 的清单、来源、存储位置、轮换流程。环境总览见 [`environments.md`](./environments.md)，部署见 [`deployment.md`](./deployment.md)。
 >
 > **核心原则：** 任何 secret **不进 git**。所有 secret 通过 Wrangler / EAS / 1Password（或团队选定的工具）注入运行时。
+>
+> **⚠️ 运行时覆盖层：** 本文档描述的 env / Wrangler secret 是 **bootstrap / 兜底来源**。其上还叠了一个**运行时 DB 覆盖层**——管理员工作台改的配置写入 D1，优先级**高于** env，~30s 生效、无需重部署。详见 [`admin-settings-workspace.md`](./admin-settings-workspace.md)。**关键后果：若某项在工作台改过，再改 env 重新部署也不生效**（运行时读 DB 值），需到工作台 Reset 回退。许多 secret（RunningHub / LLM / Stripe / Resend / JWT / OAuth 等）既能走 Wrangler secret，也能在工作台临时覆盖；权威轮换仍以 Wrangler secret 为准（见 §3），应急可先用工作台。
 
 ---
 

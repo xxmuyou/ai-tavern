@@ -3,8 +3,9 @@
 > **类型：** 新建  |  **依赖：** spec-020, spec-021  |  **估时：** 3-5 天（不含 workflow 搭建周期）  |  **状态：** 🟡 in-progress（WF-1 create 文生图切片已落地：通用 `image_generation_jobs` 表 + provider `create` 模式 + base-art 端点 + webhook/cron 识别 + 前端生成面板；待 RunningHub 回填 workflowId/promptNodeId 后端到端验证。WF-2 variation / WF-3 edit 仍待做）
 
 > **本期落地偏差（v1 WF-1 create 切片）：**
-> - 仅 `create`（txt2img）路径落地；provider 只覆盖 **prompt 节点**（底模固定在 workflow 里，本期不切 checkpoint）。配置用 `RUNNINGHUB_CREATE_WORKFLOWS`（风格→`{workflowId, promptNodeId, checkpointNodeId?, ckptName?}` JSON map），新增风格只加 map 条目，代码同时兼容「一风格一 workflow」与「一 workflow 切 checkpoint」。
-> - 落地了 spec-020 §C 的通用 `image_generation_jobs` 表（migration `0018`）；**未建** `image_generation_config` 表——provider 配置暂从 env 读，与现有 `runninghub-provider.ts` 一致。
+> - 仅 `create`（txt2img）路径落地。provider 覆盖 **prompt 节点**；**checkpoint 切换已落地**：当某风格的 `RUNNINGHUB_CREATE_WORKFLOWS` 条目配了 `checkpointNodeId` 时，provider 会覆盖该节点的 `ckpt_name`。底模来源优先级：请求级用户所选模型的 `ckpt_name`（WF1 模型目录）> workflow 配置里的默认 `ckptName`。配置仍用 `RUNNINGHUB_CREATE_WORKFLOWS`（风格→`{workflowId, promptNodeId, checkpointNodeId?, ckptName?}` JSON map），代码同时兼容「一风格一 workflow」与「一 workflow 切 checkpoint」。⚠️ 若某风格未配 `checkpointNodeId`，则该风格下模型的 `ckpt_name` 被静默忽略（回退 workflow 内置底模）——admin「图像模型」面板会对受影响模型显示警告，provider 也会 `console.warn`。
+> - **WF1 可选模型目录已落地：** `image_models` 表（migration `0022`）+ admin「图像模型」面板（[`ImageModelsSection.tsx`](../../apps/app/components/admin/ImageModelsSection.tsx)），每个模型 = `style_tag` + `ckpt_name`，创建角色时供用户选。
+> - 落地了 spec-020 §C 的通用 `image_generation_jobs` 表（migration `0018`）；**未建** `image_generation_config` 表。provider 配置现通过**设置工作台（DB 覆盖 → env 兜底）**读取（`image_gen.*`，见 [`registry.ts`](../../packages/api/src/settings/registry.ts) 与 [`admin-settings-workspace.md`](../ops/admin-settings-workspace.md)），不再仅从 env 读。
 > - base-art 草稿走 spec-020 §F 的 `POST /companions/base-art/generate` + `GET /companions/base-art/jobs/{jobId}`；结果落 `user-art/{user_id}/base-art/{uuid}.{ext}` + `asset_objects`。webhook（`/webhooks/runninghub`）与 cron 兜底（`pollStaleRunningHubArtJobs`）均已扩展为识别 `image_generation_jobs`。
 > - **本期不接积分**（spec-021 扣费后续再接）。
 > - **产品范围收敛（2026-05-29）**：上传图创建角色先不做“尽量保真”。上传图只作为风格化参考 / img2img 重画输入，不承诺像原人；MVP 不为 WF-1 增加 InstantID / FaceID / IPAdapter 等真人身份保真能力。
@@ -36,7 +37,7 @@
 | **WF-2 变体 + 抠图** | 从确认的基础图生成 5 个非 neutral 情绪变体，尾部去背输出透明背景 | `variation` |
 | **WF-3 编辑** | 按 prompt（+可选 mask）换装 / 换姿势；MVP 暂不交付 | `edit` |
 
-风格固定 3 种：`realistic`（写实）/ `anime_jp`（日漫）/ `anime_kr`（韩漫）。目标形态是三种风格共用同一套 workflow，后端通过覆盖 checkpoint 节点的 `ckpt_name` 切换；当前代码也兼容 `RUNNINGHUB_CREATE_WORKFLOWS` 的“一风格一 workflow”过渡配置。
+风格固定 3 种：`realistic`（写实）/ `anime_jp`（日漫）/ `anime_kr`（韩漫）。后端通过覆盖 checkpoint 节点的 `ckpt_name` 切换底模（**已落地**，依赖该风格在 `RUNNINGHUB_CREATE_WORKFLOWS` 里配了 `checkpointNodeId`）；同一风格下可挂多个 checkpoint（WF1 模型目录多行）。代码同时兼容「一风格一 workflow」过渡配置。运营操作步骤（含上传自有 checkpoint）见 [`admin-settings-workspace.md`](../ops/admin-settings-workspace.md) §6。
 
 > 术语统一：[`spec-020`](./spec-020-companion-emotion-art-generation.md) 的「6 emotion 变体」就是产品语境里说的「6 个姿势/立绘」，本 spec 的 WF-2 即生成这套变体，不是额外的姿势集合。
 
