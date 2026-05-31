@@ -19,6 +19,8 @@ import { handleMemoryRequest } from "./life/memory";
 import { handlePushRequest } from "./life/push";
 import { handleTodayRequest } from "./life/today";
 import { handleAdminLlmRequest } from "./llm";
+import { handleAdminImageGenRequest } from "./image-gen/admin";
+import { handleAdminSettingsRequest } from "./settings/admin";
 import { handleRelationshipsRequest } from "./relationships";
 import { handleScenesRequest } from "./scenes";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
@@ -46,11 +48,11 @@ export default {
 
     try {
       if (request.method === "OPTIONS") {
-        return jsonCorsResponse(request, env, null);
+        return await jsonCorsResponse(request, env, null);
       }
 
-      if (isRequestBodyTooLarge(request, env, pathname)) {
-        return jsonCorsResponse(request, env, { error: "request_body_too_large" }, { status: 413 });
+      if (await isRequestBodyTooLarge(request, env, pathname)) {
+        return await jsonCorsResponse(request, env, { error: "request_body_too_large" }, { status: 413 });
       }
 
       const rateLimitResponse = await enforceRateLimit(env, request, pathname);
@@ -60,81 +62,91 @@ export default {
 
       const runningHubWebhookResponse = await handleRunningHubWebhookRequest(request, env, pathname);
       if (runningHubWebhookResponse) {
-        return withCors(request, env, runningHubWebhookResponse);
+        return await withCors(request, env, runningHubWebhookResponse);
       }
 
       const authResponse = await handleAuthRequest(request, env, pathname);
       if (authResponse) {
-        return withCors(request, env, authResponse);
+        return await withCors(request, env, authResponse);
       }
 
       const adminLlmResponse = await handleAdminLlmRequest(request, env, pathname);
       if (adminLlmResponse) {
-        return withCors(request, env, adminLlmResponse);
+        return await withCors(request, env, adminLlmResponse);
+      }
+
+      const adminImageGenResponse = await handleAdminImageGenRequest(request, env, pathname);
+      if (adminImageGenResponse) {
+        return await withCors(request, env, adminImageGenResponse);
+      }
+
+      const adminSettingsResponse = await handleAdminSettingsRequest(request, env, pathname);
+      if (adminSettingsResponse) {
+        return await withCors(request, env, adminSettingsResponse);
       }
 
       const adminResponse = await handleAdminRequest(request, env, pathname);
       if (adminResponse) {
-        return withCors(request, env, adminResponse);
+        return await withCors(request, env, adminResponse);
       }
 
       const billingResponse = await handleBillingRequest(request, env, ctx, pathname);
       if (billingResponse) {
-        return withCors(request, env, billingResponse);
+        return await withCors(request, env, billingResponse);
       }
 
       const creditsResponse = await handleCreditsRequest(request, env, pathname);
       if (creditsResponse) {
-        return withCors(request, env, creditsResponse);
+        return await withCors(request, env, creditsResponse);
       }
 
       const scenesResponse = await handleScenesRequest(request, env, pathname);
       if (scenesResponse) {
-        return withCors(request, env, scenesResponse);
+        return await withCors(request, env, scenesResponse);
       }
 
       const companionsResponse = await handleCompanionsRequest(request, env, pathname);
       if (companionsResponse) {
-        return withCors(request, env, companionsResponse);
+        return await withCors(request, env, companionsResponse);
       }
 
       const relationshipsResponse = await handleRelationshipsRequest(request, env, pathname);
       if (relationshipsResponse) {
-        return withCors(request, env, relationshipsResponse);
+        return await withCors(request, env, relationshipsResponse);
       }
 
       const chatResponse = await handleChatRequest(request, env, ctx, pathname);
       if (chatResponse) {
-        return withCors(request, env, chatResponse);
+        return await withCors(request, env, chatResponse);
       }
 
       const eventsResponse = await handleEventsRequest(request, env, pathname);
       if (eventsResponse) {
-        return withCors(request, env, eventsResponse);
+        return await withCors(request, env, eventsResponse);
       }
 
       const todayResponse = await handleTodayRequest(request, env, pathname);
       if (todayResponse) {
-        return withCors(request, env, todayResponse);
+        return await withCors(request, env, todayResponse);
       }
 
       const activityResponse = await handleActivityRequest(request, env, pathname);
       if (activityResponse) {
-        return withCors(request, env, activityResponse);
+        return await withCors(request, env, activityResponse);
       }
 
       const memoryResponse = await handleMemoryRequest(request, env, pathname);
       if (memoryResponse) {
-        return withCors(request, env, memoryResponse);
+        return await withCors(request, env, memoryResponse);
       }
 
       const pushResponse = await handlePushRequest(request, env, pathname);
       if (pushResponse) {
-        return withCors(request, env, pushResponse);
+        return await withCors(request, env, pushResponse);
       }
 
       if (isRetiredPath(pathname)) {
-        return jsonCorsResponse(
+        return await jsonCorsResponse(
           request,
           env,
           { error: "endpoint_retired", message: "This endpoint was removed by the v1 redesign and will be reintroduced by a later spec." },
@@ -150,17 +162,17 @@ export default {
           environment: env.APP_ENV,
         };
 
-        return jsonCorsResponse(request, env, body);
+        return await jsonCorsResponse(request, env, body);
       }
 
       if (pathname === "/config/bootstrap" && request.method === "GET") {
         const config = await env.CONFIG.get("client:bootstrap", "json");
-        return jsonCorsResponse(request, env, { config: config ?? {} });
+        return await jsonCorsResponse(request, env, { config: config ?? {} });
       }
 
       if (pathname === "/db/ping" && request.method === "GET") {
         const result = await env.DB.prepare("SELECT 1 AS ok").first<{ ok: number }>();
-        return jsonCorsResponse(request, env, { ok: result?.ok === 1 });
+        return await jsonCorsResponse(request, env, { ok: result?.ok === 1 });
       }
 
       if (pathname === "/jobs" && request.method === "POST") {
@@ -171,14 +183,14 @@ export default {
           body,
           createdAt: new Date().toISOString(),
         });
-        return jsonCorsResponse(request, env, { ok: true }, { status: 202 });
+        return await jsonCorsResponse(request, env, { ok: true }, { status: 202 });
       }
 
       const signedObjectMatch = pathname.match(/^\/objects\/signed\/(.+)$/);
       if (signedObjectMatch) {
         const objectKey = signedObjectMatch[1];
         if (!objectKey) {
-          return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
+          return await jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
         }
 
         return handleSignedObjectRequest(request, env, decodeURIComponent(objectKey));
@@ -188,7 +200,7 @@ export default {
       if (objectMatch) {
         const objectKey = objectMatch[1];
         if (!objectKey) {
-          return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
+          return await jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
         }
 
         return handleObjectRequest(request, env, ctx, decodeURIComponent(objectKey));
@@ -198,7 +210,7 @@ export default {
       if (roomMatch) {
         const matchedRoomId = roomMatch[1];
         if (!matchedRoomId) {
-          return jsonCorsResponse(request, env, { error: "invalid_room_id" }, { status: 400 });
+          return await jsonCorsResponse(request, env, { error: "invalid_room_id" }, { status: 400 });
         }
 
         const roomId = decodeURIComponent(matchedRoomId);
@@ -209,14 +221,14 @@ export default {
         return room.fetch(new Request(roomUrl, request));
       }
 
-      return jsonCorsResponse(request, env, { error: "not_found" }, { status: 404 });
+      return await jsonCorsResponse(request, env, { error: "not_found" }, { status: 404 });
     } catch (error) {
       if (error instanceof Response) {
-        return withCors(request, env, error);
+        return await withCors(request, env, error);
       }
 
       console.error(JSON.stringify({ message: "Unhandled API error", error: String(error) }));
-      return jsonCorsResponse(request, env, { error: "internal_error" }, { status: 500 });
+      return await jsonCorsResponse(request, env, { error: "internal_error" }, { status: 500 });
     }
   },
   async queue(batch, env): Promise<void> {
@@ -251,14 +263,14 @@ async function handleObjectRequest(
 ): Promise<Response> {
   const normalizedKey = normalizeObjectKey(key);
   if (!normalizedKey) {
-    return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
+    return await jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
   }
 
   if (request.method === "PUT") {
     await requireAdminUser(env, request);
 
     if (!request.body) {
-      return jsonCorsResponse(request, env, { error: "missing_body" }, { status: 400 });
+      return await jsonCorsResponse(request, env, { error: "missing_body" }, { status: 400 });
     }
 
     const contentType = request.headers.get("content-type") ?? "application/octet-stream";
@@ -276,23 +288,23 @@ async function handleObjectRequest(
 
     ctx.waitUntil(recordAsset(env, normalizedKey, metadata));
 
-    return jsonCorsResponse(request, env, { key: normalizedKey }, { status: 201 });
+    return await jsonCorsResponse(request, env, { key: normalizedKey }, { status: 201 });
   }
 
   if (request.method === "GET") {
     const object = await env.ASSETS.get(normalizedKey);
     if (!object) {
-      return withCors(request, env, notFound());
+      return await withCors(request, env, notFound());
     }
 
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
 
-    return withCors(request, env, new Response(object.body, { headers }));
+    return await withCors(request, env, new Response(object.body, { headers }));
   }
 
-  return jsonCorsResponse(request, env, { error: "method_not_allowed" }, { status: 405 });
+  return await jsonCorsResponse(request, env, { error: "method_not_allowed" }, { status: 405 });
 }
 
 async function handleSignedObjectRequest(
@@ -302,12 +314,12 @@ async function handleSignedObjectRequest(
 ): Promise<Response> {
   const normalizedKey = normalizeObjectKey(key);
   if (!normalizedKey) {
-    return jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
+    return await jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
   }
 
   const signedObject = await verifySignedObjectRequest(env, request, normalizedKey);
   if (!signedObject) {
-    return jsonCorsResponse(request, env, { error: "invalid_or_expired_signature" }, { status: 401 });
+    return await jsonCorsResponse(request, env, { error: "invalid_or_expired_signature" }, { status: 401 });
   }
 
   const object = await env.ASSETS.get(signedObject.key);

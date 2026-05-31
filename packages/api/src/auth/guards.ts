@@ -1,4 +1,5 @@
 import { ensureUserByEmail, normalizeEmail, type UserRecord } from "../identity";
+import { getSetting } from "../settings/store";
 import { verifyRequestAuth } from "./session";
 import { DEFAULT_ADMIN_EMAILS, authError, isDevRuntime } from "./types";
 import type { AuthEnv } from "./types";
@@ -86,11 +87,21 @@ export function isAdminEmail(env: Env, email: string | null | undefined): boolea
 export async function isAdminUser(env: Env, email: string | null | undefined): Promise<boolean> {
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
-  if (isAdminEmail(env, normalized)) return true;
+  if ((await getConfiguredAdminEmailsForRequest(env)).has(normalized)) return true;
   const row = await env.DB.prepare("SELECT email FROM admin_user_allowlist WHERE email = ?")
     .bind(normalized)
     .first<{ email: string }>();
   return Boolean(row);
+}
+
+async function getConfiguredAdminEmailsForRequest(env: Env): Promise<Set<string>> {
+  const configuredRaw = await getSetting(env, "auth.admin_emails");
+  const configured = (configuredRaw ?? "")
+    .split(",")
+    .map((email) => normalizeEmail(email))
+    .filter((email): email is string => Boolean(email));
+  const emails = configured.length ? configured : DEFAULT_ADMIN_EMAILS;
+  return new Set(emails);
 }
 
 export function getConfiguredAdminEmails(env: Env): Set<string> {

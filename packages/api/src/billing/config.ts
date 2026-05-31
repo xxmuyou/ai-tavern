@@ -1,5 +1,6 @@
 import { jsonResponse } from "../http";
 import { isDevRuntime } from "../auth";
+import { getSetting } from "../settings/store";
 import type { BillingEnv } from "./types";
 
 export type BillingConfig = {
@@ -28,14 +29,14 @@ const ENV_NAMES: Record<keyof BillingConfig, keyof BillingEnv> = {
   webhookSecret: "STRIPE_WEBHOOK_SECRET",
 };
 
-export function readBillingConfig(env: BillingEnv, purpose: BillingConfigPurpose): BillingConfig {
+export async function readBillingConfig(env: BillingEnv, purpose: BillingConfigPurpose): Promise<BillingConfig> {
   const config: BillingConfig = {
-    cancelUrl: env.STRIPE_CANCEL_URL?.trim() ?? "",
-    portalReturnUrl: env.STRIPE_PORTAL_RETURN_URL?.trim() ?? "",
-    priceProMonthly: env.STRIPE_PRICE_PRO_MONTHLY?.trim() ?? "",
-    secretKey: env.STRIPE_SECRET_KEY?.trim() ?? "",
-    successUrl: env.STRIPE_SUCCESS_URL?.trim() ?? "",
-    webhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() ?? "",
+    cancelUrl: (await getSetting(env, "billing.cancel_url")) ?? "",
+    portalReturnUrl: (await getSetting(env, "billing.portal_return_url")) ?? "",
+    priceProMonthly: (await getSetting(env, "billing.pro_monthly_price")) ?? "",
+    secretKey: (await getSetting(env, "billing.stripe_secret_key")) ?? "",
+    successUrl: (await getSetting(env, "billing.success_url")) ?? "",
+    webhookSecret: (await getSetting(env, "billing.stripe_webhook_secret")) ?? "",
   };
 
   const missing = PURPOSE_KEYS[purpose]

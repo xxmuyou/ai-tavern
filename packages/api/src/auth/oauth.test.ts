@@ -307,25 +307,25 @@ describe("apple provider (v1 placeholder)", () => {
 });
 
 describe("getOAuthProvider", () => {
-  it("returns google provider when credentials are set", () => {
+  it("returns google provider when credentials are set", async () => {
     const env = createEnv({
       GOOGLE_OAUTH_CLIENT_ID: "cid",
       GOOGLE_OAUTH_CLIENT_SECRET: "secret",
     });
-    const provider = getOAuthProvider(env, "google");
+    const provider = await getOAuthProvider(env, "google");
     expect(provider.id).toBe("google");
   });
 
-  it("throws provider_not_configured for google when credentials missing", () => {
+  it("throws provider_not_configured for google when credentials missing", async () => {
     const env = createEnv();
-    expect(() => getOAuthProvider(env, "google")).toThrow(
+    await expect(getOAuthProvider(env, "google")).rejects.toThrow(
       expect.objectContaining({ status: 400 }),
     );
   });
 
-  it("throws unknown_provider for an unrecognised provider id", () => {
+  it("throws unknown_provider for an unrecognised provider id", async () => {
     const env = createEnv();
-    expect(() => getOAuthProvider(env, "github")).toThrow(
+    await expect(getOAuthProvider(env, "github")).rejects.toThrow(
       expect.objectContaining({ status: 400 }),
     );
   });

@@ -2,6 +2,7 @@ import { estimateCost } from "./cost";
 import { writeLLMLog } from "./logs";
 import { deepseekProvider, DEEPSEEK_BASE_URL } from "./providers/deepseek";
 import { openaiProvider } from "./providers/openai";
+import { getSetting } from "../settings/store";
 import {
   LLMError,
   type LLMProvider,
@@ -251,7 +252,7 @@ export async function invokeProvider(
   if (!provider) {
     throw new LLMError("config_error", `provider '${target.provider}' is not wired up in v1`);
   }
-  const config = buildProviderConfig(env, target.provider, target.model);
+  const config = await buildProviderConfig(env, target.provider, target.model);
   return provider.call(config, request);
 }
 
@@ -264,7 +265,7 @@ async function openStream(
   if (!provider) {
     throw new LLMError("config_error", `provider '${target.provider}' is not wired up in v1`);
   }
-  const config = buildProviderConfig(env, target.provider, target.model);
+  const config = await buildProviderConfig(env, target.provider, target.model);
   return provider.stream(config, request);
 }
 
@@ -288,22 +289,22 @@ async function pickStreamingTarget(
   }
 }
 
-function buildProviderConfig(
+async function buildProviderConfig(
   env: Env,
   provider: LLMProvider,
   model: string,
-): ProviderConfig {
+): Promise<ProviderConfig> {
   switch (provider) {
     case "deepseek":
       return {
-        apiKey: readApiKey(env, "DEEPSEEK_API_KEY"),
+        apiKey: await readApiKey(env, "DEEPSEEK_API_KEY"),
         baseURL: DEEPSEEK_BASE_URL,
         model,
         provider,
       };
     case "openai":
       return {
-        apiKey: readApiKey(env, "OPENAI_API_KEY"),
+        apiKey: await readApiKey(env, "OPENAI_API_KEY"),
         model,
         provider,
       };
@@ -312,8 +313,9 @@ function buildProviderConfig(
   }
 }
 
-function readApiKey(env: Env, key: "DEEPSEEK_API_KEY" | "OPENAI_API_KEY"): string {
-  const value = (env as unknown as Record<string, string | undefined>)[key];
+async function readApiKey(env: Env, key: "DEEPSEEK_API_KEY" | "OPENAI_API_KEY"): Promise<string> {
+  const settingKey = key === "DEEPSEEK_API_KEY" ? "llm.deepseek_api_key" : "llm.openai_api_key";
+  const value = await getSetting(env, settingKey);
   if (!value || value.length === 0) {
     throw new LLMError("config_error", `${key} is not configured`);
   }

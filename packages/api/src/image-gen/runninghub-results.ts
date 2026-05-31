@@ -8,12 +8,7 @@ import {
   type ImageGenJobRow,
 } from "./base-art";
 import { jsonResponse } from "../http";
-
-type RunningHubResultEnv = Env & {
-  RUNNINGHUB_API_KEY?: string;
-  RUNNINGHUB_BASE_URL?: string;
-  RUNNINGHUB_WEBHOOK_SECRET?: string;
-};
+import { getSetting } from "../settings/store";
 
 type RunningHubOutput = {
   fileUrl?: string;
@@ -46,7 +41,7 @@ export async function handleRunningHubWebhookRequest(
   if (request.method !== "POST") {
     return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
   }
-  if (!isAuthorizedWebhook(request, env)) {
+  if (!(await isAuthorizedWebhook(request, env))) {
     return jsonResponse({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -184,7 +179,7 @@ async function fetchRunningHubTaskResult(
   env: Env,
   taskId: string,
 ): Promise<RunningHubTaskResult> {
-  const config = readApiConfig(env);
+  const config = await readApiConfig(env);
   const outputResponse = await callRunningHub(env, `${config.baseUrl}/task/openapi/outputs`, {
     taskId,
   });
@@ -202,7 +197,7 @@ async function callRunningHub(
   url: string,
   body: { taskId: string },
 ): Promise<RunningHubApiResponse> {
-  const config = readApiConfig(env);
+  const config = await readApiConfig(env);
   const response = await fetch(url, {
     body: JSON.stringify({ apiKey: config.apiKey, taskId: body.taskId }),
     headers: {
@@ -315,8 +310,8 @@ function extractTaskId(payload: unknown): string | null {
   return null;
 }
 
-function isAuthorizedWebhook(request: Request, env: Env): boolean {
-  const secret = (env as RunningHubResultEnv).RUNNINGHUB_WEBHOOK_SECRET?.trim();
+async function isAuthorizedWebhook(request: Request, env: Env): Promise<boolean> {
+  const secret = await getSetting(env, "image_gen.webhook_secret");
   if (!secret) return true;
   const url = new URL(request.url);
   const querySecret = url.searchParams.get("secret");
@@ -324,15 +319,15 @@ function isAuthorizedWebhook(request: Request, env: Env): boolean {
   return querySecret === secret || headerSecret === secret;
 }
 
-function readApiConfig(env: Env): { apiKey: string; baseUrl: string } {
-  const config = env as RunningHubResultEnv;
-  const apiKey = config.RUNNINGHUB_API_KEY?.trim();
+async function readApiConfig(env: Env): Promise<{ apiKey: string; baseUrl: string }> {
+  const apiKey = await getSetting(env, "image_gen.api_key");
   if (!apiKey) {
     throw new Error("RUNNINGHUB_API_KEY is required");
   }
+  const baseUrl = await getSetting(env, "image_gen.runninghub_base_url");
   return {
     apiKey,
-    baseUrl: (config.RUNNINGHUB_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ""),
+    baseUrl: (baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, ""),
   };
 }
 

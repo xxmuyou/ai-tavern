@@ -1,4 +1,5 @@
 import { jsonResponse } from "./http";
+import { getSetting, getSettingNumber } from "./settings/store";
 
 type SecurityEnv = Env & {
   ALLOWED_ORIGINS?: string;
@@ -29,13 +30,13 @@ export function jsonCorsResponse(
   env: Env,
   data: unknown,
   init: ResponseInit = {},
-): Response {
+): Promise<Response> {
   return withCors(request, env, jsonResponse(data, init));
 }
 
-export function withCors(request: Request, env: Env, response: Response): Response {
+export async function withCors(request: Request, env: Env, response: Response): Promise<Response> {
   const headers = new Headers(response.headers);
-  const allowedOrigin = resolveAllowedCorsOrigin(request, env as SecurityEnv);
+  const allowedOrigin = await resolveAllowedCorsOrigin(request, env as SecurityEnv);
   if (allowedOrigin) {
     headers.set("access-control-allow-origin", allowedOrigin);
     headers.set("access-control-allow-credentials", "true");
@@ -52,16 +53,16 @@ export function withCors(request: Request, env: Env, response: Response): Respon
   });
 }
 
-export function resolveAllowedCorsOrigin(request: Request, env: SecurityEnv): string | null {
+export async function resolveAllowedCorsOrigin(request: Request, env: SecurityEnv): Promise<string | null> {
   const origin = request.headers.get("origin");
   if (!origin) {
     return null;
   }
 
-  return readAllowedOrigins(env).has(origin) ? origin : null;
+  return (await readAllowedOrigins(env)).has(origin) ? origin : null;
 }
 
-export function isRequestBodyTooLarge(request: Request, env: Env, pathname: string): boolean {
+export async function isRequestBodyTooLarge(request: Request, env: Env, pathname: string): Promise<boolean> {
   const method = request.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
     return false;
@@ -72,12 +73,11 @@ export function isRequestBodyTooLarge(request: Request, env: Env, pathname: stri
     return false;
   }
 
-  const securityEnv = env as SecurityEnv;
   const limit = pathname === "/billing/webhook"
-    ? readPositiveInt(securityEnv.STRIPE_WEBHOOK_BODY_LIMIT_BYTES, DEFAULT_STRIPE_WEBHOOK_BODY_LIMIT_BYTES)
+    ? await getSettingNumber(env, "limits.stripe_webhook_body_bytes", DEFAULT_STRIPE_WEBHOOK_BODY_LIMIT_BYTES)
     : isAssetUploadRequest(request, pathname)
-      ? readPositiveInt(securityEnv.ASSET_UPLOAD_BODY_LIMIT_BYTES, DEFAULT_ASSET_UPLOAD_BODY_LIMIT_BYTES)
-      : readPositiveInt(securityEnv.REQUEST_BODY_LIMIT_BYTES, DEFAULT_REQUEST_BODY_LIMIT_BYTES);
+      ? await getSettingNumber(env, "limits.asset_upload_body_bytes", DEFAULT_ASSET_UPLOAD_BODY_LIMIT_BYTES)
+      : await getSettingNumber(env, "limits.request_body_bytes", DEFAULT_REQUEST_BODY_LIMIT_BYTES);
 
   return contentLength > limit;
 }
@@ -87,10 +87,9 @@ export async function enforceRateLimit(env: Env, request: Request, pathname: str
     return null;
   }
 
-  const securityEnv = env as SecurityEnv;
   const limit = pathname.startsWith("/llm")
-    ? readPositiveInt(securityEnv.LLM_RATE_LIMIT_PER_MINUTE, DEFAULT_LLM_RATE_LIMIT_PER_MINUTE)
-    : readPositiveInt(securityEnv.RATE_LIMIT_PER_MINUTE, DEFAULT_RATE_LIMIT_PER_MINUTE);
+    ? await getSettingNumber(env, "limits.llm_rate_limit_per_minute", DEFAULT_LLM_RATE_LIMIT_PER_MINUTE)
+    : await getSettingNumber(env, "limits.rate_limit_per_minute", DEFAULT_RATE_LIMIT_PER_MINUTE);
   const minute = Math.floor(Date.now() / 60000);
   const subject = rateLimitSubject(request);
   const bucket = pathname.startsWith("/llm") ? "llm" : "mutate";
@@ -98,7 +97,7 @@ export async function enforceRateLimit(env: Env, request: Request, pathname: str
   const current = Number((await env.CONFIG.get(key)) ?? "0");
 
   if (Number.isFinite(current) && current >= limit) {
-    return jsonCorsResponse(request, env, { error: "rate_limited" }, {
+    return await jsonCorsResponse(request, env, { error: "rate_limited" }, {
       headers: {
         "retry-after": "60",
       },
@@ -110,8 +109,9 @@ export async function enforceRateLimit(env: Env, request: Request, pathname: str
   return null;
 }
 
-function readAllowedOrigins(env: SecurityEnv): Set<string> {
-  const configured = (env.ALLOWED_ORIGINS ?? "")
+async function readAllowedOrigins(env: SecurityEnv): Promise<Set<string>> {
+  const raw = await getSetting(env, "auth.allowed_origins");
+  const configured = (raw ?? "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);

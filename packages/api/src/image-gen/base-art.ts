@@ -34,6 +34,7 @@ export type ImageGenJobRow = {
   model: string | null;
   prompt: string;
   negative_prompt: string | null;
+  ckpt_name: string | null;
   input_keys: string | null;
   mask_key: string | null;
   output_prefix: string;
@@ -70,6 +71,7 @@ export type CreateBaseArtJobInput = {
   style: ArtStyle;
   prompt?: string;
   uploadKey?: string;
+  ckptName?: string;
 };
 
 export async function createBaseArtJob(
@@ -83,9 +85,9 @@ export async function createBaseArtJob(
 
   await env.DB.prepare(
     `INSERT INTO image_generation_jobs
-       (id, user_id, task, mode, status, style, prompt, input_keys,
+       (id, user_id, task, mode, status, style, prompt, ckpt_name, input_keys,
         output_prefix, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -94,6 +96,7 @@ export async function createBaseArtJob(
       mode,
       input.style,
       input.prompt ?? "",
+      input.ckptName ?? null,
       inputKeys,
       OUTPUT_PREFIX,
       now,
@@ -255,8 +258,10 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       prompt: job.prompt,
       source_art_url: sourceArtUrl ?? undefined,
       style: (job.style as ArtStyle | null) ?? undefined,
+      ckpt_name: job.ckpt_name ?? undefined,
     };
-    const response = await getImageGenProvider(env).generate(request, env);
+    const provider = await getImageGenProvider(env);
+    const response = await provider.generate(request, env);
 
     if (response.type === "pending") {
       await updateImageJob(env, job.id, {

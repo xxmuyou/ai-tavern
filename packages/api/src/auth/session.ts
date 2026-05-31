@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 
 import { findUserById, normalizeEmail, type UserRecord } from "../identity";
+import { getSetting } from "../settings/store";
 import {
   DEFAULT_SESSION_TTL_SECONDS,
   DEV_FALLBACK_SECRET,
@@ -30,7 +31,7 @@ export async function signSession(env: AuthEnv, input: SignSessionInput): Promis
     .bind(sessionId, input.userId, jti, issuedAt * 1000, expiresAt * 1000)
     .run();
 
-  const secret = encodeSecret(readSigningSecret(env));
+  const secret = encodeSecret(await readSigningSecret(env));
   const token = await new SignJWT({ email: input.email, jti })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject(input.userId)
@@ -47,7 +48,7 @@ export async function signSession(env: AuthEnv, input: SignSessionInput): Promis
 }
 
 export async function verifyAuthToken(env: AuthEnv, token: string): Promise<AuthPayload> {
-  const secret = encodeSecret(readSigningSecret(env));
+  const secret = encodeSecret(await readSigningSecret(env));
   let payload: Record<string, unknown>;
   try {
     const verified = await jwtVerify(token, secret, { algorithms: ["HS256"] });
@@ -117,13 +118,13 @@ export async function revokeSession(env: AuthEnv, jti: string, now: number = Dat
     .run();
 }
 
-function readSigningSecret(env: AuthEnv): string {
-  const primary = env.JWT_SIGNING_KEY?.trim();
+async function readSigningSecret(env: AuthEnv): Promise<string> {
+  const primary = await getSetting(env, "auth.jwt_signing_key");
   if (primary) {
     return primary;
   }
 
-  const legacy = env.AUTH_TOKEN_SECRET?.trim();
+  const legacy = await getSetting(env, "auth.legacy_token_secret");
   if (legacy) {
     return legacy;
   }

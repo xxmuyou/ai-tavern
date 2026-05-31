@@ -1,5 +1,6 @@
 import { jsonResponse, readJson } from "../http";
 import { normalizeEmail } from "../identity";
+import { getSetting } from "../settings/store";
 import { buildErrorTarget, buildSuccessTarget, normalizeRedirect, redirectResponse } from "./redirects";
 import { createLocalEmailSession, isLocalEmailSessionRequest } from "./local-email-session";
 import { upsertUserFromIdentity } from "./repository";
@@ -50,9 +51,9 @@ export async function handleSendLink(
     return jsonResponse(await createLocalEmailSession(env, email));
   }
 
-  const redirect = normalizeRedirect(env, body.redirect);
-  const apiKey = env.EMAIL_PROVIDER_API_KEY?.trim();
-  const fromAddress = env.EMAIL_FROM_ADDRESS?.trim();
+  const redirect = await normalizeRedirect(env, body.redirect);
+  const apiKey = await getSetting(env, "email.provider_api_key");
+  const fromAddress = await getSetting(env, "email.from_address");
   const dev = isDevRuntime(env);
 
   if (!apiKey) {
@@ -113,13 +114,13 @@ export async function handleVerify(request: Request, env: AuthEnv): Promise<Resp
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
   if (!token) {
-    return redirectResponse(buildErrorTarget(env, "invalid_magic_link"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_magic_link"));
   }
 
   const hash = await sha256Hex(token);
   const stored = await env.CONFIG.get(magicKey(hash));
   if (!stored) {
-    return redirectResponse(buildErrorTarget(env, "invalid_magic_link"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_magic_link"));
   }
   await env.CONFIG.delete(magicKey(hash));
 
@@ -127,7 +128,7 @@ export async function handleVerify(request: Request, env: AuthEnv): Promise<Resp
   try {
     record = JSON.parse(stored) as MagicLinkRecord;
   } catch {
-    return redirectResponse(buildErrorTarget(env, "invalid_magic_link"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_magic_link"));
   }
 
   const user = await upsertUserFromIdentity(env, {
@@ -138,7 +139,7 @@ export async function handleVerify(request: Request, env: AuthEnv): Promise<Resp
   });
 
   const session = await signSession(env, { userId: user.id, email: user.email });
-  const target = buildSuccessTarget(env, record.redirect, {
+  const target = await buildSuccessTarget(env, record.redirect, {
     token: session.token,
     expiresIso: session.expiresAt,
     email: session.email,

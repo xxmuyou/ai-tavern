@@ -1,3 +1,4 @@
+import { resolveImageGenConfig, type ImageGenConfig } from "../settings/store";
 import { createSignedObjectUrl } from "./signed-url";
 import {
   ImageGenError,
@@ -6,24 +7,6 @@ import {
   type ImageGenRequest,
   type ImageGenResponse,
 } from "./types";
-
-type RunningHubEnv = Env & {
-  RUNNINGHUB_API_KEY?: string;
-  RUNNINGHUB_BASE_URL?: string;
-  RUNNINGHUB_WORKFLOW_ID?: string;
-  RUNNINGHUB_LOAD_IMAGE_NODE_ID?: string;
-  RUNNINGHUB_PROMPT_NODE_ID?: string;
-  RUNNINGHUB_WEBHOOK_SECRET?: string;
-  RUNNINGHUB_WEBHOOK_URL?: string;
-  /**
-   * spec-022 WF-1 create config. JSON map keyed by art style:
-   *   { "anime_kr": { "workflowId": "...", "promptNodeId": "6",
-   *                   "checkpointNodeId"?: "4", "ckptName"?: "..." } }
-   * checkpointNodeId/ckptName are optional — only needed when one workflow
-   * swaps checkpoints per style; with one workflow per style they are omitted.
-   */
-  RUNNINGHUB_CREATE_WORKFLOWS?: string;
-};
 
 type CreateWorkflowConfig = {
   workflowId: string;
@@ -51,32 +34,40 @@ export const runningHubImageGenProvider: ImageGenProvider = {
   name: "runninghub",
 
   async generate(req: ImageGenRequest, env: Env): Promise<ImageGenResponse> {
+    const cfg = await resolveImageGenConfig(env);
     if (req.mode === "create" && !req.source_art_url) {
-      return generateCreate(req, env);
+      return generateCreate(req, cfg);
     }
-    return generateVariation(req, env);
+    return generateVariation(req, env, cfg);
   },
 };
 
-/** WF-1 create (txt2img): only the prompt node is overridden. */
-async function generateCreate(req: ImageGenRequest, env: Env): Promise<ImageGenResponse> {
-  const config = readCreateConfig(env, req.style);
+/** WF-1 create (txt2img): override prompt node, plus checkpoint when switching models. */
+function generateCreate(req: ImageGenRequest, cfg: ImageGenConfig): Promise<ImageGenResponse> {
+  const config = readCreateConfig(cfg, req.style);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
-  if (config.checkpointNodeId && config.ckptName) {
+  // The creator-selected model's checkpoint (req.ckpt_name) takes precedence
+  // over the env/admin workflow default ckpt.
+  const ckptName = req.ckpt_name?.trim() || config.ckptName;
+  if (config.checkpointNodeId && ckptName) {
     nodeInfoList.push({
       fieldName: "ckpt_name",
-      fieldValue: config.ckptName,
+      fieldValue: ckptName,
       nodeId: config.checkpointNodeId,
     });
   }
-  return submitTask(env, config.workflowId, nodeInfoList, `companion-create-${req.style}`);
+  return submitTask(cfg, config.workflowId, nodeInfoList, `companion-create-${req.style}`);
 }
 
-/** Existing emotion-pack path (img2img): load-image + prompt. */
-async function generateVariation(req: ImageGenRequest, env: Env): Promise<ImageGenResponse> {
-  const config = readConfig(env);
+/** WF-2 variation (img2img): load-image + prompt. */
+async function generateVariation(
+  req: ImageGenRequest,
+  env: Env,
+  cfg: ImageGenConfig,
+): Promise<ImageGenResponse> {
+  const config = readVariationConfig(cfg);
   if (!req.source_art_url) {
     throw new ImageGenError("invalid_source_art_url", "source_art_url is required for variation", {
       retryable: false,
@@ -87,25 +78,21 @@ async function generateVariation(req: ImageGenRequest, env: Env): Promise<ImageG
     { fieldName: "url", fieldValue: sourceUrl, nodeId: config.loadImageNodeId },
     { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
-  return submitTask(env, config.workflowId, nodeInfoList, MODEL);
+  return submitTask(cfg, config.workflowId, nodeInfoList, MODEL);
 }
 
 async function submitTask(
-  env: Env,
+  cfg: ImageGenConfig,
   workflowId: string,
   nodeInfoList: NodeInfo[],
   model: string,
 ): Promise<ImageGenResponse> {
-  const apiKey = readApiKey(env);
-  const config = env as RunningHubEnv;
-  const baseUrl = (config.RUNNINGHUB_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const webhookUrl = config.RUNNINGHUB_WEBHOOK_URL?.trim();
+  const apiKey = requireApiKey(cfg);
+  const baseUrl = (cfg.runninghubBaseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
   const body = {
     apiKey,
     nodeInfoList,
-    webhookUrl: webhookUrl
-      ? buildWebhookUrl(webhookUrl, config.RUNNINGHUB_WEBHOOK_SECRET?.trim() || null)
-      : undefined,
+    webhookUrl: cfg.webhookUrl ? buildWebhookUrl(cfg.webhookUrl, cfg.webhookSecret) : undefined,
     workflowId,
   };
 
@@ -148,35 +135,33 @@ async function submitTask(
   };
 }
 
-function readApiKey(env: Env): string {
-  const apiKey = (env as RunningHubEnv).RUNNINGHUB_API_KEY?.trim();
-  if (!apiKey) {
+function requireApiKey(cfg: ImageGenConfig): string {
+  if (!cfg.apiKey) {
     throw new ImageGenError(
       "provider_not_configured",
-      "RunningHub image provider missing config: RUNNINGHUB_API_KEY",
+      "RunningHub image provider missing config: api key",
       { retryable: false },
     );
   }
-  return apiKey;
+  return cfg.apiKey;
 }
 
-function readCreateConfig(env: Env, style: ArtStyle | undefined): CreateWorkflowConfig {
-  readApiKey(env);
+function readCreateConfig(cfg: ImageGenConfig, style: ArtStyle | undefined): CreateWorkflowConfig {
+  requireApiKey(cfg);
   if (!style) {
     throw new ImageGenError("provider_config_error", "create mode requires a style", {
       retryable: false,
     });
   }
 
-  const raw = (env as RunningHubEnv).RUNNINGHUB_CREATE_WORKFLOWS?.trim();
   let parsed: Record<string, Partial<CreateWorkflowConfig>> = {};
-  if (raw) {
+  if (cfg.createWorkflows) {
     try {
-      parsed = JSON.parse(raw) as Record<string, Partial<CreateWorkflowConfig>>;
+      parsed = JSON.parse(cfg.createWorkflows) as Record<string, Partial<CreateWorkflowConfig>>;
     } catch {
       throw new ImageGenError(
         "provider_config_error",
-        "RUNNINGHUB_CREATE_WORKFLOWS is not valid JSON",
+        "create workflows config is not valid JSON",
         { retryable: false },
       );
     }
@@ -199,28 +184,17 @@ function readCreateConfig(env: Env, style: ArtStyle | undefined): CreateWorkflow
   };
 }
 
-function readConfig(env: Env): {
-  apiKey: string;
-  baseUrl: string;
+function readVariationConfig(cfg: ImageGenConfig): {
+  workflowId: string;
   loadImageNodeId: string;
   promptNodeId: string;
-  webhookSecret: string | null;
-  webhookUrl: string;
-  workflowId: string;
 } {
-  const config = env as RunningHubEnv;
-  const apiKey = config.RUNNINGHUB_API_KEY?.trim();
-  const workflowId = config.RUNNINGHUB_WORKFLOW_ID?.trim();
-  const loadImageNodeId = config.RUNNINGHUB_LOAD_IMAGE_NODE_ID?.trim();
-  const promptNodeId = config.RUNNINGHUB_PROMPT_NODE_ID?.trim();
-  const webhookUrl = config.RUNNINGHUB_WEBHOOK_URL?.trim();
-
   const missing = [
-    ["RUNNINGHUB_API_KEY", apiKey],
-    ["RUNNINGHUB_WORKFLOW_ID", workflowId],
-    ["RUNNINGHUB_LOAD_IMAGE_NODE_ID", loadImageNodeId],
-    ["RUNNINGHUB_PROMPT_NODE_ID", promptNodeId],
-    ["RUNNINGHUB_WEBHOOK_URL", webhookUrl],
+    ["api key", cfg.apiKey],
+    ["WF2 workflow id", cfg.wf2.workflowId],
+    ["WF2 load-image node id", cfg.wf2.loadImageNodeId],
+    ["WF2 prompt node id", cfg.wf2.promptNodeId],
+    ["webhook url", cfg.webhookUrl],
   ]
     .filter(([, value]) => !value)
     .map(([name]) => name);
@@ -234,13 +208,9 @@ function readConfig(env: Env): {
   }
 
   return {
-    apiKey: apiKey!,
-    baseUrl: (config.RUNNINGHUB_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, ""),
-    loadImageNodeId: loadImageNodeId!,
-    promptNodeId: promptNodeId!,
-    webhookSecret: config.RUNNINGHUB_WEBHOOK_SECRET?.trim() || null,
-    webhookUrl: webhookUrl!,
-    workflowId: workflowId!,
+    loadImageNodeId: cfg.wf2.loadImageNodeId!,
+    promptNodeId: cfg.wf2.promptNodeId!,
+    workflowId: cfg.wf2.workflowId!,
   };
 }
 

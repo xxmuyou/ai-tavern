@@ -7,6 +7,7 @@ import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
+import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
@@ -128,6 +129,7 @@ export default function CompanionDetailScreen() {
 
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
           <RelationshipGoalPanel goal={relationshipGoal} />
+          <CompanionUnlocksPanel companionId={companion.id} />
           <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
 
           <View className="rounded-lg border border-app-line bg-app-card p-5">

@@ -21,7 +21,7 @@ describe("runningHubImageGenProvider", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const provider = getImageGenProvider(createEnv());
+    const provider = await getImageGenProvider(createEnv());
     const result = await provider.generate(createRequest(), createEnv());
 
     expect(result).toEqual({
@@ -77,7 +77,7 @@ describe("runningHubImageGenProvider", () => {
       RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
     } as unknown as Env;
 
-    const result = await getImageGenProvider(env).generate(
+    const result = await (await getImageGenProvider(env)).generate(
       { mode: "create", prompt: "a calm girl in a sweater", style: "anime_kr" },
       env,
     );
@@ -105,7 +105,7 @@ describe("runningHubImageGenProvider", () => {
     } as unknown as Env;
 
     await expect(
-      getImageGenProvider(env).generate(
+      (await getImageGenProvider(env)).generate(
         { mode: "create", prompt: "x", style: "anime_kr" },
         env,
       ),
@@ -113,7 +113,7 @@ describe("runningHubImageGenProvider", () => {
   });
 
   it("fails as non-retryable when required config is missing", async () => {
-    const provider = getImageGenProvider({ IMAGE_GEN_PROVIDER: "runninghub" } as Env);
+    const provider = await getImageGenProvider({ IMAGE_GEN_PROVIDER: "runninghub" } as Env);
 
     await expect(provider.generate(createRequest(), { IMAGE_GEN_PROVIDER: "runninghub" } as Env))
       .rejects.toMatchObject({

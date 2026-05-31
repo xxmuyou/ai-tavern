@@ -16,19 +16,24 @@ import {
 } from 'react-native';
 
 import { clearChatHistory, getCompanion } from '@/api/companion-client';
-import type { ChatEmotionKey, ChatMessage } from '@/api/types';
+import type { ChatEmotionKey, ChatMessage, ChatUnlock, RelationshipDimensions } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { AuthGuard } from '@/components/AuthGuard';
 import { Button } from '@/components/Button';
+import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
 import { PortraitBar } from '@/components/PortraitBar';
+import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { TopBar } from '@/components/TopBar';
+import { UnlockCelebration } from '@/components/UnlockCelebration';
+import { gateEmotion } from '@/utils/expression-unlock';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useChatHistory } from '@/hooks/use-chat-history';
+import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 
@@ -82,12 +87,17 @@ function ChatScreenInner() {
   const [isClearing, setIsClearing] = useState(false);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [lastSignals, setLastSignals] = useState<Partial<RelationshipDimensions> | null>(null);
+  const [signalToken, setSignalToken] = useState(0);
+  const [lastUnlocks, setLastUnlocks] = useState<ChatUnlock[] | null>(null);
+  const [unlockToken, setUnlockToken] = useState(0);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const shouldScrollOnNextRef = useRef(true);
 
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
+  const relationship = useChatRelationship(companionId);
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
   const { activity, refresh: refreshActivity, setActivity } = activityState;
@@ -202,6 +212,14 @@ function ChatScreenInner() {
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
         },
+        onSignals: (signals) => {
+          setLastSignals(signals);
+          setSignalToken((token) => token + 1);
+        },
+        onUnlocks: (unlocks) => {
+          setLastUnlocks(unlocks);
+          setUnlockToken((token) => token + 1);
+        },
         sceneId,
       });
       const finalMessage: ChatMessage = {
@@ -214,6 +232,8 @@ function ChatScreenInner() {
       };
       history.appendMessage(finalMessage);
       shouldScrollOnNextRef.current = true;
+      // Pull server truth so the HUD progress bar reflects this turn.
+      void relationship.refresh();
     } catch (error) {
       if (error instanceof QuotaExceededError) {
         setQuotaModalVisible(true);
@@ -228,7 +248,7 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activityId, companionId, draft, history, pushError, rateLimitedUntil, sceneId, stream]);
+  }, [activityId, companionId, draft, history, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -340,10 +360,16 @@ function ChatScreenInner() {
       <PortraitBar
         artEmotions={companion.art_emotions}
         artUrl={companion.art_url}
-        emotion={currentEmotion}
+        emotion={gateEmotion(currentEmotion, relationship.goal?.stage)}
         name={companion.name}
         sceneArt={sceneArt}
       />
+
+      <ChatRelationshipHud goal={relationship.goal} />
+
+      <SignalFeedback signals={lastSignals} token={signalToken} />
+
+      <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
 
       <ActivityContextBanner
         activity={activity}

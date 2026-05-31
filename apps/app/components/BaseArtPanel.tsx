@@ -2,32 +2,28 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { generateBaseArt, getBaseArtJob, mediaSource } from '@/api/companion-client';
-import type { ArtStyle } from '@/api/types';
+import { useImageModels } from '@/hooks/use-image-models';
 import { Button } from '@/components/Button';
 
 type Phase = 'idle' | 'generating' | 'preview' | 'error';
-
-const STYLES: { id: ArtStyle; label: string; enabled: boolean }[] = [
-  { enabled: false, id: 'realistic', label: 'Realistic' },
-  { enabled: false, id: 'anime_jp', label: 'Anime (JP)' },
-  { enabled: true, id: 'anime_kr', label: 'Manhwa (KR)' },
-];
 
 const POLL_INTERVAL_MS = 2500;
 const MAX_POLLS = 120;
 
 type BaseArtPanelProps = {
-  onConfirm: (artKey: string, style: ArtStyle) => void;
+  onConfirm: (artKey: string, modelId: string) => void;
 };
 
 /**
- * spec-022 WF-1 create — step 1 of companion creation: pick a style, enter a
+ * spec-022 WF-1 create — step 1 of companion creation: pick a model, enter a
  * prompt, generate a base portrait, preview, then confirm to carry it into the
- * character form. Shared by the web and native create screens.
+ * character form. The model catalog is admin-managed; each model carries its
+ * own style tag. Shared by the web and native create screens.
  */
 export function BaseArtPanel({ onConfirm }: BaseArtPanelProps) {
+  const { models, isLoading: modelsLoading } = useImageModels();
   const [phase, setPhase] = useState<Phase>('idle');
-  const [style, setStyle] = useState<ArtStyle>('anime_kr');
+  const [model, setModel] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [artKey, setArtKey] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -39,6 +35,12 @@ export function BaseArtPanel({ onConfirm }: BaseArtPanelProps) {
       activeRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!model && models.length > 0) {
+      setModel(models[0].id);
+    }
+  }, [model, models]);
 
   async function pollJob(jobId: string) {
     for (let i = 0; i < MAX_POLLS; i += 1) {
@@ -73,11 +75,16 @@ export function BaseArtPanel({ onConfirm }: BaseArtPanelProps) {
       setPhase('error');
       return;
     }
+    if (!model) {
+      setErrorCode('model_required');
+      setPhase('error');
+      return;
+    }
     setPhase('generating');
     setErrorCode(null);
     setArtKey(null);
     try {
-      const { job_id } = await generateBaseArt({ prompt: trimmed, source: 'text', style });
+      const { job_id } = await generateBaseArt({ prompt: trimmed, source: 'text', model });
       await pollJob(job_id);
     } catch {
       if (activeRef.current) {
@@ -93,21 +100,24 @@ export function BaseArtPanel({ onConfirm }: BaseArtPanelProps) {
   return (
     <View className="mx-auto w-full max-w-2xl gap-5 px-4 py-6">
       <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
-        <Text className="text-lg font-semibold text-app-text">1. Choose a style</Text>
+        <Text className="text-lg font-semibold text-app-text">1. Choose a model</Text>
         <View className="flex-row flex-wrap gap-2">
-          {STYLES.map((item) => (
+          {modelsLoading ? <Text className="text-sm text-app-muted">Loading models…</Text> : null}
+          {!modelsLoading && models.length === 0 ? (
+            <Text className="text-sm text-app-danger">No models configured.</Text>
+          ) : null}
+          {models.map((item) => (
             <Pressable
               key={item.id}
               accessibilityRole="button"
-              disabled={!item.enabled || isGenerating}
-              onPress={() => setStyle(item.id)}
+              disabled={isGenerating}
+              onPress={() => setModel(item.id)}
               className={`rounded-full border px-3 py-2 ${
-                style === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
-              } ${item.enabled ? 'opacity-100' : 'opacity-40'}`}
+                model === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+              }`}
             >
-              <Text className={`text-sm font-semibold ${style === item.id ? 'text-white' : 'text-app-muted'}`}>
+              <Text className={`text-sm font-semibold ${model === item.id ? 'text-white' : 'text-app-muted'}`}>
                 {item.label}
-                {item.enabled ? '' : ' · soon'}
               </Text>
             </Pressable>
           ))}
@@ -130,6 +140,7 @@ export function BaseArtPanel({ onConfirm }: BaseArtPanelProps) {
         ) : null}
 
         <Button
+          disabled={!model}
           isLoading={isGenerating}
           label={artKey ? 'Generate again' : 'Generate portrait'}
           onPress={() => void generate()}
@@ -149,7 +160,7 @@ export function BaseArtPanel({ onConfirm }: BaseArtPanelProps) {
           <View className="items-center overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
             <Image accessibilityLabel="Generated portrait" resizeMode="contain" source={previewSource} style={styles.preview} />
           </View>
-          <Button label="Use this portrait" onPress={() => artKey && onConfirm(artKey, style)} />
+          <Button label="Use this portrait" onPress={() => artKey && model && onConfirm(artKey, model)} />
           <Button label="Regenerate" onPress={() => void generate()} variant="secondary" />
         </View>
       ) : null}
@@ -161,6 +172,8 @@ function errorLabel(code: string | null): string {
   switch (code) {
     case 'prompt_required':
       return 'Enter a description first.';
+    case 'model_required':
+      return 'Pick a model first.';
     case 'timeout':
       return 'Generation timed out. Please try again.';
     case 'request_failed':

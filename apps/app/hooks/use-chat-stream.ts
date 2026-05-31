@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { clearStoredAuthSession, sendChatMessage } from '@/api/companion-client';
-import type { RelationshipDimensions } from '@/api/types';
+import type { ChatUnlock, RelationshipDimensions } from '@/api/types';
 import {
   ApiError,
   NetworkError,
@@ -28,6 +28,7 @@ export type ChatStreamCallbacks = {
   onDone?: (info: ChatStreamDoneInfo, result: ChatStreamResult) => void;
   onEmotion?: (emotion: ChatEmotion) => void;
   onSignals?: (signals: Partial<RelationshipDimensions>) => void;
+  onUnlocks?: (unlocks: ChatUnlock[]) => void;
 };
 
 export type SendOptions = ChatStreamCallbacks & {
@@ -113,6 +114,11 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             }
           } else if (event.type === 'signals') {
             options.onSignals?.((event.data as Partial<RelationshipDimensions>) ?? {});
+          } else if (event.type === 'unlocks') {
+            const list = Array.isArray(event.data) ? (event.data as ChatUnlock[]) : [];
+            if (list.length > 0) {
+              options.onUnlocks?.(list);
+            }
           } else if (event.type === 'emotion') {
             const rawValue = (event.data as { value?: unknown } | undefined)?.value;
             const next = asEmotion(rawValue);

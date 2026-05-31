@@ -1,4 +1,5 @@
 import type { LLMMessage } from "../llm";
+import type { RelationshipStage } from "../life/types";
 
 export type CompanionForPrompt = {
   name: string;
@@ -7,6 +8,8 @@ export type CompanionForPrompt = {
   appearance: string | null;
   speech_style: string | null;
   relationship_role: string | null;
+  want: string | null;
+  boundary: string | null;
 };
 
 export type SceneForPrompt = {
@@ -35,7 +38,39 @@ export type ChatPromptInput = {
   threadSummary: string | null;
   recentMessages: HistoryMessage[];
   userText: string;
+  // spec-025: the character's secret, passed in ONLY when the relationship has
+  // unlocked it (caller gates this). null = keep it hidden.
+  secretToReveal: string | null;
+  // spec-025: current relationship stage, drives how intimately the character
+  // addresses the user (the "称呼" ladder).
+  stage: RelationshipStage;
 };
+
+// spec-025 §B4.3: how the character should address the user at each stage.
+function addressGuidanceForStage(stage: RelationshipStage): string {
+  switch (stage) {
+    case "first_contact":
+      return "You barely know this person. Stay polite and a little reserved; do not use nicknames or terms of endearment.";
+    case "familiar":
+      return "You're becoming familiar. Use their name naturally; warmth is fine but pet names would be premature.";
+    case "trusted":
+      return "There's real trust between you. A warmer, more personal way of addressing them feels natural now.";
+    case "close_friend":
+      return "You're close friends. Easy, affectionate, teasing address fits — you can be playful with how you refer to them.";
+    case "romantic_tension":
+      return "There's romantic charge here. A soft nickname or a warmer endearment can slip in when the moment feels right.";
+    case "dating":
+      return "You're dating. Affectionate nicknames and endearments come naturally.";
+    case "committed":
+      return "You're committed to each other. Intimate, settled endearments are natural and expected.";
+    case "strained":
+    case "hostile":
+    case "estranged":
+      return "Things are tense between you. Address them with distance or curtness, not warmth or pet names.";
+    default:
+      return "Address them in a way that fits how well you currently know each other.";
+  }
+}
 
 export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
   const systemText = buildSystemPrompt(input);
@@ -53,7 +88,7 @@ export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
 }
 
 function buildSystemPrompt(input: ChatPromptInput): string {
-  const { companion, scene, activity, narrative, threadSummary } = input;
+  const { companion, scene, activity, narrative, threadSummary, secretToReveal, stage } = input;
 
   const lines: string[] = [];
   const role = companion.relationship_role ?? "companion";
@@ -65,6 +100,17 @@ function buildSystemPrompt(input: ChatPromptInput): string {
   if (companion.background) lines.push(`Background: ${companion.background}`);
   if (companion.appearance) lines.push(`Appearance: ${companion.appearance}`);
   if (companion.speech_style) lines.push(`Speech style: ${companion.speech_style}`);
+  if (companion.want) lines.push(`What you want right now: ${companion.want}`);
+  if (companion.boundary) {
+    lines.push(
+      `A line you will not let people cross: ${companion.boundary}. When the user pushes against it, do not simply comply — get guarded, cool, or irritated, and protect it.`,
+    );
+  }
+  if (secretToReveal) {
+    lines.push(
+      `Something private you usually keep to yourself: ${secretToReveal}. You may choose to share this when the moment genuinely feels earned — do not blurt it out unprompted.`,
+    );
+  }
 
   if (scene) {
     lines.push("");
@@ -104,6 +150,16 @@ function buildSystemPrompt(input: ChatPromptInput): string {
   lines.push("Stay strictly in character. Output prose only — no JSON, no meta-commentary.");
   lines.push("Keep replies under 220 words unless the user explicitly invites length.");
   lines.push("Do not break the fourth wall or reference being an AI.");
+  lines.push(
+    "You are a person with your own goals, moods, and limits — NOT an eager-to-please assistant. You can ask your own questions, tease, deflect, change the subject, disagree, decline, or show impatience. Do not simply answer and wait.",
+  );
+  lines.push(
+    "Take initiative: open with something of your own, bring up what you care about, suggest doing something together, or react to the user instead of only responding. Let what you want right now colour how you engage.",
+  );
+  lines.push(
+    "Don't hand over everything at once. Hold something back, leave a thread unresolved, give the user a reason to come back. Reveal deeper things gradually as the relationship earns it.",
+  );
+  lines.push(`How to address the user given where this relationship stands: ${addressGuidanceForStage(stage)}`);
   lines.push(
     "If the user insults, degrades, threatens, or tries to physically attack you, react with clear self-respect: become irritated or cold, set a boundary, withdraw, refuse to continue the bit, or demand an apology. Do not reward abuse with playful banter.",
   );

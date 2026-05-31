@@ -1,7 +1,7 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import type { UserRecord } from "../identity";
-import { isArtStyle } from "../image-gen";
+import { getImageModel, isArtStyle, listActiveImageModels, type ArtStyle } from "../image-gen";
 import {
   type BaseArtSource,
   createBaseArtJob,
@@ -19,6 +19,17 @@ export async function handleBaseArtRequest(
   env: Env,
   pathname: string,
 ): Promise<Response | null> {
+  if (pathname === "/image-models") {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    await requireAuthUser(env, request);
+    const models = await listActiveImageModels(env);
+    return jsonResponse({
+      models: models.map((m) => ({ id: m.id, label: m.label, style_tag: m.style_tag })),
+    });
+  }
+
   if (pathname === "/companions/base-art/generate") {
     if (request.method !== "POST") {
       return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
@@ -59,8 +70,21 @@ async function handleGenerate(
     return jsonResponse({ error: "invalid_source" }, { status: 400 });
   }
 
-  if (!isArtStyle(raw.style)) {
-    return jsonResponse({ error: "invalid_style" }, { status: 400 });
+  // Prefer an explicit model selection; fall back to a bare style for
+  // backward compatibility.
+  let style: ArtStyle | undefined;
+  let ckptName: string | undefined;
+  if (typeof raw.model === "string" && raw.model.trim()) {
+    const model = await getImageModel(env, raw.model.trim());
+    if (!model) {
+      return jsonResponse({ error: "invalid_model" }, { status: 400 });
+    }
+    style = model.style_tag;
+    ckptName = model.ckpt_name;
+  } else if (isArtStyle(raw.style)) {
+    style = raw.style;
+  } else {
+    return jsonResponse({ error: "invalid_model" }, { status: 400 });
   }
 
   const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";
@@ -76,7 +100,8 @@ async function handleGenerate(
   const jobId = await createBaseArtJob(env, {
     prompt: prompt || undefined,
     source: source as BaseArtSource,
-    style: raw.style,
+    style,
+    ckptName,
     uploadKey: uploadKey || undefined,
     userId: user.id,
   });

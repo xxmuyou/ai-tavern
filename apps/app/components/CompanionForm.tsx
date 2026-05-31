@@ -11,12 +11,15 @@ type CompanionFormValues = {
   appearance: string;
   art_url: string;
   background: string;
+  boundary: string;
   gender: Gender;
   name: string;
   personality: string;
   preferred_scenes: string[];
   relationship_role: string;
+  secret: string;
   speech_style: string;
+  want: string;
 };
 
 type CompanionFormProps = {
@@ -65,12 +68,15 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
       appearance: cleanText(values.appearance),
       art_url: values.art_url,
       background: cleanText(values.background),
+      boundary: cleanText(values.boundary),
       gender: values.gender,
       name,
       personality: cleanText(values.personality),
       preferred_scenes: values.preferred_scenes,
       relationship_role: cleanText(values.relationship_role),
+      secret: cleanText(values.secret),
       speech_style: cleanText(values.speech_style),
+      want: cleanText(values.want),
     });
   }
 
@@ -173,6 +179,33 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
             />
           </FormPanel>
 
+          <FormPanel title="Inner life">
+            <Field
+              hint="What they're after right now — colours how they engage."
+              label="Want"
+              multiline
+              onChangeText={(want) => setValues((current) => ({ ...current, want }))}
+              placeholder="To be taken seriously, to not be rushed..."
+              value={values.want}
+            />
+            <Field
+              hint="Revealed only once the relationship earns enough trust."
+              label="Secret"
+              multiline
+              onChangeText={(secret) => setValues((current) => ({ ...current, secret }))}
+              placeholder="A soft spot or past hurt they keep hidden..."
+              value={values.secret}
+            />
+            <Field
+              hint="Crossing it makes them guarded, cold, or distant."
+              label="Boundary"
+              multiline
+              onChangeText={(boundary) => setValues((current) => ({ ...current, boundary }))}
+              placeholder="Being pushed, lied to, treated as a backup..."
+              value={values.boundary}
+            />
+          </FormPanel>
+
           {scenes.length ? (
             <FormPanel title="Preferred scenes">
               <View className="flex-row flex-wrap gap-2">
@@ -221,12 +254,15 @@ function initialValues(initial?: CompanionDetail | null, initialArtUrl?: string)
     appearance: initial?.appearance ?? '',
     art_url: initial?.art_url ?? initialArtUrl ?? '',
     background: initial?.background ?? '',
+    boundary: initial?.boundary ?? '',
     gender: initial?.gender ?? 'female',
     name: initial?.name ?? '',
     personality: initial?.personality ?? '',
     preferred_scenes: initial?.preferred_scenes ?? [],
     relationship_role: initial?.relationship_role ?? 'friend',
+    secret: initial?.secret ?? '',
     speech_style: initial?.speech_style ?? '',
+    want: initial?.want ?? '',
   };
 }
 
@@ -245,12 +281,14 @@ function FormPanel({ children, title }: { children: ReactNode; title: string }) 
 }
 
 function Field({
+  hint,
   label,
   multiline,
   onChangeText,
   placeholder,
   value,
 }: {
+  hint?: string;
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
@@ -260,6 +298,7 @@ function Field({
   return (
     <View>
       <Text className="mb-2 text-sm font-semibold text-app-text">{label}</Text>
+      {hint ? <Text className="mb-2 -mt-1 text-xs text-app-muted">{hint}</Text> : null}
       <TextInput
         className={`rounded-lg border border-app-line bg-white px-3 py-3 text-base text-app-text ${
           multiline ? 'min-h-24 text-top' : ''

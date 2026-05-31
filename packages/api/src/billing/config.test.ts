@@ -4,8 +4,8 @@ import { readBillingConfig } from "./config";
 import type { BillingEnv } from "./types";
 
 describe("billing config", () => {
-  it("reads checkout config", () => {
-    expect(readBillingConfig(fullEnv(), "checkout")).toMatchObject({
+  it("reads checkout config", async () => {
+    expect(await readBillingConfig(fullEnv(), "checkout")).toMatchObject({
       cancelUrl: "https://app.example.com/cancel",
       priceProMonthly: "price_pro",
       secretKey: "sk_test_123",
@@ -15,7 +15,7 @@ describe("billing config", () => {
 
   it("reports missing keys in dev", async () => {
     try {
-      readBillingConfig({ APP_ENV: "dev" } as BillingEnv, "webhook");
+      await readBillingConfig({ APP_ENV: "dev" } as BillingEnv, "webhook");
       throw new Error("expected config error");
     } catch (err) {
       expect(err).toBeInstanceOf(Response);

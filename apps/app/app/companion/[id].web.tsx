@@ -6,6 +6,7 @@ import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
+import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
@@ -85,6 +86,7 @@ export default function WebCompanionDetailScreen() {
         <View className="gap-6 xl:col-span-2">
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
           <RelationshipGoalPanel goal={relationshipGoal} />
+          <CompanionUnlocksPanel companionId={companion.id} />
           <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
           <WebPanel>
             <Text className="mb-3 text-xl font-semibold text-app-text">Timeline</Text>

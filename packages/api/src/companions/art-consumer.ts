@@ -56,7 +56,7 @@ export async function processArtJob(env: Env, payload: ArtJobQueuePayload): Prom
   await updateJob(env, job.id, { status: "processing" });
 
   try {
-    const imageProvider = getImageGenProvider(env);
+    const imageProvider = await getImageGenProvider(env);
     const request: ImageGenRequest = {
       companion: {
         appearance: companion.appearance,

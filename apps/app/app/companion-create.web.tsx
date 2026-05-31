@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 
 import { createCompanion, uploadCompanionArt } from '@/api/companion-client';
-import type { ArtStyle, CompanionCreateInput } from '@/api/types';
+import type { CompanionCreateInput } from '@/api/types';
 import { BaseArtPanel } from '@/components/BaseArtPanel';
 import { CompanionForm } from '@/components/CompanionForm';
 import { WebAppShell } from '@/components/web/WebAppShell';
@@ -29,7 +29,7 @@ export default function WebCompanionCreateScreen() {
     }
   }
 
-  function confirmArt(key: string, _style: ArtStyle) {
+  function confirmArt(key: string) {
     setArtKey(key);
   }
 

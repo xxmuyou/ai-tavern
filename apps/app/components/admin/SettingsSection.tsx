@@ -1,0 +1,254 @@
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+
+import type { AdminSettingItem } from '@/api/types';
+import { Button } from '@/components/Button';
+import { useAdminSettings } from '@/hooks/use-admin-settings';
+
+const GROUP_LABELS: Record<string, string> = {
+  auth: 'Auth, admins, and OAuth',
+  billing: 'Stripe billing',
+  image_gen: 'Image generation (RunningHub)',
+  llm: 'LLM providers',
+  limits: 'Rate limits',
+  email: 'Email',
+};
+
+const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text';
+const CREATE_WORKFLOWS_KEY = 'image_gen.create_workflows';
+const STYLES = ['realistic', 'anime_jp', 'anime_kr'] as const;
+
+type SaveFn = (key: string, value: string, confirm?: string) => Promise<void>;
+
+export function SettingsSection() {
+  const { settings, groups, isLoading, error, save } = useAdminSettings();
+
+  if (isLoading) {
+    return (
+      <View className="items-center py-12">
+        <ActivityIndicator color="#1E6B52" />
+      </View>
+    );
+  }
+
+  return (
+    <View className="gap-4">
+      <View className="rounded-lg border border-app-line bg-white p-5">
+        <Text className="text-lg font-semibold text-app-text">Operational settings</Text>
+        <Text className="mt-1 text-sm leading-6 text-app-muted">
+          Configure integrations here instead of editing wrangler/.env. Saved values take effect within ~30s, no redeploy. Empty a field to fall back to the env default. This is per-environment.
+        </Text>
+        {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
+      </View>
+
+      {groups.map((group) => {
+        const rows = settings.filter((s) => s.group === group);
+        if (rows.length === 0) return null;
+        return (
+          <View key={group} className="rounded-lg border border-app-line bg-white p-5">
+            <Text className="text-base font-semibold text-app-text">{GROUP_LABELS[group] ?? group}</Text>
+            <View className="mt-3 gap-3">
+              {rows.map((item) =>
+                item.key === CREATE_WORKFLOWS_KEY ? (
+                  <CreateWorkflowsRow key={item.key} item={item} onSave={save} />
+                ) : (
+                  <SettingRow key={item.key} item={item} onSave={save} />
+                ),
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function SourceTag({ item }: { item: AdminSettingItem }) {
+  const label = item.source === 'db' ? 'admin' : item.source === 'env' ? 'env default' : 'unset';
+  return <Text className="text-xs text-app-muted">source: {label}{item.updated_by ? ` · ${item.updated_by}` : ''}</Text>;
+}
+
+function SettingRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }) {
+  const isSecret = item.type === 'secret';
+  const isBoolean = item.type === 'boolean';
+  const isDangerous = item.danger_level === 'high';
+  const [draft, setDraft] = useState(isSecret ? '' : item.value ?? '');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isSecret) setDraft(item.value ?? '');
+  }, [item.value, isSecret]);
+
+  async function run(value: string) {
+    setBusy(true);
+    try {
+      await onSave(item.key, value, isDangerous ? confirm.trim() : undefined);
+      if (isSecret) setDraft('');
+      setConfirm('');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (isBoolean) {
+    const on = (item.value ?? 'false') === 'true';
+    return (
+      <View className="gap-1 rounded-lg border border-app-line bg-app-bg p-4">
+        <RowHeader item={item} />
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1">
+            <SourceTag item={item} />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => void run(on ? 'false' : 'true')}
+            className={`rounded-full border px-3 py-2 ${on ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
+          >
+            <Text className={`text-sm font-semibold ${on ? 'text-white' : 'text-app-muted'}`}>{on ? 'On' : 'Off'}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View className="gap-2 rounded-lg border border-app-line bg-app-bg p-4">
+      <RowHeader item={item} />
+      <TextInput
+        className={INPUT_CLASS}
+        keyboardType={item.type === 'number' ? 'number-pad' : 'default'}
+        onChangeText={setDraft}
+        placeholder={isSecret ? (item.is_set ? '•••••• set — type to replace' : 'not set') : 'value'}
+        placeholderTextColor="#687076"
+        secureTextEntry={isSecret}
+        value={draft}
+      />
+      {isDangerous ? (
+        <View>
+          <Text className="mb-1 text-xs font-semibold text-app-danger">Confirm by typing the setting key</Text>
+          <TextInput
+            className={INPUT_CLASS}
+            onChangeText={setConfirm}
+            placeholder={item.key}
+            placeholderTextColor="#687076"
+            value={confirm}
+          />
+        </View>
+      ) : null}
+      <View className="flex-row items-center justify-between">
+        <View className="flex-1 pr-3">
+          <SourceTag item={item} />
+        </View>
+        <View className="flex-row gap-2">
+          {item.source === 'db' ? (
+            <View className="w-24">
+              <Button disabled={busy || (isDangerous && confirm.trim() !== item.key)} label="Reset" onPress={() => void run('')} variant="secondary" />
+            </View>
+          ) : null}
+          <View className="w-24">
+            <Button disabled={busy || (isSecret ? draft.trim() === '' : draft === (item.value ?? '')) || (isDangerous && confirm.trim() !== item.key)} isLoading={busy} label="Save" onPress={() => void run(draft)} />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function RowHeader({ item }: { item: AdminSettingItem }) {
+  return (
+    <View>
+      <Text className="text-sm font-semibold text-app-text">{item.label}</Text>
+      <Text className="text-xs text-app-muted">{item.env_key ? `${item.env_key} · ` : ''}{item.key}</Text>
+      {item.description ? <Text className="text-xs text-app-muted">{item.description}</Text> : null}
+      {item.danger_level === 'high' ? <Text className="text-xs font-semibold text-app-danger">High-risk runtime setting</Text> : null}
+    </View>
+  );
+}
+
+type WorkflowEntry = { workflowId: string; promptNodeId: string; checkpointNodeId: string };
+
+function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }) {
+  const [draft, setDraft] = useState<Record<string, WorkflowEntry>>(() => parseWorkflows(item.value));
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setDraft(parseWorkflows(item.value));
+  }, [item.value]);
+
+  function setField(style: string, field: keyof WorkflowEntry, value: string) {
+    setDraft((cur) => ({
+      ...cur,
+      [style]: { ...emptyEntry(), ...cur[style], [field]: value },
+    }));
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      const out: Record<string, WorkflowEntry> = {};
+      for (const style of STYLES) {
+        const e = draft[style];
+        if (e?.workflowId?.trim()) {
+          out[style] = {
+            workflowId: e.workflowId.trim(),
+            promptNodeId: e.promptNodeId.trim(),
+            checkpointNodeId: e.checkpointNodeId.trim(),
+          };
+        }
+      }
+      await onSave(item.key, JSON.stringify(out));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-4">
+      <RowHeader item={item} />
+      {STYLES.map((style) => {
+        const e = draft[style] ?? emptyEntry();
+        return (
+          <View key={style} className="gap-2 rounded-lg border border-app-line bg-white p-3">
+            <Text className="text-sm font-semibold text-app-text">{style}</Text>
+            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'workflowId', v)} placeholder="workflowId" placeholderTextColor="#687076" value={e.workflowId} />
+            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'promptNodeId', v)} placeholder="prompt node id" placeholderTextColor="#687076" value={e.promptNodeId} />
+            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'checkpointNodeId', v)} placeholder="checkpoint node id (required to switch models)" placeholderTextColor="#687076" value={e.checkpointNodeId} />
+          </View>
+        );
+      })}
+      <View className="flex-row items-center justify-between">
+        <SourceTag item={item} />
+        <View className="w-24">
+          <Button disabled={busy} isLoading={busy} label="Save" onPress={() => void save()} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function emptyEntry(): WorkflowEntry {
+  return { workflowId: '', promptNodeId: '', checkpointNodeId: '' };
+}
+
+function parseWorkflows(raw: string | null | undefined): Record<string, WorkflowEntry> {
+  const out: Record<string, WorkflowEntry> = {};
+  if (!raw) return out;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, Partial<WorkflowEntry>>;
+    for (const style of STYLES) {
+      const e = parsed[style];
+      if (e) {
+        out[style] = {
+          workflowId: String(e.workflowId ?? ''),
+          promptNodeId: String(e.promptNodeId ?? ''),
+          checkpointNodeId: String(e.checkpointNodeId ?? ''),
+        };
+      }
+    }
+  } catch {
+    // ignore malformed JSON
+  }
+  return out;
+}

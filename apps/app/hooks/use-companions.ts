@@ -1,5 +1,11 @@
-import { getCompanion, getRelationship, listCompanions } from '@/api/companion-client';
-import type { CompanionDetailResponse, CompanionsListResponse, CompanionSource, RelationshipResponse } from '@/api/types';
+import { getCompanion, getCompanionUnlocks, getRelationship, listCompanions } from '@/api/companion-client';
+import type {
+  CompanionDetailResponse,
+  CompanionsListResponse,
+  CompanionSource,
+  RelationshipResponse,
+  RelationshipUnlocksResponse,
+} from '@/api/types';
 
 import { useApi } from './use-api';
 
@@ -15,4 +21,8 @@ export function useCompanion(companionId: string) {
 
 export function useRelationship(companionId: string) {
   return useApi<RelationshipResponse>(() => getRelationship(companionId), [companionId]);
+}
+
+export function useCompanionUnlocks(companionId: string) {
+  return useApi<RelationshipUnlocksResponse>(() => getCompanionUnlocks(companionId), [companionId]);
 }

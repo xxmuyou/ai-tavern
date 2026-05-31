@@ -7,6 +7,13 @@ import { loadActiveActivityForChat } from "../life/activity";
 import { applySignals, ensureRelationship, loadRelationship } from "../relationships/engine";
 import type { DimensionValues } from "../relationships/level";
 import { ZERO_DIMENSIONS } from "../relationships/level";
+import { deriveStage } from "../relationships/stage";
+import {
+  detectAndRecordUnlocks,
+  isSecretUnlocked,
+  loadUnlockedKeys,
+  type UnlockEvent,
+} from "../relationships/unlocks";
 import {
   canChatWithCompanion,
   ensureThread,
@@ -114,10 +121,18 @@ export async function handlePostMessage(
   const thread = await ensureThread(env, user.id, companionId, now);
   const recentMessages = await loadRecentMessages(env, thread.id, RECENT_MESSAGES_LIMIT);
 
+  // spec-025: gate the secret on unlock state, and feed the current stage so
+  // the prompt can pick how intimately the character addresses the user.
+  const stage = deriveStage(relationship?.dimensions ?? { ...ZERO_DIMENSIONS }).stage;
+  const unlockedKeys = await loadUnlockedKeys(env, user.id, companionId);
+  const secretToReveal = isSecretUnlocked(unlockedKeys) ? companion.secret : null;
+
   const promptMessages = buildChatPrompt({
     companion,
     narrative,
     recentMessages,
+    secretToReveal,
+    stage,
     scene: scene
       ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
       : null,
@@ -192,6 +207,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
   let call1Usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
   let companionMessageId: string | null = null;
   let conflictSignals: Partial<DimensionValues> | null = null;
+  let unlockEvents: UnlockEvent[] = [];
 
   const handleChunk = (chunk: LLMStreamChunk): void => {
     if (chunk.type === "text") {
@@ -256,8 +272,22 @@ async function runChat(args: RunChatArgs): Promise<void> {
       )
         .bind(JSON.stringify(finalExtract.signals), finalExtract.emotion, companionMessageId)
         .run();
-      await applySignals(env, user.id, companionId, finalExtract.signals, now);
+      const newState = await applySignals(env, user.id, companionId, finalExtract.signals, now);
       conflictSignals = finalExtract.signals;
+      // spec-025: detect stage-transition unlocks off the freshly applied
+      // dimensions and surface any newly granted unlocks to the client.
+      try {
+        const unlockResult = await detectAndRecordUnlocks(
+          env,
+          user.id,
+          companionId,
+          newState.dimensions,
+          now,
+        );
+        unlockEvents = unlockResult.newlyUnlocked;
+      } catch {
+        // Unlock detection is best-effort; never break the reply for it.
+      }
     } catch (err) {
       // Persistence of signals failed but reply is already saved; degrade to warning.
       finalExtract.ok = false;
@@ -266,6 +296,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
 
   sse.writeEvent("signals", finalExtract.signals);
   sse.writeEvent("emotion", { value: finalExtract.emotion satisfies Emotion });
+  sse.writeEvent("unlocks", unlockEvents);
   sse.writeEvent("done", {
     message_id: companionMessageId,
     usage: {

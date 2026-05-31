@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
+import { getSetting } from "../settings/store";
 import { authError } from "./types";
 import type { AuthEnv } from "./types";
 
@@ -16,17 +17,17 @@ export type OAuthProvider = {
   exchangeCode(input: { code: string; redirectUri: string }): Promise<OAuthExchangeResult>;
 };
 
-export type ProviderResolver = (env: AuthEnv, providerId: string) => OAuthProvider;
+export type ProviderResolver = (env: AuthEnv, providerId: string) => OAuthProvider | Promise<OAuthProvider>;
 
 const GOOGLE_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
 
-export function getOAuthProvider(env: AuthEnv, providerId: string): OAuthProvider {
+export async function getOAuthProvider(env: AuthEnv, providerId: string): Promise<OAuthProvider> {
   if (providerId === "google") {
-    const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-    const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+    const clientId = await getSetting(env, "auth.google_client_id");
+    const clientSecret = await getSetting(env, "auth.google_client_secret");
     if (!clientId || !clientSecret) {
       throw authError("provider_not_configured", 400);
     }

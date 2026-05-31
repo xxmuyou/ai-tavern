@@ -5,6 +5,9 @@ import type {
   ActivityResponse,
   AdminAllowlistItem,
   AdminAllowlistResponse,
+  AdminCreditAdjustmentResult,
+  AdminUserCredits,
+  AdminUsersResponse,
   BaseArtGenerateInput,
   BaseArtGenerateResponse,
   BaseArtJobResponse,
@@ -16,13 +19,28 @@ import type {
   CompanionsListResponse,
   CreditBalanceResponse,
   CreditLedgerResponse,
+  AdminImageModelsResponse,
+  AdminSettingsResponse,
   CreditPackageId,
   DailyState,
+  ExpressionGender,
+  ExpressionPromptsResponse,
+  ImageModelInput,
+  ImageModelOption,
+  ImageModelsResponse,
+  LlmConfigItem,
+  LlmConfigResponse,
+  LlmConfigUpdateInput,
+  LlmTestInput,
+  LlmTestResult,
+  LlmUsageResponse,
+  LlmUsageWindow,
   Memory,
   MeResponse,
   MemoriesResponse,
   PushPreferenceResponse,
   RelationshipResponse,
+  RelationshipUnlocksResponse,
   RomancePreference,
   SceneEnterResponse,
   ScenesListResponse,
@@ -197,6 +215,120 @@ export async function removeAdminAllowlistEmail(email: string): Promise<{ ok: tr
   });
 }
 
+export async function searchAdminUsers(search: string): Promise<AdminUsersResponse> {
+  return requestJson<AdminUsersResponse>(`/admin/users?search=${encodeURIComponent(search)}`);
+}
+
+export async function getAdminUserCredits(userId: string): Promise<AdminUserCredits> {
+  return requestJson<AdminUserCredits>(`/admin/users/${encodeURIComponent(userId)}/credits`);
+}
+
+export async function adjustAdminUserCredits(
+  userId: string,
+  amount: number,
+  reason: string,
+): Promise<AdminCreditAdjustmentResult> {
+  return requestJson<AdminCreditAdjustmentResult>(
+    `/admin/users/${encodeURIComponent(userId)}/credits/adjustment`,
+    {
+      body: JSON.stringify({ amount, reason }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function listLlmConfig(): Promise<LlmConfigResponse> {
+  return requestJson<LlmConfigResponse>('/admin/llm/config');
+}
+
+export async function updateLlmConfig(
+  task: string,
+  input: LlmConfigUpdateInput,
+): Promise<LlmConfigItem> {
+  return requestJson<LlmConfigItem>(`/admin/llm/config/${encodeURIComponent(task)}`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PUT',
+  });
+}
+
+export async function testLlmCall(input: LlmTestInput): Promise<LlmTestResult> {
+  return requestJson<LlmTestResult>('/admin/llm/test', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function getLlmUsage(window: LlmUsageWindow): Promise<LlmUsageResponse> {
+  return requestJson<LlmUsageResponse>(`/admin/llm/usage?window=${encodeURIComponent(window)}`);
+}
+
+export async function listAdminImageModels(): Promise<AdminImageModelsResponse> {
+  return requestJson<AdminImageModelsResponse>('/admin/image-models');
+}
+
+export async function createAdminImageModel(input: ImageModelInput): Promise<{ id: string }> {
+  return requestJson<{ id: string }>('/admin/image-models', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function updateAdminImageModel(id: string, input: ImageModelInput): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/image-models/${encodeURIComponent(id)}`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PUT',
+  });
+}
+
+export async function deleteAdminImageModel(id: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/image-models/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listAdminSettings(): Promise<AdminSettingsResponse> {
+  return requestJson<AdminSettingsResponse>('/admin/settings');
+}
+
+export async function updateAdminSetting(
+  key: string,
+  value: string,
+  confirm?: string,
+): Promise<{ ok: true; source: string }> {
+  return requestJson<{ ok: true; source: string }>(
+    `/admin/settings/${encodeURIComponent(key)}`,
+    {
+      body: JSON.stringify({ confirm, value }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    },
+  );
+}
+
+export async function listAdminExpressionPrompts(): Promise<ExpressionPromptsResponse> {
+  return requestJson<ExpressionPromptsResponse>('/admin/expression-prompts');
+}
+
+export async function updateAdminExpressionPrompt(
+  gender: ExpressionGender,
+  emotion: string,
+  prompt: string,
+): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(
+    `/admin/expression-prompts/${encodeURIComponent(gender)}/${encodeURIComponent(emotion)}`,
+    {
+      body: JSON.stringify({ prompt }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    },
+  );
+}
+
 export async function updateRomancePreference(
   preference: RomancePreference,
 ): Promise<{ romance_preference: RomancePreference }> {
@@ -318,6 +450,13 @@ export async function getBaseArtJob(jobId: string): Promise<BaseArtJobResponse> 
   );
 }
 
+export type { ImageModelOption } from './types';
+
+export async function fetchImageModels(): Promise<ImageModelOption[]> {
+  const data = await requestJson<ImageModelsResponse>('/image-models');
+  return data.models ?? [];
+}
+
 export async function updateCompanion(
   id: string,
   input: Partial<CompanionCreateInput>,
@@ -337,6 +476,14 @@ export async function deleteCompanion(id: string): Promise<{ ok: true }> {
 
 export async function getRelationship(companionId: string): Promise<RelationshipResponse> {
   return requestJson<RelationshipResponse>(`/relationships/${encodeURIComponent(companionId)}`);
+}
+
+export async function getCompanionUnlocks(
+  companionId: string,
+): Promise<RelationshipUnlocksResponse> {
+  return requestJson<RelationshipUnlocksResponse>(
+    `/relationships/${encodeURIComponent(companionId)}/unlocks`,
+  );
 }
 
 export async function getToday(): Promise<TodayResponse> {

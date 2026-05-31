@@ -51,7 +51,7 @@ async function handleCheckout(request: Request, env: BillingEnv): Promise<Respon
   }
 
   const user = await requireAuthUser(env, request);
-  const config = readBillingConfig(env, "checkout");
+  const config = await readBillingConfig(env, "checkout");
   const stripe = createStripeClient(config);
   const now = Date.now();
 
@@ -102,7 +102,7 @@ async function handlePortal(request: Request, env: BillingEnv): Promise<Response
   }
 
   const user = await requireAuthUser(env, request);
-  const config = readBillingConfig(env, "portal");
+  const config = await readBillingConfig(env, "portal");
   const customer = await getBillingCustomer(env, user.id);
   if (!customer) {
     return jsonResponse({ error: "billing_customer_not_found" }, { status: 404 });
@@ -136,7 +136,7 @@ async function handleWebhook(request: Request, env: BillingEnv): Promise<Respons
     return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
   }
 
-  const config = readBillingConfig(env, "webhook");
+  const config = await readBillingConfig(env, "webhook");
   const signature = request.headers.get("stripe-signature");
   if (!signature) {
     return jsonResponse({ error: "stripe_signature_invalid" }, { status: 400 });

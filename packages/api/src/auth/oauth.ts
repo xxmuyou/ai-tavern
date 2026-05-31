@@ -31,7 +31,7 @@ export async function handleOAuthStart(
 
   let provider: OAuthProvider;
   try {
-    provider = resolveProvider(env, providerId);
+    provider = await resolveProvider(env, providerId);
   } catch (error) {
     if (error instanceof Response) {
       return error;
@@ -41,7 +41,7 @@ export async function handleOAuthStart(
 
   const url = new URL(request.url);
   const rawRedirect = url.searchParams.get("redirect");
-  const redirect = normalizeRedirect(env, rawRedirect);
+  const redirect = await normalizeRedirect(env, rawRedirect);
 
   const state = crypto.randomUUID();
   const stateRecord: StateRecord = {
@@ -75,11 +75,11 @@ export async function handleOAuthCallback(
   // short-circuit to the unified error redirect.
   let provider: OAuthProvider;
   try {
-    provider = resolveProvider(env, providerId);
+    provider = await resolveProvider(env, providerId);
   } catch (error) {
     if (error instanceof Response) {
       const code = await extractErrorCode(error);
-      return redirectResponse(buildErrorTarget(env, code));
+      return redirectResponse(await buildErrorTarget(env, code));
     }
     throw error;
   }
@@ -89,12 +89,12 @@ export async function handleOAuthCallback(
   const state = url.searchParams.get("state");
 
   if (!code || !state) {
-    return redirectResponse(buildErrorTarget(env, "invalid_oauth_state"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_oauth_state"));
   }
 
   const stateRaw = await env.CONFIG.get(stateKey(state));
   if (!stateRaw) {
-    return redirectResponse(buildErrorTarget(env, "invalid_oauth_state"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_oauth_state"));
   }
   await env.CONFIG.delete(stateKey(state));
 
@@ -102,11 +102,11 @@ export async function handleOAuthCallback(
   try {
     stateRecord = JSON.parse(stateRaw) as StateRecord;
   } catch {
-    return redirectResponse(buildErrorTarget(env, "invalid_oauth_state"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_oauth_state"));
   }
 
   if (stateRecord.provider !== provider.id) {
-    return redirectResponse(buildErrorTarget(env, "invalid_oauth_state"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_oauth_state"));
   }
 
   let exchange: OAuthExchangeResult;
@@ -116,11 +116,11 @@ export async function handleOAuthCallback(
       redirectUri: buildProviderRedirectUri(request, providerId),
     });
   } catch {
-    return redirectResponse(buildErrorTarget(env, "invalid_oauth_token"));
+    return redirectResponse(await buildErrorTarget(env, "invalid_oauth_token"));
   }
 
   if (!exchange.emailVerified) {
-    return redirectResponse(buildErrorTarget(env, "email_unverified"));
+    return redirectResponse(await buildErrorTarget(env, "email_unverified"));
   }
 
   const user = await upsertUserFromIdentity(env, {
@@ -133,7 +133,7 @@ export async function handleOAuthCallback(
 
   const session = await signSession(env, { userId: user.id, email: user.email });
 
-  const target = buildSuccessTarget(env, stateRecord.redirect, {
+  const target = await buildSuccessTarget(env, stateRecord.redirect, {
     token: session.token,
     expiresIso: session.expiresAt,
     email: session.email,

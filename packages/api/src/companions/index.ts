@@ -39,6 +39,9 @@ type CompanionRow = {
   background: string | null;
   speech_style: string | null;
   relationship_role: string | null;
+  want: string | null;
+  secret: string | null;
+  boundary: string | null;
   preferred_scenes: string | null;
   art_url: string | null;
   art_emotions: string | null;
@@ -263,7 +266,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
       }
     : { ...ZERO_DIMENSIONS };
 
-  const body = {
+  const body: Record<string, unknown> = {
     appearance: row.appearance,
     art_emotions: serializeArtEmotions(row.art_emotions),
     art_url: row.art_url,
@@ -283,6 +286,16 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     source: row.source,
     speech_style: row.speech_style,
   };
+
+  // The persona "driver" fields are spoilers (and `secret` is gated content),
+  // so they are only exposed to the owner of a user-created companion — who
+  // needs them to pre-fill the edit form. Official-companion secrets reach the
+  // player through the unlock endpoint once earned, never through this payload.
+  if (row.source === "user" && row.created_by === user.id) {
+    body.want = row.want;
+    body.secret = row.secret;
+    body.boundary = row.boundary;
+  }
 
   return jsonResponse(body);
 }
@@ -307,9 +320,10 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
   await env.DB.prepare(
     `INSERT INTO companions
       (id, source, created_by, is_active, name, appearance, personality,
-       background, speech_style, relationship_role, preferred_scenes,
-       art_url, art_emotions, gender, initial_dims, created_at, updated_at)
-     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+       background, speech_style, relationship_role, want, secret, boundary,
+       preferred_scenes, art_url, art_emotions, gender, initial_dims,
+       created_at, updated_at)
+     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   )
     .bind(
       id,
@@ -320,6 +334,9 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
       input.value.background ?? null,
       input.value.speech_style ?? null,
       input.value.relationship_role ?? null,
+      input.value.want ?? null,
+      input.value.secret ?? null,
+      input.value.boundary ?? null,
       input.value.preferred_scenes ? JSON.stringify(input.value.preferred_scenes) : null,
       input.value.art_url ?? null,
       input.value.art_url
@@ -367,6 +384,7 @@ async function updateCompanion(
     appearance: patch.value.appearance ?? existing.appearance,
     art_url: patch.value.art_url ?? existing.art_url,
     background: patch.value.background ?? existing.background,
+    boundary: patch.value.boundary ?? existing.boundary,
     gender: patch.value.gender ?? existing.gender,
     name: patch.value.name ?? existing.name,
     personality: patch.value.personality ?? existing.personality,
@@ -375,7 +393,9 @@ async function updateCompanion(
         ? JSON.stringify(patch.value.preferred_scenes)
         : existing.preferred_scenes,
     relationship_role: patch.value.relationship_role ?? existing.relationship_role,
+    secret: patch.value.secret ?? existing.secret,
     speech_style: patch.value.speech_style ?? existing.speech_style,
+    want: patch.value.want ?? existing.want,
   };
   // spec-020: when the neutral art_url changes, drop all non-neutral
   // emotion entries — they were generated against the old base image and
@@ -394,8 +414,9 @@ async function updateCompanion(
   await env.DB.prepare(
     `UPDATE companions
      SET name = ?, appearance = ?, personality = ?, background = ?,
-         speech_style = ?, relationship_role = ?, preferred_scenes = ?,
-         art_url = ?, art_emotions = ?, gender = ?, updated_at = ?
+         speech_style = ?, relationship_role = ?, want = ?, secret = ?,
+         boundary = ?, preferred_scenes = ?, art_url = ?, art_emotions = ?,
+         gender = ?, updated_at = ?
      WHERE id = ?`,
   )
     .bind(
@@ -405,6 +426,9 @@ async function updateCompanion(
       merged.background,
       merged.speech_style,
       merged.relationship_role,
+      merged.want,
+      merged.secret,
+      merged.boundary,
       merged.preferred_scenes,
       merged.art_url,
       artEmotions,
@@ -466,8 +490,9 @@ function canRead(row: CompanionRow, user: UserRecord): boolean {
 async function loadCompanion(env: Env, companionId: string): Promise<CompanionRow | null> {
   return env.DB.prepare(
     `SELECT id, source, created_by, is_active, name, appearance, personality,
-            background, speech_style, relationship_role, preferred_scenes,
-            art_url, art_emotions, gender, initial_dims, created_at, updated_at
+            background, speech_style, relationship_role, want, secret, boundary,
+            preferred_scenes, art_url, art_emotions, gender, initial_dims,
+            created_at, updated_at
      FROM companions
      WHERE id = ?`,
   )
@@ -507,14 +532,17 @@ function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
     background: row.background,
     created_at: row.created_at,
     gender: normalizeGender(row.gender),
+    boundary: row.boundary,
     id: row.id,
     name: row.name,
     personality: row.personality,
     preferred_scenes: parseStringArray(row.preferred_scenes),
     relationship_role: row.relationship_role,
+    secret: row.secret,
     source: row.source,
     speech_style: row.speech_style,
     updated_at: row.updated_at,
+    want: row.want,
   };
 }
 
@@ -533,6 +561,9 @@ type CreateValue = {
   background?: string;
   speech_style?: string;
   relationship_role?: string;
+  want?: string;
+  secret?: string;
+  boundary?: string;
   preferred_scenes?: string[];
   art_url?: string;
 };
@@ -562,7 +593,10 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
       personality: readOptionalText(raw, "personality"),
       preferred_scenes: readOptionalStringArray(raw, "preferred_scenes"),
       relationship_role: readOptionalEnum(raw, "relationship_role", KNOWN_RELATIONSHIP_ROLES),
+      secret: readOptionalText(raw, "secret"),
       speech_style: readOptionalText(raw, "speech_style"),
+      want: readOptionalText(raw, "want"),
+      boundary: readOptionalText(raw, "boundary"),
     },
   };
 }
@@ -588,6 +622,9 @@ function parseUpdateInput(raw: unknown): ParsedInput<UpdateValue> {
   if ("personality" in raw) value.personality = readOptionalText(raw, "personality");
   if ("background" in raw) value.background = readOptionalText(raw, "background");
   if ("speech_style" in raw) value.speech_style = readOptionalText(raw, "speech_style");
+  if ("want" in raw) value.want = readOptionalText(raw, "want");
+  if ("secret" in raw) value.secret = readOptionalText(raw, "secret");
+  if ("boundary" in raw) value.boundary = readOptionalText(raw, "boundary");
   if ("art_url" in raw) value.art_url = readOptionalText(raw, "art_url", 2048);
   if ("relationship_role" in raw) {
     value.relationship_role = readOptionalEnum(raw, "relationship_role", KNOWN_RELATIONSHIP_ROLES);

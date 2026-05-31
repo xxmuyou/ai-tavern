@@ -54,6 +54,11 @@ export type ImageGenRequest = {
   /** Art style; drives checkpoint/workflow selection in real providers. */
   style?: ArtStyle;
   /**
+   * Explicit checkpoint name to use for `create`, overriding the env workflow's
+   * default ckpt. Set when the creator picked a specific WF1 model.
+   */
+  ckpt_name?: string;
+  /**
    * R2 object key OR full URL of the source portrait. Required for
    * `variation`; for `create` only set when re-painting an uploaded image.
    */

@@ -182,6 +182,11 @@ export type CompanionDetail = {
   relationship_role: string | null;
   source: CompanionSource;
   speech_style: string | null;
+  // spec-025 persona fields. Only present for the owner of a user-created
+  // companion (the backend hides them otherwise).
+  want?: string | null;
+  secret?: string | null;
+  boundary?: string | null;
 };
 
 export type CompanionCreateInput = {
@@ -194,6 +199,43 @@ export type CompanionCreateInput = {
   preferred_scenes?: string[];
   relationship_role?: string;
   speech_style?: string;
+  // spec-025 persona depth
+  want?: string;
+  secret?: string;
+  boundary?: string;
+};
+
+// spec-025: a single unlock surfaced over the chat SSE `unlocks` event.
+export type ChatUnlock = {
+  key: string;
+  kind: 'secret' | 'expression' | 'title';
+  label: string;
+};
+
+export type RelationshipUnlockItem = {
+  key: string;
+  kind: 'secret' | 'expression' | 'title';
+  label: string;
+  required_stage: string;
+  unlocked: boolean;
+};
+
+export type RelationshipSceneUnlock = {
+  id: string;
+  name: string;
+  unlocked: boolean;
+  hint: string | null;
+};
+
+export type RelationshipUnlocksResponse = {
+  companion_id: string;
+  stage: string;
+  is_pro: boolean;
+  is_owner: boolean;
+  secret: string | null;
+  secret_unlocked: boolean;
+  items: RelationshipUnlockItem[];
+  scenes: RelationshipSceneUnlock[];
 };
 
 export type ArtStyle = 'realistic' | 'anime_jp' | 'anime_kr';
@@ -202,9 +244,20 @@ export type BaseArtJobStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
 
 export type BaseArtGenerateInput = {
   source: 'text' | 'upload';
-  style: ArtStyle;
+  model?: string;
+  style?: ArtStyle;
   prompt?: string;
   upload_key?: string;
+};
+
+export type ImageModelOption = {
+  id: string;
+  label: string;
+  style_tag: ArtStyle;
+};
+
+export type ImageModelsResponse = {
+  models: ImageModelOption[];
 };
 
 export type BaseArtGenerateResponse = {
@@ -231,6 +284,10 @@ export type RelationshipResponse = {
   last_interaction_at: number | null;
   level: string;
   milestones: unknown[];
+  next_goal?: string | null;
+  recommended_activity?: ActivityType | null;
+  stage?: string | null;
+  stage_progress?: number | null;
 };
 
 export type SceneUnlockHint = {
@@ -413,6 +470,174 @@ export type AdminAllowlistItem = {
 
 export type AdminAllowlistResponse = {
   emails: AdminAllowlistItem[];
+};
+
+export type AdminUserTier = 'free' | 'pro';
+
+export type AdminUserSummary = {
+  email: string;
+  tier: AdminUserTier;
+  user_id: string;
+};
+
+export type AdminUsersResponse = {
+  users: AdminUserSummary[];
+};
+
+export type AdminLedgerEntry = {
+  amount: number;
+  balance_after: number;
+  created_at: string;
+  id: string;
+  reason: string | null;
+  type: string;
+};
+
+export type AdminUserCredits = {
+  available_credits: number;
+  recent_ledger: AdminLedgerEntry[];
+  reserved_credits: number;
+  user_id: string;
+};
+
+export type AdminCreditAdjustmentResult = {
+  available_credits: number;
+  entry: AdminLedgerEntry;
+  user_id: string;
+};
+
+export type LlmProvider = 'anthropic' | 'cloudflare' | 'deepseek' | 'doubao' | 'openai';
+
+export type LlmConfigItem = {
+  fallback_model: string | null;
+  fallback_provider: LlmProvider | null;
+  model: string;
+  provider: LlmProvider;
+  task: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+export type LlmConfigResponse = {
+  tasks: LlmConfigItem[];
+};
+
+export type LlmConfigUpdateInput = {
+  fallback_model?: string | null;
+  fallback_provider?: LlmProvider | null;
+  model: string;
+  provider: LlmProvider;
+};
+
+export type LlmTestInput = {
+  model?: string;
+  prompt: string;
+  provider?: LlmProvider;
+  task: string;
+};
+
+export type LlmTestResult =
+  | {
+      cost_usd: number;
+      latency_ms: number;
+      model: string;
+      ok: true;
+      provider: string;
+      text: string;
+      tokens: { input: number; output: number };
+    }
+  | {
+      error_code: string;
+      error_message: string;
+      latency_ms: number;
+      model: string;
+      ok: false;
+      provider: string;
+    };
+
+export type LlmUsageWindow = '7d' | '30d' | 'today';
+
+export type LlmUsageTotals = {
+  calls: number;
+  cost_usd: number;
+  error_calls: number;
+  token_input: number;
+  token_output: number;
+};
+
+export type LlmUsageByTaskProvider = LlmUsageTotals & {
+  provider: string;
+  task: string;
+};
+
+export type LlmUsageResponse = {
+  by_task_provider: LlmUsageByTaskProvider[];
+  from: string;
+  to: string;
+  totals: LlmUsageTotals;
+  window: LlmUsageWindow;
+};
+
+// --- Admin: WF1 model catalog ---
+export type AdminImageModel = {
+  id: string;
+  label: string;
+  style_tag: ArtStyle;
+  ckpt_name: string;
+  is_active: boolean;
+  sort_order: number;
+  updated_at: number;
+  updated_by_email: string | null;
+};
+
+export type AdminImageModelsResponse = {
+  models: AdminImageModel[];
+};
+
+export type ImageModelInput = {
+  label: string;
+  style_tag: ArtStyle;
+  ckpt_name: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
+// --- Admin: WF2 expression prompts (gender × emotion) ---
+export type ExpressionGender = 'male' | 'female';
+
+export type ExpressionPromptItem = {
+  gender: ExpressionGender;
+  emotion: string;
+  prompt: string;
+  updated_at: number;
+  updated_by_email: string | null;
+};
+
+export type ExpressionPromptsResponse = {
+  prompts: ExpressionPromptItem[];
+};
+
+export type AdminSettingType = 'text' | 'number' | 'boolean' | 'secret' | 'json';
+
+export type AdminSettingItem = {
+  key: string;
+  danger_level: 'normal' | 'high';
+  env_key: string | null;
+  group: string;
+  label: string;
+  type: AdminSettingType;
+  description: string | null;
+  source: 'db' | 'env' | 'unset';
+  is_set: boolean;
+  updated_at: number | null;
+  updated_by: string | null;
+  // Absent for secrets (never returned by the backend).
+  value?: string | null;
+};
+
+export type AdminSettingsResponse = {
+  groups: string[];
+  settings: AdminSettingItem[];
 };
 
 export type AsyncState<T> =

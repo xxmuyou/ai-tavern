@@ -25,8 +25,9 @@ const BASE_CONSTRAINTS = [
 export function buildEmotionPrompt(
   emotion: NonNeutralEmotion,
   companion: CompanionPromptContext,
+  intentOverride?: string | null,
 ): string {
-  const intent = EMOTION_INTENT[emotion];
+  const intent = intentOverride?.trim() || EMOTION_INTENT[emotion];
   const lines = [
     BASE_CONSTRAINTS,
     `Target emotion: ${emotion} — ${intent}.`,

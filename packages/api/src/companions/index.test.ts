@@ -14,6 +14,9 @@ type CompanionRow = {
   background: string | null;
   speech_style: string | null;
   relationship_role: string | null;
+  want: string | null;
+  secret: string | null;
+  boundary: string | null;
   preferred_scenes: string | null;
   art_url: string | null;
   art_emotions: string | null;
@@ -541,6 +544,7 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
     art_emotions: null,
     art_url: null,
     background: null,
+    boundary: null,
     created_at: 1747000000000,
     created_by: null,
     gender,
@@ -551,9 +555,11 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
     personality: null,
     preferred_scenes: null,
     relationship_role: "crush",
+    secret: null,
     source: "official",
     speech_style: null,
     updated_at: 1747000000000,
+    want: null,
   };
 }
 
@@ -563,6 +569,7 @@ function userCompanion(id: string, ownerId: string, gender: "male" | "female" = 
     art_emotions: null,
     art_url: null,
     background: null,
+    boundary: null,
     created_at: 1747000000000,
     created_by: ownerId,
     gender,
@@ -573,9 +580,11 @@ function userCompanion(id: string, ownerId: string, gender: "male" | "female" = 
     personality: null,
     preferred_scenes: null,
     relationship_role: "friend",
+    secret: null,
     source: "user",
     speech_style: null,
     updated_at: 1747000000000,
+    want: null,
   };
 }
 
@@ -809,6 +818,9 @@ function mutate(
       background,
       speech_style,
       relationship_role,
+      want,
+      secret,
+      boundary,
       preferred_scenes,
       art_url,
       art_emotions,
@@ -828,6 +840,9 @@ function mutate(
       string | null,
       string | null,
       string | null,
+      string | null,
+      string | null,
+      string | null,
       number,
       number,
     ];
@@ -836,6 +851,7 @@ function mutate(
       art_emotions,
       art_url,
       background,
+      boundary,
       created_at: createdAt,
       created_by: ownerId,
       gender,
@@ -846,9 +862,11 @@ function mutate(
       personality,
       preferred_scenes,
       relationship_role,
+      secret,
       source: "user",
       speech_style,
       updated_at: updatedAt,
+      want,
     });
     return;
   }
@@ -862,6 +880,9 @@ function mutate(
       background,
       speech_style,
       relationship_role,
+      want,
+      secret,
+      boundary,
       preferred_scenes,
       art_url,
       art_emotions,
@@ -870,6 +891,9 @@ function mutate(
       id,
     ] = values as [
       string,
+      string | null,
+      string | null,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -890,13 +914,16 @@ function mutate(
         art_emotions,
         art_url,
         background,
+        boundary,
         gender,
         name,
         personality,
         preferred_scenes,
         relationship_role,
+        secret,
         speech_style,
         updated_at: updatedAt,
+        want,
       });
     }
     return;

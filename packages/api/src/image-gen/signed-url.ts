@@ -1,8 +1,4 @@
-type SignedUrlEnv = Pick<Env, "APP_ENV"> & {
-  IMAGE_GEN_PUBLIC_BASE_URL?: string;
-  R2_SIGNING_KEY?: string;
-  RUNNINGHUB_WEBHOOK_URL?: string;
-};
+import { getSetting } from "../settings/store";
 
 const DEFAULT_TTL_SECONDS = 15 * 60;
 
@@ -21,10 +17,10 @@ export async function createSignedObjectUrl(
     throw new Error("invalid_source_art_url");
   }
 
-  const signingKey = readSigningKey(env);
+  const signingKey = await readSigningKey(env);
   const exp = Math.floor(Date.now() / 1000) + (options.ttlSeconds ?? DEFAULT_TTL_SECONDS);
   const sig = await signObjectToken(signingKey, key, exp);
-  const baseUrl = readPublicBaseUrl(env);
+  const baseUrl = await readPublicBaseUrl(env);
   const encodedKey = encodeURIComponent(key);
 
   return `${baseUrl}/objects/signed/${encodedKey}?exp=${exp}&sig=${sig}`;
@@ -44,7 +40,7 @@ export async function verifySignedObjectRequest(
     return null;
   }
 
-  const signingKey = readSigningKey(env);
+  const signingKey = await readSigningKey(env);
   const expected = await signObjectToken(signingKey, key, exp);
   if (!constantTimeEqual(sig, expected)) {
     return null;
@@ -75,20 +71,19 @@ export function normalizeObjectKey(value: string): string | null {
   return normalized;
 }
 
-function readSigningKey(env: Env): string {
-  const value = (env as SignedUrlEnv).R2_SIGNING_KEY?.trim();
+async function readSigningKey(env: Env): Promise<string> {
+  const value = await getSetting(env, "image_gen.r2_signing_key");
   if (!value) {
     throw new Error("R2_SIGNING_KEY is required for signed image URLs");
   }
   return value;
 }
 
-function readPublicBaseUrl(env: Env): string {
-  const config = env as SignedUrlEnv;
-  const explicit = config.IMAGE_GEN_PUBLIC_BASE_URL?.trim();
+async function readPublicBaseUrl(env: Env): Promise<string> {
+  const explicit = await getSetting(env, "image_gen.public_base_url");
   if (explicit) return explicit.replace(/\/+$/, "");
 
-  const webhook = config.RUNNINGHUB_WEBHOOK_URL?.trim();
+  const webhook = await getSetting(env, "image_gen.webhook_url");
   if (webhook) {
     const url = new URL(webhook);
     const apiPrefix = url.pathname.startsWith("/api/") ? "/api" : "";

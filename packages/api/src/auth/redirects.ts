@@ -1,5 +1,6 @@
 import { authError } from "./types";
 import type { AuthEnv } from "./types";
+import { getSetting } from "../settings/store";
 
 export type SuccessFragment = {
   token: string;
@@ -9,8 +10,8 @@ export type SuccessFragment = {
 
 const HAS_SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
 
-export function readAuthSuccessUrl(env: AuthEnv): URL {
-  const value = env.AUTH_SUCCESS_URL?.trim();
+export async function readAuthSuccessUrl(env: AuthEnv): Promise<URL> {
+  const value = await getSetting(env, "auth.success_url");
   if (!value) {
     throw authError("auth_success_url_invalid", 500);
   }
@@ -28,16 +29,17 @@ export function readAuthSuccessUrl(env: AuthEnv): URL {
   }
 }
 
-export function readAllowedOrigins(env: AuthEnv): Set<string> {
-  const list = (env.ALLOWED_ORIGINS ?? "")
+export async function readAllowedOrigins(env: AuthEnv): Promise<Set<string>> {
+  const raw = await getSetting(env, "auth.allowed_origins");
+  const list = (raw ?? "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
   return new Set(list);
 }
 
-export function normalizeRedirect(env: AuthEnv, raw: string | null | undefined): string {
-  const successFallback = readAuthSuccessUrl(env).toString();
+export async function normalizeRedirect(env: AuthEnv, raw: string | null | undefined): Promise<string> {
+  const successFallback = (await readAuthSuccessUrl(env)).toString();
   if (typeof raw !== "string") {
     return successFallback;
   }
@@ -60,7 +62,7 @@ export function normalizeRedirect(env: AuthEnv, raw: string | null | undefined):
       if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
         return successFallback;
       }
-      const allowed = readAllowedOrigins(env);
+      const allowed = await readAllowedOrigins(env);
       if (allowed.has(parsed.origin)) {
         return parsed.toString();
       }
@@ -77,19 +79,19 @@ export function normalizeRedirect(env: AuthEnv, raw: string | null | undefined):
   return trimmed;
 }
 
-export function buildSuccessTarget(
+export async function buildSuccessTarget(
   env: AuthEnv,
   redirect: string,
   fragment: SuccessFragment,
-): URL {
-  const successUrl = readAuthSuccessUrl(env);
+): Promise<URL> {
+  const successUrl = await readAuthSuccessUrl(env);
   const target = new URL(redirect, successUrl);
   target.hash = buildFragment(fragment);
   return target;
 }
 
-export function buildErrorTarget(env: AuthEnv, errorCode: string): URL {
-  const successUrl = readAuthSuccessUrl(env);
+export async function buildErrorTarget(env: AuthEnv, errorCode: string): Promise<URL> {
+  const successUrl = await readAuthSuccessUrl(env);
   successUrl.searchParams.set("error", errorCode);
   return successUrl;
 }

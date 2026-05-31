@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { createCompanion, uploadCompanionArt } from '@/api/companion-client';
-import type { ArtStyle, CompanionCreateInput } from '@/api/types';
+import type { CompanionCreateInput } from '@/api/types';
 import { BaseArtPanel } from '@/components/BaseArtPanel';
 import { CompanionForm } from '@/components/CompanionForm';
 import { TopBar } from '@/components/TopBar';
@@ -31,7 +31,7 @@ export default function CompanionCreateScreen() {
     }
   }
 
-  function confirmArt(key: string, _style: ArtStyle) {
+  function confirmArt(key: string) {
     setArtKey(key);
   }
 

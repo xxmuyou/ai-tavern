@@ -4,17 +4,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
-import type { ChatEmotionKey, ChatMessage, CompanionDetail } from '@/api/types';
+import type { ChatEmotionKey, ChatMessage, ChatUnlock, CompanionDetail, RelationshipDimensions } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { Button } from '@/components/Button';
+import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
+import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
+import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { WebAppShell, WebPanel } from '@/components/web/WebAppShell';
+import { gateEmotion } from '@/utils/expression-unlock';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useChatHistory } from '@/hooks/use-chat-history';
+import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 
@@ -41,6 +46,7 @@ export default function WebChatScreen() {
   const { pushError } = useErrorBanner();
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
+  const relationship = useChatRelationship(companionId);
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
   const { activity, refresh: refreshActivity, setActivity } = activityState;
@@ -50,6 +56,10 @@ export default function WebChatScreen() {
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [lastSignals, setLastSignals] = useState<Partial<RelationshipDimensions> | null>(null);
+  const [signalToken, setSignalToken] = useState(0);
+  const [lastUnlocks, setLastUnlocks] = useState<ChatUnlock[] | null>(null);
+  const [unlockToken, setUnlockToken] = useState(0);
 
   useEffect(() => {
     void refreshActivity();
@@ -116,6 +126,14 @@ export default function WebChatScreen() {
       const result = await stream.send(text, {
         activityId,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
+        onSignals: (signals) => {
+          setLastSignals(signals);
+          setSignalToken((token) => token + 1);
+        },
+        onUnlocks: (unlocks) => {
+          setLastUnlocks(unlocks);
+          setUnlockToken((token) => token + 1);
+        },
         sceneId,
       });
       history.appendMessage({
@@ -126,6 +144,8 @@ export default function WebChatScreen() {
         id: `local-companion-${Date.now()}`,
         role: 'companion',
       });
+      // Pull server truth so the HUD progress bar reflects this turn.
+      void relationship.refresh();
     } catch (error) {
       if (error instanceof QuotaExceededError) {
         setQuotaModalVisible(true);
@@ -139,7 +159,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activityId, companionId, draft, history, pushError, remainingSeconds, sceneId, stream]);
+  }, [activityId, companionId, draft, history, pushError, relationship, remainingSeconds, sceneId, stream]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -173,7 +193,8 @@ export default function WebChatScreen() {
     );
   }
 
-  const portrait = mediaSource(companion?.art_emotions?.[currentEmotion as ChatEmotionKey] ?? companion?.art_url ?? null);
+  const shownEmotion = gateEmotion(currentEmotion, relationship.goal?.stage);
+  const portrait = mediaSource(companion?.art_emotions?.[shownEmotion as ChatEmotionKey] ?? companion?.art_url ?? null);
 
   return (
     <WebAppShell title={companion?.name ?? 'Chat'} subtitle="Streaming conversation workspace.">
@@ -186,7 +207,10 @@ export default function WebChatScreen() {
           <Text className="mt-4 text-xl font-semibold text-app-text">{companion?.name ?? 'Companion'}</Text>
           <Text className="mt-1 text-sm uppercase tracking-normal text-app-muted">{companion?.relationship_role ?? 'companion'}</Text>
           <View className="mt-4 rounded-full bg-app-primarySoft px-3 py-2">
-            <Text className="text-sm font-semibold text-app-primary">{currentEmotion}</Text>
+            <Text className="text-sm font-semibold text-app-primary">{shownEmotion}</Text>
+          </View>
+          <View className="mt-4 overflow-hidden rounded-lg border border-app-line">
+            <ChatRelationshipHud goal={relationship.goal} />
           </View>
           <View className="mt-5">
             <Button label="View profile" onPress={() => router.push(`/companion/${encodeURIComponent(companionId)}`)} variant="secondary" />
@@ -200,6 +224,8 @@ export default function WebChatScreen() {
             onCancel={handleCancelActivity}
             onComplete={handleCompleteActivity}
           />
+          <SignalFeedback signals={lastSignals} token={signalToken} />
+          <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
           <View className="h-[620px] justify-end bg-app-bg">
             <View className="gap-2 px-2 py-4">
               {history.hasMore ? (
