@@ -1,8 +1,19 @@
 import { requireAdminUser } from "../auth";
 import { jsonResponse } from "../http";
 import { loadUpdatedByEmails } from "../llm/admin/repo";
-import { SETTINGS, SETTINGS_BY_KEY, SETTING_GROUPS, type SettingType } from "./registry";
-import { invalidateSettingsCache, loadSettings, resolveSetting } from "./store";
+import {
+  SETTINGS,
+  SETTINGS_BY_KEY,
+  SETTING_GROUPS,
+  type SettingDef,
+  type SettingType,
+} from "./registry";
+import {
+  invalidateSettingsCache,
+  loadSettings,
+  resolveSetting,
+  type SettingsMap,
+} from "./store";
 
 type AppSettingRow = {
   key: string;
@@ -62,26 +73,7 @@ async function handleList(request: Request, env: Env): Promise<Response> {
   );
 
   const settings = await Promise.all(
-    SETTINGS.map(async (def) => {
-      const resolved = await resolveSetting(env, def.key, map);
-      const row = dbRows.get(def.key);
-      const base = {
-        key: def.key,
-        danger_level: def.dangerLevel ?? "normal",
-        env_key: def.envKey ?? null,
-        group: def.group,
-        label: def.label,
-        type: def.type,
-        description: def.description ?? null,
-        source: resolved.source,
-        is_set: resolved.value != null && resolved.value !== "",
-        updated_at: row?.updated_at ?? null,
-        updated_by: row?.updated_by ? emails.get(row.updated_by) ?? null : null,
-      };
-      // Never leak secret values to the client.
-      if (def.type === "secret") return base;
-      return { ...base, value: resolved.value };
-    }),
+    SETTINGS.map((def) => serializeSetting(env, def, map, dbRows, emails)),
   );
 
   return jsonResponse({ groups: SETTING_GROUPS, settings });
@@ -109,7 +101,11 @@ async function handlePut(request: Request, env: Env, key: string): Promise<Respo
   if (trimmed === "") {
     await env.DB.prepare(`DELETE FROM app_settings WHERE key = ?`).bind(key).run();
     invalidateSettingsCache(env);
-    return jsonResponse({ ok: true, source: "env" });
+    return jsonResponse({
+      ok: true,
+      setting: await loadSettingPayload(env, def),
+      source: "env",
+    });
   }
 
   const invalid = validateByType(def.type, trimmed);
@@ -130,7 +126,48 @@ async function handlePut(request: Request, env: Env, key: string): Promise<Respo
     .run();
   invalidateSettingsCache(env);
 
-  return jsonResponse({ ok: true, source: "db" });
+  return jsonResponse({
+    ok: true,
+    setting: await loadSettingPayload(env, def),
+    source: "db",
+  });
+}
+
+async function loadSettingPayload(env: Env, def: SettingDef): Promise<Record<string, unknown>> {
+  const map = await loadSettings(env, true);
+  const dbRows = await loadDbRows(env);
+  const emails = await loadUpdatedByEmails(
+    env,
+    [...dbRows.values()].map((r) => r.updated_by).filter((id): id is string => id !== null),
+  );
+  return serializeSetting(env, def, map, dbRows, emails);
+}
+
+async function serializeSetting(
+  env: Env,
+  def: SettingDef,
+  map: SettingsMap,
+  dbRows: Map<string, AppSettingRow>,
+  emails: Map<string, string>,
+): Promise<Record<string, unknown>> {
+  const resolved = await resolveSetting(env, def.key, map);
+  const row = dbRows.get(def.key);
+  const base = {
+    key: def.key,
+    danger_level: def.dangerLevel ?? "normal",
+    env_key: def.envKey ?? null,
+    group: def.group,
+    label: def.label,
+    type: def.type,
+    description: def.description ?? null,
+    source: resolved.source,
+    is_set: resolved.value != null && resolved.value !== "",
+    updated_at: row?.updated_at ?? null,
+    updated_by: row?.updated_by ? emails.get(row.updated_by) ?? null : null,
+  };
+  // Never leak secret values to the client.
+  if (def.type === "secret") return base;
+  return { ...base, value: resolved.value };
 }
 
 function validateByType(type: SettingType, value: string): string | null {

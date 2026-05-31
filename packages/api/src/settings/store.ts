@@ -11,10 +11,12 @@ import { SETTINGS_BY_KEY } from "./registry";
  */
 const TTL_MS = 30_000;
 
-type CacheEntry = { at: number; map: Map<string, string> };
+export type SettingsMap = Map<string, string>;
+
+type CacheEntry = { at: number; map: SettingsMap };
 const cacheByEnv = new WeakMap<object, CacheEntry>();
 
-export async function loadSettings(env: Env, fresh = false): Promise<Map<string, string>> {
+export async function loadSettings(env: Env, fresh = false): Promise<SettingsMap> {
   const now = Date.now();
   const cached = cacheByEnv.get(env as object);
   if (!fresh && cached && now - cached.at < TTL_MS) {

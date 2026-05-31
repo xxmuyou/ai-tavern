@@ -102,6 +102,14 @@ describe("admin settings", () => {
       "/admin/settings/limits.rate_limit_per_minute",
     );
     expect(saved?.status).toBe(200);
+    const savedBody = (await saved!.json()) as { setting: Record<string, unknown>; source: string };
+    expect(savedBody.source).toBe("db");
+    expect(savedBody.setting).toMatchObject({
+      key: "limits.rate_limit_per_minute",
+      source: "db",
+      updated_by: ADMIN_EMAIL,
+      value: "42",
+    });
     expect(env.settingsRows.get("limits.rate_limit_per_minute")?.value).toBe("42");
 
     const reset = await handleAdminSettingsRequest(
@@ -112,6 +120,14 @@ describe("admin settings", () => {
       "/admin/settings/limits.rate_limit_per_minute",
     );
     expect(reset?.status).toBe(200);
+    const resetBody = (await reset!.json()) as { setting: Record<string, unknown>; source: string };
+    expect(resetBody.source).toBe("env");
+    expect(resetBody.setting).toMatchObject({
+      key: "limits.rate_limit_per_minute",
+      source: "env",
+      updated_by: null,
+      value: "120",
+    });
     expect(env.settingsRows.has("limits.rate_limit_per_minute")).toBe(false);
   });
 

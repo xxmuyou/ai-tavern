@@ -29,10 +29,18 @@ export function useAdminSettings() {
 
   const save = useCallback(
     async (key: string, value: string, confirm?: string) => {
-      await updateAdminSetting(key, value, confirm);
-      await reload();
+      setError(null);
+      try {
+        const result = await updateAdminSetting(key, value, confirm);
+        setSettings((current) =>
+          current.map((item) => (item.key === key ? result.setting : item)),
+        );
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : 'Failed to save setting.');
+        throw nextError;
+      }
     },
-    [reload],
+    [],
   );
 
   return { settings, groups, isLoading, error, reload, save } as const;

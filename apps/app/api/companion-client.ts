@@ -8,6 +8,7 @@ import type {
   AdminCreditAdjustmentResult,
   AdminUserCredits,
   AdminUsersResponse,
+  AdminSettingItem,
   BaseArtGenerateInput,
   BaseArtGenerateResponse,
   BaseArtJobResponse,
@@ -299,8 +300,8 @@ export async function updateAdminSetting(
   key: string,
   value: string,
   confirm?: string,
-): Promise<{ ok: true; source: string }> {
-  return requestJson<{ ok: true; source: string }>(
+): Promise<{ ok: true; setting: AdminSettingItem; source: string }> {
+  return requestJson<{ ok: true; setting: AdminSettingItem; source: string }>(
     `/admin/settings/${encodeURIComponent(key)}`,
     {
       body: JSON.stringify({ confirm, value }),
