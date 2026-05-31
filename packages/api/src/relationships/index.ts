@@ -170,8 +170,8 @@ async function getRelationship(env: Env, user: UserRecord, companionId: string):
       level: computeLevel(ZERO_DIMENSIONS),
       stage: stage.stage,
       stage_progress: stage.stage_progress,
-      next_goal: stage.next_goal,
-      recommended_activity: stage.recommended_activity,
+      next_goal: stage.next_goal?.description ?? null,
+      recommended_activity: stage.recommended_activity?.activity_type ?? null,
       milestones: [],
     });
   }
@@ -192,8 +192,8 @@ async function getRelationship(env: Env, user: UserRecord, companionId: string):
     level: relationship.level,
     stage: stage.stage,
     stage_progress: stage.stage_progress,
-    next_goal: stage.next_goal,
-    recommended_activity: stage.recommended_activity,
+    next_goal: stage.next_goal?.description ?? null,
+    recommended_activity: stage.recommended_activity?.activity_type ?? null,
     milestones: [{ at: relationship.first_met_at, type: "first_met" }],
   });
 }

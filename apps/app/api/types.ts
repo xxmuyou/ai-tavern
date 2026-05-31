@@ -9,14 +9,29 @@ export type RelationshipDimensionKey =
 
 export type RelationshipDimensions = Record<RelationshipDimensionKey, number>;
 
+export type RelationshipNextGoalWire =
+  | string
+  | {
+      description?: string | null;
+      target_dim?: RelationshipDimensionKey | null;
+      target_value?: number | null;
+    };
+
+export type RecommendedActivityWire =
+  | ActivityType
+  | {
+      activity_type?: ActivityType | null;
+      reason?: string | null;
+    };
+
 export type RelationshipSummary = {
   dimensions: RelationshipDimensions;
   first_met_at: number | null;
   last_interaction_at: number | null;
   level: string;
   milestones?: unknown[];
-  next_goal?: string | null;
-  recommended_activity?: ActivityType | null;
+  next_goal?: RelationshipNextGoalWire | null;
+  recommended_activity?: RecommendedActivityWire | null;
   stage?: string | null;
   stage_progress?: number | null;
 };
@@ -284,8 +299,8 @@ export type RelationshipResponse = {
   last_interaction_at: number | null;
   level: string;
   milestones: unknown[];
-  next_goal?: string | null;
-  recommended_activity?: ActivityType | null;
+  next_goal?: RelationshipNextGoalWire | null;
+  recommended_activity?: RecommendedActivityWire | null;
   stage?: string | null;
   stage_progress?: number | null;
 };

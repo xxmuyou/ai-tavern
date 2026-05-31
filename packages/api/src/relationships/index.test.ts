@@ -67,6 +67,9 @@ describe("relationships GET endpoint", () => {
       dimensions: Record<string, number>;
       first_met_at: number | null;
       last_interaction_at: number | null;
+      next_goal: string | null;
+      recommended_activity: string | null;
+      stage: string;
       milestones: Array<{ type: string; at: number }>;
     };
     expect(body.companion_id).toBe("maya");
@@ -74,6 +77,9 @@ describe("relationships GET endpoint", () => {
     expect(body.first_met_at).toBeNull();
     expect(body.last_interaction_at).toBeNull();
     expect(body.dimensions.closeness).toBe(0);
+    expect(body.stage).toBe("first_contact");
+    expect(body.next_goal).toBe("Spend more time around them so they recognise you.");
+    expect(body.recommended_activity).toBe("check_in");
     expect(body.milestones).toEqual([]);
   });
 
@@ -108,12 +114,18 @@ describe("relationships GET endpoint", () => {
       level: string;
       dimensions: Record<string, number>;
       first_met_at: number;
+      next_goal: string | null;
+      recommended_activity: string | null;
+      stage: string;
       milestones: Array<{ type: string; at: number }>;
     };
     expect(body.level).toBe("Friend"); // computed from dimensions, not read from stored level_label
     expect(body.dimensions.closeness).toBe(50);
     expect(body.dimensions.friendship).toBe(40);
     expect(body.first_met_at).toBe(1747000000000);
+    expect(body.stage).toBe("familiar");
+    expect(body.next_goal).toBe("Earn their trust — listen, follow through, show up.");
+    expect(body.recommended_activity).toBe("check_in");
     expect(body.milestones).toEqual([{ at: 1747000000000, type: "first_met" }]);
   });
 
