@@ -97,7 +97,7 @@ export default function CompanionsScreen() {
         <ScrollView className="flex-1">
           <View className="mx-auto w-full max-w-4xl flex-row flex-wrap gap-4 px-4 py-6">
             {data.items.map((companion) => (
-              <View key={companion.id} className="min-w-40 flex-1" style={{ flexBasis: '47%' }}>
+              <View key={companion.id} className="min-w-40" style={{ flexBasis: '47%' }}>
                 <CompanionCard
                   artUrl={companion.art_url}
                   level={companion.current_level}

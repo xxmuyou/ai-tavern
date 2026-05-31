@@ -94,7 +94,7 @@ function formatCompanionCount(count: number, limit: number | null | undefined): 
 function CompanionTile({ companion, onPress }: { companion: CompanionListItem; onPress: () => void }) {
   const imageSource = mediaSource(companion.art_url);
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} className="min-w-[220px] flex-1 rounded-lg border border-app-line bg-white p-4">
+    <Pressable accessibilityRole="button" onPress={onPress} className="w-[220px] rounded-lg border border-app-line bg-white p-4">
       <View className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
         <View pointerEvents="none" style={tileStyles.portraitFloor} />
         {imageSource ? (
