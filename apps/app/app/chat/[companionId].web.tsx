@@ -1,10 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
+} from 'react-native';
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
-import type { ChatEmotionKey, ChatMessage, ChatUnlock, CompanionDetail, RelationshipDimensions } from '@/api/types';
+import type { ChatEmotionKey, ChatMessage, ChatUnlock, CompanionDetail, NonNeutralChatEmotionKey, RelationshipDimensions } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { Button } from '@/components/Button';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
@@ -21,6 +31,7 @@ import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
+import { useOnDemandEmotionArt } from '@/hooks/use-emotion-art';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 
 const STREAMING_ID = '__streaming__';
@@ -181,6 +192,38 @@ export default function WebChatScreen() {
     }
   }, [activityActions, activityId, pushError, setActivity]);
 
+  const shownEmotion = gateEmotion(currentEmotion, relationship.goal?.stage);
+  const handleEmotionArtReady = useCallback((emotion: NonNeutralChatEmotionKey, key: string) => {
+    setCompanion((current) =>
+      current
+        ? {
+            ...current,
+            art_emotions: { ...(current.art_emotions ?? {}), [emotion]: key },
+          }
+        : current,
+    );
+  }, []);
+
+  useOnDemandEmotionArt({
+    artEmotions: companion?.art_emotions,
+    artUrl: companion?.art_url,
+    companionId,
+    emotion: shownEmotion,
+    onReady: handleEmotionArtReady,
+    source: companion?.source,
+  });
+
+  const handleKeyPress = useCallback(
+    (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+      const native = event.nativeEvent as TextInputKeyPressEventData & { shiftKey?: boolean };
+      if (native.key === 'Enter' && !native.shiftKey) {
+        event.preventDefault?.();
+        void handleSend();
+      }
+    },
+    [handleSend],
+  );
+
   if (history.isLoadingInitial) {
     return <LoadingScreen label="Loading chat..." />;
   }
@@ -193,7 +236,6 @@ export default function WebChatScreen() {
     );
   }
 
-  const shownEmotion = gateEmotion(currentEmotion, relationship.goal?.stage);
   const portrait = mediaSource(companion?.art_emotions?.[shownEmotion as ChatEmotionKey] ?? companion?.art_url ?? null);
 
   return (
@@ -252,9 +294,10 @@ export default function WebChatScreen() {
           <View className="border-t border-app-line bg-white p-4">
             <View className="flex-row items-end gap-3">
               <TextInput
+                editable={!stream.isStreaming}
                 multiline
                 onChangeText={setDraft}
-                onSubmitEditing={() => void handleSend()}
+                onKeyPress={handleKeyPress}
                 placeholder="Write a message..."
                 placeholderTextColor="#8B949E"
                 value={draft}

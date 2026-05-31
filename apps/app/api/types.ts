@@ -183,6 +183,8 @@ export type ChatEmotionKey =
   | 'tense'
   | 'annoyed';
 
+export type NonNeutralChatEmotionKey = Exclude<ChatEmotionKey, 'neutral'>;
+
 export type CompanionDetail = {
   appearance: string | null;
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
@@ -284,6 +286,31 @@ export type BaseArtJobResponse = {
   status: BaseArtJobStatus;
   art_key?: string;
   error_code?: string;
+};
+
+export type EmotionArtJobStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
+
+export type EmotionArtJob = {
+  completed_at: number | null;
+  created_at: number;
+  emotion: NonNeutralChatEmotionKey;
+  error_code: string | null;
+  error_message: string | null;
+  external_task_id: string | null;
+  id: string;
+  output_key: string | null;
+  provider: string | null;
+  source_art_url: string;
+  status: EmotionArtJobStatus;
+  updated_at: number;
+};
+
+export type EmotionArtGenerateResponse =
+  | { key: string; status: 'cached' }
+  | { job_id: string; reused: boolean; status: 'queued' };
+
+export type EmotionArtJobsResponse = {
+  jobs: EmotionArtJob[];
 };
 
 export type CompanionsListResponse = {

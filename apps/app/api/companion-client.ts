@@ -24,6 +24,8 @@ import type {
   AdminSettingsResponse,
   CreditPackageId,
   DailyState,
+  EmotionArtGenerateResponse,
+  EmotionArtJobsResponse,
   ExpressionGender,
   ExpressionPromptsResponse,
   ImageModelInput,
@@ -448,6 +450,24 @@ export async function generateBaseArt(
 export async function getBaseArtJob(jobId: string): Promise<BaseArtJobResponse> {
   return requestJson<BaseArtJobResponse>(
     `/companions/base-art/jobs/${encodeURIComponent(jobId)}`,
+  );
+}
+
+export async function generateCompanionEmotionArt(
+  companionId: string,
+  emotion: string,
+): Promise<EmotionArtGenerateResponse> {
+  return requestJson<EmotionArtGenerateResponse>(
+    `/companions/${encodeURIComponent(companionId)}/emotion-art/${encodeURIComponent(emotion)}/generate`,
+    { method: 'POST' },
+  );
+}
+
+export async function listCompanionEmotionArtJobs(
+  companionId: string,
+): Promise<EmotionArtJobsResponse> {
+  return requestJson<EmotionArtJobsResponse>(
+    `/companions/${encodeURIComponent(companionId)}/emotion-art/jobs`,
   );
 }
 

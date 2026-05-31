@@ -98,16 +98,6 @@ async function handleGenerate(
     return jsonResponse({ key: artMap[emotion], status: "cached" });
   }
 
-  // Non-admin users must go through the credits ledger. spec-021 hasn't
-  // landed yet, so we explicitly tell the client that the feature isn't
-  // ready instead of silently bypassing the cost.
-  if (!isAdmin) {
-    return jsonResponse(
-      { error: "credits_not_ready" },
-      { status: 501 },
-    );
-  }
-
   const result = await enqueueGenerationJob(env, {
     companionId,
     emotion,
