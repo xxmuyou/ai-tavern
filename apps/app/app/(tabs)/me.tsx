@@ -2,10 +2,10 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
-import { fetchMe, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
-import type { MeResponse, RomancePreference } from '@/api/types';
+import { fetchMe, listImageAssets, mediaSource, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
+import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
@@ -23,6 +23,7 @@ export default function MeScreen() {
   const { session, signOut } = useSession();
   const { data: billing, refetch: refetchBilling } = useBilling();
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [imageAssets, setImageAssets] = useState<UserImageAsset[]>([]);
   const push = usePush(me?.push_enabled);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -33,9 +34,13 @@ export default function MeScreen() {
 
     async function loadMe() {
       try {
-        const payload = await fetchMe();
+        const [payload, assets] = await Promise.all([
+          fetchMe(),
+          listImageAssets().catch(() => ({ assets: [] })),
+        ]);
         if (isMounted) {
           setMe(payload);
+          setImageAssets(assets.assets);
         }
       } catch {
         pushError('Could not load account details.');
@@ -157,6 +162,10 @@ export default function MeScreen() {
             ) : null}
           </Section>
 
+          <Section title="My image assets">
+            <ImageAssetGrid assets={imageAssets} />
+          </Section>
+
           <Section title="Push notifications">
             <View className="flex-row items-center justify-between gap-4">
               <View className="min-w-0 flex-1">
@@ -189,6 +198,31 @@ export default function MeScreen() {
           </Section>
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
+  if (!assets.length) {
+    return <Text className="text-sm text-app-muted">No saved images yet.</Text>;
+  }
+
+  return (
+    <View className="flex-row flex-wrap gap-3">
+      {assets.map((asset) => {
+        const source = mediaSource(asset.art_key);
+        return (
+          <View key={asset.id} className="w-[30%] min-w-[92px] overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
+            {source ? (
+              <Image accessibilityLabel="Saved image asset" resizeMode="cover" source={source} className="aspect-[4/5] w-full" />
+            ) : (
+              <View className="aspect-[4/5] w-full items-center justify-center">
+                <Text className="text-xs text-app-muted">Image</Text>
+              </View>
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }

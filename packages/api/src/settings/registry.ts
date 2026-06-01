@@ -305,30 +305,32 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "image_gen",
     label: "WF1 create workflows (per style)",
     type: "json",
-    envKey: "RUNNINGHUB_CREATE_WORKFLOWS",
     description:
-      'Per-style WF1 wiring: { "realistic": { workflowId, promptNodeId, checkpointNodeId } , ... }. ckptName comes from the Image models catalog.',
+      "Deployment-managed per-style WF1 wiring synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
   },
   {
     key: "image_gen.wf2_workflow_id",
     group: "image_gen",
     label: "WF2 workflow ID",
     type: "text",
-    envKey: "RUNNINGHUB_WORKFLOW_ID",
+    description:
+      "Deployment-managed WF2 workflow id synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
   },
   {
     key: "image_gen.wf2_load_image_node_id",
     group: "image_gen",
     label: "WF2 load-image node ID",
     type: "text",
-    envKey: "RUNNINGHUB_LOAD_IMAGE_NODE_ID",
+    description:
+      "Deployment-managed WF2 load-image node id synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
   },
   {
     key: "image_gen.wf2_prompt_node_id",
     group: "image_gen",
     label: "WF2 prompt node ID",
     type: "text",
-    envKey: "RUNNINGHUB_PROMPT_NODE_ID",
+    description:
+      "Deployment-managed WF2 prompt node id synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
   },
 
   // --- llm ---

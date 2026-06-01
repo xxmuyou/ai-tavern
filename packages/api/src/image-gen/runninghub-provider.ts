@@ -12,6 +12,7 @@ type CreateWorkflowConfig = {
   workflowId: string;
   promptNodeId: string;
   checkpointNodeId?: string;
+  checkpointFieldName?: string;
   ckptName?: string;
 };
 
@@ -53,7 +54,7 @@ function generateCreate(req: ImageGenRequest, cfg: ImageGenConfig): Promise<Imag
   const ckptName = req.ckpt_name?.trim() || config.ckptName;
   if (config.checkpointNodeId && ckptName) {
     nodeInfoList.push({
-      fieldName: "ckpt_name",
+      fieldName: config.checkpointFieldName ?? "ckpt_name",
       fieldValue: ckptName,
       nodeId: config.checkpointNodeId,
     });
@@ -185,6 +186,7 @@ function readCreateConfig(cfg: ImageGenConfig, style: ArtStyle | undefined): Cre
   }
 
   return {
+    checkpointFieldName: entry.checkpointFieldName?.toString().trim() || undefined,
     checkpointNodeId: entry.checkpointNodeId?.toString().trim() || undefined,
     ckptName: entry.ckptName?.trim() || undefined,
     promptNodeId: entry.promptNodeId.toString().trim(),

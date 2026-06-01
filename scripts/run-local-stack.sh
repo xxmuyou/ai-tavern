@@ -13,7 +13,7 @@ for arg in "$@"; do
         --skip-migrate) SKIP_MIGRATE=1 ;;
         -h|--help)
             cat <<'USAGE'
-Usage: scripts/local-dev.sh [--skip-migrate]
+Usage: scripts/run-local-stack.sh [--skip-migrate]
 
 Starts the Cloudflare Workers API on :8787 and the Expo web app on :8081.
 By default applies any pending local D1 migrations before booting the API
@@ -97,7 +97,7 @@ cleanup() {
 stop_ports
 
 echo "Preparing local env files..."
-if ! bash "$SCRIPT_DIR/prepare-local-env.sh" local; then
+if ! bash "$SCRIPT_DIR/generate-env-files.sh" local; then
     echo "Local env preparation failed. Refusing to start with stale env files." >&2
     exit 1
 fi
@@ -114,9 +114,9 @@ else
 fi
 
 CHILDREN=()
-start_proc api pnpm run local:api
+start_proc api pnpm run run:local:api
 CHILDREN+=("$STARTED_PID")
-start_proc app pnpm run local:app
+start_proc app pnpm run run:local:app
 CHILDREN+=("$STARTED_PID")
 
 trap cleanup INT TERM
@@ -131,7 +131,7 @@ echo "Keep this terminal open. Press Ctrl+C in this terminal to stop both servic
 # Wait for any child to exit, then cleanup.
 wait -n "${CHILDREN[@]}" 2>/dev/null || true
 EXIT_CODE=$?
-echo "[local-dev] a child process exited (code $EXIT_CODE), stopping the other..."
+echo "[run-local-stack] a child process exited (code $EXIT_CODE), stopping the other..."
 for pid in "${CHILDREN[@]}"; do
     stop_proc "$pid"
 done

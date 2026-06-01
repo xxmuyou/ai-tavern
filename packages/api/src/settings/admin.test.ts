@@ -50,7 +50,12 @@ describe("admin settings", () => {
   it("lists metadata while hiding secret values", async () => {
     const env = createEnv({
       DEEPSEEK_API_KEY: "env-secret",
-      RUNNINGHUB_CREATE_WORKFLOWS: "{\"anime_kr\":{\"workflowId\":\"wf\"}}",
+    });
+    env.settingsRows.set("image_gen.create_workflows", {
+      key: "image_gen.create_workflows",
+      updated_at: 123,
+      updated_by: "admin-1",
+      value: "{\"anime_kr\":{\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
     });
     const token = await issueToken(env, ADMIN_EMAIL);
 
@@ -73,7 +78,11 @@ describe("admin settings", () => {
     expect(secret).not.toHaveProperty("value");
 
     const workflows = body.settings.find((row) => row.key === "image_gen.create_workflows")!;
-    expect(workflows.value).toBe("{\"anime_kr\":{\"workflowId\":\"wf\"}}");
+    expect(workflows).toMatchObject({
+      env_key: null,
+      source: "db",
+      value: "{\"anime_kr\":{\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
+    });
   });
 
   it("requires confirmation for high-risk settings", async () => {

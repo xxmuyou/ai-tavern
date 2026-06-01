@@ -67,15 +67,14 @@ describe("runningHubImageGenProvider", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const env = {
-      IMAGE_GEN_PROVIDER: "runninghub",
-      RUNNINGHUB_API_KEY: "runninghub-api-key",
-      RUNNINGHUB_BASE_URL: "https://www.runninghub.ai",
-      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
-        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
-      }),
-      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
-    } as unknown as Env;
+    const env = createEnv(
+      {},
+      {
+        "image_gen.create_workflows": JSON.stringify({
+          anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+        }),
+      },
+    );
 
     const result = await (await getImageGenProvider(env, "create")).generate(
       { mode: "create", prompt: "a calm girl in a sweater", style: "anime_kr" },
@@ -106,14 +105,19 @@ describe("runningHubImageGenProvider", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const env = {
-      IMAGE_GEN_PROVIDER: "runninghub",
-      RUNNINGHUB_API_KEY: "runninghub-api-key",
-      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
-        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow", checkpointNodeId: "4" },
-      }),
-      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
-    } as unknown as Env;
+    const env = createEnv(
+      {},
+      {
+        "image_gen.create_workflows": JSON.stringify({
+          anime_kr: {
+            promptNodeId: "6",
+            workflowId: "kr-workflow",
+            checkpointNodeId: "4",
+            checkpointFieldName: "model_name",
+          },
+        }),
+      },
+    );
 
     await (await getImageGenProvider(env, "create")).generate(
       { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
@@ -124,7 +128,43 @@ describe("runningHubImageGenProvider", () => {
     const body = JSON.parse(String(calls[0]![1].body));
     expect(body.nodeInfoList).toEqual([
       { fieldName: "text", fieldValue: "x", nodeId: "6" },
-      { fieldName: "ckpt_name", fieldValue: "myCustom.safetensors", nodeId: "4" },
+      { fieldName: "model_name", fieldValue: "myCustom.safetensors", nodeId: "4" },
+    ]);
+  });
+
+  it("uses the workflow default ckptName when the request has no selected model", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-create-2", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.create_workflows": JSON.stringify({
+          anime_kr: {
+            promptNodeId: "6",
+            workflowId: "kr-workflow",
+            checkpointNodeId: "4",
+            ckptName: "workflowDefault.safetensors",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "create")).generate(
+      { mode: "create", prompt: "x", style: "anime_kr" },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.nodeInfoList).toEqual([
+      { fieldName: "text", fieldValue: "x", nodeId: "6" },
+      { fieldName: "ckpt_name", fieldValue: "workflowDefault.safetensors", nodeId: "4" },
     ]);
   });
 
@@ -138,14 +178,14 @@ describe("runningHubImageGenProvider", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const env = {
-      IMAGE_GEN_PROVIDER: "runninghub",
-      RUNNINGHUB_API_KEY: "runninghub-api-key",
-      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
-        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
-      }),
-      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
-    } as unknown as Env;
+    const env = createEnv(
+      {},
+      {
+        "image_gen.create_workflows": JSON.stringify({
+          anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+        }),
+      },
+    );
 
     await (await getImageGenProvider(env, "create")).generate(
       { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
@@ -159,11 +199,7 @@ describe("runningHubImageGenProvider", () => {
   });
 
   it("fails create when the style has no configured workflow", async () => {
-    const env = {
-      IMAGE_GEN_PROVIDER: "runninghub",
-      RUNNINGHUB_API_KEY: "runninghub-api-key",
-      RUNNINGHUB_CREATE_WORKFLOWS: "{}",
-    } as unknown as Env;
+    const env = createEnv({}, { "image_gen.create_workflows": "{}" });
 
     await expect(
       (await getImageGenProvider(env, "create")).generate(
@@ -203,18 +239,40 @@ describe("styleHasCheckpointNode", () => {
   });
 });
 
-function createEnv(): Env {
+function createEnv(
+  envOverrides: Record<string, unknown> = {},
+  settings: Record<string, string> = {},
+): Env {
+  const rows = new Map<string, string>([
+    ["image_gen.wf2_workflow_id", "workflow-1"],
+    ["image_gen.wf2_load_image_node_id", "load-image-node"],
+    ["image_gen.wf2_prompt_node_id", "prompt-node"],
+    ...Object.entries(settings),
+  ]);
+
   return {
+    DB: {
+      prepare(sql: string) {
+        return {
+          all: async () => {
+            if (sql.includes("FROM app_settings")) {
+              return {
+                results: [...rows.entries()].map(([key, value]) => ({ key, value })),
+              };
+            }
+            return { results: [] };
+          },
+        };
+      },
+    },
     IMAGE_GEN_PROVIDER: "runninghub",
     IMAGE_GEN_PUBLIC_BASE_URL: "https://dev.aiappsbox.com/api",
     R2_SIGNING_KEY: "test-signing-key",
     RUNNINGHUB_API_KEY: "runninghub-api-key",
     RUNNINGHUB_BASE_URL: "https://www.runninghub.ai",
-    RUNNINGHUB_LOAD_IMAGE_NODE_ID: "load-image-node",
-    RUNNINGHUB_PROMPT_NODE_ID: "prompt-node",
     RUNNINGHUB_WEBHOOK_SECRET: "webhook-secret",
     RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
-    RUNNINGHUB_WORKFLOW_ID: "workflow-1",
+    ...envOverrides,
   } as unknown as Env;
 }
 

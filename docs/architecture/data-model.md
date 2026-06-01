@@ -466,8 +466,8 @@ xtbit-assets/
 
 **运行方式：**
 ```bash
-pnpm cf:d1:migrate:dev    # dev 环境
-pnpm cf:d1:migrate:prod   # prod 环境（需要 admin 确认）
+pnpm migrate:db:dev    # dev 环境
+pnpm migrate:db:prod   # prod 环境（需要 admin 确认）
 ```
 
 **回滚策略：** D1 不支持自动回滚。每个 migration 包含 `-- ROLLBACK:` 注释段，需手动执行。

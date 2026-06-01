@@ -1,0 +1,32 @@
+{
+  "wf1": {
+    "createWorkflows": {
+      "realistic": {
+        "workflowId": "",
+        "promptNodeId": "",
+        "checkpointNodeId": "",
+        "checkpointFieldName": "",
+        "ckptName": ""
+      },
+      "anime_jp": {
+        "workflowId": "",
+        "promptNodeId": "",
+        "checkpointNodeId": "",
+        "checkpointFieldName": "",
+        "ckptName": ""
+      },
+      "anime_kr": {
+        "workflowId": "",
+        "promptNodeId": "",
+        "checkpointNodeId": "",
+        "checkpointFieldName": "",
+        "ckptName": ""
+      }
+    }
+  },
+  "wf2": {
+    "workflowId": "",
+    "loadImageNodeId": "",
+    "promptNodeId": ""
+  }
+}

@@ -288,6 +288,31 @@ export type BaseArtJobResponse = {
   error_code?: string;
 };
 
+export type BaseArtPromptAssistResponse = {
+  fallback?: boolean;
+  prompt: string;
+};
+
+export type UserImageAsset = {
+  art_key: string;
+  created_at: number;
+  id: string;
+  model_id: string | null;
+  prompt: string | null;
+  source: 'generated' | 'upload';
+};
+
+export type UserImageAssetsResponse = {
+  assets: UserImageAsset[];
+};
+
+export type UserImageAssetCreateInput = {
+  art_key: string;
+  model_id?: string;
+  prompt?: string;
+  source: 'generated' | 'upload';
+};
+
 export type EmotionArtJobStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
 
 export type EmotionArtJob = {

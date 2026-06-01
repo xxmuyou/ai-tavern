@@ -270,7 +270,13 @@ export function RowHeader({ item }: { item: AdminSettingItem }) {
   );
 }
 
-type WorkflowEntry = { workflowId: string; promptNodeId: string; checkpointNodeId: string };
+type WorkflowEntry = {
+  workflowId: string;
+  promptNodeId: string;
+  checkpointNodeId: string;
+  checkpointFieldName: string;
+  ckptName: string;
+};
 
 export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveSettingFn }) {
   const [draft, setDraft] = useState<Record<string, WorkflowEntry>>(() => parseWorkflows(item.value));
@@ -298,6 +304,8 @@ export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; o
             workflowId: e.workflowId.trim(),
             promptNodeId: e.promptNodeId.trim(),
             checkpointNodeId: e.checkpointNodeId.trim(),
+            checkpointFieldName: e.checkpointFieldName.trim(),
+            ckptName: e.ckptName.trim(),
           };
         }
       }
@@ -318,6 +326,8 @@ export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; o
             <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'workflowId', v)} placeholder="workflowId" placeholderTextColor="#687076" value={e.workflowId} />
             <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'promptNodeId', v)} placeholder="prompt node id" placeholderTextColor="#687076" value={e.promptNodeId} />
             <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'checkpointNodeId', v)} placeholder="checkpoint node id (required to switch models)" placeholderTextColor="#687076" value={e.checkpointNodeId} />
+            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'checkpointFieldName', v)} placeholder="checkpoint field name (default: ckpt_name)" placeholderTextColor="#687076" value={e.checkpointFieldName} />
+            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'ckptName', v)} placeholder="default checkpoint file name" placeholderTextColor="#687076" value={e.ckptName} />
           </View>
         );
       })}
@@ -332,7 +342,7 @@ export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; o
 }
 
 function emptyEntry(): WorkflowEntry {
-  return { workflowId: '', promptNodeId: '', checkpointNodeId: '' };
+  return { workflowId: '', promptNodeId: '', checkpointNodeId: '', checkpointFieldName: '', ckptName: '' };
 }
 
 function parseWorkflows(raw: string | null | undefined): Record<string, WorkflowEntry> {
@@ -347,6 +357,8 @@ function parseWorkflows(raw: string | null | undefined): Record<string, Workflow
           workflowId: String(e.workflowId ?? ''),
           promptNodeId: String(e.promptNodeId ?? ''),
           checkpointNodeId: String(e.checkpointNodeId ?? ''),
+          checkpointFieldName: String(e.checkpointFieldName ?? ''),
+          ckptName: String(e.ckptName ?? ''),
         };
       }
     }

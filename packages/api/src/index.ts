@@ -16,6 +16,7 @@ import {
 import { verifySignedObjectRequest } from "./image-gen/signed-url";
 import { handleActivityRequest } from "./life/activity";
 import { handleMemoryRequest } from "./life/memory";
+import { handleMeImageAssetsRequest } from "./me/image-assets";
 import { handlePushRequest } from "./life/push";
 import { handleTodayRequest } from "./life/today";
 import { handleAdminLlmRequest } from "./llm";
@@ -138,6 +139,11 @@ export default {
       const memoryResponse = await handleMemoryRequest(request, env, pathname);
       if (memoryResponse) {
         return await withCors(request, env, memoryResponse);
+      }
+
+      const meImageAssetsResponse = await handleMeImageAssetsRequest(request, env, pathname);
+      if (meImageAssetsResponse) {
+        return await withCors(request, env, meImageAssetsResponse);
       }
 
       const pushResponse = await handlePushRequest(request, env, pathname);

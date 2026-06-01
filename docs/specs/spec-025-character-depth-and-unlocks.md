@@ -25,7 +25,7 @@
 - `utils/expression-unlock.ts`：镜像后端的表情 stage 门控（`gateEmotion`），未解锁回退 neutral。
 - `components/UnlockCelebration.tsx`：收到 `unlocks` 的轻量庆祝；`components/CompanionUnlocksPanel.tsx`：角色页“已解锁”区（秘密/称呼/表情/场景 + 锁态 + Pro 升级引导）。
 - `utils/portrait.ts`：抽出共享的情绪展示常量（label/emoji/tint/比例/`resolvePortrait`），供 `PortraitBar` 与图鉴复用。`components/CompanionGalleryPanel.tsx` + `components/PortraitViewerModal.tsx`：角色页立绘图鉴网格 + 全屏查看器（见 §B4.4/§B5）。
-- `CompanionForm.tsx`：新增“Inner life”面板（want/secret/boundary，带说明），create/edit 两端贯通。
+- `CompanionForm.tsx`：新增“Inner life”面板（want/secret/boundary，带说明），create/edit 两端贯通。创建表单的低门槛 preset chips 见 A4.1。
 - 两端聊天屏接 `onUnlocks` + 庆祝 + `gateEmotion` 门控立绘；两端角色页插入解锁面板。
 - `tsc --noEmit` 与 `expo lint` 均通过。
 
@@ -115,6 +115,15 @@ ALTER TABLE companions ADD COLUMN boundary  TEXT;  -- 底线/雷区（触碰→g
 - 后端：`createCompanion` 的输入类型 + 校验加上 want/secret/boundary（均可选；长度上限与现有字段一致）；编辑端点（spec-019）同步。
 - 前端（`CompanionForm` / companion-create / `companion/[id]/edit` 两端）：表单加三个多行输入，附简短说明（want=ta 现在想要什么 / secret=高信任才揭露 / boundary=会让 ta 反感的事）。
 - 类型：`apps/app/api/types.ts` 的 companion 相关类型补三字段。
+
+### A4.1 创建表单 persona 预设
+为降低新用户创建门槛，创建角色表单提供可点击 preset chips；编辑页可复用，但不是必需。
+
+- 覆盖字段固定为 `personality`、`speech_style`、`want`、`boundary`。
+- `secret` 不做预设，避免诱导用户写套路化秘密；保持自由文本。
+- 每组提供 4-8 个英文短语 preset，并保留 `Other`。
+- 点击 preset 只填充或追加到对应 TextInput；提交给后端的仍是普通字符串，不新增枚举 schema。
+- `Other` 只代表 UI 自由输入状态，不作为字段值提交。
 
 ---
 

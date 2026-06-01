@@ -14,11 +14,7 @@
 - `GET /companions?source=user|official|all`：列表，含关系维度
 - `GET /billing/status`：返回 `entitlements.custom_companion_limit`（free=3, Pro=null=无限）
 
-前端当前 0% 实现：没有创建/编辑/删除 UI，没有配额提示，没有立绘上传入口。
-
-**Emotion 立绘约定（2026-05-25 用户确认）：** 用户上传一张图，后端在 `companions` 表的 6 个 emotion 列（`art_emotion_warm/neutral/guarded/playful/tense/annoyed`）全部写入该 URL。用户不需要在 UI 感知"多 emotion"——只上传一张。
-
-> **⚠️ 已被 [`spec-020`](./spec-020-companion-emotion-art-generation.md) 修订**：基础图来源不止"上传一张"，还可**文生图创建**（填 prompt + 选 3 风格 `realistic`/`anime_jp`/`anime_kr`）；上传/文生图只写 `art_url` + `art_emotions.neutral`（**不再填满 6 列**），其余 5 个 emotion 变体由 spec-020 异步生成（透明背景）。本 spec 的 UI 需提供「文生图 / 上传」二选一入口 + 风格选择 + 「生成表情」入口；生图后端契约（含 `POST /companions/base-art/generate`、`art/edit`）见 spec-020 §F，provider 见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
+本文档是创建/编辑自定义 companion 的当前产品契约。旧版“上传后必须重画”“上传一张图填满 6 个 emotion”的说法已废弃：创建时只确定一张 neutral 基础图，非 neutral 变体按 spec-020 的能力异步补齐或回退 neutral。
 
 ---
 
@@ -27,17 +23,18 @@
 ### 包含（v1 MVP）
 
 - Native（iOS/Android via Expo Go + EAS）+ Web 三端：创建页、编辑页、删除确认、配额提示
-- 立绘上传：用户上传一张图 → R2 → URL，后端填充全部 emotion 列
-- 后端新增 `POST /companions/upload-art` 端点
+- 立绘来源：文生图创建，或上传本地图片直接作为最终 neutral 图
+- 后端 `POST /companions/upload-art` 端点
+- 文生图 prompt assistant：帮助用户把需求转为英文生图 prompt
+- 手动保存个人图片资产，并在 Me 查看
 - 配额 UX：免费用户上限 3 个，Pro 无限
 
 ### 不包含（v2）
 
-- `/companions/assist` LLM 辅助创角
 - 6 emotion 分别上传不同图
 - 角色公开 / 社区分享
 - 角色 import/export
-- ~~AI 生成立绘~~ → 已纳入 [`spec-020`](./spec-020-companion-emotion-art-generation.md)（文生图创建 + 表情变体生成）；本 spec 负责其创建/风格选择 UI 入口
+- 上传图片后再走 img2img 重画 / 身份保真
 
 ---
 
@@ -71,24 +68,26 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 ---
 
-## 创建流程（浮窗 → 属性 → 完成）
+## 创建流程（基础图 → 属性 → 完成）
 
 > 2026-05-28 用户确认的实际顺序：**先拿到基础图，再填属性，点「完成」才建角色**。基础图先于 companion 记录存在；详见 [`spec-020`](./spec-020-companion-emotion-art-generation.md) §A「创建流程顺序」与 §F。
 
-### 第 1 步：基础图浮窗
+### 第 1 步：基础图
 
 点「+ 创建」弹浮窗（未达配额时；达上限走 QuotaModal）：
 
-1. **选风格**：3 选 1 —— 写实 `realistic` / 日漫 `anime_jp` / 韩漫 `anime_kr`。风格同时决定文生图和后续变体用哪个 checkpoint，必选。
+1. **选择生成模型**：从 `/image-models` 拉取 admin 配置的 active 模型。模型决定 `style_tag` 与 `ckpt_name`；前端展示 label，不硬编码三种风格。
 2. **二选一拿基础图**：
-   - **上传本地人像**：`upload-art` 拿原图 key → 调 `POST /companions/base-art/generate`（`source:"upload"` + `upload_key` + `style`），后端按风格 img2img 重画（**不保真**）。
-   - **文生图**：填一段外貌描述 prompt → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `style`）。
-3. **积分提示**：文生图（及上传重画）消耗积分，浮窗内明确告知本次消耗与余额，由用户确认后再发起（消耗规则见 spec-021）。
-4. **异步预览 / 重抽**：`base-art/generate` 返回 `job_id`，前端轮询 `GET /companions/base-art/jobs/{jobId}`：
+   - **上传本地图片**：`POST /companions/upload-art` 拿到原图 key，直接作为最终 `art_url` / neutral 图；不调用 RunningHub，不做 img2img 重画，不消耗生图流程。
+   - **文生图**：填外貌描述 prompt → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `model`）。
+3. **Prompt assistant**：生图输入旁增加小栏，英文提示文案固定为 `Not sure what kind of portrait you want? Ask me.`。用户在小对话框里描述需求后，后端返回一段可编辑的英文生图 prompt；该接口只生成 prompt，不直接触发生图，不保存资产。
+4. **异步预览 / 重抽**：文生图的 `base-art/generate` 返回 `job_id`，前端轮询 `GET /companions/base-art/jobs/{jobId}`：
    - `processing` → 显示「生成中」spinner。
-   - `succeeded` → 预览风格化基础图；满意则「下一步」，不满意可「重新生成」（重抽 = 再次调用 = 再次扣分）。
+   - `succeeded` → 预览基础图；满意则「下一步」，不满意可「重新生成」。
    - `failed` → toast 错误，可重试。
-5. 拿到满意的基础图后，把 `art_key` + `style` 暂存到创建表单 state，进入第 2 步。
+5. **预览尺寸**：基础图预览和空状态占位都用较小的居中 `4:5` 画幅。Web/tablet 最大宽度约 `320px`，窄屏约 `240px`；图片不再 `width:100%` 撑满整块面板。
+6. **手动保存资产**：文生图成功后显示 `Save to My assets`。只有用户点击后才写入个人资产库；未保存的废稿仍可继续用于本次创建，但不出现在 Me。
+7. 拿到满意的基础图后，把 `art_key` / `art_url` 暂存到创建表单 state，进入第 2 步。
 
 ### 第 2 步：属性表单
 
@@ -96,12 +95,11 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 ### 第 3 步：点「完成」建角色
 
-`POST /companions` 带 `{属性 + art_key/art_url + art_style}` 落库（spec-004 扩展接受这几个字段）：
+`POST /companions` 带 `{属性 + art_url}` 落库（文生图结果和上传结果都作为 `art_url` 提交）：
 
-- 后端写 `art_url` + `art_emotions.neutral`（= 风格化基础图）+ `art_style`，**不填满 6 列**。
-- 落库后**自动异步**触发 5 个非 neutral 变体 + 抠图透明（无需前端再调 expression pack）。
-- 此步也消耗积分，「完成」按钮处应提示这一步会再扣分。
-- 角色立即可用：变体没出齐前，PortraitBar 用 neutral fallback；出齐后自动命中。
+- 后端写 `art_url` + `art_emotions.neutral`，**不填满 6 列**。
+- 文生图可携带对应模型/风格信息供后续表情变体使用；上传本地图片没有强制风格重画。
+- 非 neutral 变体未生成或不适用时，PortraitBar 回退 neutral，角色仍立即可用。
 
 ---
 
@@ -120,9 +118,9 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 ### 处理
 
 1. 校验文件大小 / MIME 类型
-2. 生成 R2 key：`user-art/{user_id}/{uuid}.{ext}`
+2. 生成 R2 key：`companions/user/{user_id}/{uuid}.{ext}`
 3. 上传到 `env.ASSETS`（R2 binding）
-4. 返回 `{ "key": "user-art/{user_id}/{uuid}.webp" }`（相对 key，非绝对 URL；前端通过 `objectUrl(key)` 转 preview URL）
+4. 返回 `{ "key": "companions/user/{user_id}/{uuid}.webp" }`（相对 key，非绝对 URL；前端通过 `objectUrl(key)` 转 preview URL）
 
 ### 错误
 
@@ -135,13 +133,13 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 ### 文件位置
 
-新增 `packages/api/src/companions/upload-art.ts`，在 companions `index.ts` 路由表中注册 `POST /companions/upload-art`。
+端点实现位于 `packages/api/src/companions/upload-art.ts`，在 companions `index.ts` 路由表中注册 `POST /companions/upload-art`。
 
 ---
 
 ## Emotion 填充逻辑（后端）
 
-> **⚠️ 已被 [`spec-020`](./spec-020-companion-emotion-art-generation.md) 修订**：不再「一张图填满 6 列」。基础图只写 `neutral`，其余 5 个非 neutral 变体由 spec-020 异步生成（透明背景）。
+当前约定：不再「一张图填满 6 列」。基础图只写 `neutral`，其余 5 个非 neutral 变体由 spec-020 异步生成（透明背景）或回退 neutral。
 
 在 `companions/index.ts` 的 `createCompanion()` 函数中（INSERT 前）：
 
@@ -152,8 +150,8 @@ if (input.art_url && !input.art_emotions) {
 }
 ```
 
-- `art_emotions.neutral` 等于 `art_url`（风格化基础图）；`warm/playful/guarded/tense/annoyed` 留空，等异步变体生成。
-- 创建成功后由后端自动异步触发变体生成（见 spec-020 §A / §F）。
+- `art_emotions.neutral` 等于 `art_url`；`warm/playful/guarded/tense/annoyed` 留空，等异步变体生成或回退 neutral。
+- 文生图创建可自动触发后续变体生成（见 spec-020 §A / §F）；上传本地图片直接作为 neutral，不强制接 RunningHub 重画。
 - `PUT /companions/{id}`（编辑）：若更新 `art_url` 或 `art_style`，清空或标记 stale 旧的非 neutral 变体，避免新基础图 / 新风格与旧变体串味。
 
 ---
@@ -172,13 +170,27 @@ if (input.art_url && !input.art_emotions) {
 | `speech_style` | 多行 TextInput | ❌ | 最大 4000 字符 |
 | `relationship_role` | 下拉（colleague/neighbor/friend/crush/stranger/family） | ❌ | — |
 | `preferred_scenes` | 场景多选（从 `GET /scenes` 拉清单） | ❌ | 最多 32 个 |
+| `want` | 多行 TextInput + preset chips | ❌ | 最大 4000 字符 |
+| `secret` | 多行 TextInput | ❌ | 最大 4000 字符 |
+| `boundary` | 多行 TextInput + preset chips | ❌ | 最大 4000 字符 |
 | 立绘（`art_url`） | 图片上传（预览 + 重选） | ❌ | 见上传端点 |
+
+### Persona 预设 UX
+
+为降低创建门槛，以下字段提供可点击 preset chips，并保留 `Other` 自由输入：
+
+- `personality`：如 warm / reserved / playful / protective / ambitious / mysterious。
+- `speech_style`：如 soft-spoken / direct / teasing / formal / poetic。
+- `want`：如 to be understood / to feel safe / to be taken seriously / to find excitement。
+- `boundary`：如 being lied to / being rushed / being ignored / being treated as a backup。
+
+点击 preset 只填充或追加到可编辑文本里，用户最终提交的仍是普通字符串。`Other` 不是后端枚举值，只是打开自由输入的 UI 状态。
 
 ---
 
 ## 立绘上传 UX
 
-1. 占位区：圆角矩形，`aspect-[4/5]`，虚线边框，居中「Upload portrait」文案
+1. 占位区：小尺寸居中圆角矩形，`aspect-[4/5]`，虚线边框，居中「Upload portrait」文案；Web/tablet 最大宽度约 `320px`，窄屏约 `240px`
 2. 点击触发文件选择：
    - Native：`expo-image-picker` → `MediaTypeOptions.Images`
    - Web：`<input type="file" accept="image/*">`
@@ -186,6 +198,39 @@ if (input.art_url && !input.art_emotions) {
 4. 成功：预览图替换占位区，同时记录 `artKey` 到表单 state
 5. 失败：toast 错误，占位区恢复
 6. 支持重新选择（点击预览图 → 重新选）
+
+---
+
+## 个人图片资产
+
+用户对文生图结果有手动保存为个人资产的权利，入口在生成预览旁。
+
+### API
+
+- `POST /me/image-assets`：手动保存一张图片资产。
+  - 请求：`{ "art_key": "<r2 key>", "source": "generated" | "upload", "prompt"?: "...", "model_id"?: "..." }`
+  - 返回：`{ "id": "...", "art_key": "...", "created_at": ... }`
+- `GET /me/image-assets`：列出当前用户保存过的图片资产，按 `created_at DESC` 返回。
+- `DELETE /me/image-assets/{id}`：从个人资产库移除记录；不删除 R2 原图，也不影响已经创建的 companion。
+
+### 数据
+
+新增 `user_image_assets` 表承载用户资产语义，不复用 `image_generation_jobs` 作为长期图库：
+
+```sql
+CREATE TABLE user_image_assets (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id),
+  art_key     TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  prompt      TEXT,
+  model_id    TEXT,
+  created_at  INTEGER NOT NULL,
+  deleted_at  INTEGER
+);
+```
+
+Me 页面新增 `My image assets` 区块，显示缩略图网格。空状态不提示配置或接口细节，只显示简短空状态。
 
 ---
 
@@ -257,7 +302,7 @@ if (input.art_url && !input.art_emotions) {
 
 ### Web (`companion-create.web.tsx`)
 
-- 两列布局：左侧立绘上传区（1/3 宽），右侧字段分组卡片（2/3 宽）
+- 两列布局：左侧小尺寸立绘区（最大约 `320px`），右侧字段分组卡片
 - 最大宽度 720px 居中
 - 图片选择：`<input type="file">`
 - "Create" 按钮在表单底部（非 sticky）
@@ -282,20 +327,32 @@ Native 端将 `expo-image-picker` 返回的 `uri` 转为 `Blob` 后调用。
 
 - [ ] emotion 填充：POST 只给 `art_url` → 仅 `art_emotions.neutral` 写入该 URL，其余 5 列留空
 - [ ] emotion 填充：POST 同时给 `art_url` + `art_emotions` → 以传入 `art_emotions` 为准
-- [ ] 创建带 `art_key` + `art_style` → 落库后自动异步触发非 neutral 变体（mock provider 下验证 job 入队）
+- [ ] 创建带文生图 `art_url` → `neutral` 正确写入，后续变体可异步触发或回退 neutral
+- [ ] 创建带上传 `art_url` → 不触发 RunningHub upload 重画，`neutral` 使用上传 key
 
 ### 单元测试（`companions/upload-art.test.ts`）
 
 - [ ] 未登录 → 401
 - [ ] 超过 5MB → 400 `file_too_large`
 - [ ] 不支持的 MIME → 400 `invalid_file_type`
-- [ ] 正常上传 → 200 `{ key: "user-art/..." }`；R2 存储被调用
+- [ ] 正常上传 → 200 `{ key: "companions/user/..." }`；R2 存储被调用
+
+### 单元测试（`me/image-assets.test.ts`）
+
+- [ ] 未登录 → 401
+- [ ] 保存不属于当前用户可访问范围的 key → 403 或 404
+- [ ] 正常保存 → 返回 asset id，`GET /me/image-assets` 可见
+- [ ] 删除资产 → `GET /me/image-assets` 不再返回；R2 对象不删除
 
 ### 集成测试（前端手动）
 
 - [ ] 创建 → 列表可见 → 详情 → 编辑 → 删除流程
 - [ ] 免费用户创建第 4 个 → QuotaModal
 - [ ] Pro 用户无 QuotaModal，无分母计数
+- [ ] 文生图预览尺寸不会撑满页面；移动端和 Web 都保持小尺寸
+- [ ] 文生图成功后，未点击 `Save to My assets` 不出现在 Me；点击后出现在 Me
+- [ ] prompt assistant 返回英文 prompt，用户可编辑后再生成
+- [ ] persona preset chips 能填充字段，`Other` 可自由输入
 
 ---
 
@@ -307,16 +364,17 @@ Native 端将 `expo-image-picker` 返回的 `uri` 转为 `Blob` 后调用。
 | `PUT /companions/{id}` 后端 | ✅ done (spec-004) |
 | `DELETE /companions/{id}` 后端 | ✅ done (spec-004) |
 | `GET /billing/status` → `custom_companion_limit` | ✅ done (spec-010) |
-| `POST /companions/upload-art` 后端 | ❌ 本 spec 新增 |
+| `POST /companions/upload-art` 后端 | ✅ done |
 | R2 `ASSETS` binding 已配置 | ✅ done (wrangler.jsonc) |
+| `POST /me/image-assets` / `GET /me/image-assets` | ❌ 本 spec 新增 |
+| prompt assistant 端点 | ❌ 本 spec 新增 |
 
 ---
 
 ## 不做 / v2 留位
 
-- `/companions/assist` LLM 辅助创角
 - 6 emotion 分别配不同立绘
 - 角色公开 / 分享 / 社区浏览
 - 角色 import/export
-- AI 生成立绘
+- 上传后 RunningHub img2img 重画 / 身份保真
 - 批量删除

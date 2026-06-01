@@ -14,9 +14,9 @@
 - 前端 `PortraitBar` 已经按当前 emotion 读取 `art_emotions[emotion]`，缺失时回退到 `art_url`。
 - `POST /companions/upload-art` 已支持用户上传一张 companion 图片到 R2。
 
-问题在于：用户创建 companion 时只上传一张图，后端当前会把 6 个 emotion 全部映射到同一张图片，导致情绪状态虽然变了，角色立绘却没有变化。这不符合一个可商业化 AI companion 产品的内容生成体验。
+问题在于：companion 只有一张 neutral 图时，聊天中的 emotion 状态虽然会变化，但缺失的非 neutral 立绘只能回退到 neutral。要形成可商业化的视觉反馈，需要在 neutral 之外生成可复用的表情变体。
 
-本 spec 把用户/管理员的工作流改为：**只上传或维护一张 neutral 基础图，其他情绪图通过 Expression Pack 异步生成，生成后缓存复用。**
+本 spec 的工作流为：**只要求一张 neutral 基础图，其他情绪图通过 Expression Pack 异步生成，生成后缓存复用。**
 
 同时，本 spec 不把生图能力写死在 companion 模块里。表情包只是第一个业务场景；底层需要新增一个可复用的 `image-generation` 模块，后续 web/app 其他页面需要文生图、图生图、编辑、透明背景或 WebP 输出时，都复用同一套 provider adapter、任务表、队列处理和 R2 入库逻辑。
 
@@ -26,8 +26,8 @@
 
 在表情包之外，本 spec 把 companion 的**基础图来源**和**风格**也纳入：
 
-1. **基础图来源新增「文生图创建」**：创建 companion 时，用户可以**不上传**，改为填提示词由后端文生图生成基础图；上传仍保留（走 img2img 按所选风格重画，**不要求像原人**）。
-2. **新增 `art_style` 风格属性**：3 种固定风格 `realistic`（写实）/ `anime_jp`（日漫）/ `anime_kr`（韩漫），决定生图用哪个 checkpoint。
+1. **基础图来源新增「文生图创建」**：创建 companion 时，用户可以填提示词由后端文生图生成基础图；也可以上传本地图片并直接作为最终 neutral 图。当前产品创建流程不把上传图再送 RunningHub img2img 重画。
+2. **模型/风格属性**：创建生图由 admin 配置的 active image model 决定 `style_tag` 与 checkpoint；旧的 3 风格枚举只作为兼容层存在。
 3. **变体输出统一透明背景**：5 个非 neutral 变体由生图链路对**角色立绘去背**，输出透明背景。这里的“背景抠图”不是生成场景背景图。
 4. **新增编辑接口**：按 prompt（+可选 mask）换装 / 换姿势，**留接口、优先级最低**。
 
@@ -35,18 +35,16 @@
 
 用户创建 companion 的实际顺序是 **「先出基础图 → 再填属性 → 点完成才建角色」**，基础图先于 companion 记录存在：
 
-1. 点「创建」弹浮窗，先选 `style`（3 风格），再二选一拿到基础图：
-   - **上传**：上传本地人像 → 走 WF-1 `create` 的 img2img 按风格重画（**不保真**）。
-   - **文生图**：填 prompt → 走 WF-1 `create` 的 txt2img。可选是否消耗积分由 UI 决定（见 spec-019）。
+1. 点「创建」弹浮窗，二选一拿到基础图：
+   - **上传**：上传本地图片 → `POST /companions/upload-art` → 返回 key 直接作为最终 neutral 图；不调用 RunningHub，不做 img2img 重画。
+   - **文生图**：选 active image model，填 prompt → 走 WF-1 `create` 的 txt2img。可选是否消耗积分由 UI 决定（见 spec-019）。
    - 文生图是异步的：浮窗里「生成中 → 预览 → 满意进下一步 / 不满意重抽（重抽再扣分）」。
 2. 拿到满意的基础图后进入属性表单（name/gender/personality 等，**不参与出图**，只喂 chat 人设）。
-3. 点「完成」才 `POST /companions` 建角色，把 `{属性 + 基础图 key + style}` 一起提交；建完记录后**后台异步**触发 5 个非 neutral 变体 + 抠图透明。
+3. 点「完成」才 `POST /companions` 建角色，把 `{属性 + 基础图 key}` 一起提交；文生图来源可携带模型/风格信息，供后续变体生成使用。
 
-因此基础图生成是一个**不绑 companion id 的草稿步骤**（companion 此时还不存在），不能挂在 `/companions/{id}/` 下；见 §F 端点设计。
+因此文生图基础图生成是一个**不绑 companion id 的草稿步骤**（companion 此时还不存在），不能挂在 `/companions/{id}/` 下；见 §F 端点设计。上传本地图片则是同步上传，直接返回可提交的 `art_url`。
 
-> **基础图风格一致性**：无论上传还是文生图，neutral 槽存的都是**按所选风格出/重画后的基础图**，不是用户上传的原图。否则 neutral（原图）与 5 个风格化变体会串味。上传路径默认重画统一风格。
->
-> **上传图非保真规则（MVP 决策）**：上传图只作为风格化参考 / 重画输入，不承诺贴合上传者长相，不为 WF-1 增加 InstantID / FaceID / IPAdapter 等真人身份保真节点。需要“像原人”的产品能力以后作为独立增强评估，不进入当前创角闭环。
+> **上传图规则（2026-06-01 产品决策）**：创建角色时，上传图是用户选择的最终 neutral 图，不是 RunningHub 的参考图。底层 `source:"upload"` 能力可作为后续增强保留，但不属于当前创建流程。
 
 > **术语统一**：产品语境里说的「6 个姿势 / 立绘」就是本 spec 的「6 个 emotion 变体」（`neutral` + 5 个非 neutral），是同一套图，喂给 chat 的 `PortraitBar`，不是另一套独立的姿势集合。
 >
@@ -102,18 +100,18 @@ ALTER TABLE companions ADD COLUMN art_style TEXT; -- 'realistic' | 'anime_jp' | 
 - 创建 companion 时确定 `art_style`，决定生图（create / variation / edit）用哪个 checkpoint。
 - 历史 seed companion 的 `art_style` 可为空；生图时缺省按一个默认风格（如 `anime_jp`）处理或要求显式选择。
 
-**基础图来源**（`art_url` / `art_emotions.neutral` 二选一来源）—— 都在 companion **创建之前**作为草稿步骤产出，最终 neutral 槽存的是**风格化后的基础图**：
+**基础图来源**（`art_url` / `art_emotions.neutral` 二选一来源）—— 都在 companion **创建之前**确定：
 
-- **(a) 上传**：先 `POST /companions/upload-art` 拿到原图 key，再调 `POST /companions/base-art/generate`（`source: "upload"` + `style` + `upload_key`），走 WF-1 的 img2img 按风格重画（**不保真**，不挂 IPAdapter/InstantID）。neutral 存重画后的图，不存原图。
-- **(b) 文生图**：调 `POST /companions/base-art/generate`（`source: "text"` + `prompt` + `style`），走 WF-1 txt2img 生成基础图（见 §F）。
+- **(a) 上传**：先 `POST /companions/upload-art` 拿到原图 key，直接作为最终 neutral 图提交给 `POST /companions`。当前产品流程不再调用 `base-art/generate source:"upload"` 重画。
+- **(b) 文生图**：调 `POST /companions/base-art/generate`（`source: "text"` + `prompt` + `model`），走 WF-1 txt2img 生成基础图（见 §F）。
 
-两条路都返回一个**草稿生图任务**（异步），前端轮询拿到风格化基础图的 R2 key，预览满意后带进创建表单。
+只有文生图返回**草稿生图任务**（异步），前端轮询拿到生成图 R2 key，预览满意后带进创建表单。上传路径是同步上传，不产生生图任务。
 
 用户创建/编辑 companion 时：
 
-- 基础图（风格化后）只写入 `art_url` 和 `art_emotions.neutral`，由 `POST /companions` 在「完成」时落库。
+- 基础图只写入 `art_url` 和 `art_emotions.neutral`，由 `POST /companions` 在「完成」时落库。
 - 不再把同一张图片填充到 `warm/playful/guarded/tense/annoyed`。
-- companion 建好后，后端**自动异步**触发 5 个非 neutral 变体 + 抠图（等价于内部调用 expression pack）。
+- companion 建好后，文生图来源可自动异步触发 5 个非 neutral 变体 + 抠图（等价于内部调用 expression pack）。上传来源若未配置可用风格/模型，则继续回退 neutral。
 - 若之后更新了 `art_url` 或 `art_style`，应清空旧的非 neutral 自动生成图，或将它们标记为 stale，避免新基础图 / 新风格与旧表情图不一致。
 
 ### B. 通用 Image Generation 模块
@@ -221,7 +219,7 @@ CREATE INDEX idx_image_generation_jobs_provider_task ON image_generation_jobs(pr
 
 后续可新增 D1 表 `image_generation_config`，用于模型路由和 provider 切换。
 
-> **当前实现状态**：已落地 `image_generation_jobs`（migration `0018`），但尚未创建 `image_generation_config`。RunningHub provider 配置当前从 env 读取（见 spec-022 的 `RUNNINGHUB_CREATE_WORKFLOWS` 与旧 variation 配置），下表是后续演进方向，不是当前必做项。
+> **当前实现状态**：已落地 `image_generation_jobs`（migration `0018`），但尚未创建 `image_generation_config`。RunningHub provider 配置通过 settings store 读取；secret / provider 开关保留 env 兜底，workflow/node/checkpoint 配置由 repo 中按环境区分的 RunningHub workflow 配置文件在部署时同步到 D1。下表是更完整的后续演进方向，不是当前必做项。
 
 ```sql
 CREATE TABLE image_generation_config (
@@ -346,7 +344,7 @@ CREATE INDEX idx_companion_art_jobs_status ON companion_art_jobs(status, updated
 新增或扩展 companion art API：
 
 ```txt
-POST /companions/base-art/generate               # 新增：创建前的基础图草稿（文生图/上传重画），不绑 companion id
+POST /companions/base-art/generate               # 新增：创建前的文生图草稿，不绑 companion id
 GET  /companions/base-art/jobs/{jobId}            # 新增：轮询基础图草稿任务状态
 POST /companions/{id}/expression-pack/generate
 POST /companions/{id}/emotion-art/{emotion}/generate
@@ -355,7 +353,7 @@ GET  /companions/{id}/emotion-art/jobs
 POST /admin/companions/{id}/emotion-art/prewarm
 ```
 
-> **顺序说明**：`base-art/generate` 在 companion **创建之前**调用（companion 还不存在，故不带 `{id}`），产出风格化基础图草稿；`POST /companions`（spec-004）在「完成」时带 `art_key`/`art_url` + `art_style` 落库，并**自动**为 5 个非 neutral emotion 异步触发变体（等价于内部调用 expression pack）。`expression-pack/generate` 保留供后续 retry / 手动重生成。
+> **顺序说明**：文生图时，`base-art/generate` 在 companion **创建之前**调用（companion 还不存在，故不带 `{id}`），产出基础图草稿；上传本地图片时，`upload-art` 直接返回可提交的 key。`POST /companions`（spec-004）在「完成」时带 `art_url` 落库；文生图来源可继续为 5 个非 neutral emotion 异步触发变体（等价于内部调用 expression pack）。`expression-pack/generate` 保留供后续 retry / 手动重生成。
 
 `POST /companions/{id}/expression-pack/generate`
 
@@ -392,15 +390,15 @@ POST /admin/companions/{id}/emotion-art/prewarm
 - 默认只补缺失项，不覆盖已有图。
 - 请求可选 `{ "force": true }`，强制重新生成并替换非 neutral 图。
 
-> **实施进度（spec-022 WF-1 create 切片已落地）：** `base-art/generate` + `base-art/jobs/{jobId}` 两个端点、通用 `image_generation_jobs` 表（migration `0018`）、provider `create`（txt2img）模式、webhook/cron 识别均已实现并跑通（mock + 单测）。本期只落 `create` 文生图路径；`upload` 走 img2img 重画、变体生成、积分扣费仍待做。详见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 状态说明。
+> **实施进度（spec-022 WF-1 create 切片已落地）：** `base-art/generate` + `base-art/jobs/{jobId}` 两个端点、通用 `image_generation_jobs` 表（migration `0018`）、provider `create`（txt2img）模式、webhook/cron 识别均已实现并跑通（mock + 单测）。当前产品创建流程只使用文生图路径；`source:"upload"` img2img 重画属于保留的底层能力，不作为 v1 创建入口。变体生成、积分扣费仍待做。详见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 状态说明。
 
-`POST /companions/base-art/generate`（新增，创建前的基础图草稿，**不绑 companion id**）
+`POST /companions/base-art/generate`（新增，创建前的文生图基础图草稿，**不绑 companion id**）
 
 - Auth required（`requireAuthUser`）。companion 此时还不存在，所以不挂在 `/companions/{id}/` 下。
-- body：`{ "source": "text" | "upload", "style": "realistic" | "anime_jp" | "anime_kr", "prompt"?: "...", "upload_key"?: "<r2 key>" }`。
+- body：`{ "source": "text", "model": "<image model id>", "prompt": "..." }`。`style` 仍可作为旧兼容参数，但新 UI 应传 `model`。
   - `source: "text"`：必须带 `prompt`，走 WF-1 `create` 的 txt2img（无 `source_art_url`）。
-  - `source: "upload"`：必须带 `upload_key`（先经 `POST /companions/upload-art` 拿到），走 WF-1 `create` 的 img2img 按风格重画（**不保真**）。
-- 校验：`source` 非法 → `400 invalid_source`；text 缺 `prompt` → `400 prompt_required`；upload 缺 `upload_key` → `400 upload_key_required`；`style` 非法 → `400 invalid_style`。
+  - `source: "upload"`：底层兼容能力，可带 `upload_key` 做 img2img；当前创建 UI 不使用。
+- 校验：`source` 非法 → `400 invalid_source`；text 缺 `prompt` → `400 prompt_required`；upload 缺 `upload_key` → `400 upload_key_required`；模型或兼容 `style` 非法 → `400 invalid_model`。
 - 异步返回 `202 { status: "queued", job_id }`（`job_id` 为 `image_generation_jobs` 任务）。前端用 `GET /companions/base-art/jobs/{jobId}` 轮询。
 - **不写任何 companion 字段**（companion 尚不存在）；产出仅为一张风格化基础图的 R2 key，由前端带进创建表单。
 - 积分系统启用后透传 spec-021 的 `402 credits_insufficient`；重抽 = 再次调用 = 再次扣费。
@@ -411,7 +409,7 @@ POST /admin/companions/{id}/emotion-art/prewarm
 - 返回 `{ status, art_key?, error_code? }`：`processing`（生成中）/ `succeeded`（带 `art_key`，风格化基础图）/ `failed`（带 `error_code`）。
 - `art_key` 即创建 companion 时提交的 `art_url`/`art_key` 来源。
 
-> **落库时机**：基础图草稿成功后，前端把 `art_key` + 用户选的 `style` 暂存在创建表单；用户填完属性点「完成」时由 `POST /companions`（spec-004）一并写入 `art_url` / `art_emotions.neutral` / `art_style`，并自动异步触发 5 个非 neutral 变体。基础图草稿任务本身不落 companion 字段。
+> **落库时机**：文生图草稿成功后，前端把 `art_key` 暂存在创建表单；上传图片成功后，前端把上传 key 暂存在创建表单。用户填完属性点「完成」时由 `POST /companions`（spec-004）写入 `art_url` / `art_emotions.neutral`。基础图草稿任务本身不落 companion 字段。
 
 `POST /companions/{id}/art/edit`（新增，换装/换姿势，**留接口、优先级最低**）
 
@@ -507,12 +505,12 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 ## 实施步骤
 
 1. 新增 migration：创建 `image_generation_jobs`、`companion_art_jobs`；并补齐 `art_style` 字段。`image_generation_config` 暂不作为 MVP 必需项，当前配置走 env。
-2. 调整 companion create/update：`POST /companions` 接受 `art_key`/`art_url` + `art_style`，只写 `art_url` 和 `art_emotions.neutral`，并记录 `art_style`；创建成功后自动异步触发 5 个非 neutral 变体（内部调用 expression pack）。基础图草稿在创建之前由 `base-art/generate` 单独产出。
+2. 调整 companion create/update：`POST /companions` 接受 `art_url`，只写 `art_url` 和 `art_emotions.neutral`；文生图来源可记录模型/风格并触发 5 个非 neutral 变体（内部调用 expression pack），上传来源无可用模型/风格时回退 neutral。文生图草稿在创建之前由 `base-art/generate` 单独产出。
 3. 演进 `packages/api/src/image-gen/` 通用模块，封装 job 创建、配置解析、queue 处理、R2 写入和 `asset_objects` 记录。
 4. 新增 RunningHub workflow provider adapter，v1 默认；MVP 先支持 WF-1 create 与 WF-2 variation，WF-3 edit 保留接口和文档方向。详细接入见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
 5. OpenAI image provider adapter 仅作为后续 fallback 方向，本期不强制启用。
 6. 新增 companion expression pack service：解析/更新 `art_emotions` JSON，封装 cache hit、job 去重和 stale 判断。
-7. 新增端点：`base-art/generate`（创建前的基础图草稿，文生图/上传重画，不绑 id）+ `base-art/jobs/{jobId}`（轮询）、pack endpoint、单张 retry endpoint、admin prewarm endpoint；`art/edit`（WF-3，可先 `501 edit_not_ready`）。
+7. 新增端点：`base-art/generate`（创建前的文生图草稿，不绑 id）+ `base-art/jobs/{jobId}`（轮询）、pack endpoint、单张 retry endpoint、admin prewarm endpoint；`art/edit`（WF-3，可先 `501 edit_not_ready`）。
 8. 接入 spec-021 的 reserve/commit/refund 接口；在 spec-021 未完成前允许 admin/system bypass，普通用户端点返回 `501 credits_not_ready` 或使用 feature flag 关闭。
 9. 扩展 queue consumer：处理 `image.generate` 和 `companion.emotion_art.finalize`。
 10. 前端 chat/detail/edit 页面接入生成状态、pack 入口与 retry UI。
@@ -533,10 +531,10 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 
 ### Companion Expression Pack
 
-- **基础图草稿（创建前）**：`source:"text"` + prompt + style 调 `base-art/generate` 返回 202 + `job_id`，轮询 `base-art/jobs/{jobId}` 最终 `succeeded` 带 `art_key`；此时**不写任何 companion 字段**。空 prompt / 非法 source / 非法 style 返回对应 400。
-- **上传重画草稿**：先 `upload-art` 拿 key，再 `source:"upload"` + upload_key + style 调 `base-art/generate`，产出风格化基础图（neutral 存重画后的图、非原图）。
-- **完成建角色**：带 `art_key` + `style` 调 `POST /companions`，落库后 `art_url`/`art_emotions.neutral` 有图、`companions.art_style` = 所选风格，且 `art_emotions` 只包含 `neutral`，并自动异步触发 5 个变体。
-- 5 个变体生成后**背景透明**（alpha 正确），且风格与 `art_style` 一致。
+- **文生图基础图草稿（创建前）**：`source:"text"` + prompt + model 调 `base-art/generate` 返回 202 + `job_id`，轮询 `base-art/jobs/{jobId}` 最终 `succeeded` 带 `art_key`；此时**不写任何 companion 字段**。空 prompt / 非法 source / 非法 model 返回对应 400。
+- **上传最终图**：先 `upload-art` 拿 key，直接作为 `art_url` 提交创建；不调用 RunningHub 重画。
+- **完成建角色**：带 `art_url` 调 `POST /companions`，落库后 `art_url`/`art_emotions.neutral` 有图，且 `art_emotions` 只包含 `neutral`。文生图来源可继续触发 5 个变体；上传来源在无模型/风格时回退 neutral。
+- 5 个变体生成后**背景透明**（alpha 正确），且风格与对应模型/风格一致。
 - Chat 中 emotion 变为 `warm` 且缺图时，前端仍显示 neutral，不报错。
 - 触发 expression pack 后返回 202，并为缺失 emotion 插入 pending jobs。
 - 已有 emotion 图返回 cached，不创建 image job。

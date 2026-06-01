@@ -78,14 +78,16 @@ if [ "$target" = "prod" ]; then
         exit 1
     fi
 
-    pnpm cf:d1:migrate:prod
+    pnpm migrate:db:prod
+    bash ./scripts/sync-runninghub-workflows.sh prod
     bash ./scripts/tasks/run.sh api:deploy-prod
     bash ./scripts/tasks/run.sh deploy:web-prod
     curl -fsS "https://aiappsbox.com/api/health" >/dev/null
     curl -fsSI "https://aiappsbox.com" >/dev/null
     assert_web_entry_matches "https://aiappsbox.com"
 else
-    pnpm cf:d1:migrate:dev
+    pnpm migrate:db:dev
+    bash ./scripts/sync-runninghub-workflows.sh dev
     pnpm deploy:api:dev
     pnpm deploy:web:dev
     curl -fsS "https://dev.aiappsbox.com/api/health" >/dev/null

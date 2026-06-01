@@ -48,7 +48,7 @@ export default function WebCompanionCreateScreen() {
           scenes={scenes.data?.scenes}
         />
       ) : (
-        <BaseArtPanel onConfirm={confirmArt} />
+        <BaseArtPanel onConfirm={confirmArt} onUploadArt={pickWebArt} />
       )}
     </WebAppShell>
   );

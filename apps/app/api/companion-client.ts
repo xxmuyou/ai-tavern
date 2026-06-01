@@ -13,6 +13,7 @@ import type {
   BaseArtGenerateInput,
   BaseArtGenerateResponse,
   BaseArtJobResponse,
+  BaseArtPromptAssistResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
   ChatMessageInput,
@@ -50,6 +51,9 @@ import type {
   ScenesListResponse,
   SseEvent,
   TodayResponse,
+  UserImageAsset,
+  UserImageAssetCreateInput,
+  UserImageAssetsResponse,
 } from './types';
 
 const CONFIGURED_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
@@ -458,6 +462,35 @@ export async function getBaseArtJob(jobId: string): Promise<BaseArtJobResponse> 
   return requestJson<BaseArtJobResponse>(
     `/companions/base-art/jobs/${encodeURIComponent(jobId)}`,
   );
+}
+
+export async function assistBaseArtPrompt(input: {
+  model_label?: string;
+  request: string;
+}): Promise<BaseArtPromptAssistResponse> {
+  return requestJson<BaseArtPromptAssistResponse>('/companions/base-art/prompt-assist', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function saveImageAsset(input: UserImageAssetCreateInput): Promise<UserImageAsset> {
+  return requestJson<UserImageAsset>('/me/image-assets', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function listImageAssets(): Promise<UserImageAssetsResponse> {
+  return requestJson<UserImageAssetsResponse>('/me/image-assets');
+}
+
+export async function deleteImageAsset(id: string): Promise<{ ok: boolean }> {
+  return requestJson<{ ok: boolean }>(`/me/image-assets/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function generateCompanionEmotionArt(

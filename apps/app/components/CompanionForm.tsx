@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
@@ -6,6 +6,10 @@ import type { CompanionCreateInput, CompanionDetail, Gender, Scene } from '@/api
 import { Button } from '@/components/Button';
 
 const ROLES = ['friend', 'crush', 'stranger', 'colleague', 'neighbor', 'family'] as const;
+const PERSONALITY_PRESETS = ['warm', 'reserved', 'playful', 'protective', 'ambitious', 'mysterious'];
+const SPEECH_STYLE_PRESETS = ['soft-spoken', 'direct', 'teasing', 'formal', 'poetic'];
+const WANT_PRESETS = ['to be understood', 'to feel safe', 'to be taken seriously', 'to find excitement'];
+const BOUNDARY_PRESETS = ['being lied to', 'being rushed', 'being ignored', 'being treated as a backup'];
 
 type CompanionFormValues = {
   appearance: string;
@@ -149,11 +153,12 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
           </FormPanel>
 
           <FormPanel title="Character card">
-            <Field
+            <PresetField
               label="Personality"
               multiline
               onChangeText={(personality) => setValues((current) => ({ ...current, personality }))}
               placeholder="Warm, direct, protective..."
+              presets={PERSONALITY_PRESETS}
               value={values.personality}
             />
             <Field
@@ -170,22 +175,24 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
               placeholder="Their history, goals, contradictions..."
               value={values.background}
             />
-            <Field
+            <PresetField
               label="Speech style"
               multiline
               onChangeText={(speech_style) => setValues((current) => ({ ...current, speech_style }))}
               placeholder="How they talk, pacing, favorite phrases..."
+              presets={SPEECH_STYLE_PRESETS}
               value={values.speech_style}
             />
           </FormPanel>
 
           <FormPanel title="Inner life">
-            <Field
+            <PresetField
               hint="What they're after right now — colours how they engage."
               label="Want"
               multiline
               onChangeText={(want) => setValues((current) => ({ ...current, want }))}
               placeholder="To be taken seriously, to not be rushed..."
+              presets={WANT_PRESETS}
               value={values.want}
             />
             <Field
@@ -196,12 +203,13 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
               placeholder="A soft spot or past hurt they keep hidden..."
               value={values.secret}
             />
-            <Field
+            <PresetField
               hint="Crossing it makes them guarded, cold, or distant."
               label="Boundary"
               multiline
               onChangeText={(boundary) => setValues((current) => ({ ...current, boundary }))}
               placeholder="Being pushed, lied to, treated as a backup..."
+              presets={BOUNDARY_PRESETS}
               value={values.boundary}
             />
           </FormPanel>
@@ -284,11 +292,13 @@ function Field({
   hint,
   label,
   multiline,
+  inputRef,
   onChangeText,
   placeholder,
   value,
 }: {
   hint?: string;
+  inputRef?: RefObject<TextInput | null>;
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
@@ -297,9 +307,10 @@ function Field({
 }) {
   return (
     <View>
-      <Text className="mb-2 text-sm font-semibold text-app-text">{label}</Text>
+      {label ? <Text className="mb-2 text-sm font-semibold text-app-text">{label}</Text> : null}
       {hint ? <Text className="mb-2 -mt-1 text-xs text-app-muted">{hint}</Text> : null}
       <TextInput
+        ref={inputRef}
         className={`rounded-lg border border-app-line bg-white px-3 py-3 text-base text-app-text ${
           multiline ? 'min-h-24 text-top' : ''
         }`}
@@ -312,6 +323,64 @@ function Field({
       />
     </View>
   );
+}
+
+function PresetField({
+  hint,
+  label,
+  multiline,
+  onChangeText,
+  placeholder,
+  presets,
+  value,
+}: {
+  hint?: string;
+  label: string;
+  multiline?: boolean;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  presets: string[];
+  value: string;
+}) {
+  const inputRef = useRef<TextInput | null>(null);
+
+  function applyPreset(preset: string) {
+    const parts = value
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (!parts.includes(preset)) {
+      onChangeText([...parts, preset].join(', '));
+    }
+  }
+
+  return (
+    <View>
+      <Text className="mb-2 text-sm font-semibold text-app-text">{label}</Text>
+      {hint ? <Text className="mb-2 -mt-1 text-xs text-app-muted">{hint}</Text> : null}
+      <View className="mb-3 flex-row flex-wrap gap-2">
+        {presets.map((preset) => (
+          <Choice key={preset} active={hasPreset(value, preset)} label={preset} onPress={() => applyPreset(preset)} />
+        ))}
+        <Choice active={false} label="Other" onPress={() => inputRef.current?.focus()} />
+      </View>
+      <Field
+        inputRef={inputRef}
+        label=""
+        multiline={multiline}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        value={value}
+      />
+    </View>
+  );
+}
+
+function hasPreset(value: string, preset: string): boolean {
+  return value
+    .split(',')
+    .map((part) => part.trim())
+    .includes(preset);
 }
 
 function Choice({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {

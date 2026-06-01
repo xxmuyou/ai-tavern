@@ -1,10 +1,10 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 
-import { fetchMe, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
-import type { MeResponse, RomancePreference } from '@/api/types';
+import { fetchMe, listImageAssets, mediaSource, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
+import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { WebAppShell, WebInfoRow, WebPanel } from '@/components/web/WebAppShell';
@@ -22,15 +22,19 @@ export default function WebMeScreen() {
   const { session, signOut } = useSession();
   const { data: billing, refetch: refetchBilling } = useBilling();
   const [me, setMe] = useState<MeResponse | null>(null);
+  const [imageAssets, setImageAssets] = useState<UserImageAsset[]>([]);
   const push = usePush(me?.push_enabled);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    fetchMe()
-      .then((payload) => {
-        if (mounted) setMe(payload);
+    Promise.all([fetchMe(), listImageAssets().catch(() => ({ assets: [] }))])
+      .then(([payload, assets]) => {
+        if (mounted) {
+          setMe(payload);
+          setImageAssets(assets.assets);
+        }
       })
       .catch(() => pushError('Could not load account details.'))
       .finally(() => {
@@ -123,6 +127,11 @@ export default function WebMeScreen() {
           </WebPanel>
 
           <WebPanel>
+            <Text className="mb-3 text-xl font-semibold text-app-text">My image assets</Text>
+            <ImageAssetGrid assets={imageAssets} />
+          </WebPanel>
+
+          <WebPanel>
             <Text className="mb-3 text-xl font-semibold text-app-text">Push notifications</Text>
             <Text className="text-sm leading-6 text-app-muted">Mobile push can be enabled in the native app. Browser push is not part of v1.</Text>
             <View className="mt-4 flex-row items-center justify-between gap-4">
@@ -140,6 +149,31 @@ export default function WebMeScreen() {
         </View>
       </View>
     </WebAppShell>
+  );
+}
+
+function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
+  if (!assets.length) {
+    return <Text className="text-sm text-app-muted">No saved images yet.</Text>;
+  }
+
+  return (
+    <View className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {assets.map((asset) => {
+        const source = mediaSource(asset.art_key);
+        return (
+          <View key={asset.id} className="overflow-hidden rounded-md border border-app-line bg-app-primarySoft">
+            {source ? (
+              <Image accessibilityLabel="Saved image asset" resizeMode="cover" source={source} className="aspect-[4/5] w-full" />
+            ) : (
+              <View className="aspect-[4/5] w-full items-center justify-center">
+                <Text className="text-xs text-app-muted">Image</Text>
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 

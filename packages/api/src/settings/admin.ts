@@ -118,10 +118,12 @@ async function handlePut(request: Request, env: Env, key: string): Promise<Respo
   if (trimmed === "") {
     await env.DB.prepare(`DELETE FROM app_settings WHERE key = ?`).bind(key).run();
     invalidateSettingsCache(env);
+    const setting = await loadSettingPayload(env, def);
+    const source = typeof setting.source === "string" ? setting.source : "unset";
     return jsonResponse({
       ok: true,
-      setting: await loadSettingPayload(env, def),
-      source: "env",
+      setting,
+      source,
     });
   }
 

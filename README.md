@@ -40,7 +40,7 @@
 ```bash
 pnpm install
 cp .env.example .env.local
-pnpm local        # 同时启动 API (8787) 与 App (8081)
+pnpm run:local    # 同时启动 API (8787) 与 App (8081)
 pnpm typecheck
 pnpm test
 ```

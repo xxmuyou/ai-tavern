@@ -5,9 +5,9 @@ import { isArtStyle } from "./types";
  * WF1 selectable model catalog (spec: image-gen WF1 model selection).
  *
  * Flat list of RunningHub checkpoints, each carrying its own style tag. The
- * style tag selects which env workflow config (RUNNINGHUB_CREATE_WORKFLOWS) to
- * use; ckpt_name overrides that workflow's checkpoint so creators can pick a
- * model at companion-create time. Admin-editable (stored in DB).
+ * style tag selects the repo-managed workflow config synced into app_settings;
+ * ckpt_name overrides that workflow's checkpoint so creators can pick a model
+ * at companion-create time. Admin-editable (stored in DB).
  */
 export type ImageModelRow = {
   id: string;

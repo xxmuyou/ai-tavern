@@ -1,0 +1,32 @@
+{
+  "wf1": {
+    "createWorkflows": {
+      "realistic": {
+        "workflowId": "2060270467856035841",
+        "promptNodeId": "2",
+        "checkpointNodeId": "1",
+        "checkpointFieldName": "ckpt_name",
+        "ckptName": "juggernautXL_ragnarokBy.safetensors"
+      },
+      "anime_jp": {
+        "workflowId": "2060270467856035841",
+        "promptNodeId": "2",
+        "checkpointNodeId": "1",
+        "checkpointFieldName": "ckpt_name",
+        "ckptName": "animagineXL40_v4Opt.safetensors"
+      },
+      "anime_kr": {
+        "workflowId": "2060270467856035841",
+        "promptNodeId": "2",
+        "checkpointNodeId": "1",
+        "checkpointFieldName": "ckpt_name",
+        "ckptName": "ghostxl_v10BakedVAE.safetensors"
+      }
+    }
+  },
+  "wf2": {
+    "workflowId": "2060982275310964738",
+    "loadImageNodeId": "1",
+    "promptNodeId": "13"
+  }
+}

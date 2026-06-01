@@ -9,12 +9,18 @@ function createEnv(extra: Record<string, unknown> = {}): {
   jobs: Map<string, Row>;
   assets: Map<string, Uint8Array>;
   queue: unknown[];
+  settings: Map<string, string>;
 } {
   const jobs = new Map<string, Row>();
   const assets = new Map<string, Uint8Array>();
   const queue: unknown[] = [];
+  const settings = new Map<string, string>();
 
   function execute(sql: string, values: unknown[], mode: "run" | "first" | "all"): unknown {
+    if (sql.includes("FROM app_settings")) {
+      return { results: [...settings.entries()].map(([key, value]) => ({ key, value })) };
+    }
+
     if (sql.startsWith("INSERT INTO image_generation_jobs")) {
       const [id, user_id, task, mode_, style, prompt, input_keys, output_prefix, created_at, updated_at] =
         values as [string, string, string, string, string, string, string | null, string, number, number];
@@ -76,12 +82,15 @@ function createEnv(extra: Record<string, unknown> = {}): {
     throw new Error(`Unrecognized SQL in base-art test: ${sql}`);
   }
 
+  const buildStatement = (sql: string, values: unknown[] = []) => ({
+    all: async () => execute(sql, values, "all"),
+    first: async () => execute(sql, values, "first"),
+    run: async () => execute(sql, values, "run"),
+  });
+
   const prepare = (sql: string) => ({
-    bind: (...values: unknown[]) => ({
-      all: async () => execute(sql, values, "all"),
-      first: async () => execute(sql, values, "first"),
-      run: async () => execute(sql, values, "run"),
-    }),
+    ...buildStatement(sql),
+    bind: (...values: unknown[]) => buildStatement(sql, values),
   });
 
   const env = {
@@ -99,7 +108,7 @@ function createEnv(extra: Record<string, unknown> = {}): {
     ...extra,
   } as unknown as Env;
 
-  return { assets, env, jobs, queue };
+  return { assets, env, jobs, queue, settings };
 }
 
 describe("base-art job pipeline", () => {
@@ -153,14 +162,17 @@ describe("base-art job pipeline", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { env } = createEnv({
+    const { env, settings } = createEnv({
       IMAGE_GEN_PROVIDER: "runninghub",
       RUNNINGHUB_API_KEY: "k",
-      RUNNINGHUB_CREATE_WORKFLOWS: JSON.stringify({
-        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
-      }),
       RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
     });
+    settings.set(
+      "image_gen.create_workflows",
+      JSON.stringify({
+        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+      }),
+    );
 
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",

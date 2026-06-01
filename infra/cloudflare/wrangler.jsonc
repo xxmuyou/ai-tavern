@@ -28,10 +28,6 @@
     "LLM_RATE_LIMIT_PER_MINUTE": "30",
     "IMAGE_GEN_PROVIDER": "runninghub",
     "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
-    "RUNNINGHUB_WORKFLOW_ID": "",
-    "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
-    "RUNNINGHUB_PROMPT_NODE_ID": "",
-    "RUNNINGHUB_CREATE_WORKFLOWS": "{\"anime_kr\":{\"workflowId\":\"2059941190052696066\",\"promptNodeId\":\"6\"}}",
     "STRIPE_PUBLISHABLE_KEY": "",
     "GOOGLE_OAUTH_CLIENT_ID": "285229330091-i88vp1sic03pkohr5k1prumtn2233c74.apps.googleusercontent.com"
   },
@@ -112,10 +108,6 @@
         "LLM_RATE_LIMIT_PER_MINUTE": "30",
         "IMAGE_GEN_PROVIDER": "runninghub",
         "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
-        "RUNNINGHUB_WORKFLOW_ID": "",
-        "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
-        "RUNNINGHUB_PROMPT_NODE_ID": "",
-        "RUNNINGHUB_CREATE_WORKFLOWS": "{}",
         "STRIPE_PUBLISHABLE_KEY": "",
         "GOOGLE_OAUTH_CLIENT_ID": "285229330091-i88vp1sic03pkohr5k1prumtn2233c74.apps.googleusercontent.com"
       },

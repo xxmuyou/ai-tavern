@@ -48,7 +48,7 @@ export default function CompanionCreateScreen() {
           scenes={scenes.data?.scenes}
         />
       ) : (
-        <BaseArtPanel onConfirm={confirmArt} />
+        <BaseArtPanel onConfirm={confirmArt} onUploadArt={pickNativeArt} />
       )}
     </View>
   );

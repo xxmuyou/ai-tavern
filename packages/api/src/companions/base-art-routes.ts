@@ -2,6 +2,8 @@ import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import type { UserRecord } from "../identity";
 import { getImageModel, isArtStyle, listActiveImageModels, type ArtStyle } from "../image-gen";
+import { LLMRouterError, llmCall } from "../llm";
+import { LLMError } from "../llm/types";
 import {
   type BaseArtSource,
   createBaseArtJob,
@@ -39,6 +41,15 @@ export async function handleBaseArtRequest(
     return handleGenerate(env, user, body);
   }
 
+  if (pathname === "/companions/base-art/prompt-assist") {
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    const body = await request.json().catch(() => null);
+    return handlePromptAssist(env, user, body);
+  }
+
   const jobMatch = pathname.match(/^\/companions\/base-art\/jobs\/([^/]+)$/);
   if (jobMatch) {
     if (request.method !== "GET") {
@@ -53,6 +64,54 @@ export async function handleBaseArtRequest(
   }
 
   return null;
+}
+
+async function handlePromptAssist(
+  env: Env,
+  user: UserRecord,
+  body: unknown,
+): Promise<Response> {
+  if (!body || typeof body !== "object") {
+    return jsonResponse({ error: "invalid_body" }, { status: 400 });
+  }
+  const raw = body as Record<string, unknown>;
+  const requestText = typeof raw.request === "string" ? raw.request.trim() : "";
+  const modelLabel = typeof raw.model_label === "string" ? raw.model_label.trim() : "";
+  if (!requestText) {
+    return jsonResponse({ error: "request_required" }, { status: 400 });
+  }
+  if (requestText.length > 1200) {
+    return jsonResponse({ error: "request_too_large" }, { status: 400 });
+  }
+
+  try {
+    const response = await llmCall(
+      env,
+      {
+        task: "image_prompt_assist",
+        temperature: 0.55,
+        max_tokens: 220,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write concise English image-generation prompts for AI companion character portraits. Return only one polished prompt. Do not add explanations, markdown, camera metadata labels, or safety disclaimers. Keep it under 90 words. Focus on appearance, outfit, mood, composition, and portrait style. Avoid naming copyrighted characters or real people.",
+          },
+          {
+            role: "user",
+            content: `User request: ${requestText}${modelLabel ? `\nSelected model/style: ${modelLabel}` : ""}`,
+          },
+        ],
+      },
+      { user_id: user.id },
+    );
+    return jsonResponse({ prompt: cleanPrompt(response.text) || fallbackPrompt(requestText) });
+  } catch (err) {
+    if (err instanceof LLMError || err instanceof LLMRouterError) {
+      return jsonResponse({ prompt: fallbackPrompt(requestText), fallback: true });
+    }
+    throw err;
+  }
 }
 
 async function handleGenerate(
@@ -124,4 +183,24 @@ async function handleJobStatus(
     error_code: job.error_code ?? undefined,
     status: job.status,
   });
+}
+
+function cleanPrompt(value: string): string {
+  return value
+    .replace(/^```[a-z]*\s*/i, "")
+    .replace(/```$/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim()
+    .slice(0, 1000);
+}
+
+function fallbackPrompt(requestText: string): string {
+  return [
+    requestText,
+    "original AI companion character portrait",
+    "expressive face",
+    "detailed outfit",
+    "clean composition",
+    "soft lighting",
+  ].join(", ");
 }

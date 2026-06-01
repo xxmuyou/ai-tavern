@@ -15,6 +15,8 @@ Available tasks:
   api:deploy-dev
   api:deploy-prod
   api:local
+  api:sync-runninghub-dev
+  api:sync-runninghub-prod
   api:typecheck
   app:export-web-dev
   app:export-web-prod
@@ -100,6 +102,14 @@ task_api_deploy_prod() {
     run_in "packages/api" npx wrangler deploy --config "$WRANGLER_CFG" --env prod
 }
 
+task_api_sync_runninghub_dev() {
+    run_in "." bash ./scripts/sync-runninghub-workflows.sh dev
+}
+
+task_api_sync_runninghub_prod() {
+    run_in "." bash ./scripts/sync-runninghub-workflows.sh prod
+}
+
 task_api_local() {
     load_env_file "$REPO_ROOT/.env.local"
     run_in "packages/api" npx wrangler dev --config "$WRANGLER_CFG"
@@ -155,6 +165,8 @@ case "$task" in
     api:deploy-dev)       task_api_deploy_dev ;;
     api:deploy-prod)      task_api_deploy_prod ;;
     api:local)            task_api_local ;;
+    api:sync-runninghub-dev)  task_api_sync_runninghub_dev ;;
+    api:sync-runninghub-prod) task_api_sync_runninghub_prod ;;
     api:typecheck)        task_api_typecheck ;;
     app:export-web-dev)   task_app_export_web_dev ;;
     app:export-web-prod)  task_app_export_web_prod ;;
