@@ -100,6 +100,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 Admin 的 Portrait generation → RunningHub workflow/node 面板读取的是 D1 当前值，可用于查看、临时修复、现场验证。长期修改必须更新 repo 配置文件并部署同步，否则下次部署会被覆盖。
 
+> **「这两块看着重复了？」** 不是重复，是两层：`create_workflows` 是**接线图 + 兜底**（每个 style 一条，部署同步、admin 不应长期改），model catalog 是**给用户挑的菜单**（每个可选模型一行、运营手填、持久）。它们都出现 checkpoint 文件名，但角色不同——`create_workflows.ckptName` 是「没选模型时的默认底模」，`image_models.ckpt_name` 是「用户选了某模型时的覆盖值」（覆盖优先级见下）。所以同一 style 可以挂多个 catalog 模型，共用同一条 workflow 接线。
+
 生成时后端 [`runninghub-provider.ts`](../../packages/api/src/image-gen/runninghub-provider.ts) 会下发：
 ```
 nodeInfoList = [
@@ -108,6 +110,8 @@ nodeInfoList = [
 ]
 ```
 `checkpointFieldName` 默认是 `ckpt_name`。`ckptName` 优先级：请求级用户所选模型的 `ckpt_name` > workflow 配置里的默认 `ckptName`。
+
+> ⚠️ **`checkpointFieldName` 必须是 checkpoint 节点上真实存在的输入字段名**（per-style 不同的是值 `ckptName`，不是字段名）。填了节点上没有的字段名，RunningHub 会直接拒：`NODE_INFO_MISMATCH(..., field_not_found_in_node_inputs)`。排查：Portrait generation 面板的 **Recent generation jobs**（或 `GET /admin/image-gen-jobs?status=failed`）会显示这条原文。
 
 ### 6.2 接入「自己上传的 checkpoint」的步骤
 

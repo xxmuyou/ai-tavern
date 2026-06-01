@@ -13,7 +13,7 @@
 - `companions/index.ts`：行类型/`loadCompanion` SELECT/create/update/序列化/输入校验全部带上三字段；`getCompanion` 仅对**自创角色的所有者**回传 want/secret/boundary（官方角色不泄露 secret，走解锁端点）。
 - `chat/loaders.ts`：`loadCompanionForChat` 读出三字段。
 - `chat/prompt.ts`：注入 `want`（始终）、`boundary`（始终 + 触碰→守住）、`secret`（仅 `secretToReveal` 非空时）；新增议程/主动/保留 三条行为规则 + 按 stage 的称呼阶梯（`addressGuidanceForStage`）。`ChatPromptInput` 加 `secretToReveal` + `stage`。
-- `relationships/unlocks.ts`（新）：stage 阶梯排名、`UNLOCK_DEFS`（title:familiar/expr:playful @familiar，secret/expr:tense @trusted，title:close @close_friend）、`unlockKeysForStage`、`isEmotionUnlocked`（neutral/warm/guarded/annoyed 始终可用）、`detectAndRecordUnlocks`（成就语义，永久 + 去重）、`buildUnlockStatus`。
+- `relationships/unlocks.ts`（新）：stage 阶梯排名、`UNLOCK_DEFS`、`unlockKeysForStage`、`detectAndRecordUnlocks`（成就语义，永久 + 去重）、`buildUnlockStatus`。（**2026-06-01 更新**：`UNLOCK_DEFS` 现仅含 title:familiar @familiar、secret @trusted、title:close @close_friend；`expr:*` 与 `isEmotionUnlocked` 已移除——表情改为订阅门控的手动解锁，见「决策变更」。）
 - `chat/messages.ts`：建 prompt 前算 `stage` + 据解锁门控 `secretToReveal`；`applySignals` 后调 `detectAndRecordUnlocks`，新增 SSE `unlocks` 事件。
 - `relationships/index.ts`：新增 `GET /relationships/:id/unlocks`（stage + items + scenes + secret(Pro/owner 才回文本) + is_pro/is_owner）；scenes 复用 `scenes/unlock.ts` 的 `evaluateUnlock`。
 - 单测：`relationships/unlocks.test.ts`（纯函数 + 检测）、扩充 `chat/prompt.test.ts`；全套 **366 passed**。
@@ -22,7 +22,7 @@
 - `api/types.ts`：`CompanionDetail`/`CompanionCreateInput` 加 want/secret/boundary；新增 `ChatUnlock`、`RelationshipUnlock*`。
 - `api/companion-client.ts`：`getCompanionUnlocks`。`use-companions.ts`：`useCompanionUnlocks`。
 - `hooks/use-chat-stream.ts`：`onUnlocks` 回调 + 解析 `unlocks` SSE。
-- `utils/expression-unlock.ts`：镜像后端的表情 stage 门控（`gateEmotion`），未解锁回退 neutral。
+- `utils/expression-unlock.ts`：聊天实时换脸的表情可用性判断（`gateEmotion`），未解锁回退 neutral。（**2026-06-01 更新**：由「stage 门控」改为「有图才显示该表情」——基础情绪始终可用，playful/tense 需先在图鉴里订阅解锁生成。）
 - `components/UnlockCelebration.tsx`：收到 `unlocks` 的轻量庆祝；`components/CompanionUnlocksPanel.tsx`：角色页“已解锁”区（秘密/称呼/表情/场景 + 锁态 + Pro 升级引导）。
 - `utils/portrait.ts`：抽出共享的情绪展示常量（label/emoji/tint/比例/`resolvePortrait`），供 `PortraitBar` 与图鉴复用。`components/CompanionGalleryPanel.tsx` + `components/PortraitViewerModal.tsx`：角色页立绘图鉴网格 + 全屏查看器（见 §B4.4/§B5）。
 - `CompanionForm.tsx`：新增“Inner life”面板（want/secret/boundary，带说明），create/edit 两端贯通。创建表单的低门槛 preset chips 见 A4.1。
@@ -31,8 +31,13 @@
 
 **与 §B5 的一处范围取舍（待 product owner 确认）**：§B5 把“高阶表情显示”“进入新解锁场景”也列为 Pro 权益。本期：
 - **secret 文本**严格 Pro 门控（服务端，仅 Pro/owner 返回文本）✅ 完全按 §B5。
-- **高阶表情**：实现为 **stage 门控（对所有用户一致）**，未额外加 Pro 门——理由：把已到阶段的免费用户的实时立绘锁掉会损伤核心视觉反馈闭环、上销价值低、且需把 is_pro 塞进聊天热路径。
+- **高阶表情**：~~实现为 stage 门控（对所有用户一致），未额外加 Pro 门~~ —— **已于 2026-06-01 推翻（见下方「决策变更」）**：表情改为**订阅门控的手动解锁**，不再绑定 stage。
 - **新解锁场景的进入**：维持现有维度阈值判定（`scenes/unlock.ts`），未加 Pro 进入门——属 scenes/enter 改动，留作后续。
+
+> **决策变更（2026-06-01，superseates 上面「高阶表情」一条）**：高阶表情（playful/tense）不再由关系 stage 解锁，改为**订阅门控的手动解锁**——
+> - 一个表情「可用」= 它的立绘已生成；生成 = 解锁，且仅 Pro（或 admin）可触发（后端 `companions/emotion-art-routes.ts` 返回 `subscription_required` 402 拦截免费用户）。
+> - 解锁入口是角色页**立绘图鉴**：未解锁格显示「模糊主立绘 + 🔒」，Pro 点击即生成解锁，免费用户跳订阅。
+> - 因此 `UNLOCK_DEFS` 移除 `expr:playful`/`expr:tense`，stage 阶梯只保留 title/secret；聊天实时换脸改为「有图才显示该表情，否则回退 neutral」（`utils/expression-unlock.ts`），基础情绪 neutral/warm/guarded/annoyed 仍始终可用以保留实时反馈。
 - 解锁面板已对 secret 呈现 Pro 升级引导。若需严格按 §B5 给表情/场景也加 Pro 门，可另起小改动。
 
 ---
@@ -160,24 +165,24 @@ CREATE TABLE relationship_unlocks (
 1. **角色秘密 / 背景片段**：默认 stage（建议 `trusted` 或 `close_friend`）解锁 `secret`。解锁后：① prompt 注入 secret（§A3）② 角色页"已解锁"区展示该片段。
 2. **新场景**：复用 `scenes.unlock_condition` + `scenes/unlock.ts`（已是维度阈值判定）。本 spec 不改判定逻辑，**只**：① 在解锁瞬间（维度过阈）纳入庆祝呈现 ② 角色/场景页明确显示"已解锁/未解锁 + 提示"。（若要改为 stage 触发可后续再议，本期保持现有维度阈值。）
 3. **称呼变化**：纯 prompt 层。按 stage 给一个称呼亲密度阶梯（陌生：礼貌/不称呼 → familiar：名字 → close_friend/恋爱阶段：昵称），作为规则注入 §A3。无需存储，跟随 stage 即时生效。
-4. **新立绘表情**：把**部分表情**锁在更高 stage，核心表情始终可用以**不破坏阶段 0 的实时立绘体验**：
-   - 始终可用：`neutral / warm / guarded`（基础情绪，早期就需要）。
-   - 阶段解锁：`playful`（familiar）、`tense`（trusted）、`annoyed` 已由 hostility 路径触发可保持可用——**最终表集合需 §B5 末确认**。
-   - 未解锁的情绪 → `PortraitBar` 回退到 neutral（回退已存在），玩家无感报错。
-   - **回看入口**：除了聊天中实时切换/回退，角色详情页提供**立绘图鉴**（§B5），让玩家能主动浏览全部已解锁立绘——解决"解锁了却无处查看"的问题。
+4. **新立绘表情**（**2026-06-01 改版：订阅门控的手动解锁，不再绑定 stage**）：
+   - 始终可用（实时换脸的基础情绪）：`neutral / warm / guarded / annoyed`。
+   - 可解锁表情：`playful` / `tense`——「可用」= 立绘已生成；生成需 Pro（或 admin），由角色页图鉴手动触发。
+   - 聊天里：有图才显示该表情，否则 `PortraitBar` 回退 neutral（回退已存在），玩家无感报错。
+   - **解锁/回看入口**：角色详情页**立绘图鉴**（§B5）——未解锁格「模糊主立绘 + 🔒」，Pro 点击即生成解锁，免费用户跳订阅；已解锁可全屏查看。
 
 ### B5. 前端 + 订阅门槛
 - **庆祝**：收到 `unlocks` 事件 → 轻量庆祝提示（"You've unlocked: Maya's story" / "New expression unlocked"）。
 - **角色页"已解锁"区**：列出该角色已解锁的秘密片段 / 场景 / 称呼阶段 / 表情；未解锁项显示锁 + 下一阶段提示（复用 `evaluateUnlock` 的 hint 风格）。
 - **立绘图鉴（`CompanionGalleryPanel`，挂在角色详情页"已解锁"区下方）**：把表情解锁从纯文字行升级为**可视化网格**——
-  - 网格展示该角色 6 种情绪立绘。已解锁且有图的显示缩略图，点击进入**全屏查看器**（`PortraitViewerModal`），可在已解锁情绪间切换大图。
-  - 未解锁的情绪显示**锁定占位 + 所需阶段**（`Reach <stage>`，stage 取自 `expr:<emotion>` 解锁项，与后端门控一致）。
-  - 用户自创角色尚未在聊天中生成的情绪显示"聊天中生成"占位。
-  - 门控复用 `utils/expression-unlock.ts` 的 `isEmotionUnlocked(emotion, stage)`，stage 取自 `useCompanionUnlocks`；情绪展示常量（label/emoji/比例）抽到 `utils/portrait.ts`，与 `PortraitBar` 共用。
+  - 网格展示该角色 6 种情绪立绘。已解锁（有图）的显示缩略图，点击进入**全屏查看器**（`PortraitViewerModal`），可在已解锁情绪间切换大图。
+  - 未解锁（无图）的情绪显示**「模糊主立绘 + 🔒」占位**（**2026-06-01 改版**，原为「锁定占位 + 所需阶段 `Reach <stage>`」）。点击：Pro → 入队生成该表情立绘、完成后替换占位；免费用户 → 跳订阅页。
+  - 「已解锁」= 该情绪有图（`art_emotions[emotion]` 存在），不再读 stage；订阅状态用 `useBilling()`。情绪展示常量（label/比例）在 `utils/portrait.ts`，与 `PortraitBar` 共用。
 - **订阅门槛（已确认，2026-05-29）**：依"解锁只靠订阅"的决策：
   - 关系推进与阶段跃迁对**所有用户开放**，解锁照常触发并写入 `relationship_unlocks`（§B3 判定门槛不区分用户类型）。
-  - **解锁内容的访问（查看秘密、进入新解锁场景、高阶表情显示）为 Pro 权益**：免费用户在解锁点**看到内容但带锁 + 升级引导**（复用现有 billing 升级入口），不消费 credits。
+  - **解锁内容的访问（查看秘密、进入新解锁场景）为 Pro 权益**：免费用户在解锁点**看到内容但带锁 + 升级引导**（复用现有 billing 升级入口），不消费 credits。
   - 即：免费用户能"解锁"（看到"已解锁 Maya 的故事"的庆祝与条目），但**查看具体内容需 Pro**——锁定层在呈现端，不在判定端。
+  - **高阶表情（2026-06-01 调整）**：不走上面这套「stage 解锁 + 呈现端锁」，而是**订阅门控的手动解锁**——免费用户根本不能生成表情立绘（后端 402），Pro 在图鉴手动解锁生成。
 
 ---
 

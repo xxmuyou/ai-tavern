@@ -186,7 +186,18 @@ Content-Type: application/json
 | 错误码 | 含义 | 后端归类 |
 |---|---|---|
 | `APIKEY_INVALID_NODE_INFO` | workflow 未成功跑过 / nodeId 无效 | `provider_config_error`（不可重试） |
+| `NODE_INFO_MISMATCH(nodeId=…, fieldName=…, field_not_found_in_node_inputs)` | `nodeInfoList` 里给某节点指定的 **fieldName 在该节点的输入里不存在** | `provider_error`（原文存入 `error_message`） |
 | 其它 | **待客服补充** | 默认 `provider_error`（可重试） |
+
+> **`checkpointFieldName` 必须是节点上的真实输入字段名。** provider 把 `checkpointFieldName` 当作 checkpoint 节点（`checkpointNodeId`）上的输入字段名直接发给 RunningHub（默认 `ckpt_name`）；填错就会得到上面的 `NODE_INFO_MISMATCH ... field_not_found_in_node_inputs`。注意：**per-style 不同的是 `ckptName`（值），不是 `checkpointFieldName`（字段名）**。
+>
+> 真实踩坑（2026-06-01，dev）：曾把三种风格的 `checkpointFieldName` 误填成风格名 `Realistic`/`Anime_JP`/`Anime_KR`。`Realistic` 恰好是节点 1 的真实输入名所以跑通，`Anime_JP`/`Anime_KR` 在节点 1 上不存在 → 直接被拒。排查方式见下「可观测性」。
+
+#### B.5.1 失败可观测性（2026-06-01）
+
+- 每个 job 的失败原因**原文**写入 `image_generation_jobs.error_message`（截断 1000 字），错误归类写 `error_code`。
+- base-art job status 接口（`GET /companions/base-art/jobs/{jobId}`）现一并透传 `error_message`，前端生成面板在友好文案下方展示原始原因（不再只显示 "Generation failed"）。
+- Admin 诊断端点 `GET /admin/image-gen-jobs?status=failed&limit=N`（admin-only）列出最近任务的 `error_code`/`error_message`/style/model/`provider_task_id`，挂在 admin「Portrait generation」面板，免去手连 D1。
 
 ### C. 后端代码改动
 

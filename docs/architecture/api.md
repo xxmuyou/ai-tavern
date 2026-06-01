@@ -30,6 +30,7 @@
 | 404 | `NOT_FOUND` | 资源不存在 |
 | 409 | `CONFLICT` | 状态冲突（如重复创建） |
 | 402 | `QUOTA_EXCEEDED` | 当日额度用完 |
+| 402 | `subscription_required` | 需 Pro 订阅的功能（如生成 companion 表情立绘）被免费用户触发 |
 | 429 | `RATE_LIMITED` | 速率限制（10 条/分钟） |
 | 500 | `INTERNAL` | 服务端错误 |
 | 503 | `LLM_UNAVAILABLE` | 所有 LLM 供应商不可用 |
@@ -663,6 +664,24 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 错误：`amount` 非正整数 → 400 `invalid_amount`；`reason` 为空 → 400 `reason_required`；用户不存在 → 404 `user_not_found`。
 
 > 三个端点均走 `requireAdminUser`（401 `auth_required` / 403 `admin_required`），与 §9 其余 admin 端点一致。其他后台统计接口（`GET /admin/usage` 等）v1 暂不实现完整 dashboard。
+
+### `GET /admin/image-gen-jobs?status=<failed|...>&limit=<N>` (2026-06-01)
+
+只读诊断：列出最近的出图任务及其**真实失败原因**（`error_message` 存 RunningHub 原文，如 `NODE_INFO_MISMATCH`），免去手连 D1。`status` 可选（缺省返回全部最近任务），`limit` 默认 50、上限 200。
+
+```json
+// Response 200
+{
+  "jobs": [
+    { "id": "job_1", "status": "failed", "task": "companion_base_art", "style": "anime_jp",
+      "model": null, "provider": null, "error_code": "provider_error",
+      "error_message": "NODE_INFO_MISMATCH(nodeId=1, fieldName=Anime_JP, reason=field_not_found_in_node_inputs)",
+      "provider_task_id": null, "created_at": 1748785108000, "completed_at": 1748785109000 }
+  ]
+}
+```
+
+> 配套：base-art job status（`GET /companions/base-art/jobs/{jobId}`）现也透传 `error_message`；生成 companion 表情立绘（`POST /companions/{id}/emotion-art/{emotion}/generate`）对非 Pro 用户返回 402 `subscription_required`。
 
 ---
 

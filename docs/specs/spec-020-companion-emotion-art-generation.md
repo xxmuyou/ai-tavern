@@ -62,7 +62,7 @@
 - 用户或系统触发 Expression Pack 后，后端异步生成缺失的 5 个非 neutral emotion 图并上传到 R2。
 - 生成成功后更新缓存，使后续读取直接命中 `art_emotions[emotion]`。
 - 同一 `(companion_id, emotion, source_art_url)` 同时只能有一个 pending/processing 任务。
-- 官方 companion 支持 admin 批量预热；用户自创 companion 仅 owner 可触发。
+- 官方 companion 支持 admin 批量预热；用户自创 companion 仅 owner **且为 Pro 订阅用户**可触发（**2026-06-01**：表情解锁改为订阅门控；非 Pro 触发返回 `subscription_required` 402，admin 不受限）。
 - 生图必须使用 neutral 图作为 reference/image-to-image，优先保证角色一致性。
 - 生图能力抽成独立模块，支持 `text_to_image`、`image_to_image`、`edit` 三类任务。
 - Provider 切换成本必须低：切换模型优先通过配置完成；新增 provider 只新增 adapter，不改 companion workflow。
@@ -111,7 +111,7 @@ ALTER TABLE companions ADD COLUMN art_style TEXT; -- 'realistic' | 'anime_jp' | 
 
 - 基础图只写入 `art_url` 和 `art_emotions.neutral`，由 `POST /companions` 在「完成」时落库。
 - 不再把同一张图片填充到 `warm/playful/guarded/tense/annoyed`。
-- companion 建好后，文生图来源可自动异步触发 5 个非 neutral 变体 + 抠图（等价于内部调用 expression pack）。上传来源若未配置可用风格/模型，则继续回退 neutral。
+- **（2026-06-01 改版）** companion 建好后**不再自动批量生成** 5 个非 neutral 变体。非 neutral 表情由用户在角色页**立绘图鉴手动解锁触发**（订阅门控，见 spec-025 §B5）：未解锁格显示「模糊主立绘 + 🔒」，Pro 点击生成、免费用户跳订阅。聊天里有图才显示该表情，否则回退 neutral。
 - 若之后更新了 `art_url` 或 `art_style`，应清空旧的非 neutral 自动生成图，或将它们标记为 stale，避免新基础图 / 新风格与旧表情图不一致。
 
 ### B. 通用 Image Generation 模块
