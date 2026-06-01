@@ -1,20 +1,22 @@
 # 管理员配置工作台（运行时运营设置）
 
-> 本文档说明管理员工作台里的「运营设置」面板：它如何在**不改 wrangler/.env、不重新部署**的前提下覆盖运行时配置，可改哪些项，以及与 env / secret 的关系。密钥总清单与轮换见 [`secrets.md`](./secrets.md)，环境总览见 [`environments.md`](./environments.md)，部署见 [`deployment.md`](./deployment.md)。
+> 本文档说明管理员工作台里的「运营设置」面板：它如何在**不改 wrangler/.env、不重新部署**的前提下覆盖非敏感运行时配置，可改哪些项，以及与 env / secret 的关系。密钥总清单与轮换见 [`secrets.md`](./secrets.md)，环境总览见 [`environments.md`](./environments.md)，部署见 [`deployment.md`](./deployment.md)。
 
 ---
 
 ## 1. 它解决什么问题
 
-历史上所有配置都写在 `wrangler.jsonc` 的 `vars` / Wrangler secret / `.env.*` 里，改一项就要重新部署。管理员工作台引入了一个**运行时覆盖层**：管理员在网页后台改配置，写入 D1 的 `app_settings` 表，~30 秒内生效，无需 redeploy。
+历史上所有配置都写在 `wrangler.jsonc` 的 `vars` / Wrangler secret / `.env.*` 里，改一项就要重新部署。管理员工作台引入了一个**非敏感运行时覆盖层**：管理员在网页后台改运营配置，写入 D1 的 `app_settings` 表，~30 秒内生效，无需 redeploy。
 
 **这不取代 env，而是叠加在 env 之上。** env 仍是 bootstrap / 兜底来源；工作台负责运行期临时调整、应急切换、运营试错。
+
+**API key / secret / signing key 不属于运行时覆盖层。** 这些值只通过 `.env.*`、Wrangler secrets、`pnpm cf:secrets:*` 或 `wrangler secret put` 管理。后台只显示它们是否已配置，不显示值，也不能编辑。
 
 ---
 
 ## 2. 三层优先级（务必理解）
 
-每个配置项按以下顺序解析（[`packages/api/src/settings/store.ts`](../../packages/api/src/settings/store.ts)）：
+每个可编辑配置项按以下顺序解析（[`packages/api/src/settings/store.ts`](../../packages/api/src/settings/store.ts)）：
 
 ```
 DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  unset
@@ -24,12 +26,13 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 - **DB 覆盖优先级最高。** 一旦某项在工作台保存过，读取的就是 DB 值，env 被忽略。
 - **缓存：** 设置在内存缓存 30 秒（`TTL_MS`），保存时立即失效。所以改动 ~30 秒内全量生效。
 - **per-environment：** dev / prod 各自独立的 D1，互不影响。
+- **status-only secret 例外：** API key / secret / signing key 永远只读 env/Wrangler secret，代码会忽略 D1 中同 key 的旧覆盖值。
 
 ### ⚠️ 最容易踩的坑
 
-> **存在 DB 覆盖时，改 `wrangler.jsonc` / `.env` / Wrangler secret 不会生效。**
+> **可编辑配置存在 DB 覆盖时，改 `wrangler.jsonc` / `.env` / Wrangler secret 不会生效。**
 
-如果你在工作台改过某项（哪怕只是试一下），它就被钉在 DB 里了。之后你改 env 重新部署，运行时仍读 DB 值，会出现「改了 env 没反应」的灵异现象。
+如果你在工作台改过某个可编辑项（哪怕只是试一下），它就被钉在 DB 里了。之后你改 env 重新部署，运行时仍读 DB 值，会出现「改了 env 没反应」的现象。
 
 **解法：** 在工作台对应行点 **Reset**（仅当 `source: "db"` 时出现）——它会删除 DB 覆盖，回退到 env 默认。判断当前到底读的是哪层，看每行的 **source 标签**（`admin` = DB / `env default` = env / `unset` = 都没有）。
 
@@ -42,8 +45,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 | Admin 模块 | 内容 | 对应配置 |
 |------|------|------|
 | `Users` | admin 名单、用户查询、积分调整、ledger | `admin_user_allowlist`、credits endpoints |
-| `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、DeepSeek/OpenAI key 状态与查看 | `llm_config`、`llm.*` |
-| `Portrait generation` | 生图 provider、RunningHub API key、WF1/WF2 workflow/node、WF1 模型目录 | `image_gen.*`、`image_models` |
+| `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、DeepSeek/OpenAI key 配置状态 | `llm_config`、`llm.*` |
+| `Portrait generation` | 生图 provider、RunningHub/OpenAI/R2 key 配置状态、WF1/WF2 workflow/node、WF1 模型目录 | `image_gen.*`、`image_models` |
 | `Prompts` | expression 立绘系统提示词；后续其他 prompt 也放这里 | `expression_prompts` |
 | `Settings` | auth、billing、email、limits 等通用运营项 | `auth.*`、`billing.*`、`email.*`、`limits.*` |
 
@@ -51,8 +54,9 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 ### 类型与交互
 
-- **secret**（`type: "secret"`）：列表接口默认不回传值，只报 `is_set`。UI 默认显示 `****`，管理员点击 **View** 时调用 `GET /admin/settings/{key}/reveal` 查看当前有效值；输入新值即覆盖。
-- **high 危险项**（`dangerLevel: "high"`，如 admin 邮箱 / JWT key / 请求体上限）：保存前必须**输入该项的 key 名确认**，防误操作锁死自己。
+- **editable**（默认）：后台可保存 D1 覆盖；空值表示 Reset 回 env fallback。
+- **status-only secret**（`adminMode: "status_only"`）：后台只显示 `Configured` / `Missing`，不回传值，不允许 **View**，不允许保存覆盖。真实值只走 env/Wrangler secrets。
+- **high 危险项**（`dangerLevel: "high"`，如 admin 邮箱 / CORS / 请求体上限）：保存前必须**输入该项的 key 名确认**，防误操作锁死自己。
 - **json**（目前仅 `image_gen.create_workflows`）：用专用的 per-style 编辑器，见 §6。
 - **number / boolean / text**：分别为数字输入 / 开关 / 文本框。
 
@@ -69,8 +73,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 ## 5. 与 env / secret 的关系（SOT 调和）
 
 - `.env.dev` / `.env.prod` 仍是**本地与部署的 SOT**（见 [`secrets.md`](./secrets.md)）：首次部署、CI、Wrangler secret 注入都靠它，工作台为空时也靠它兜底。
-- 工作台是**运行期覆盖**：应急切 provider、临时换 key、调限流，不想等一次完整部署时用。
-- **secret 轮换有两条路**：① 长期/权威轮换走 `pnpm cf:secrets:prod` 注入 Wrangler secret（见 secrets.md §3）；② 应急可先在工作台覆盖。注意工作台覆盖后，记得最终把权威值写回 env 并 **Reset** 工作台项，避免两处漂移。
+- 工作台是**非敏感运行期覆盖**：应急切 provider、调 workflow/node、调限流，不想等一次完整部署时用。
+- **secret 轮换只有一条权威路径**：走 `.env.*` + `pnpm cf:secrets:dev/prod` 或 `wrangler secret put` 注入 Wrangler secret（见 secrets.md §3）。后台不能查看、不能替换、不能临时覆盖 secret。
 
 ---
 

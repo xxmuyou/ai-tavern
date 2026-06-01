@@ -72,6 +72,45 @@ describe("llmCall router", () => {
     expect(env.logs[1]?.provider).toBe("openai");
   });
 
+  it("routes to doubao via the ARK endpoint", async () => {
+    const env = createEnv({
+      config: [
+        {
+          fallback_model: null,
+          fallback_provider: null,
+          model: "doubao-1.5-lite-32k",
+          provider: "doubao",
+          task: "chat",
+        },
+      ],
+    });
+
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.includes("ark.cn-beijing.volces.com")) {
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "doubao response" } }],
+            usage: { completion_tokens: 4, prompt_tokens: 10 },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch to ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await llmCall(env.env, {
+      messages: [{ content: "Hi", role: "user" }],
+      task: "chat",
+    });
+
+    expect(response.text).toBe("doubao response");
+    expect(response.provider).toBe("doubao");
+    expect(response.model).toBe("doubao-1.5-lite-32k");
+    expect(env.logs[0]).toMatchObject({ provider: "doubao", status: "success" });
+  });
+
   it("throws final error when both providers fail and logs both attempts", async () => {
     const env = createEnv({
       config: [
@@ -182,6 +221,7 @@ function createEnv({ config }: { config: LLMConfigFixture[] }): CreatedEnv {
   const env = {
     DEEPSEEK_API_KEY: "ds-test",
     OPENAI_API_KEY: "oai-test",
+    ARK_API_KEY: "ark-test",
     DB: {
       prepare(sql: string) {
         return buildStatement(sql, configByTask, logs, logUserIds);

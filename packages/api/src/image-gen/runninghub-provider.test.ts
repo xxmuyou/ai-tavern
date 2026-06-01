@@ -21,7 +21,7 @@ describe("runningHubImageGenProvider", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const provider = await getImageGenProvider(createEnv());
+    const provider = await getImageGenProvider(createEnv(), "variation");
     const result = await provider.generate(createRequest(), createEnv());
 
     expect(result).toEqual({
@@ -77,7 +77,7 @@ describe("runningHubImageGenProvider", () => {
       RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
     } as unknown as Env;
 
-    const result = await (await getImageGenProvider(env)).generate(
+    const result = await (await getImageGenProvider(env, "create")).generate(
       { mode: "create", prompt: "a calm girl in a sweater", style: "anime_kr" },
       env,
     );
@@ -115,7 +115,7 @@ describe("runningHubImageGenProvider", () => {
       RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
     } as unknown as Env;
 
-    await (await getImageGenProvider(env)).generate(
+    await (await getImageGenProvider(env, "create")).generate(
       { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
       env,
     );
@@ -147,7 +147,7 @@ describe("runningHubImageGenProvider", () => {
       RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
     } as unknown as Env;
 
-    await (await getImageGenProvider(env)).generate(
+    await (await getImageGenProvider(env, "create")).generate(
       { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
       env,
     );
@@ -166,7 +166,7 @@ describe("runningHubImageGenProvider", () => {
     } as unknown as Env;
 
     await expect(
-      (await getImageGenProvider(env)).generate(
+      (await getImageGenProvider(env, "create")).generate(
         { mode: "create", prompt: "x", style: "anime_kr" },
         env,
       ),
@@ -174,7 +174,7 @@ describe("runningHubImageGenProvider", () => {
   });
 
   it("fails as non-retryable when required config is missing", async () => {
-    const provider = await getImageGenProvider({ IMAGE_GEN_PROVIDER: "runninghub" } as Env);
+    const provider = await getImageGenProvider({ IMAGE_GEN_PROVIDER: "runninghub" } as Env, "variation");
 
     await expect(provider.generate(createRequest(), { IMAGE_GEN_PROVIDER: "runninghub" } as Env))
       .rejects.toMatchObject({

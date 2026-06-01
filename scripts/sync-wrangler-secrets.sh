@@ -8,7 +8,7 @@ usage() {
     cat >&2 <<EOF
 Usage: $0 <dev|prod> [--dry-run] [--config <path>]
 
-Uploads Worker runtime secrets from .env.dev or .env.prod to Cloudflare
+Uploads selected Worker runtime values from .env.dev or .env.prod to Cloudflare
 Wrangler for the selected environment.
 
 This intentionally does not upload deployment credentials, frontend public
@@ -51,20 +51,19 @@ env_file="$REPO_ROOT/.env.$target"
 [ -f "$config_file" ] || { echo "Wrangler config not found: $config_file" >&2; exit 1; }
 
 if [ "$target" = "prod" ]; then
-    wrangler_env_args=(--env production)
+    wrangler_env_args=(--env prod)
 else
     wrangler_env_args=(--env=)
 fi
 
 # Only keys that the Worker should receive at runtime belong here.
 # Do not add CLOUDFLARE_*, AWS_*, or EXPO_PUBLIC_* values.
-ALLOWED_SECRET_KEYS=(
+ALLOWED_WORKER_KEYS=(
     AUTH_TOKEN_SECRET
     JWT_SIGNING_KEY
     GOOGLE_OAUTH_CLIENT_SECRET
     EMAIL_PROVIDER_API_KEY
     EMAIL_FROM_ADDRESS
-    APPLE_SIGNIN_PRIVATE_KEY
     STRIPE_PRICE_PRO_MONTHLY
     STRIPE_PRICE_CREDITS_SMALL
     STRIPE_PRICE_CREDITS_MEDIUM
@@ -72,19 +71,17 @@ ALLOWED_SECRET_KEYS=(
     STRIPE_SECRET_KEY
     STRIPE_WEBHOOK_SECRET
     OPENAI_API_KEY
-    OPENAI_MODEL
     DEEPSEEK_API_KEY
     ARK_API_KEY
-    LLM_DEFAULT_ROUTE
     RUNNINGHUB_API_KEY
     RUNNINGHUB_WEBHOOK_SECRET
     R2_SIGNING_KEY
 )
 
-is_allowed_secret() {
+is_allowed_worker_key() {
     local needle="$1"
     local allowed_key
-    for allowed_key in "${ALLOWED_SECRET_KEYS[@]}"; do
+    for allowed_key in "${ALLOWED_WORKER_KEYS[@]}"; do
         [ "$allowed_key" = "$needle" ] && return 0
     done
     return 1
@@ -131,8 +128,8 @@ while IFS= read -r raw || [ -n "$raw" ]; do
             ;;
     esac
 
-    if ! is_allowed_secret "$key"; then
-        echo "Skipping $key (not a Worker runtime secret)"
+    if ! is_allowed_worker_key "$key"; then
+        echo "Skipping $key (not a synced Worker runtime key)"
         continue
     fi
 

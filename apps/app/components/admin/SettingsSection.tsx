@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
 import { Button } from '@/components/Button';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
+import { AdminDropdown } from './AdminDropdown';
+
 const GROUP_LABELS: Record<string, string> = {
-  auth: 'Auth, admins, OAuth, and CORS',
+  auth: 'Google / Auth / OAuth / CORS',
   billing: 'Stripe billing',
   limits: 'Rate limits',
   email: 'Email',
@@ -21,7 +23,11 @@ export type RevealSettingFn = (key: string) => Promise<{ value: string | null }>
 
 export function SettingsSection() {
   const { settings, groups, isLoading, error, reveal, save } = useAdminSettings();
-  const visibleGroups = groups.filter((group) => group !== 'llm' && group !== 'image_gen');
+  const visibleGroups = useMemo(
+    () => groups.filter((group) => group !== 'llm' && group !== 'image_gen' && settings.some((s) => s.group === group)),
+    [groups, settings],
+  );
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -31,40 +37,57 @@ export function SettingsSection() {
     );
   }
 
+  const activeGroup = selectedGroup && visibleGroups.includes(selectedGroup) ? selectedGroup : visibleGroups[0] ?? null;
+  const rows = activeGroup ? settings.filter((s) => s.group === activeGroup) : [];
+
   return (
     <View className="gap-4">
       <View className="rounded-lg border border-app-line bg-white p-5">
         <Text className="text-lg font-semibold text-app-text">Operational settings</Text>
         <Text className="mt-1 text-sm leading-6 text-app-muted">
-          Configure integrations here instead of editing wrangler/.env. Saved values take effect within ~30s, no redeploy. Empty a field to fall back to the env default. This is per-environment.
+          Pick a module to configure it. Saved values take effect within ~30s, no redeploy. Empty a field to fall back to the env default. This is per-environment.
         </Text>
         {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
+        {visibleGroups.length > 0 ? (
+          <View className="mt-4">
+            <AdminDropdown
+              labelForValue={(value) => (value ? GROUP_LABELS[value] ?? value : 'Select module')}
+              onChange={(value) => setSelectedGroup(value)}
+              options={visibleGroups.map((group) => ({ label: GROUP_LABELS[group] ?? group, value: group }))}
+              value={activeGroup}
+            />
+          </View>
+        ) : null}
       </View>
 
-      {visibleGroups.map((group) => {
-        const rows = settings.filter((s) => s.group === group);
-        if (rows.length === 0) return null;
-        return (
-          <View key={group} className="rounded-lg border border-app-line bg-white p-5">
-            <Text className="text-base font-semibold text-app-text">{GROUP_LABELS[group] ?? group}</Text>
-            <View className="mt-3 gap-3">
-              {rows.map((item) =>
-                item.key === CREATE_WORKFLOWS_KEY ? (
-                  <CreateWorkflowsRow key={item.key} item={item} onSave={save} />
-                ) : (
-                  <SettingRow key={item.key} item={item} onReveal={reveal} onSave={save} />
-                ),
-              )}
-            </View>
+      {activeGroup && rows.length > 0 ? (
+        <View className="rounded-lg border border-app-line bg-white p-5">
+          <Text className="text-base font-semibold text-app-text">{GROUP_LABELS[activeGroup] ?? activeGroup}</Text>
+          <View className="mt-3 gap-3">
+            {rows.map((item) =>
+              item.key === CREATE_WORKFLOWS_KEY ? (
+                <CreateWorkflowsRow key={item.key} item={item} onSave={save} />
+              ) : (
+                <SettingRow key={item.key} item={item} onReveal={reveal} onSave={save} />
+              ),
+            )}
           </View>
-        );
-      })}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 export function SourceTag({ item }: { item: AdminSettingItem }) {
-  const label = item.source === 'db' ? 'admin' : item.source === 'env' ? 'env default' : 'unset';
+  const label = item.admin_mode === 'status_only'
+    ? 'env managed'
+    : item.source === 'db'
+      ? 'admin'
+      : item.source === 'env'
+        ? 'env default'
+        : item.source === 'derived'
+          ? 'derived (APP_BASE_URL)'
+          : 'unset';
   return <Text className="text-xs text-app-muted">source: {label}{item.updated_by ? ` · ${item.updated_by}` : ''}</Text>;
 }
 
@@ -90,6 +113,10 @@ export function SettingRow({
   useEffect(() => {
     if (!isSecret) setDraft(item.value ?? '');
   }, [item.value, isSecret]);
+
+  if (item.admin_mode === 'status_only') {
+    return <StatusOnlySettingRow item={item} />;
+  }
 
   async function run(value: string) {
     setBusy(true);
@@ -209,12 +236,35 @@ export function SettingRow({
   );
 }
 
+function StatusOnlySettingRow({ item }: { item: AdminSettingItem }) {
+  return (
+    <View className="gap-2 rounded-lg border border-app-line bg-app-bg p-4 opacity-75">
+      <RowHeader item={item} />
+      <View className="flex-row items-center justify-between gap-3 rounded-lg border border-app-line bg-white p-3">
+        <View className="min-w-0 flex-1">
+          <Text className="text-xs font-semibold uppercase text-app-muted">Environment status</Text>
+          <Text className="mt-1 text-sm font-semibold text-app-text">
+            {item.is_set ? 'Configured' : 'Missing'}
+          </Text>
+        </View>
+        <View className={`rounded-full border px-3 py-1.5 ${item.is_set ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-app-bg'}`}>
+          <Text className={`text-xs font-semibold ${item.is_set ? 'text-app-primary' : 'text-app-muted'}`}>
+            {item.is_set ? 'Set' : 'Unset'}
+          </Text>
+        </View>
+      </View>
+      <SourceTag item={item} />
+    </View>
+  );
+}
+
 export function RowHeader({ item }: { item: AdminSettingItem }) {
   return (
     <View>
       <Text className="text-sm font-semibold text-app-text">{item.label}</Text>
       <Text className="text-xs text-app-muted">{item.env_key ? `${item.env_key} · ` : ''}{item.key}</Text>
       {item.description ? <Text className="text-xs text-app-muted">{item.description}</Text> : null}
+      {item.admin_mode === 'status_only' ? <Text className="text-xs font-semibold text-app-muted">Managed in environment secrets; value is not viewable or editable here.</Text> : null}
       {item.danger_level === 'high' ? <Text className="text-xs font-semibold text-app-danger">High-risk runtime setting</Text> : null}
     </View>
   );

@@ -1,7 +1,8 @@
-import { getSetting } from "../settings/store";
+import { resolveImageGenConfig } from "../settings/store";
 import { mockImageGenProvider } from "./mock-provider";
+import { openAiImageGenProvider } from "./openai-provider";
 import { runningHubImageGenProvider } from "./runninghub-provider";
-import type { ImageGenProvider } from "./types";
+import type { ImageGenMode, ImageGenProvider } from "./types";
 
 export {
   type ArtStyle,
@@ -43,14 +44,26 @@ export {
 } from "./models";
 
 /**
- * Return the active image-gen provider for the current environment.
+ * Return the active image-gen provider for a given workflow mode.
  *
- * Defaults to mock for local/CI unless explicitly configured otherwise.
+ * WF1 (`create`) and WF2 (`variation`) can run on different engines so they can
+ * be switched independently (e.g. WF1 on openai while WF2 stays on runninghub).
+ * The per-mode setting wins; an empty per-mode value falls back to the default
+ * `image_gen.provider`, then to mock for local/CI.
  */
-export async function getImageGenProvider(env: Env): Promise<ImageGenProvider> {
-  const provider = await getSetting(env, "image_gen.provider");
-  if (provider === "runninghub") {
-    return runningHubImageGenProvider;
+export async function getImageGenProvider(
+  env: Env,
+  mode: ImageGenMode,
+): Promise<ImageGenProvider> {
+  const cfg = await resolveImageGenConfig(env);
+  const perMode = mode === "create" ? cfg.wf1Provider : cfg.wf2Provider;
+  const provider = (perMode?.trim() || cfg.provider || "mock").toLowerCase();
+  switch (provider) {
+    case "runninghub":
+      return runningHubImageGenProvider;
+    case "openai":
+      return openAiImageGenProvider;
+    default:
+      return mockImageGenProvider;
   }
-  return mockImageGenProvider;
 }

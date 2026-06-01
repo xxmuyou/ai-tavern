@@ -14,11 +14,11 @@ Available tasks:
   api:d1-migrate-prod
   api:deploy-dev
   api:deploy-prod
-  api:dev
+  api:local
   api:typecheck
   app:export-web-dev
   app:export-web-prod
-  app:web
+  app:local
   deploy:web-dev
   deploy:web-prod
 EOF
@@ -71,7 +71,7 @@ run_in() {
 WRANGLER_CFG="../../infra/cloudflare/wrangler.jsonc"
 
 task_api_cf_types() {
-    load_env_file "$REPO_ROOT/.env.dev"
+    load_env_file "$REPO_ROOT/.env.local"
     run_in "packages/api" npx wrangler types --config "$WRANGLER_CFG" src/worker-configuration.d.ts
 }
 
@@ -81,7 +81,7 @@ task_api_d1_migrate_dev() {
 }
 
 task_api_d1_migrate_local() {
-    load_env_file "$REPO_ROOT/.env.dev"
+    load_env_file "$REPO_ROOT/.env.local"
     run_in "packages/api" npx wrangler d1 migrations apply xtbit-apps-dev --local --config "$WRANGLER_CFG"
 }
 
@@ -97,11 +97,11 @@ task_api_deploy_dev() {
 
 task_api_deploy_prod() {
     load_env_file "$REPO_ROOT/.env.prod"
-    run_in "packages/api" npx wrangler deploy --config "$WRANGLER_CFG" --env production
+    run_in "packages/api" npx wrangler deploy --config "$WRANGLER_CFG" --env prod
 }
 
-task_api_dev() {
-    load_env_file "$REPO_ROOT/.env.dev"
+task_api_local() {
+    load_env_file "$REPO_ROOT/.env.local"
     run_in "packages/api" npx wrangler dev --config "$WRANGLER_CFG"
 }
 
@@ -122,8 +122,8 @@ task_app_export_web_prod() {
     run_in "apps/app" npx expo export --platform web
 }
 
-task_app_web() {
-    load_env_file "$REPO_ROOT/.env.dev"
+task_app_local() {
+    load_env_file "$REPO_ROOT/.env.local"
     run_in "apps/app" npx expo start --web
 }
 
@@ -154,11 +154,11 @@ case "$task" in
     api:d1-migrate-prod)  task_api_d1_migrate_prod ;;
     api:deploy-dev)       task_api_deploy_dev ;;
     api:deploy-prod)      task_api_deploy_prod ;;
-    api:dev)              task_api_dev ;;
+    api:local)            task_api_local ;;
     api:typecheck)        task_api_typecheck ;;
     app:export-web-dev)   task_app_export_web_dev ;;
     app:export-web-prod)  task_app_export_web_prod ;;
-    app:web)              task_app_web ;;
+    app:local)            task_app_local ;;
     deploy:web-dev)       task_deploy_web_dev ;;
     deploy:web-prod)      task_deploy_web_prod ;;
     *)

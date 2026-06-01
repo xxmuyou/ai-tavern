@@ -4,7 +4,7 @@
 >
 > **核心原则：** 任何 secret **不进 git**。所有 secret 通过 Wrangler / EAS / 1Password（或团队选定的工具）注入运行时。
 >
-> **⚠️ 运行时覆盖层：** 本文档描述的 env / Wrangler secret 是 **bootstrap / 兜底来源**。其上还叠了一个**运行时 DB 覆盖层**——管理员工作台改的配置写入 D1，优先级**高于** env，~30s 生效、无需重部署。详见 [`admin-settings-workspace.md`](./admin-settings-workspace.md)。**关键后果：若某项在工作台改过，再改 env 重新部署也不生效**（运行时读 DB 值），需到工作台 Reset 回退。许多 secret（RunningHub / LLM / Stripe / Resend / JWT / OAuth 等）既能走 Wrangler secret，也能在工作台临时覆盖；权威轮换仍以 Wrangler secret 为准（见 §3），应急可先用工作台。
+> **管理员工作台边界：** Admin UI 只管理非敏感运行时配置。API key / secret / signing key 只能通过 `.env.*`、Wrangler secrets、`pnpm cf:secrets:*` 或 `wrangler secret put` 管理。工作台只显示这些 secret 是否已配置，不显示值，也不允许覆盖；历史 D1 中如果存在同 key 覆盖值，运行时代码会忽略。
 
 ---
 
@@ -125,7 +125,7 @@ pnpm cf:secrets:prod
 
 # 查看（仅列表，不显示值）
 npx wrangler secret list --config infra/cloudflare/wrangler.jsonc --env=
-npx wrangler secret list --config infra/cloudflare/wrangler.jsonc --env production
+npx wrangler secret list --config infra/cloudflare/wrangler.jsonc --env prod
 ```
 
 ### 2.2 wrangler.jsonc vars（公开非 secret）
@@ -212,6 +212,8 @@ pnpm dev                   # 自动准备本地 env，再启动 worker + Expo
 
 ### 3.1 LLM API key（DeepSeek / OpenAI / 其他）
 
+LLM API key 只能通过 Wrangler secret 轮换；Admin UI 只显示 configured / missing 状态，不能查看或替换 key。
+
 ```bash
 # 1. 在 provider 后台创建新 key
 # 2. 注入新 key（不删旧 key）
@@ -226,12 +228,16 @@ pnpm deploy:api:prod
 
 ### 3.2 Stripe key
 
+Stripe secret key 和 webhook signing secret 只能通过 Wrangler secret 管理；Admin UI 不显示、不替换真实值。
+
 **注意：rotate Stripe live key 需要联系 Stripe 支持**（live key 不支持自助删除，只能 deactivate）。
 
 - test mode key 可随时换
 - live mode key 一旦下发，**视为长期持久**，仅在泄露时联系 Stripe rotate
 
 ### 3.3 JWT signing key
+
+JWT signing key 只能通过 Wrangler secret 管理；Admin UI 不显示、不替换真实值。
 
 ```bash
 # 1. 生成新 key
@@ -248,6 +254,8 @@ openssl rand -base64 64
 **v1 暂时不做双 key**（不轮换）。出问题时一次性切换 + 强制所有用户重新登录。
 
 ### 3.4 OAuth client secret
+
+OAuth client secret 只能通过 Wrangler secret 管理；Admin UI 不显示、不替换真实值。
 
 - Google / Apple 控制台都可创建新 secret
 - 同 LLM key 流程：旧新共存，部署，撤销旧

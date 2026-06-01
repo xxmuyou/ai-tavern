@@ -300,6 +300,6 @@ pnpm dev
   - `prepare-local-env.sh` 包一层 `op run --env-file=.env.dev.template -- ./scripts/prepare-local-env.sh dev`
   - 团队成员 `op signin` 即可拉密钥
 - **GitHub Actions 集成**：dev 部署 CI 用 `OP_SERVICE_ACCOUNT_TOKEN` 注入；本 spec 仅做本地基础
-- **prod 远端同步**：写 `scripts/sync-secrets-to-cf.mjs` —— 从 `.env.prod`（或 1Password prod-worker item）批量 `wrangler secret put --env production`
+- **prod 远端同步**：写 `scripts/sync-secrets-to-cf.mjs` —— 从 `.env.prod`（或 1Password prod-worker item）批量 `wrangler secret put --env prod`
 - **`apps/app/eas.json`**：spec-015 中加入 EAS Build profile，其 env block 与 `.env.dev` / `.env.prod` 保持一致
 - **`.env.dev` schema 校验严格化**：把 `.env.example` 改成"必填 vs 可选"标注，sync 脚本对必填缺失直接报错退出

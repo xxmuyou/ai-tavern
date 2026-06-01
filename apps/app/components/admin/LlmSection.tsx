@@ -17,6 +17,7 @@ import { LLM_PROVIDERS } from '@/constants/llm';
 import { useAdminLlm } from '@/hooks/use-admin-llm';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
+import { AdminDropdown } from './AdminDropdown';
 import { SettingRow } from './SettingsSection';
 
 const INPUT_CLASS =
@@ -26,11 +27,16 @@ const USAGE_WINDOWS: LlmUsageWindow[] = ['today', '7d', '30d'];
 const LLM_SECRET_KEYS: Partial<Record<LlmProvider, string>> = {
   deepseek: 'llm.deepseek_api_key',
   openai: 'llm.openai_api_key',
+  doubao: 'llm.doubao_api_key',
 };
+
+// Providers we actually have a registered API key for (the "integrated" set).
+const INTEGRATED_LLM_PROVIDERS = Object.keys(LLM_SECRET_KEYS) as LlmProvider[];
 
 const DEFAULT_MODELS: Partial<Record<LlmProvider, string[]>> = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-5-mini'],
+  doubao: ['doubao-1.5-lite-32k'],
 };
 
 export function LlmSection() {
@@ -68,12 +74,19 @@ export function LlmSection() {
       <View className="rounded-lg border border-app-line bg-white p-5">
         <Text className="text-lg font-semibold text-app-text">Companion chat models</Text>
         <Text className="mt-1 text-sm leading-6 text-app-muted">
-          Manage provider keys and model routing used by companion conversations and related LLM tasks.
+          Manage model routing used by companion conversations and related LLM tasks. Provider keys are managed in environment secrets.
         </Text>
         {settingsError ? <Text className="mt-2 text-sm font-semibold text-app-danger">{settingsError}</Text> : null}
       </View>
-      <LlmSecretsPanel onReveal={reveal} onSave={save} settings={settings} />
-      <ConfigPanel providerModels={buildProviderModels(tasks)} saveConfig={saveConfig} savingTask={savingTask} tasks={tasks} />
+      <ProviderPanel
+        onReveal={reveal}
+        onSave={save}
+        providerModels={buildProviderModels(tasks)}
+        saveConfig={saveConfig}
+        savingTask={savingTask}
+        settings={settings}
+        tasks={tasks}
+      />
       <TestPanel
         isTesting={isTesting}
         providerModels={buildProviderModels(tasks)}
@@ -92,46 +105,112 @@ export function LlmSection() {
 }
 
 // -----------------------------------------------------------------------------
-// Config
+// Provider panel: pick a provider → key status, integrated models, and routed tasks.
 // -----------------------------------------------------------------------------
 
-function ConfigPanel({
+function ProviderPanel({
+  onReveal,
+  onSave,
   providerModels,
   saveConfig,
   savingTask,
+  settings,
   tasks,
 }: {
+  onReveal: (key: string) => Promise<{ value: string | null }>;
+  onSave: (key: string, value: string, confirm?: string) => Promise<void>;
   providerModels: Record<LlmProvider, string[]>;
   saveConfig: (task: string, input: { provider: LlmProvider; model: string; fallback_provider: LlmProvider | null; fallback_model: string | null }) => Promise<boolean>;
   savingTask: string | null;
+  settings: AdminSettingItem[];
   tasks: LlmConfigItem[];
 }) {
+  // Providers offered: integrated ones (have a registered key) plus any that
+  // already own a task, so no existing routing row is ever hidden.
+  const providers = unique([
+    ...INTEGRATED_LLM_PROVIDERS,
+    ...tasks.map((task) => task.provider),
+  ]) as LlmProvider[];
+  const [selected, setSelected] = useState<LlmProvider>(providers[0] ?? 'deepseek');
   const [editingTask, setEditingTask] = useState<string | null>(null);
+
+  const secretKey = LLM_SECRET_KEYS[selected];
+  const secretItem = secretKey ? settings.find((row) => row.key === secretKey) ?? null : null;
+  const models = providerModels[selected] ?? [];
+  const providerTasks = tasks.filter((task) => task.provider === selected);
 
   return (
     <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-lg font-semibold text-app-text">LLM routing</Text>
+      <Text className="text-lg font-semibold text-app-text">Provider</Text>
       <Text className="mt-1 text-sm leading-6 text-app-muted">
-        Provider and model per task, with an optional fallback.
+        Pick a provider to check its key status, see its integrated models, and route tasks to it.
       </Text>
-      <View className="mt-4 gap-3">
-        {tasks.map((row) =>
-          editingTask === row.task ? (
-            <ConfigEditor
-              key={row.task}
-              isSaving={savingTask === row.task}
-              onCancel={() => setEditingTask(null)}
-              onSave={async (input) => {
-                const ok = await saveConfig(row.task, input);
-                if (ok) setEditingTask(null);
-              }}
-              providerModels={providerModels}
-              row={row}
-            />
+
+      <View className="mt-4">
+        <AdminDropdown
+          labelForValue={(value) => value ?? 'Select provider'}
+          onChange={(value) => {
+            setSelected(value ?? selected);
+            setEditingTask(null);
+          }}
+          options={providers.map((provider) => ({ label: provider, value: provider }))}
+          value={selected}
+        />
+      </View>
+
+      <View className="mt-4 gap-4">
+        <View className="gap-1.5">
+          <Text className="text-xs font-semibold uppercase text-app-muted">API key status</Text>
+          {secretItem ? (
+            <SettingRow item={secretItem} onReveal={onReveal} onSave={onSave} />
           ) : (
-            <ConfigRow key={row.task} onEdit={() => setEditingTask(row.task)} row={row} />
-          ),
-        )}
+            <Text className="rounded-lg border border-app-line bg-app-bg p-4 text-xs text-app-muted">
+              No API key setting is registered for this provider yet.
+            </Text>
+          )}
+        </View>
+
+        <View className="gap-1.5">
+          <Text className="text-xs font-semibold uppercase text-app-muted">Integrated models</Text>
+          {models.length === 0 ? (
+            <Text className="text-sm text-app-muted">No models recorded for this provider.</Text>
+          ) : (
+            <View className="flex-row flex-wrap gap-2">
+              {models.map((model) => (
+                <View key={model} className="rounded-full border border-app-line bg-app-bg px-3 py-1">
+                  <Text className="text-xs font-semibold text-app-text">{model}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View className="gap-1.5">
+          <Text className="text-xs font-semibold uppercase text-app-muted">Tasks routed here</Text>
+          {providerTasks.length === 0 ? (
+            <Text className="text-sm text-app-muted">No tasks currently use {selected}.</Text>
+          ) : (
+            <View className="gap-3">
+              {providerTasks.map((row) =>
+                editingTask === row.task ? (
+                  <ConfigEditor
+                    key={row.task}
+                    isSaving={savingTask === row.task}
+                    onCancel={() => setEditingTask(null)}
+                    onSave={async (input) => {
+                      const ok = await saveConfig(row.task, input);
+                      if (ok) setEditingTask(null);
+                    }}
+                    providerModels={providerModels}
+                    row={row}
+                  />
+                ) : (
+                  <ConfigRow key={row.task} onEdit={() => setEditingTask(row.task)} row={row} />
+                ),
+              )}
+            </View>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -411,51 +490,6 @@ function UsageRow({ row }: { row: LlmUsageByTaskProvider }) {
 // Shared bits
 // -----------------------------------------------------------------------------
 
-function LlmSecretsPanel({
-  onReveal,
-  onSave,
-  settings,
-}: {
-  onReveal: (key: string) => Promise<{ value: string | null }>;
-  onSave: (key: string, value: string, confirm?: string) => Promise<void>;
-  settings: AdminSettingItem[];
-}) {
-  return (
-    <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-base font-semibold text-app-text">Provider API keys</Text>
-      <Text className="mt-1 text-sm leading-6 text-app-muted">
-        Admins can verify which providers have keys. Values stay masked until revealed.
-      </Text>
-      <View className="mt-4 gap-3">
-        {LLM_PROVIDERS.map((provider) => {
-          const key = LLM_SECRET_KEYS[provider];
-          const item = key ? settings.find((row) => row.key === key) : null;
-          if (!item) {
-            return <ProviderMissingKey key={provider} provider={provider} />;
-          }
-          return <SettingRow key={item.key} item={item} onReveal={onReveal} onSave={onSave} />;
-        })}
-      </View>
-    </View>
-  );
-}
-
-function ProviderMissingKey({ provider }: { provider: LlmProvider }) {
-  return (
-    <View className="rounded-lg border border-app-line bg-app-bg p-4">
-      <View className="flex-row items-start justify-between gap-3">
-        <View className="min-w-0 flex-1">
-          <Text className="text-sm font-semibold text-app-text">{provider}</Text>
-          <Text className="mt-1 text-xs text-app-muted">No API key setting is registered for this provider yet.</Text>
-        </View>
-        <Text className="rounded-full border border-app-danger px-3 py-1 text-xs font-semibold text-app-danger">
-          missing
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 function Field({ children, label }: { children: ReactNode; label: string }) {
   return (
     <View className="gap-1.5">
@@ -499,12 +533,12 @@ function ProviderPicker({
   onChange: (provider: LlmProvider | null) => void;
   value: LlmProvider | null;
 }) {
-  const options: Array<{ label: string; value: LlmProvider | null }> = [
+  const options: { label: string; value: LlmProvider | null }[] = [
     ...(allowNone ? [{ label: 'Default', value: null as LlmProvider | null }] : []),
     ...LLM_PROVIDERS.map((provider) => ({ label: provider, value: provider as LlmProvider })),
   ];
   return (
-    <Dropdown
+    <AdminDropdown
       labelForValue={(next) => options.find((option) => option.value === next)?.label ?? 'Default'}
       onChange={onChange}
       options={options}
@@ -540,7 +574,7 @@ function ModelPicker({
   }
   return (
     <View className="gap-2">
-      <Dropdown
+      <AdminDropdown
         labelForValue={(next) => next || 'Select model'}
         onChange={onChange}
         options={options}
@@ -554,52 +588,6 @@ function ModelPicker({
         value={value}
         className={INPUT_CLASS}
       />
-    </View>
-  );
-}
-
-function Dropdown<T extends string | null>({
-  labelForValue,
-  onChange,
-  options,
-  value,
-}: {
-  labelForValue: (value: T) => string;
-  onChange: (value: T) => void;
-  options: Array<{ label: string; value: T }>;
-  value: T;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setOpen((current) => !current)}
-        className="min-h-12 justify-center rounded-lg border border-app-line bg-white px-4"
-      >
-        <Text className="text-base font-semibold text-app-text">{labelForValue(value)}</Text>
-      </Pressable>
-      {open ? (
-        <View className="mt-2 overflow-hidden rounded-lg border border-app-line bg-white">
-          {options.map((option) => (
-            <Pressable
-              key={option.value ?? 'none'}
-              accessibilityRole="button"
-              onPress={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-              className={`border-b border-app-line px-4 py-3 last:border-b-0 ${
-                option.value === value ? 'bg-app-primarySoft' : 'bg-white'
-              }`}
-            >
-              <Text className={`text-sm font-semibold ${option.value === value ? 'text-app-primary' : 'text-app-text'}`}>
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }

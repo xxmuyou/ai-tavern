@@ -1,3 +1,4 @@
+import { resolveImageGenConfig } from "../settings/store";
 import {
   ImageGenError,
   getImageGenProvider,
@@ -253,14 +254,16 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
 
   try {
     const sourceArtUrl = parseFirstInputKey(job.input_keys);
+    const cfg = await resolveImageGenConfig(env);
+    const basePrompt = cfg.wf1BasePrompt?.trim();
     const request: ImageGenRequest = {
       mode: "create",
-      prompt: job.prompt,
+      prompt: basePrompt ? `${basePrompt}\n\n${job.prompt}` : job.prompt,
       source_art_url: sourceArtUrl ?? undefined,
       style: (job.style as ArtStyle | null) ?? undefined,
       ckpt_name: job.ckpt_name ?? undefined,
     };
-    const provider = await getImageGenProvider(env);
+    const provider = await getImageGenProvider(env, "create");
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {

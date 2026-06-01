@@ -5,6 +5,7 @@ import {
   SETTINGS,
   SETTINGS_BY_KEY,
   SETTING_GROUPS,
+  adminModeFor,
   type SettingDef,
   type SettingType,
 } from "./registry";
@@ -27,7 +28,7 @@ type AppSettingRow = {
  *   GET /admin/settings              — list registry + effective values
  *   PUT /admin/settings/{key}        — set (empty value resets to env default)
  *
- * Secret values are never returned; only whether they are set.
+ * Status-only secret values are never returned, revealed, or overwritten.
  */
 export async function handleAdminSettingsRequest(
   request: Request,
@@ -99,6 +100,9 @@ async function handlePut(request: Request, env: Env, key: string): Promise<Respo
   if (!def) {
     return jsonResponse({ error: "unknown_setting" }, { status: 400 });
   }
+  if (adminModeFor(def) === "status_only") {
+    return jsonResponse({ error: "env_managed_setting" }, { status: 400 });
+  }
 
   const body = (await request.json().catch(() => null)) as {
     confirm?: unknown;
@@ -153,6 +157,9 @@ async function handleReveal(request: Request, env: Env, key: string): Promise<Re
   if (!def) {
     return jsonResponse({ error: "unknown_setting" }, { status: 400 });
   }
+  if (adminModeFor(def) === "status_only") {
+    return jsonResponse({ error: "env_managed_setting" }, { status: 400 });
+  }
   if (def.type !== "secret") {
     return jsonResponse({ error: "not_secret" }, { status: 400 });
   }
@@ -185,7 +192,9 @@ async function serializeSetting(
 ): Promise<Record<string, unknown>> {
   const resolved = await resolveSetting(env, def.key, map);
   const row = dbRows.get(def.key);
+  const adminMode = adminModeFor(def);
   const base = {
+    admin_mode: adminMode,
     key: def.key,
     danger_level: def.dangerLevel ?? "normal",
     env_key: def.envKey ?? null,
@@ -195,8 +204,8 @@ async function serializeSetting(
     description: def.description ?? null,
     source: resolved.source,
     is_set: resolved.value != null && resolved.value !== "",
-    updated_at: row?.updated_at ?? null,
-    updated_by: row?.updated_by ? emails.get(row.updated_by) ?? null : null,
+    updated_at: adminMode === "status_only" ? null : row?.updated_at ?? null,
+    updated_by: adminMode === "status_only" ? null : row?.updated_by ? emails.get(row.updated_by) ?? null : null,
   };
   // Never leak secret values to the client.
   if (def.type === "secret") return base;

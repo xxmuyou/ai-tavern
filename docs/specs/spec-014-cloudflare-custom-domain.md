@@ -94,7 +94,7 @@ v1 RC 上线 [`README.md §4`](./README.md#4-v1-上线门槛) 要求所有配置
 ### 5. 外部 provider 重定向 URI / Webhook 注册
 
 - **Google OAuth**：Google Cloud Console → APIs & Services → Credentials → 选 OAuth 2.0 client → Authorized redirect URIs 添加两条
-- **Stripe**：Stripe Dashboard → Developers → Webhooks → Add endpoint → 填 `https://aiappsbox.com/api/billing/webhook`，监听 `customer.subscription.*`、`invoice.*`、`checkout.session.completed` 事件 → 复制 signing secret → `wrangler secret put STRIPE_WEBHOOK_SECRET --env production`
+- **Stripe**：Stripe Dashboard → Developers → Webhooks → Add endpoint → 填 `https://aiappsbox.com/api/billing/webhook`，监听 `customer.subscription.*`、`invoice.*`、`checkout.session.completed` 事件 → 复制 signing secret → `wrangler secret put STRIPE_WEBHOOK_SECRET --env prod`
 - **Resend**：Resend Dashboard → Domains → Add → `aiappsbox.com` → 按提示加 SPF + DKIM 记录到 Cloudflare DNS → 等候验证通过
 
 ### 6. 前端环境变量同步

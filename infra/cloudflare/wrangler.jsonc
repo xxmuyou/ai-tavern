@@ -19,7 +19,7 @@
   },
   "vars": {
     "APP_ENV": "dev",
-    "ALLOWED_ORIGINS": "http://localhost:8081,http://127.0.0.1:8081,https://dev.aiappsbox.com",
+    "APP_BASE_URL": "https://dev.aiappsbox.com",
     "ADMIN_EMAILS": "admin@aiappsbox.com",
     "REQUEST_BODY_LIMIT_BYTES": "262144",
     "ASSET_UPLOAD_BODY_LIMIT_BYTES": "5242880",
@@ -27,20 +27,12 @@
     "RATE_LIMIT_PER_MINUTE": "120",
     "LLM_RATE_LIMIT_PER_MINUTE": "30",
     "IMAGE_GEN_PROVIDER": "runninghub",
-    "IMAGE_GEN_PUBLIC_BASE_URL": "https://dev.aiappsbox.com/api",
     "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
     "RUNNINGHUB_WORKFLOW_ID": "",
     "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
     "RUNNINGHUB_PROMPT_NODE_ID": "",
     "RUNNINGHUB_CREATE_WORKFLOWS": "{\"anime_kr\":{\"workflowId\":\"2059941190052696066\",\"promptNodeId\":\"6\"}}",
-    "RUNNINGHUB_WEBHOOK_URL": "https://dev.aiappsbox.com/api/webhooks/runninghub",
     "STRIPE_PUBLISHABLE_KEY": "",
-    "STRIPE_SUCCESS_URL": "https://dev.aiappsbox.com/?billing=success",
-    "STRIPE_CANCEL_URL": "https://dev.aiappsbox.com/?billing=cancelled",
-    "STRIPE_PORTAL_RETURN_URL": "https://dev.aiappsbox.com/?billing=portal",
-    "STRIPE_CREDITS_SUCCESS_URL": "https://dev.aiappsbox.com/?credits=success",
-    "STRIPE_CREDITS_CANCEL_URL": "https://dev.aiappsbox.com/?credits=cancelled",
-    "AUTH_SUCCESS_URL": "https://dev.aiappsbox.com/auth/success",
     "GOOGLE_OAUTH_CLIENT_ID": "285229330091-i88vp1sic03pkohr5k1prumtn2233c74.apps.googleusercontent.com"
   },
   "d1_databases": [
@@ -101,7 +93,7 @@
     }
   ],
   "env": {
-    "production": {
+    "prod": {
       "name": "xtbit-apps-api-prod",
       "routes": [
         {
@@ -111,7 +103,7 @@
       ],
       "vars": {
         "APP_ENV": "prod",
-        "ALLOWED_ORIGINS": "https://aiappsbox.com",
+        "APP_BASE_URL": "https://aiappsbox.com",
         "ADMIN_EMAILS": "admin@aiappsbox.com",
         "REQUEST_BODY_LIMIT_BYTES": "262144",
         "ASSET_UPLOAD_BODY_LIMIT_BYTES": "5242880",
@@ -119,20 +111,12 @@
         "RATE_LIMIT_PER_MINUTE": "120",
         "LLM_RATE_LIMIT_PER_MINUTE": "30",
         "IMAGE_GEN_PROVIDER": "runninghub",
-        "IMAGE_GEN_PUBLIC_BASE_URL": "https://aiappsbox.com/api",
         "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
         "RUNNINGHUB_WORKFLOW_ID": "",
         "RUNNINGHUB_LOAD_IMAGE_NODE_ID": "",
         "RUNNINGHUB_PROMPT_NODE_ID": "",
         "RUNNINGHUB_CREATE_WORKFLOWS": "{}",
-        "RUNNINGHUB_WEBHOOK_URL": "https://aiappsbox.com/api/webhooks/runninghub",
         "STRIPE_PUBLISHABLE_KEY": "",
-        "STRIPE_SUCCESS_URL": "https://aiappsbox.com/?billing=success",
-        "STRIPE_CANCEL_URL": "https://aiappsbox.com/?billing=cancelled",
-        "STRIPE_PORTAL_RETURN_URL": "https://aiappsbox.com/?billing=portal",
-        "STRIPE_CREDITS_SUCCESS_URL": "https://aiappsbox.com/?credits=success",
-        "STRIPE_CREDITS_CANCEL_URL": "https://aiappsbox.com/?credits=cancelled",
-        "AUTH_SUCCESS_URL": "https://aiappsbox.com/auth/success",
         "GOOGLE_OAUTH_CLIENT_ID": "285229330091-i88vp1sic03pkohr5k1prumtn2233c74.apps.googleusercontent.com"
       },
       "d1_databases": [

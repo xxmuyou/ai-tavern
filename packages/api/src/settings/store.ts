@@ -1,4 +1,5 @@
-import { SETTINGS_BY_KEY } from "./registry";
+import { derivedSettingDefault } from "./derived-urls";
+import { adminModeFor, SETTINGS_BY_KEY } from "./registry";
 
 /**
  * Runtime settings store: reads admin-managed config from the `app_settings`
@@ -54,9 +55,12 @@ function readEnv(env: Env, envKey: string | undefined): string | null {
 
 /** DB override (non-empty) wins; otherwise the registered env fallback. */
 function pick(env: Env, map: Map<string, string>, key: string): string | null {
+  const def = SETTINGS_BY_KEY[key];
+  if (adminModeFor(def) === "status_only") return readEnv(env, def?.envKey);
+
   const dbVal = map.get(key);
   if (typeof dbVal === "string" && dbVal.trim() !== "") return dbVal.trim();
-  return readEnv(env, SETTINGS_BY_KEY[key]?.envKey);
+  return readEnv(env, def?.envKey) ?? derivedSettingDefault(env, key);
 }
 
 export async function getSetting(env: Env, key: string): Promise<string | null> {
@@ -64,7 +68,7 @@ export async function getSetting(env: Env, key: string): Promise<string | null> 
   return pick(env, map, key);
 }
 
-export type ResolvedSetting = { value: string | null; source: "db" | "env" | "unset" };
+export type ResolvedSetting = { value: string | null; source: "db" | "env" | "derived" | "unset" };
 
 /** Like getSetting, but also reports where the value came from (for admin UI). */
 export async function resolveSetting(
@@ -73,12 +77,20 @@ export async function resolveSetting(
   map?: Map<string, string>,
 ): Promise<ResolvedSetting> {
   const m = map ?? (await loadSettings(env));
+  const def = SETTINGS_BY_KEY[key];
+  if (adminModeFor(def) === "status_only") {
+    const envVal = readEnv(env, def?.envKey);
+    return envVal != null ? { value: envVal, source: "env" } : { value: null, source: "unset" };
+  }
+
   const dbVal = m.get(key);
   if (typeof dbVal === "string" && dbVal.trim() !== "") {
     return { value: dbVal.trim(), source: "db" };
   }
-  const envVal = readEnv(env, SETTINGS_BY_KEY[key]?.envKey);
-  return envVal != null ? { value: envVal, source: "env" } : { value: null, source: "unset" };
+  const envVal = readEnv(env, def?.envKey);
+  if (envVal != null) return { value: envVal, source: "env" };
+  const derived = derivedSettingDefault(env, key);
+  return derived != null ? { value: derived, source: "derived" } : { value: null, source: "unset" };
 }
 
 export async function getSettingNumber(
@@ -94,6 +106,9 @@ export async function getSettingNumber(
 
 export type ImageGenConfig = {
   provider: string;
+  wf1Provider: string | null;
+  wf2Provider: string | null;
+  wf1BasePrompt: string | null;
   publicBaseUrl: string | null;
   runninghubBaseUrl: string | null;
   apiKey: string | null;
@@ -101,6 +116,11 @@ export type ImageGenConfig = {
   webhookSecret: string | null;
   r2SigningKey: string | null;
   createWorkflows: string | null;
+  openai: {
+    apiKey: string | null;
+    model: string;
+    size: string;
+  };
   wf2: {
     workflowId: string | null;
     loadImageNodeId: string | null;
@@ -114,6 +134,9 @@ export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
   const p = (key: string) => pick(env, map, key);
   return {
     provider: p("image_gen.provider") ?? "mock",
+    wf1Provider: p("image_gen.wf1_provider"),
+    wf2Provider: p("image_gen.wf2_provider"),
+    wf1BasePrompt: p("image_gen.wf1_base_prompt"),
     publicBaseUrl: p("image_gen.public_base_url"),
     runninghubBaseUrl: p("image_gen.runninghub_base_url"),
     apiKey: p("image_gen.api_key"),
@@ -121,6 +144,11 @@ export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
     webhookSecret: p("image_gen.webhook_secret"),
     r2SigningKey: p("image_gen.r2_signing_key"),
     createWorkflows: p("image_gen.create_workflows"),
+    openai: {
+      apiKey: p("image_gen.openai_api_key"),
+      model: p("image_gen.openai_model") ?? "gpt-image-1",
+      size: p("image_gen.openai_image_size") ?? "1024x1024",
+    },
     wf2: {
       workflowId: p("image_gen.wf2_workflow_id"),
       loadImageNodeId: p("image_gen.wf2_load_image_node_id"),

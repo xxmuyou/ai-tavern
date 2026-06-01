@@ -9,6 +9,7 @@ import {
 } from "../auth/test-fixtures";
 import type { AuthEnv } from "../auth/types";
 import { handleAdminSettingsRequest } from "./admin";
+import { getSetting } from "./store";
 
 const ADMIN_EMAIL = "admin@aiappsbox.com";
 const PLAIN_EMAIL = "player@example.com";
@@ -63,6 +64,7 @@ describe("admin settings", () => {
     const body = (await response!.json()) as { settings: Array<Record<string, unknown>> };
     const secret = body.settings.find((row) => row.key === "llm.deepseek_api_key")!;
     expect(secret).toMatchObject({
+      admin_mode: "status_only",
       env_key: "DEEPSEEK_API_KEY",
       is_set: true,
       source: "env",
@@ -147,7 +149,7 @@ describe("admin settings", () => {
     expect(((await response!.json()) as { error: string }).error).toBe("invalid_json");
   });
 
-  it("reveals secret values to admins only", async () => {
+  it("does not reveal env-managed secrets", async () => {
     const env = createEnv({ OPENAI_API_KEY: "env-openai-key" });
     const token = await issueToken(env, ADMIN_EMAIL);
 
@@ -157,19 +159,15 @@ describe("admin settings", () => {
       "/admin/settings/llm.openai_api_key/reveal",
     );
 
-    expect(response?.status).toBe(200);
-    expect(await response!.json()).toEqual({
-      env_key: "OPENAI_API_KEY",
-      key: "llm.openai_api_key",
-      source: "env",
-      value: "env-openai-key",
-    });
+    expect(response?.status).toBe(400);
+    expect(((await response!.json()) as { error: string }).error).toBe("env_managed_setting");
   });
 
-  it("reveals db overrides before env defaults", async () => {
+  it("does not allow env-managed secrets to be saved from admin", async () => {
     const env = createEnv({ OPENAI_API_KEY: "env-openai-key" });
     const token = await issueToken(env, ADMIN_EMAIL);
-    await handleAdminSettingsRequest(
+
+    const response = await handleAdminSettingsRequest(
       authedPut("http://api/admin/settings/llm.openai_api_key", token, {
         value: "db-openai-key",
       }),
@@ -177,17 +175,38 @@ describe("admin settings", () => {
       "/admin/settings/llm.openai_api_key",
     );
 
-    const response = await handleAdminSettingsRequest(
-      authedRequest("http://api/admin/settings/llm.openai_api_key/reveal", token),
-      env,
-      "/admin/settings/llm.openai_api_key/reveal",
-    );
+    expect(response?.status).toBe(400);
+    expect(((await response!.json()) as { error: string }).error).toBe("env_managed_setting");
+    expect(env.settingsRows.has("llm.openai_api_key")).toBe(false);
+  });
 
-    expect(response?.status).toBe(200);
-    expect(await response!.json()).toMatchObject({
-      source: "db",
+  it("ignores old db overrides for env-managed secrets", async () => {
+    const env = createEnv({ OPENAI_API_KEY: "env-openai-key" });
+    env.settingsRows.set("llm.openai_api_key", {
+      key: "llm.openai_api_key",
+      updated_at: 123,
+      updated_by: "admin-1",
       value: "db-openai-key",
     });
+    const token = await issueToken(env, ADMIN_EMAIL);
+
+    expect(await getSetting(env, "llm.openai_api_key")).toBe("env-openai-key");
+
+    const response = await handleAdminSettingsRequest(
+      authedRequest("http://api/admin/settings", token),
+      env,
+      "/admin/settings",
+    );
+    const body = (await response!.json()) as { settings: Array<Record<string, unknown>> };
+    const secret = body.settings.find((row) => row.key === "llm.openai_api_key")!;
+    expect(secret).toMatchObject({
+      admin_mode: "status_only",
+      is_set: true,
+      source: "env",
+      updated_at: null,
+      updated_by: null,
+    });
+    expect(secret).not.toHaveProperty("value");
   });
 
   it("does not reveal non-secret settings", async () => {

@@ -669,13 +669,14 @@ export type AdminSettingType = 'text' | 'number' | 'boolean' | 'secret' | 'json'
 
 export type AdminSettingItem = {
   key: string;
+  admin_mode: 'editable' | 'status_only';
   danger_level: 'normal' | 'high';
   env_key: string | null;
   group: string;
   label: string;
   type: AdminSettingType;
   description: string | null;
-  source: 'db' | 'env' | 'unset';
+  source: 'db' | 'env' | 'derived' | 'unset';
   is_set: boolean;
   updated_at: number | null;
   updated_by: string | null;
@@ -691,7 +692,7 @@ export type AdminSettingsResponse = {
 export type AdminSecretRevealResponse = {
   env_key: string | null;
   key: string;
-  source: 'db' | 'env' | 'unset';
+  source: 'db' | 'env' | 'derived' | 'unset';
   value: string | null;
 };
 

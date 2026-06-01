@@ -70,7 +70,7 @@
 ## 开发快速入口
 
 ```bash
-pnpm dev            # 启动本地：API:8787 + App:8081
+pnpm local          # 启动本地：API:8787 + App:8081
 pnpm typecheck      # 类型检查
 pnpm test           # 测试
 pnpm deploy:api:dev # 部署 API 到 dev

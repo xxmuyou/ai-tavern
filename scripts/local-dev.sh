@@ -4,7 +4,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$REPO_ROOT/tmp"
-LOG_FILE="$LOG_DIR/local-dev.log"
+LOG_FILE="$LOG_DIR/local.log"
 PORTS=(8081 8787)
 
 SKIP_MIGRATE=0
@@ -30,12 +30,12 @@ done
 mkdir -p "$LOG_DIR"
 touch "$LOG_FILE"
 
-echo "Restarting local dev environment..."
-echo "Using .env.dev for local environment values."
+echo "Restarting local environment..."
+echo "Using .env.local for local environment values."
 echo "Writing logs to $LOG_FILE"
 
-if [ ! -f "$REPO_ROOT/.env.dev" ]; then
-    echo "Warning: .env.dev was not found. Create it from .env.example if local keys are needed."
+if [ ! -f "$REPO_ROOT/.env.local" ]; then
+    echo "Warning: .env.local was not found. Create it from .env.example if local keys are needed."
 fi
 
 stop_ports() {
@@ -97,7 +97,7 @@ cleanup() {
 stop_ports
 
 echo "Preparing local env files..."
-if ! bash "$SCRIPT_DIR/prepare-local-env.sh" dev; then
+if ! bash "$SCRIPT_DIR/prepare-local-env.sh" local; then
     echo "Local env preparation failed. Refusing to start with stale env files." >&2
     exit 1
 fi
@@ -114,9 +114,9 @@ else
 fi
 
 CHILDREN=()
-start_proc api pnpm run dev:api
+start_proc api pnpm run local:api
 CHILDREN+=("$STARTED_PID")
-start_proc app pnpm run dev:app
+start_proc app pnpm run local:app
 CHILDREN+=("$STARTED_PID")
 
 trap cleanup INT TERM

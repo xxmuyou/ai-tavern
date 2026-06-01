@@ -27,6 +27,13 @@ fi
 
 cd "$REPO_ROOT"
 
+env_file="$REPO_ROOT/.env.$target"
+if [ ! -f "$env_file" ]; then
+    echo "Missing $env_file. Create it from .env.example before deploying to $target." >&2
+    exit 1
+fi
+echo "Using .env.$target for $target deploy commands."
+
 assert_web_entry_matches() {
     local origin="$1"
     local expected

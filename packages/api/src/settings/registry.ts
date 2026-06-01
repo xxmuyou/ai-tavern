@@ -1,20 +1,21 @@
 /**
- * Registry of admin-editable operational settings.
+ * Registry of admin-visible operational settings.
  *
  * Each entry maps a canonical settings key to its UI type and the env var used
- * as a fallback when no DB override exists. The code reads config through the
+ * as a fallback when no DB override exists. Editable settings read through the
  * settings store (DB override → env fallback), so admins can configure
- * integrations from the workspace without touching wrangler/.env or redeploying.
+ * non-sensitive integrations from the workspace without redeploying.
  *
- * Secrecy is defined HERE (type === "secret"), never in the DB — so stored data
- * can't reclassify a value's secrecy. Secret values are never returned to the
- * client; the admin API only reports whether they are set.
+ * Secrets use adminMode "status_only": their real values are managed in
+ * env/Wrangler secrets, never returned to the client, and old DB overrides are
+ * ignored by runtime reads.
  *
  * Deliberately NOT managed here: build/deploy credentials and client bundle
  * vars (EXPO_PUBLIC_*, CLOUDFLARE_*, AWS_*). Those are not Worker runtime
  * knobs and changing them in D1 would not affect the deployed app.
  */
 export type SettingType = "text" | "number" | "boolean" | "secret" | "json";
+export type SettingAdminMode = "editable" | "status_only";
 
 export type SettingGroup =
   | "auth"
@@ -31,6 +32,11 @@ export type SettingDef = {
   group: SettingGroup;
   label: string;
   type: SettingType;
+  /**
+   * editable: admins may save a D1 runtime override.
+   * status_only: admins can only see whether the env/Wrangler value is set.
+   */
+  adminMode?: SettingAdminMode;
   /** Env var consulted when there is no DB override. */
   envKey?: string;
   dangerLevel?: SettingDangerLevel;
@@ -70,6 +76,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "auth",
     label: "JWT signing key",
     type: "secret",
+    adminMode: "status_only",
     envKey: "JWT_SIGNING_KEY",
     dangerLevel: "high",
     description: "Changing this invalidates existing sessions unless the legacy key remains configured.",
@@ -79,6 +86,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "auth",
     label: "Legacy auth token secret",
     type: "secret",
+    adminMode: "status_only",
     envKey: "AUTH_TOKEN_SECRET",
     dangerLevel: "high",
   },
@@ -95,6 +103,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "auth",
     label: "Google OAuth client secret",
     type: "secret",
+    adminMode: "status_only",
     envKey: "GOOGLE_OAUTH_CLIENT_SECRET",
     dangerLevel: "high",
   },
@@ -105,6 +114,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "billing",
     label: "Stripe secret key",
     type: "secret",
+    adminMode: "status_only",
     envKey: "STRIPE_SECRET_KEY",
     dangerLevel: "high",
   },
@@ -113,6 +123,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "billing",
     label: "Stripe webhook secret",
     type: "secret",
+    adminMode: "status_only",
     envKey: "STRIPE_WEBHOOK_SECRET",
     dangerLevel: "high",
   },
@@ -184,10 +195,63 @@ export const SETTINGS: readonly SettingDef[] = [
   {
     key: "image_gen.provider",
     group: "image_gen",
-    label: "Image provider",
+    label: "Image provider (default)",
     type: "text",
     envKey: "IMAGE_GEN_PROVIDER",
-    description: '"runninghub" for live generation, "mock" for local/testing.',
+    description:
+      'Fallback engine when a workflow has no explicit provider. "runninghub", "openai", or "mock".',
+  },
+  {
+    key: "image_gen.wf1_provider",
+    group: "image_gen",
+    label: "WF1 (create) provider",
+    type: "text",
+    envKey: "IMAGE_GEN_WF1_PROVIDER",
+    description:
+      'Engine for base portrait creation: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
+  },
+  {
+    key: "image_gen.wf2_provider",
+    group: "image_gen",
+    label: "WF2 (variation) provider",
+    type: "text",
+    envKey: "IMAGE_GEN_WF2_PROVIDER",
+    description:
+      'Engine for expression portrait variants: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
+  },
+  {
+    key: "image_gen.wf1_base_prompt",
+    group: "image_gen",
+    label: "WF1 base prompt (global)",
+    type: "text",
+    envKey: "IMAGE_GEN_WF1_BASE_PROMPT",
+    description:
+      "Global style/quality preamble prepended to every WF1 create prompt, across all styles.",
+  },
+  {
+    key: "image_gen.openai_api_key",
+    group: "image_gen",
+    label: "OpenAI image API key",
+    type: "secret",
+    adminMode: "status_only",
+    envKey: "OPENAI_API_KEY",
+    description: "Used when a workflow's provider is openai. Shares the OPENAI_API_KEY env default.",
+  },
+  {
+    key: "image_gen.openai_model",
+    group: "image_gen",
+    label: "OpenAI image model",
+    type: "text",
+    envKey: "OPENAI_IMAGE_MODEL",
+    description: 'OpenAI Images model id, e.g. "gpt-image-1".',
+  },
+  {
+    key: "image_gen.openai_image_size",
+    group: "image_gen",
+    label: "OpenAI image size",
+    type: "text",
+    envKey: "OPENAI_IMAGE_SIZE",
+    description: 'OpenAI Images size, e.g. "1024x1024".',
   },
   {
     key: "image_gen.public_base_url",
@@ -209,6 +273,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "image_gen",
     label: "RunningHub API key",
     type: "secret",
+    adminMode: "status_only",
     envKey: "RUNNINGHUB_API_KEY",
   },
   {
@@ -223,6 +288,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "image_gen",
     label: "RunningHub webhook secret",
     type: "secret",
+    adminMode: "status_only",
     envKey: "RUNNINGHUB_WEBHOOK_SECRET",
   },
   {
@@ -230,6 +296,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "image_gen",
     label: "R2 signing key",
     type: "secret",
+    adminMode: "status_only",
     envKey: "R2_SIGNING_KEY",
     description: "HMAC key used to sign source-image URLs handed to RunningHub.",
   },
@@ -270,6 +337,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "llm",
     label: "DeepSeek API key",
     type: "secret",
+    adminMode: "status_only",
     envKey: "DEEPSEEK_API_KEY",
   },
   {
@@ -277,7 +345,16 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "llm",
     label: "OpenAI API key",
     type: "secret",
+    adminMode: "status_only",
     envKey: "OPENAI_API_KEY",
+  },
+  {
+    key: "llm.doubao_api_key",
+    group: "llm",
+    label: "Doubao (Volcano ARK) API key",
+    type: "secret",
+    adminMode: "status_only",
+    envKey: "ARK_API_KEY",
   },
 
   // --- limits ---
@@ -326,6 +403,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "email",
     label: "Email provider API key (Resend)",
     type: "secret",
+    adminMode: "status_only",
     envKey: "EMAIL_PROVIDER_API_KEY",
   },
   {
@@ -352,4 +430,8 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
 
 export function isSecret(key: string): boolean {
   return SETTINGS_BY_KEY[key]?.type === "secret";
+}
+
+export function adminModeFor(def: SettingDef | undefined): SettingAdminMode {
+  return def?.adminMode ?? "editable";
 }

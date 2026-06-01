@@ -36,8 +36,8 @@
 
 ```
 .env.local                  ← 本地开发覆盖（git ignored）
-.env.dev                    ← dev 环境模板（不含真实 secret）
-.env.prod                   ← prod 环境模板（不含真实 secret）
+.env.dev                    ← 远端 dev 部署/secret sync（git ignored）
+.env.prod                   ← 远端 prod 部署/secret sync（git ignored）
 ```
 
 **真实 secret 不进 git**，统一在 `secrets.md` 管理。
@@ -46,13 +46,14 @@
 
 ```bash
 pnpm install
-pnpm dev    # 同时启 API:8787 + App:8081
+cp .env.example .env.local
+pnpm local  # 同时启 API:8787 + App:8081
 ```
 
 启动脚本 `scripts/local-dev.sh` 会：
 1. 启动 Wrangler dev (API)
 2. 启动 Expo Web dev (App)
-3. 监听日志（`tmp/local-dev.log`）
+3. 监听日志（`tmp/local.log`）
 4. 进程退出时清理两个子进程
 
 ### 2.4 本地登录
