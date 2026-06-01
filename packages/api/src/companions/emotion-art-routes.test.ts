@@ -44,9 +44,10 @@ type JobRow = {
 };
 
 describe("companion emotion-art routes", () => {
-  it("lets a user queue emotion art for their own custom companion", async () => {
+  it("lets a Pro user queue emotion art for their own custom companion", async () => {
     const env = createEnv({
       companions: [userCompanion("echo", "user-1")],
+      proUserIds: ["user-1"],
     });
     const token = await issueToken(env, "player@example.com");
 
@@ -75,6 +76,25 @@ describe("companion emotion-art routes", () => {
         type: "companion.emotion_art.generate",
       }),
     ]);
+  });
+
+  it("blocks a free (non-Pro) user from queueing emotion art", async () => {
+    const env = createEnv({
+      companions: [userCompanion("echo", "user-1")],
+    });
+    const token = await issueToken(env, "player@example.com");
+
+    const response = await handleCompanionEmotionArtRequest(
+      authedRequest("http://api/companions/echo/emotion-art/warm/generate", token, "POST"),
+      env,
+      "/companions/echo/emotion-art/warm/generate",
+    );
+
+    expect(response?.status).toBe(402);
+    const body = (await response!.json()) as { error: string };
+    expect(body.error).toBe("subscription_required");
+    expect(env.jobs).toHaveLength(0);
+    expect(env.queue).toHaveLength(0);
   });
 
   it("does not let a user queue emotion art for another user's companion", async () => {
@@ -126,7 +146,9 @@ type TestEnv = Env & {
 function createEnv(fixtures: {
   companions: CompanionRow[];
   users?: Array<{ id: string; email: string }>;
+  proUserIds?: string[];
 }): TestEnv {
+  const proUserIds = new Set(fixtures.proUserIds ?? []);
   const seed = fixtures.users ?? [{ email: "player@example.com", id: "user-1" }];
   const usersStore = createUsersStore(
     seed.map((user) => ({
@@ -152,7 +174,7 @@ function createEnv(fixtures: {
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
-        return buildStatement(sql, { companions, jobs, sessionsStore, usersStore });
+        return buildStatement(sql, { companions, jobs, proUserIds, sessionsStore, usersStore });
       },
     },
     JOB_QUEUE: {
@@ -172,6 +194,7 @@ function buildStatement(
   stores: {
     companions: Map<string, CompanionRow>;
     jobs: JobRow[];
+    proUserIds: Set<string>;
     sessionsStore: SessionsStore;
     usersStore: UsersStore;
   },
@@ -190,6 +213,16 @@ function buildStatement(
       const userResult = stores.usersStore.handle(sql, values);
       if (userResult?.kind === "first") return userResult.result as unknown as T | null;
       if (sql.includes("FROM admin_user_allowlist")) return null;
+      if (sql.includes("FROM billing_subscriptions") && sql.includes("status IN ('active', 'trialing')")) {
+        const [userId] = values as [string];
+        if (!stores.proUserIds.has(userId)) return null;
+        return {
+          current_period_end: Number.MAX_SAFE_INTEGER,
+          id: `sub-${userId}`,
+          status: "active",
+          user_id: userId,
+        } as unknown as T;
+      }
       if (sql.includes("FROM companions") && sql.includes("WHERE id = ?")) {
         const [id] = values as [string];
         const companion = stores.companions.get(id) ?? null;

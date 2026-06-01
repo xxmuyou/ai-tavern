@@ -1,50 +1,34 @@
-// spec-025 §B4.4: gate higher emotions behind relationship stages while
-// keeping the base set always available, so Phase-0's live portrait swapping
-// never regresses for early-stage players. Mirrors the backend rules in
-// packages/api/src/relationships/unlocks.ts — keep the two in sync.
+// Expression availability for the in-chat live portrait.
+//
+// Expressions are no longer gated by relationship stage. Base emotions stay
+// always available so Phase-0's live tint/label feedback never regresses; the
+// previously stage-gated expressions (playful, tense) now render in chat only
+// once their art has been generated. Generating that art is subscription-gated
+// and triggered manually from the profile portrait gallery — see
+// components/CompanionGalleryPanel.tsx and the backend
+// packages/api/src/companions/emotion-art-routes.ts.
 
-const STAGE_RANK: Readonly<Record<string, number>> = {
-  first_contact: 0,
-  familiar: 1,
-  trusted: 2,
-  close_friend: 3,
-  romantic_tension: 4,
-  dating: 5,
-  committed: 6,
-};
+import type { ChatEmotionKey } from '@/api/types';
+import type { ArtEmotions } from '@/utils/portrait';
 
-// Always renderable regardless of stage.
-const ALWAYS_AVAILABLE = new Set(['neutral', 'warm', 'guarded', 'annoyed']);
+// Always renderable for live emotional feedback, even without dedicated art
+// (PortraitBar falls back to the neutral image).
+const ALWAYS_AVAILABLE: ReadonlySet<string> = new Set(['neutral', 'warm', 'guarded', 'annoyed']);
 
-// Gated emotion -> minimum stage required.
-const EMOTION_GATE: Readonly<Record<string, string>> = {
-  playful: 'familiar',
-  tense: 'trusted',
-};
-
-function rankOf(stage: string | null | undefined): number | null {
-  if (!stage) return null;
-  const rank = STAGE_RANK[stage];
-  return rank === undefined ? null : rank;
-}
-
-/** Whether the given emotion may render at the given relationship stage. */
-export function isEmotionUnlocked(emotion: string, stage: string | null | undefined): boolean {
+/**
+ * Whether the given emotion may render live in chat. Base emotions are always
+ * on; the unlockable expressions (playful, tense) appear only once their art
+ * has actually been generated.
+ */
+export function isEmotionUnlocked(emotion: string, artEmotions: ArtEmotions): boolean {
   if (ALWAYS_AVAILABLE.has(emotion)) return true;
-  const required = EMOTION_GATE[emotion];
-  if (!required) return true; // not gated
-  const have = rankOf(stage);
-  const need = rankOf(required);
-  if (have === null || need === null) return false;
-  return have >= need;
+  return Boolean(artEmotions?.[emotion as ChatEmotionKey]);
 }
 
 /**
- * Resolve the emotion to actually display: the requested one if unlocked,
- * otherwise fall back to neutral. When `stage` is unknown, gating is skipped
- * (returns the requested emotion) so callers without stage info are unaffected.
+ * Resolve the emotion to actually display in chat: the requested one if it may
+ * render, otherwise fall back to neutral.
  */
-export function gateEmotion<T extends string>(emotion: T, stage: string | null | undefined): T | 'neutral' {
-  if (stage == null) return emotion;
-  return isEmotionUnlocked(emotion, stage) ? emotion : 'neutral';
+export function gateEmotion<T extends string>(emotion: T, artEmotions: ArtEmotions): T | 'neutral' {
+  return isEmotionUnlocked(emotion, artEmotions) ? emotion : 'neutral';
 }

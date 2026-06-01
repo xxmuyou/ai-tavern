@@ -1,4 +1,5 @@
 import { isAdminUser, requireAuthUser } from "../auth";
+import { isProUser } from "../billing";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 import {
@@ -96,6 +97,12 @@ async function handleGenerate(
   const artMap = parseArtEmotions(companion.art_emotions);
   if (artMap[emotion]) {
     return jsonResponse({ key: artMap[emotion], status: "cached" });
+  }
+
+  // Expression unlock is subscription-gated: only Pro users (or admins) may
+  // generate non-neutral expressions. Free users are prompted to subscribe.
+  if (!isAdmin && !(await isProUser(env, user.id))) {
+    return jsonResponse({ error: "subscription_required" }, { status: 402 });
   }
 
   const result = await enqueueGenerationJob(env, {

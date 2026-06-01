@@ -4,7 +4,6 @@ import { ZERO_DIMENSIONS, type DimensionValues } from "./level";
 import {
   buildUnlockStatus,
   detectAndRecordUnlocks,
-  isEmotionUnlocked,
   isSecretUnlocked,
   unlockKeysForStage,
 } from "./unlocks";
@@ -16,9 +15,10 @@ function dims(partial: Partial<DimensionValues>): DimensionValues {
 describe("unlock rules (pure)", () => {
   it("grants nothing at first_contact, climbs with stage", () => {
     expect(unlockKeysForStage("first_contact")).toEqual([]);
-    expect(unlockKeysForStage("familiar")).toEqual(["title:familiar", "expr:playful"]);
+    // Expressions are no longer stage-gated; only titles + secret remain.
+    expect(unlockKeysForStage("familiar")).toEqual(["title:familiar"]);
     expect(unlockKeysForStage("trusted")).toContain("secret");
-    expect(unlockKeysForStage("committed").length).toBe(5);
+    expect(unlockKeysForStage("committed").length).toBe(3);
   });
 
   it("grants nothing for negative / off-ladder stages", () => {
@@ -26,25 +26,13 @@ describe("unlock rules (pure)", () => {
     expect(unlockKeysForStage("estranged")).toEqual([]);
   });
 
-  it("gates expressions by stage but keeps base emotions always available", () => {
-    expect(isEmotionUnlocked("neutral", "first_contact")).toBe(true);
-    expect(isEmotionUnlocked("warm", "first_contact")).toBe(true);
-    expect(isEmotionUnlocked("guarded", "first_contact")).toBe(true);
-    expect(isEmotionUnlocked("annoyed", "first_contact")).toBe(true);
-
-    expect(isEmotionUnlocked("playful", "first_contact")).toBe(false);
-    expect(isEmotionUnlocked("playful", "familiar")).toBe(true);
-    expect(isEmotionUnlocked("tense", "familiar")).toBe(false);
-    expect(isEmotionUnlocked("tense", "trusted")).toBe(true);
-  });
-
   it("builds status for every unlock with the right unlocked flags", () => {
     const status = buildUnlockStatus(new Set(["secret"]));
-    expect(status.length).toBe(5);
+    expect(status.length).toBe(3);
     expect(status.find((s) => s.key === "secret")?.unlocked).toBe(true);
     expect(status.find((s) => s.key === "title:familiar")?.unlocked).toBe(false);
     expect(isSecretUnlocked(new Set(["secret"]))).toBe(true);
-    expect(isSecretUnlocked(new Set(["expr:playful"]))).toBe(false);
+    expect(isSecretUnlocked(new Set(["title:familiar"]))).toBe(false);
   });
 });
 
@@ -100,19 +88,17 @@ describe("detectAndRecordUnlocks", () => {
 
     const familiar = await detectAndRecordUnlocks(env, "u1", "maya", dims({ closeness: 25 }), 1000);
     expect(familiar.stage).toBe("familiar");
-    expect(familiar.newlyUnlocked.map((u) => u.key).sort()).toEqual(
-      ["expr:playful", "title:familiar"].sort(),
-    );
+    expect(familiar.newlyUnlocked.map((u) => u.key).sort()).toEqual(["title:familiar"]);
     expect(getLastStage()).toBe("familiar");
 
     // Same stage again -> nothing new.
     const again = await detectAndRecordUnlocks(env, "u1", "maya", dims({ closeness: 25 }), 1001);
     expect(again.newlyUnlocked).toEqual([]);
 
-    // Advance to trusted -> only the two new keys are granted.
+    // Advance to trusted -> only the new secret key is granted.
     const trusted = await detectAndRecordUnlocks(env, "u1", "maya", dims({ trust: 40 }), 1002);
     expect(trusted.stage).toBe("trusted");
-    expect(trusted.newlyUnlocked.map((u) => u.key).sort()).toEqual(["expr:tense", "secret"].sort());
+    expect(trusted.newlyUnlocked.map((u) => u.key).sort()).toEqual(["secret"]);
     expect(getUnlocked().has("secret")).toBe(true);
   });
 

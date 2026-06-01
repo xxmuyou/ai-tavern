@@ -309,7 +309,7 @@ function ChatScreenInner() {
     [handleSend],
   );
 
-  const shownEmotion = gateEmotion(currentEmotion, relationship.goal?.stage);
+  const shownEmotion = gateEmotion(currentEmotion, companion.art_emotions);
   const handleEmotionArtReady = useCallback((emotion: NonNeutralChatEmotionKey, key: string) => {
     setCompanion((current) => ({
       ...current,

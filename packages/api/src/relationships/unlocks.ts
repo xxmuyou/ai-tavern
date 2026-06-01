@@ -6,7 +6,12 @@
 // content stays unlocked even if the relationship later decays.
 //
 // Scenes are NOT handled here — they keep their existing dimension-threshold
-// gating in scenes/unlock.ts. This module covers secret / expression / title.
+// gating in scenes/unlock.ts. This module covers secret / title.
+//
+// Expressions are NOT stage-gated anymore: they are subscription-gated and
+// unlocked manually from the profile portrait gallery (an expression is
+// "available" once its art has been generated, which only Pro users may do).
+// See companions/emotion-art-routes.ts and apps/app/utils/expression-unlock.ts.
 
 import type { RelationshipStage } from "../life/types";
 import type { DimensionValues } from "./level";
@@ -36,40 +41,9 @@ export const STAGE_RANK: Readonly<Record<string, number>> = {
 
 export const UNLOCK_DEFS: readonly UnlockDef[] = [
   { key: "title:familiar", kind: "title", stage: "familiar", label: "They use your name now" },
-  {
-    key: "expr:playful",
-    kind: "expression",
-    stage: "familiar",
-    emotion: "playful",
-    label: "New expression unlocked: playful",
-  },
   { key: "secret", kind: "secret", stage: "trusted", label: "They trust you with something private" },
-  {
-    key: "expr:tense",
-    kind: "expression",
-    stage: "trusted",
-    emotion: "tense",
-    label: "New expression unlocked: tense",
-  },
   { key: "title:close", kind: "title", stage: "close_friend", label: "A name just between you two" },
 ];
-
-// Emotions that are always available regardless of stage, so Phase-0's
-// real-time portrait swapping never regresses for early-stage players.
-export const ALWAYS_AVAILABLE_EMOTIONS: ReadonlySet<string> = new Set([
-  "neutral",
-  "warm",
-  "guarded",
-  "annoyed",
-]);
-
-// Emotion -> minimum stage required, derived from UNLOCK_DEFS.
-const EMOTION_GATE: ReadonlyMap<string, RelationshipStage> = new Map(
-  UNLOCK_DEFS.filter((d) => d.kind === "expression" && d.emotion).map((d) => [
-    d.emotion as string,
-    d.stage,
-  ]),
-);
 
 function rankOf(stage: string): number | null {
   const rank = STAGE_RANK[stage];
@@ -81,17 +55,6 @@ export function unlockKeysForStage(stage: string): string[] {
   const rank = rankOf(stage);
   if (rank === null) return [];
   return UNLOCK_DEFS.filter((d) => (STAGE_RANK[d.stage] ?? Infinity) <= rank).map((d) => d.key);
-}
-
-/** Whether a given emotion is allowed to render at the given stage. */
-export function isEmotionUnlocked(emotion: string, stage: string): boolean {
-  if (ALWAYS_AVAILABLE_EMOTIONS.has(emotion)) return true;
-  const required = EMOTION_GATE.get(emotion);
-  if (!required) return true; // not gated -> always allowed
-  const have = rankOf(stage);
-  const need = rankOf(required);
-  if (have === null || need === null) return false;
-  return have >= need;
 }
 
 export type UnlockEvent = { key: string; kind: UnlockKind; label: string };

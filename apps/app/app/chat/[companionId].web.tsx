@@ -192,7 +192,7 @@ export default function WebChatScreen() {
     }
   }, [activityActions, activityId, pushError, setActivity]);
 
-  const shownEmotion = gateEmotion(currentEmotion, relationship.goal?.stage);
+  const shownEmotion = gateEmotion(currentEmotion, companion?.art_emotions);
   const handleEmotionArtReady = useCallback((emotion: NonNeutralChatEmotionKey, key: string) => {
     setCompanion((current) =>
       current
