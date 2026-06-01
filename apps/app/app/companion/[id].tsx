@@ -5,6 +5,7 @@ import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'rea
 
 import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
+import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
@@ -130,6 +131,12 @@ export default function CompanionDetailScreen() {
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
           <RelationshipGoalPanel goal={relationshipGoal} />
           <CompanionUnlocksPanel companionId={companion.id} />
+          <CompanionGalleryPanel
+            artEmotions={companion.art_emotions}
+            artUrl={companion.art_url}
+            companionId={companion.id}
+            name={companion.name}
+          />
           <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
 
           <View className="rounded-lg border border-app-line bg-app-card p-5">

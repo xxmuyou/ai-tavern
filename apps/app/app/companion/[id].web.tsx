@@ -4,6 +4,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { deleteCompanion, mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
+import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
@@ -87,6 +88,12 @@ export default function WebCompanionDetailScreen() {
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
           <RelationshipGoalPanel goal={relationshipGoal} />
           <CompanionUnlocksPanel companionId={companion.id} />
+          <CompanionGalleryPanel
+            artEmotions={companion.art_emotions}
+            artUrl={companion.art_url}
+            companionId={companion.id}
+            name={companion.name}
+          />
           <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
           <WebPanel>
             <Text className="mb-3 text-xl font-semibold text-app-text">Timeline</Text>

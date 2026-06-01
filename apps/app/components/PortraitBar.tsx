@@ -1,10 +1,15 @@
 import { Image, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
-import type { ChatEmotionKey } from '@/api/types';
 import type { ChatEmotion } from '@/hooks/use-chat-stream';
-
-type ArtEmotions = Partial<Record<ChatEmotionKey, string>> | null | undefined;
+import {
+  EMOTION_EMOJI,
+  EMOTION_LABEL,
+  EMOTION_TINT,
+  PORTRAIT_ASPECT,
+  resolvePortrait,
+  type ArtEmotions,
+} from '@/utils/portrait';
 
 type PortraitBarProps = {
   artEmotions?: ArtEmotions;
@@ -15,39 +20,6 @@ type PortraitBarProps = {
 };
 
 const CONTAINER_HEIGHT = 280;
-const PORTRAIT_ASPECT = 1023 / 1535;
-
-const EMOTION_LABEL: Record<ChatEmotion, string> = {
-  annoyed: 'annoyed',
-  guarded: 'guarded',
-  neutral: 'neutral',
-  playful: 'playful',
-  tense: 'tense',
-  warm: 'warm',
-};
-
-const EMOTION_EMOJI: Record<ChatEmotion, string> = {
-  annoyed: '😤',
-  guarded: '😶',
-  neutral: '😐',
-  playful: '😏',
-  tense: '😟',
-  warm: '😊',
-};
-
-const EMOTION_TINT: Record<ChatEmotion, string> = {
-  annoyed: '#C0524A',
-  guarded: '#6E7B8A',
-  neutral: '#8C8F94',
-  playful: '#D4A33C',
-  tense: '#A85A8E',
-  warm: '#E89B6A',
-};
-
-function resolvePortrait(artEmotions: ArtEmotions, artUrl: string | null | undefined, emotion: ChatEmotion) {
-  const raw = (artEmotions && artEmotions[emotion]) || artUrl || null;
-  return mediaSource(raw);
-}
 
 export function PortraitBar({ artEmotions, artUrl, emotion, name, sceneArt }: PortraitBarProps) {
   const activeEmotion: ChatEmotion = emotion ?? 'neutral';
