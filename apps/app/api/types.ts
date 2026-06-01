@@ -286,6 +286,8 @@ export type BaseArtJobResponse = {
   status: BaseArtJobStatus;
   art_key?: string;
   error_code?: string;
+  /** Raw provider failure detail (e.g. RunningHub message), surfaced for debugging. */
+  error_message?: string;
 };
 
 export type BaseArtPromptAssistResponse = {
@@ -665,6 +667,25 @@ export type AdminImageModel = {
 
 export type AdminImageModelsResponse = {
   models: AdminImageModel[];
+};
+
+// --- Admin: image generation job diagnostics ---
+export type AdminImageGenJob = {
+  id: string;
+  status: BaseArtJobStatus;
+  task: string;
+  style: string | null;
+  model: string | null;
+  provider: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  provider_task_id: string | null;
+  created_at: number;
+  completed_at: number | null;
+};
+
+export type AdminImageGenJobsResponse = {
+  jobs: AdminImageGenJob[];
 };
 
 export type ImageModelInput = {

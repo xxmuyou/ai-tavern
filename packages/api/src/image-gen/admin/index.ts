@@ -31,7 +31,52 @@ export async function handleAdminImageGenRequest(
   if (pathname.startsWith("/admin/expression-prompts")) {
     return handleExpressionPrompts(request, env, pathname);
   }
+  if (pathname === "/admin/image-gen-jobs") {
+    return handleImageGenJobs(request, env);
+  }
   return null;
+}
+
+type ImageGenJobSummaryRow = {
+  id: string;
+  status: string;
+  task: string;
+  style: string | null;
+  model: string | null;
+  provider: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  provider_task_id: string | null;
+  created_at: number;
+  completed_at: number | null;
+};
+
+const JOB_STATUSES = new Set(["pending", "processing", "succeeded", "failed", "cancelled"]);
+
+/**
+ * Read-only diagnostics: list recent image generation jobs so admins can see the
+ * real provider failure reason (error_message holds the raw RunningHub message)
+ * without querying D1 by hand. Defaults to the most recent failures.
+ */
+async function handleImageGenJobs(request: Request, env: Env): Promise<Response> {
+  await requireAdminUser(env, request);
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status");
+  const rawLimit = Number(url.searchParams.get("limit") ?? "50");
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200) : 50;
+
+  const where = status && JOB_STATUSES.has(status) ? "WHERE status = ?" : "";
+  const sql = `SELECT id, status, task, style, model, provider, error_code, error_message,
+                      provider_task_id, created_at, completed_at
+               FROM image_generation_jobs
+               ${where}
+               ORDER BY created_at DESC
+               LIMIT ?`;
+  const stmt = where
+    ? env.DB.prepare(sql).bind(status, limit)
+    : env.DB.prepare(sql).bind(limit);
+  const { results } = await stmt.all<ImageGenJobSummaryRow>();
+  return jsonResponse({ jobs: results ?? [] });
 }
 
 async function handleImageModels(

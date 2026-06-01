@@ -181,6 +181,7 @@ async function handleJobStatus(
   return jsonResponse({
     art_key: job.output_key ?? undefined,
     error_code: job.error_code ?? undefined,
+    error_message: job.error_message ?? undefined,
     status: job.status,
   });
 }

@@ -22,6 +22,7 @@ import type {
   CompanionsListResponse,
   CreditBalanceResponse,
   CreditLedgerResponse,
+  AdminImageGenJobsResponse,
   AdminImageModelsResponse,
   AdminSettingsResponse,
   CreditPackageId,
@@ -275,6 +276,18 @@ export async function getLlmUsage(window: LlmUsageWindow): Promise<LlmUsageRespo
 
 export async function listAdminImageModels(): Promise<AdminImageModelsResponse> {
   return requestJson<AdminImageModelsResponse>('/admin/image-models');
+}
+
+export async function listAdminImageGenJobs(
+  options: { status?: string; limit?: number } = {},
+): Promise<AdminImageGenJobsResponse> {
+  const params = new URLSearchParams();
+  if (options.status) params.set('status', options.status);
+  if (options.limit) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return requestJson<AdminImageGenJobsResponse>(
+    `/admin/image-gen-jobs${query ? `?${query}` : ''}`,
+  );
 }
 
 export async function createAdminImageModel(input: ImageModelInput): Promise<{ id: string }> {

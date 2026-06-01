@@ -6,6 +6,7 @@ import { Button } from '@/components/Button';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
+import { ImageGenJobsSection } from './ImageGenJobsSection';
 import { ImageModelsSection } from './ImageModelsSection';
 import { CreateWorkflowsRow, SettingRow, SourceTag } from './SettingsSection';
 import type { RevealSettingFn, SaveSettingFn } from './SettingsSection';
@@ -107,6 +108,8 @@ export function PortraitGenerationSection() {
           title="WF2 — expression variants (variation)"
         />
       )}
+
+      <ImageGenJobsSection />
     </View>
   );
 }

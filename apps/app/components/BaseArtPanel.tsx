@@ -30,6 +30,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   const [artKey, setArtKey] = useState<string | null>(null);
   const [artSource, setArtSource] = useState<ArtSource | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [assistantInput, setAssistantInput] = useState('');
   const [assistantError, setAssistantError] = useState<string | null>(null);
@@ -67,6 +68,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
       if (res.status === 'failed' || res.status === 'cancelled') {
         if (activeRef.current) {
           setErrorCode(res.error_code ?? 'generation_failed');
+          setErrorDetail(res.error_message ?? null);
           setPhase('error');
         }
         return;
@@ -75,6 +77,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     }
     if (activeRef.current) {
       setErrorCode('timeout');
+      setErrorDetail(null);
       setPhase('error');
     }
   }
@@ -83,16 +86,19 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     const trimmed = prompt.trim();
     if (!trimmed) {
       setErrorCode('prompt_required');
+      setErrorDetail(null);
       setPhase('error');
       return;
     }
     if (!model) {
       setErrorCode('model_required');
+      setErrorDetail(null);
       setPhase('error');
       return;
     }
     setPhase('generating');
     setErrorCode(null);
+    setErrorDetail(null);
     setArtKey(null);
     setArtSource(null);
     setAssetSaved(false);
@@ -102,6 +108,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     } catch {
       if (activeRef.current) {
         setErrorCode('request_failed');
+        setErrorDetail(null);
         setPhase('error');
       }
     }
@@ -110,6 +117,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   async function uploadLocalArt() {
     if (!onUploadArt) return;
     setErrorCode(null);
+    setErrorDetail(null);
     setIsUploading(true);
     try {
       const key = await onUploadArt();
@@ -172,6 +180,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     } catch {
       if (activeRef.current) {
         setErrorCode('asset_save_failed');
+        setErrorDetail(null);
         setPhase('error');
       }
     } finally {
@@ -225,7 +234,12 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
           />
 
           {phase === 'error' ? (
-            <Text className="text-sm font-semibold text-app-danger">{errorLabel(errorCode)}</Text>
+            <View className="gap-1">
+              <Text className="text-sm font-semibold text-app-danger">{errorLabel(errorCode)}</Text>
+              {errorDetail ? (
+                <Text className="text-xs leading-4 text-app-muted">Details: {errorDetail}</Text>
+              ) : null}
+            </View>
           ) : null}
 
           <View className="gap-3 web:flex-row">
