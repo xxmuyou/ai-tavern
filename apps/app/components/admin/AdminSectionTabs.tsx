@@ -1,19 +1,17 @@
 import { Pressable, ScrollView, Text } from 'react-native';
 
 export type AdminSection =
-  | 'members'
-  | 'credits'
-  | 'llm'
-  | 'image-models'
-  | 'expressions'
+  | 'users'
+  | 'chat-models'
+  | 'portrait-generation'
+  | 'prompts'
   | 'settings';
 
 const TABS: { id: AdminSection; label: string }[] = [
-  { id: 'members', label: 'Members' },
-  { id: 'credits', label: 'Credits' },
-  { id: 'llm', label: 'LLM' },
-  { id: 'image-models', label: 'Image models' },
-  { id: 'expressions', label: 'Expressions' },
+  { id: 'users', label: 'Users' },
+  { id: 'chat-models', label: 'Chat models' },
+  { id: 'portrait-generation', label: 'Portrait generation' },
+  { id: 'prompts', label: 'Prompts' },
   { id: 'settings', label: 'Settings' },
 ];
 

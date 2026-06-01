@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { listAdminSettings, updateAdminSetting } from '@/api/companion-client';
+import { listAdminSettings, revealAdminSettingSecret, updateAdminSetting } from '@/api/companion-client';
 import type { AdminSettingItem } from '@/api/types';
 
 export function useAdminSettings() {
@@ -43,5 +43,18 @@ export function useAdminSettings() {
     [],
   );
 
-  return { settings, groups, isLoading, error, reload, save } as const;
+  const reveal = useCallback(
+    async (key: string) => {
+      setError(null);
+      try {
+        return await revealAdminSettingSecret(key);
+      } catch (nextError) {
+        setError(nextError instanceof Error ? nextError.message : 'Failed to reveal secret.');
+        throw nextError;
+      }
+    },
+    [],
+  );
+
+  return { settings, groups, isLoading, error, reload, reveal, save } as const;
 }

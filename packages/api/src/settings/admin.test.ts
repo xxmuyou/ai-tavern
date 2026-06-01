@@ -146,6 +146,63 @@ describe("admin settings", () => {
     expect(response?.status).toBe(400);
     expect(((await response!.json()) as { error: string }).error).toBe("invalid_json");
   });
+
+  it("reveals secret values to admins only", async () => {
+    const env = createEnv({ OPENAI_API_KEY: "env-openai-key" });
+    const token = await issueToken(env, ADMIN_EMAIL);
+
+    const response = await handleAdminSettingsRequest(
+      authedRequest("http://api/admin/settings/llm.openai_api_key/reveal", token),
+      env,
+      "/admin/settings/llm.openai_api_key/reveal",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response!.json()).toEqual({
+      env_key: "OPENAI_API_KEY",
+      key: "llm.openai_api_key",
+      source: "env",
+      value: "env-openai-key",
+    });
+  });
+
+  it("reveals db overrides before env defaults", async () => {
+    const env = createEnv({ OPENAI_API_KEY: "env-openai-key" });
+    const token = await issueToken(env, ADMIN_EMAIL);
+    await handleAdminSettingsRequest(
+      authedPut("http://api/admin/settings/llm.openai_api_key", token, {
+        value: "db-openai-key",
+      }),
+      env,
+      "/admin/settings/llm.openai_api_key",
+    );
+
+    const response = await handleAdminSettingsRequest(
+      authedRequest("http://api/admin/settings/llm.openai_api_key/reveal", token),
+      env,
+      "/admin/settings/llm.openai_api_key/reveal",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response!.json()).toMatchObject({
+      source: "db",
+      value: "db-openai-key",
+    });
+  });
+
+  it("does not reveal non-secret settings", async () => {
+    const env = createEnv({ RATE_LIMIT_PER_MINUTE: "120" });
+    const token = await issueToken(env, ADMIN_EMAIL);
+
+    const response = await handleAdminSettingsRequest(
+      authedRequest("http://api/admin/settings/limits.rate_limit_per_minute/reveal", token),
+      env,
+      "/admin/settings/limits.rate_limit_per_minute/reveal",
+    );
+
+    expect(response?.status).toBe(400);
+    expect(((await response!.json()) as { error: string }).error).toBe("not_secret");
+  });
 });
 
 function createEnv(overrides: Record<string, unknown> = {}): TestEnv {
