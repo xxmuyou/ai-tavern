@@ -6,10 +6,8 @@ import { Button } from '@/components/Button';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 const GROUP_LABELS: Record<string, string> = {
-  auth: 'Auth, admins, and OAuth',
+  auth: 'Auth, admins, OAuth, and CORS',
   billing: 'Stripe billing',
-  image_gen: 'Image generation (RunningHub)',
-  llm: 'LLM providers',
   limits: 'Rate limits',
   email: 'Email',
 };
@@ -18,10 +16,12 @@ const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-white px-4 te
 const CREATE_WORKFLOWS_KEY = 'image_gen.create_workflows';
 const STYLES = ['realistic', 'anime_jp', 'anime_kr'] as const;
 
-type SaveFn = (key: string, value: string, confirm?: string) => Promise<void>;
+export type SaveSettingFn = (key: string, value: string, confirm?: string) => Promise<void>;
+export type RevealSettingFn = (key: string) => Promise<{ value: string | null }>;
 
 export function SettingsSection() {
-  const { settings, groups, isLoading, error, save } = useAdminSettings();
+  const { settings, groups, isLoading, error, reveal, save } = useAdminSettings();
+  const visibleGroups = groups.filter((group) => group !== 'llm' && group !== 'image_gen');
 
   if (isLoading) {
     return (
@@ -41,7 +41,7 @@ export function SettingsSection() {
         {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
       </View>
 
-      {groups.map((group) => {
+      {visibleGroups.map((group) => {
         const rows = settings.filter((s) => s.group === group);
         if (rows.length === 0) return null;
         return (
@@ -52,7 +52,7 @@ export function SettingsSection() {
                 item.key === CREATE_WORKFLOWS_KEY ? (
                   <CreateWorkflowsRow key={item.key} item={item} onSave={save} />
                 ) : (
-                  <SettingRow key={item.key} item={item} onSave={save} />
+                  <SettingRow key={item.key} item={item} onReveal={reveal} onSave={save} />
                 ),
               )}
             </View>
@@ -63,18 +63,29 @@ export function SettingsSection() {
   );
 }
 
-function SourceTag({ item }: { item: AdminSettingItem }) {
+export function SourceTag({ item }: { item: AdminSettingItem }) {
   const label = item.source === 'db' ? 'admin' : item.source === 'env' ? 'env default' : 'unset';
   return <Text className="text-xs text-app-muted">source: {label}{item.updated_by ? ` · ${item.updated_by}` : ''}</Text>;
 }
 
-function SettingRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }) {
+export function SettingRow({
+  item,
+  onReveal,
+  onSave,
+}: {
+  item: AdminSettingItem;
+  onReveal?: RevealSettingFn;
+  onSave: SaveSettingFn;
+}) {
   const isSecret = item.type === 'secret';
   const isBoolean = item.type === 'boolean';
   const isDangerous = item.danger_level === 'high';
   const [draft, setDraft] = useState(isSecret ? '' : item.value ?? '');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [showRevealed, setShowRevealed] = useState(false);
 
   useEffect(() => {
     if (!isSecret) setDraft(item.value ?? '');
@@ -86,8 +97,26 @@ function SettingRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }
       await onSave(item.key, value, isDangerous ? confirm.trim() : undefined);
       if (isSecret) setDraft('');
       setConfirm('');
+      setRevealed(null);
+      setShowRevealed(false);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleReveal() {
+    if (!onReveal || !isSecret) return;
+    if (showRevealed) {
+      setShowRevealed(false);
+      return;
+    }
+    setIsRevealing(true);
+    try {
+      const result = await onReveal(item.key);
+      setRevealed(result.value ?? '');
+      setShowRevealed(true);
+    } finally {
+      setIsRevealing(false);
     }
   }
 
@@ -125,6 +154,30 @@ function SettingRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }
         secureTextEntry={isSecret}
         value={draft}
       />
+      {isSecret ? (
+        <View className="gap-2 rounded-lg border border-app-line bg-white p-3">
+          <View className="flex-row items-center justify-between gap-3">
+            <View className="min-w-0 flex-1">
+              <Text className="text-xs font-semibold uppercase text-app-muted">Current secret</Text>
+              <Text numberOfLines={1} className="mt-1 font-mono text-sm text-app-text">
+                {showRevealed ? revealed || '(empty)' : item.is_set ? '****' : 'missing'}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              disabled={!onReveal || isRevealing || !item.is_set}
+              onPress={() => void toggleReveal()}
+              className={`rounded-full border px-3 py-2 ${
+                showRevealed ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-app-bg'
+              } ${!item.is_set ? 'opacity-50' : ''}`}
+            >
+              <Text className="text-xs font-semibold text-app-primary">
+                {showRevealed ? 'Hide' : isRevealing ? 'Loading' : 'View'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
       {isDangerous ? (
         <View>
           <Text className="mb-1 text-xs font-semibold text-app-danger">Confirm by typing the setting key</Text>
@@ -156,7 +209,7 @@ function SettingRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }
   );
 }
 
-function RowHeader({ item }: { item: AdminSettingItem }) {
+export function RowHeader({ item }: { item: AdminSettingItem }) {
   return (
     <View>
       <Text className="text-sm font-semibold text-app-text">{item.label}</Text>
@@ -169,7 +222,7 @@ function RowHeader({ item }: { item: AdminSettingItem }) {
 
 type WorkflowEntry = { workflowId: string; promptNodeId: string; checkpointNodeId: string };
 
-function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveFn }) {
+export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveSettingFn }) {
   const [draft, setDraft] = useState<Record<string, WorkflowEntry>>(() => parseWorkflows(item.value));
   const [busy, setBusy] = useState(false);
 

@@ -6,6 +6,7 @@ import type {
   AdminAllowlistItem,
   AdminAllowlistResponse,
   AdminCreditAdjustmentResult,
+  AdminSecretRevealResponse,
   AdminUserCredits,
   AdminUsersResponse,
   AdminSettingItem,
@@ -310,6 +311,12 @@ export async function updateAdminSetting(
       headers: { 'content-type': 'application/json' },
       method: 'PUT',
     },
+  );
+}
+
+export async function revealAdminSettingSecret(key: string): Promise<AdminSecretRevealResponse> {
+  return requestJson<AdminSecretRevealResponse>(
+    `/admin/settings/${encodeURIComponent(key)}/reveal`,
   );
 }
 

@@ -35,24 +35,23 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 ---
 
-## 3. 可改哪些项
+## 3. 管理员后台现在按业务模块归类
 
-配置项在 [`packages/api/src/settings/registry.ts`](../../packages/api/src/settings/registry.ts) 声明式注册，UI（[`SettingsSection.tsx`](../../apps/app/components/admin/SettingsSection.tsx)）按 6 个分组自动渲染：
+配置项仍在 [`packages/api/src/settings/registry.ts`](../../packages/api/src/settings/registry.ts) 声明式注册，但 Web Admin 不再把所有 env/settings 平铺在一个页面里。后台按业务模块展示：
 
-| 分组 | 内容 | 备注 |
+| Admin 模块 | 内容 | 对应配置 |
 |------|------|------|
-| `auth` | admin 邮箱、CORS origins、JWT key、Google OAuth | 多为高危 |
-| `billing` | Stripe secret/webhook、各 Price ID、回跳 URL | |
-| `image_gen` | RunningHub provider / api key / webhook / WF1 create workflows / WF2 节点 id | 见 §6 |
-| `llm` | DeepSeek / OpenAI key | |
-| `limits` | 各类速率与请求体上限 | 部分高危 |
-| `email` | Resend key、发件地址 | |
+| `Users` | admin 名单、用户查询、积分调整、ledger | `admin_user_allowlist`、credits endpoints |
+| `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、DeepSeek/OpenAI key 状态与查看 | `llm_config`、`llm.*` |
+| `Portrait generation` | 生图 provider、RunningHub API key、WF1/WF2 workflow/node、WF1 模型目录 | `image_gen.*`、`image_models` |
+| `Prompts` | expression 立绘系统提示词；后续其他 prompt 也放这里 | `expression_prompts` |
+| `Settings` | auth、billing、email、limits 等通用运营项 | `auth.*`、`billing.*`、`email.*`、`limits.*` |
 
-新增配置项**只改 registry 一处**即可自动出现在 UI，无需动 UI 代码。
+新增通用配置项仍然只改 registry；如果它属于 LLM 或生图，应放入对应业务模块的过滤列表，而不是重新塞回 Settings。
 
 ### 类型与交互
 
-- **secret**（`type: "secret"`）：值**永不回传客户端**，API 只报 `is_set`。UI 显示 `•••••• set — type to replace`，输入新值即覆盖。
+- **secret**（`type: "secret"`）：列表接口默认不回传值，只报 `is_set`。UI 默认显示 `****`，管理员点击 **View** 时调用 `GET /admin/settings/{key}/reveal` 查看当前有效值；输入新值即覆盖。
 - **high 危险项**（`dangerLevel: "high"`，如 admin 邮箱 / JWT key / 请求体上限）：保存前必须**输入该项的 key 名确认**，防误操作锁死自己。
 - **json**（目前仅 `image_gen.create_workflows`）：用专用的 per-style 编辑器，见 §6。
 - **number / boolean / text**：分别为数字输入 / 开关 / 文本框。
@@ -63,7 +62,7 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 - 前端：[`AdminGuard`](../../apps/app/components/AdminGuard.tsx) 要求登录 + `is_admin`，否则重定向 `/me`。
 - 后端：所有 `/admin/*` 端点首行 `requireAdminUser(env, request)`（`ADMIN_EMAILS` env + `admin_user_allowlist` 表，任一命中即 admin）。
-- **「运营设置」与「图像模型」面板目前只在 Web 端**：[原生 admin](../../apps/app/app/admin/index.tsx) 只挂了 `members` / `credits` / `llm`。这是有意拆分——运营配置在桌面操作更稳，移动端不暴露这些高危旋钮。
+- **高危运营配置仍主要在 Web 端操作**：[原生 admin](../../apps/app/app/admin/index.tsx) 只挂 `Users` / `Chat models`。生图 workflow、prompts、Settings 这些更适合桌面管理。
 
 ---
 
@@ -85,8 +84,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 | 在哪配 | 配什么 | 文件 |
 |--------|--------|------|
-| Settings → Image generation → **WF1 create workflows**（json） | 每个 style 的 `workflowId` / `promptNodeId` / **`checkpointNodeId`** | `image_gen.create_workflows` |
-| **Image models** 面板（WF1 模型目录） | 每个可选模型的 `label` / `style_tag` / **`ckpt_name`** | `image_models` 表（migration 0022） |
+| Portrait generation → **RunningHub and workflow nodes** → WF1 create workflows | 每个 style 的 `workflowId` / `promptNodeId` / **`checkpointNodeId`** | `image_gen.create_workflows` |
+| Portrait generation → **WF1 model catalog** | 每个可选模型的 `label` / `style_tag` / **`ckpt_name`** | `image_models` 表（migration 0022） |
 
 生成时后端 [`runninghub-provider.ts`](../../packages/api/src/image-gen/runninghub-provider.ts) 会下发：
 ```
@@ -100,15 +99,15 @@ nodeInfoList = [
 ### 6.2 接入「自己上传的 checkpoint」的步骤
 
 1. 在 **RunningHub 账号**里上传该 checkpoint 文件（应用本身不负责上传），记下它在 RunningHub 里的**确切文件名**（如 `myCustom_v1.safetensors`）。
-2. 确认对应 style 的 WF1 workflow 里有一个 **Load Checkpoint 节点**，把它的节点 id 填进 Settings → WF1 create workflows 的 `checkpointNodeId`。
-3. 在 **Image models** 面板新增一行：`label` 任取，`style_tag` 选**已配 checkpointNodeId 的那个 style**，`ckpt_name` 填第 1 步的文件名。
+2. 确认对应 style 的 WF1 workflow 里有一个 **Load Checkpoint 节点**，把它的节点 id 填进 Portrait generation → RunningHub and workflow nodes → WF1 create workflows 的 `checkpointNodeId`。
+3. 在 Portrait generation → **WF1 model catalog** 新增一行：`label` 任取，`style_tag` 选**已配 checkpointNodeId 的那个 style**，`ckpt_name` 填第 1 步的文件名。
 4. 完成——用户创建角色时选这个模型，就会用你的 checkpoint 出图。**不用新建 workflow。**
 
 ### 6.3 ⚠️ checkpointNodeId 依赖（静默失效已加警告）
 
 如果某 style 的 WF1 workflow **没填 `checkpointNodeId`**，那么该 style 下所有模型的 `ckpt_name` 都会被**忽略**，悄悄用 workflow 内置的默认底模。
 
-为此 Image models 面板现在会在受影响的模型行显示红色警告（`checkpoint_applies = false`），后端生成时也会 `console.warn` 留痕。看到警告就去 Settings 给该 style 补 `checkpointNodeId`。
+为此 Portrait generation 的 WF1 model catalog 会在受影响的模型行显示红色警告（`checkpoint_applies = false`），后端生成时也会 `console.warn` 留痕。看到警告就去 RunningHub and workflow nodes 给该 style 补 `checkpointNodeId`。
 
 ### 6.4 什么时候才真的要新建 workflow
 

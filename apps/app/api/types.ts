@@ -688,6 +688,13 @@ export type AdminSettingsResponse = {
   settings: AdminSettingItem[];
 };
 
+export type AdminSecretRevealResponse = {
+  env_key: string | null;
+  key: string;
+  source: 'db' | 'env' | 'unset';
+  value: string | null;
+};
+
 export type AsyncState<T> =
   | { status: 'idle' | 'loading' }
   | { data: T; status: 'ready' }

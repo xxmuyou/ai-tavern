@@ -46,6 +46,19 @@ export async function handleAdminSettingsRequest(
     }
   }
 
+  const revealMatch = pathname.match(/^\/admin\/settings\/([^/]+)\/reveal$/);
+  if (revealMatch) {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    try {
+      return await handleReveal(request, env, decodeURIComponent(revealMatch[1] ?? ""));
+    } catch (err) {
+      if (err instanceof Response) return err;
+      throw err;
+    }
+  }
+
   const match = pathname.match(/^\/admin\/settings\/([^/]+)$/);
   if (match) {
     if (request.method !== "PUT") {
@@ -130,6 +143,26 @@ async function handlePut(request: Request, env: Env, key: string): Promise<Respo
     ok: true,
     setting: await loadSettingPayload(env, def),
     source: "db",
+  });
+}
+
+async function handleReveal(request: Request, env: Env, key: string): Promise<Response> {
+  await requireAdminUser(env, request);
+
+  const def = SETTINGS_BY_KEY[key];
+  if (!def) {
+    return jsonResponse({ error: "unknown_setting" }, { status: 400 });
+  }
+  if (def.type !== "secret") {
+    return jsonResponse({ error: "not_secret" }, { status: 400 });
+  }
+
+  const resolved = await resolveSetting(env, key, await loadSettings(env, true));
+  return jsonResponse({
+    env_key: def.envKey ?? null,
+    key,
+    source: resolved.source,
+    value: resolved.value,
   });
 }
 
