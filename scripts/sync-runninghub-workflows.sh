@@ -203,8 +203,10 @@ if (wf2AnySet && (!wf2.workflowId || !wf2.loadImageNodeId || !wf2.promptNodeId))
   throw new Error("wf2 must include workflowId, loadImageNodeId, and promptNodeId when configured.");
 }
 
+// D1 `wrangler d1 execute --remote --file` runs the file's statements as a
+// single atomic batch and rejects explicit BEGIN TRANSACTION / COMMIT, so these
+// statements must NOT be wrapped in an explicit transaction.
 const statements = [
-  "BEGIN TRANSACTION;",
   `DELETE FROM app_settings WHERE key IN (${settingKeys.map(sqlString).join(", ")});`,
 ];
 
@@ -217,8 +219,6 @@ if (wf2.workflowId && wf2.loadImageNodeId && wf2.promptNodeId) {
   statements.push(upsert("image_gen.wf2_load_image_node_id", wf2.loadImageNodeId));
   statements.push(upsert("image_gen.wf2_prompt_node_id", wf2.promptNodeId));
 }
-
-statements.push("COMMIT;");
 
 console.log(statements.join("\n\n"));
 NODE

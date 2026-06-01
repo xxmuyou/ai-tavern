@@ -5,22 +5,22 @@
         "workflowId": "2060270467856035841",
         "promptNodeId": "2",
         "checkpointNodeId": "1",
-        "checkpointFieldName": "ckpt_name",
-        "ckptName": "juggernautXL_ragnarokBy.safetensors"
+        "checkpointFieldName": "Realistic",
+        "ckptName": "excelaxl_20251018b.safetensors"
       },
       "anime_jp": {
         "workflowId": "2060270467856035841",
         "promptNodeId": "2",
         "checkpointNodeId": "1",
-        "checkpointFieldName": "ckpt_name",
-        "ckptName": "animagineXL40_v4Opt.safetensors"
+        "checkpointFieldName": "Anime_JP",
+        "ckptName": "sdxl-动漫二次元_4.0.safetensors"
       },
       "anime_kr": {
         "workflowId": "2060270467856035841",
         "promptNodeId": "2",
         "checkpointNodeId": "1",
-        "checkpointFieldName": "ckpt_name",
-        "ckptName": "ghostxl_v10BakedVAE.safetensors"
+        "checkpointFieldName": "Anime_KR",
+        "ckptName": "illustraversa_vektor.safetensors"
       }
     }
   },
