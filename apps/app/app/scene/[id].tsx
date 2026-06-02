@@ -100,6 +100,7 @@ export default function SceneDetailScreen() {
                         artUrl={companion.art_url}
                         name={companion.name}
                         opener={companion.opener}
+                        storyBeat={companion.active_story_beat}
                         onPress={() => {
                           if (companions.length > 1) {
                             openChat(companion.id);

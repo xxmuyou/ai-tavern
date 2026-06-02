@@ -1,5 +1,6 @@
 import type { LLMMessage } from "../llm";
 import type { RelationshipStage } from "../life/types";
+import type { StoryBeatPublic } from "../story-beats";
 
 export type CompanionForPrompt = {
   name: string;
@@ -44,6 +45,8 @@ export type ChatPromptInput = {
   // spec-025: current relationship stage, drives how intimately the character
   // addresses the user (the "称呼" ladder).
   stage: RelationshipStage;
+  // spec-026: optional authored story beat for the current companion/scene.
+  storyBeat?: StoryBeatPublic | null;
 };
 
 // spec-025 §B4.3: how the character should address the user at each stage.
@@ -88,7 +91,7 @@ export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
 }
 
 function buildSystemPrompt(input: ChatPromptInput): string {
-  const { companion, scene, activity, narrative, threadSummary, secretToReveal, stage } = input;
+  const { companion, scene, activity, narrative, threadSummary, secretToReveal, stage, storyBeat } = input;
 
   const lines: string[] = [];
   const role = companion.relationship_role ?? "companion";
@@ -132,6 +135,17 @@ function buildSystemPrompt(input: ChatPromptInput): string {
       lines.push(`What you were doing before the user arrived: ${activity.activity_hint}`);
     }
     lines.push("Respond in a way that honours the activity and your current mood. Do not teleport to a different scene.");
+  }
+
+  if (storyBeat?.status === "active") {
+    lines.push("");
+    lines.push("# Current story beat");
+    lines.push(`Beat title: ${storyBeat.title}`);
+    lines.push(`Opening hook: ${storyBeat.opener}`);
+    lines.push(`Current objective: ${storyBeat.objective}`);
+    lines.push(
+      "Let this beat color the scene. You may bring it up, dodge around it, or invite the user into it, but do not force the user's choice or narrate their actions.",
+    );
   }
 
   lines.push("");

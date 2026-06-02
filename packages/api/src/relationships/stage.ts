@@ -42,14 +42,14 @@ function clamp01(n: number): number {
 const POSITIVE_RULES: readonly StageRule[] = [
   {
     stage: "committed",
-    predicate: (d) => d.romance > 75 && d.trust > 55,
+    predicate: (d) => d.romance >= 75 && d.trust >= 55,
     nextGoal: null,
     recommended: { activity_type: "date", reason: "Keep your bond alive — plan something just for you two." },
     progress: () => 1,
   },
   {
     stage: "dating",
-    predicate: (d) => d.romance > 50 && d.tension < 50 && d.hostility < 50,
+    predicate: (d) => d.romance >= 50 && d.tension <= 50 && d.hostility <= 50,
     nextGoal: {
       description: "Build enough trust and romance to make it official.",
       target_dim: "romance",
@@ -60,7 +60,7 @@ const POSITIVE_RULES: readonly StageRule[] = [
   },
   {
     stage: "romantic_tension",
-    predicate: (d) => d.romance > 30,
+    predicate: (d) => d.romance >= 30,
     nextGoal: {
       description: "Spend more time alone together to turn tension into a real date.",
       target_dim: "romance",
@@ -71,7 +71,7 @@ const POSITIVE_RULES: readonly StageRule[] = [
   },
   {
     stage: "close_friend",
-    predicate: (d) => d.closeness > 60 && d.friendship > 50 && d.trust > 40,
+    predicate: (d) => d.closeness >= 60 && d.friendship >= 50 && d.trust >= 40,
     nextGoal: {
       description: "Open up romantically — share something personal next time you meet.",
       target_dim: "romance",
@@ -82,7 +82,7 @@ const POSITIVE_RULES: readonly StageRule[] = [
   },
   {
     stage: "trusted",
-    predicate: (d) => d.trust > 35,
+    predicate: (d) => d.trust >= 35,
     nextGoal: {
       description: "Deepen the friendship by hanging out more often.",
       target_dim: "friendship",
@@ -93,7 +93,7 @@ const POSITIVE_RULES: readonly StageRule[] = [
   },
   {
     stage: "familiar",
-    predicate: (d) => d.closeness > 20,
+    predicate: (d) => d.closeness >= 20,
     nextGoal: {
       description: "Earn their trust — listen, follow through, show up.",
       target_dim: "trust",
