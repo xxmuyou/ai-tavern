@@ -271,7 +271,7 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       ckpt_name: job.ckpt_name ?? undefined,
       checkpoint_field_name: job.checkpoint_field_name ?? undefined,
     };
-    const provider = await getImageGenProvider(env, "create");
+    const provider = await getImageGenProvider(env, "create", request.workflow_key);
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {

@@ -14,6 +14,16 @@ describe("getImageGenProvider per-workflow routing", () => {
     expect((await getImageGenProvider(env, "variation")).name).toBe("runninghub");
   });
 
+  it("routes WF_MOMENT by workflow key instead of create mode", async () => {
+    const env = {
+      IMAGE_GEN_WF1_PROVIDER: "openai",
+      IMAGE_GEN_WF_MOMENT_PROVIDER: "runninghub",
+    } as unknown as Env;
+
+    expect((await getImageGenProvider(env, "create")).name).toBe("openai");
+    expect((await getImageGenProvider(env, "create", "wf_moment")).name).toBe("runninghub");
+  });
+
   it("falls back to the default provider when a workflow has none", async () => {
     const env = { IMAGE_GEN_PROVIDER: "openai" } as unknown as Env;
     expect((await getImageGenProvider(env, "create")).name).toBe("openai");

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
-import { Button } from '@/components/Button';
+import { WebButton, WebCard, WebLoading } from '@/components/web/ui';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
@@ -14,10 +14,11 @@ import type { RevealSettingFn, SaveSettingFn } from './SettingsSection';
 const DEFAULT_PROVIDER_KEY = 'image_gen.provider';
 const WF1_PROVIDER_KEY = 'image_gen.wf1_provider';
 const WF2_PROVIDER_KEY = 'image_gen.wf2_provider';
+const WF_MOMENT_PROVIDER_KEY = 'image_gen.wf_moment_provider';
 // Engines the backend can actually route to (see image-gen/index.ts).
 const IMAGE_PROVIDERS = ['mock', 'runninghub', 'openai'] as const;
 
-// RunningHub infra shared by WF1 + WF2 when either runs on runninghub.
+// RunningHub infra shared by WF1, WF2, and WF_MOMENT when any workflow runs on runninghub.
 const RUNNINGHUB_SHARED_KEYS = [
   'image_gen.runninghub_base_url',
   'image_gen.api_key',
@@ -33,8 +34,9 @@ const OPENAI_KEYS = [
 ] as const;
 
 const WORKFLOWS = [
-  { id: 'wf1', mode: 'create', label: 'WF1 — base portrait (create)', providerKey: WF1_PROVIDER_KEY },
-  { id: 'wf2', mode: 'variation', label: 'WF2 — expression variants (variation)', providerKey: WF2_PROVIDER_KEY },
+  { id: 'wf1', mode: 'create', label: 'WF1 - base portrait (create)', providerKey: WF1_PROVIDER_KEY },
+  { id: 'wf2', mode: 'variation', label: 'WF2 - expression variants (variation)', providerKey: WF2_PROVIDER_KEY },
+  { id: 'wf_moment', mode: 'create', label: 'WF_MOMENT - chat scene moment (create)', providerKey: WF_MOMENT_PROVIDER_KEY },
 ] as const;
 
 type Workflow = (typeof WORKFLOWS)[number];
@@ -45,11 +47,7 @@ export function PortraitGenerationSection() {
   const [workflowId, setWorkflowId] = useState<WorkflowId>('wf1');
 
   if (isLoading) {
-    return (
-      <View className="items-center py-12">
-        <ActivityIndicator color="#1E6B52" />
-      </View>
-    );
+    return <WebLoading fullscreen={false} label="Loading portrait generation settings..." />;
   }
 
   const byKey = (key: string) => settings.find((item) => item.key === key) ?? null;
@@ -59,14 +57,14 @@ export function PortraitGenerationSection() {
 
   return (
     <View className="gap-4">
-      <View className="rounded-lg border border-app-line bg-white p-5">
-        <Text className="text-lg font-semibold text-app-text">Portrait generation</Text>
-        <Text className="mt-1 text-sm leading-6 text-app-muted">
-          Pick a workflow to edit. WF1 (create) and WF2 (variation) each choose their own engine and
-          switch independently — only the selected one is shown. Checkpoints are managed per workflow
+      <WebCard padding="md">
+        <Text className="font-serif text-title text-app-ink">Portrait generation</Text>
+        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
+          Pick a workflow to edit. WF1 (create), WF2 (variation), and WF_MOMENT (chat scene moment)
+          each choose their own engine and switch independently. Checkpoints are managed per workflow
           in its model catalog.
         </Text>
-        {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
+        {error ? <Text className="mt-2 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
         <View className="mt-4">
           <AdminDropdown
             labelForValue={(value) => WORKFLOWS.find((w) => w.id === value)?.label ?? WORKFLOWS[0].label}
@@ -75,7 +73,7 @@ export function PortraitGenerationSection() {
             value={workflowId}
           />
         </View>
-      </View>
+      </WebCard>
 
       <WorkflowPanel
         byKey={byKey}
@@ -125,10 +123,10 @@ function WorkflowPanel({
       .map((item) => <SettingRow key={item.key} item={item} onReveal={onReveal} onSave={onSave} />);
 
   return (
-    <View className="gap-4 rounded-lg border border-app-line bg-white p-5">
+    <WebCard className="gap-4" padding="md">
       <View>
-        <Text className="text-base font-semibold text-app-text">{workflow.label}</Text>
-        <Text className="mt-1 text-xs text-app-muted">
+        <Text className="font-serif text-title-sm text-app-ink">{workflow.label}</Text>
+        <Text className="mt-1 text-caption text-app-muted">
           Empty falls back to the default provider ({defaultProvider}).
         </Text>
       </View>
@@ -144,15 +142,14 @@ function WorkflowPanel({
           <View className="flex-row items-center justify-between gap-3">
             <SourceTag item={providerSetting} />
             {providerSetting.source === 'db' ? (
-              <View className="w-24">
-                <Button
-                  disabled={saving}
-                  isLoading={saving}
-                  label="Reset"
-                  onPress={() => void onSave(workflow.providerKey, '')}
-                  variant="secondary"
-                />
-              </View>
+              <WebButton
+                disabled={saving}
+                isLoading={saving}
+                label="Reset"
+                onPress={() => void onSave(workflow.providerKey, '')}
+                size="sm"
+                variant="outline"
+              />
             ) : null}
           </View>
         </View>
@@ -161,21 +158,21 @@ function WorkflowPanel({
       {selected === 'runninghub' ? (
         <View className="gap-3">
           <ImageModelsSection />
-          <Text className="text-xs font-semibold uppercase text-app-muted">RunningHub shared</Text>
+          <Text className="text-overline text-app-muted">RunningHub shared</Text>
           {rowsFor(RUNNINGHUB_SHARED_KEYS)}
         </View>
       ) : selected === 'openai' ? (
         <View className="gap-3">
-          <Text className="text-xs text-app-muted">
+          <Text className="text-body-sm text-app-muted">
             OpenAI image settings are shared across workflows that use OpenAI.
           </Text>
           {rowsFor(OPENAI_KEYS)}
         </View>
       ) : (
-        <Text className="text-sm leading-6 text-app-muted">
+        <Text className="text-body-sm leading-6 text-app-muted">
           Mock provider returns placeholder/passthrough images — no extra configuration needed.
         </Text>
       )}
-    </View>
+    </WebCard>
   );
 }

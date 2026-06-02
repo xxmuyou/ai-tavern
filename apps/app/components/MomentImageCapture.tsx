@@ -125,7 +125,7 @@ export function MomentImageCapture({ messageId, initialMoment }: MomentImageCapt
         accessibilityRole="button"
         disabled={phase === 'capturing'}
         onPress={() => void capture()}
-        className={`flex-row items-center gap-1.5 self-start rounded-full border border-app-line bg-app-card px-3 py-1.5 ${
+        className={`flex-row items-center gap-1.5 self-start rounded-full border border-app-brand/25 bg-app-brand-soft px-3 py-1.5 ${
           phase === 'capturing' ? 'opacity-60' : 'opacity-100'
         }`}
       >

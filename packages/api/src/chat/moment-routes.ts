@@ -118,9 +118,6 @@ async function handleGenerate(
   if (message.role !== "companion") {
     return jsonResponse({ error: "not_companion_message" }, { status: 422 });
   }
-  if (!message.scene_id) {
-    return jsonResponse({ error: "scene_context_required" }, { status: 422 });
-  }
 
   // Dedup: an existing in-flight or succeeded moment is returned as-is so the
   // user is not charged twice. A failed one may be retried (same row, new job).
@@ -137,7 +134,9 @@ async function handleGenerate(
     return momentResponse(next ?? { ...reconciled, id: momentId, status: "queued", output_key: null });
   }
 
-  const storyBeat = await loadStoryBeatForScene(env, user.id, thread.companion_id, message.scene_id);
+  const storyBeat = message.scene_id
+    ? await loadStoryBeatForScene(env, user.id, thread.companion_id, message.scene_id)
+    : null;
   const prompt = await composePrompt(env, user, thread, message);
   const { jobId, momentId } = await createMomentImageJob(env, {
     activityId: message.activity_id,
@@ -163,12 +162,12 @@ async function composePrompt(
   thread: ThreadOwnerRow,
   message: MessageRow,
 ): Promise<string> {
-  const sceneId = message.scene_id as string;
+  const sceneId = message.scene_id;
   const [companion, scene, relationship, storyBeat, previousUser, activity] = await Promise.all([
     loadCompanionForChat(env, thread.companion_id),
-    loadSceneForChat(env, sceneId),
+    sceneId ? loadSceneForChat(env, sceneId) : Promise.resolve(null),
     loadRelationship(env, user.id, thread.companion_id),
-    loadStoryBeatForScene(env, user.id, thread.companion_id, sceneId),
+    sceneId ? loadStoryBeatForScene(env, user.id, thread.companion_id, sceneId) : Promise.resolve(null),
     loadPreviousUserText(env, thread.id, message.created_at),
     message.activity_id
       ? loadActiveActivityForChat(env, user.id, message.activity_id)
@@ -196,8 +195,8 @@ async function composePrompt(
     emotion: message.emotion,
     previousUserText: previousUser,
     scene: {
-      mood: scene?.mood ?? "",
-      name: scene?.name ?? "the scene",
+      mood: scene?.mood ?? "private conversation",
+      name: scene?.name ?? "Private chat",
       tags: parseSceneTags(scene?.tags ?? null),
     },
     sourceReply: message.content,

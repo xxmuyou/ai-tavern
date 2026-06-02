@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Image,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -16,16 +15,14 @@ import {
 import { getCompanion, mediaSource } from '@/api/companion-client';
 import type { ChatEmotionKey, ChatMessage, ChatUnlock, CompanionDetail, NonNeutralChatEmotionKey, RelationshipDimensions } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
-import { Button } from '@/components/Button';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
-import { EmptyState } from '@/components/EmptyState';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
-import { WebAppShell, WebPanel } from '@/components/web/WebAppShell';
+import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebTag } from '@/components/web/ui';
 import { gateEmotion } from '@/utils/expression-unlock';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
@@ -231,41 +228,93 @@ export default function WebChatScreen() {
   );
 
   if (history.isLoadingInitial) {
-    return <LoadingScreen label="Loading chat..." />;
+    return <WebLoading label="Loading chat..." />;
   }
 
   if (history.error) {
     return (
       <WebAppShell title={companion?.name ?? 'Chat'} subtitle="Conversation could not be loaded.">
-        <EmptyState actionLabel="Try again" description="Conversation history could not be loaded." onAction={history.refresh} title="Chat unavailable" />
+        <WebEmptyState
+          actionLabel="Try again"
+          description="Conversation history could not be loaded."
+          onAction={history.refresh}
+          title="Chat unavailable"
+        />
       </WebAppShell>
     );
   }
 
   const portrait = mediaSource(companion?.art_emotions?.[shownEmotion as ChatEmotionKey] ?? companion?.art_url ?? null);
+  const canSend = !stream.isStreaming && remainingSeconds === 0 && draft.trim().length > 0;
 
   return (
     <WebAppShell title={companion?.name ?? 'Chat'} subtitle="Streaming conversation workspace.">
-      <View className="grid grid-cols-1 gap-6 xl:grid-cols-4">
-        <WebPanel className="xl:col-span-1">
-          <View className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
-            <View pointerEvents="none" style={chatPortraitStyles.portraitFloor} />
-            {portrait ? <Image source={portrait} resizeMode="contain" style={chatPortraitStyles.portraitImage} /> : null}
-          </View>
-          <Text className="mt-4 text-xl font-semibold text-app-text">{companion?.name ?? 'Companion'}</Text>
-          <Text className="mt-1 text-sm uppercase tracking-normal text-app-muted">{companion?.relationship_role ?? 'companion'}</Text>
-          <View className="mt-4 rounded-full bg-app-primarySoft px-3 py-2">
-            <Text className="text-sm font-semibold text-app-primary">{shownEmotion}</Text>
-          </View>
-          <View className="mt-4 overflow-hidden rounded-lg border border-app-line">
-            <ChatRelationshipHud goal={relationship.goal} />
-          </View>
-          <View className="mt-5">
-            <Button label="View profile" onPress={() => router.push(`/companion/${encodeURIComponent(companionId)}`)} variant="secondary" />
-          </View>
-        </WebPanel>
+      <View className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
+        {/* Companion info card */}
+        <View className="gap-5">
+          <WebCard padding="md" className="gap-4">
+            <View className="items-center gap-3">
+              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-app-rose-soft shadow-card">
+                <View pointerEvents="none" style={chatPortraitStyles.portraitFloor} />
+                {portrait ? (
+                  <Image
+                    accessibilityLabel={companion?.name ?? 'Companion portrait'}
+                    resizeMode="contain"
+                    source={portrait}
+                    style={chatPortraitStyles.portraitImage}
+                  />
+                ) : (
+                  <View className="flex-1 items-center justify-center">
+                    <Ionicons color="#C9486B" name="person-outline" size={32} />
+                  </View>
+                )}
+              </View>
+              <View className="items-center gap-1">
+                <Text className="font-serif text-title text-app-ink">{companion?.name ?? 'Companion'}</Text>
+                <Text className="text-overline text-rose-deep">{companion?.relationship_role ?? 'companion'}</Text>
+              </View>
+              <WebTag size="sm" variant="rose">
+                {shownEmotion}
+              </WebTag>
+            </View>
 
-        <View className="overflow-hidden rounded-lg border border-app-line bg-white xl:col-span-3">
+            <View className="overflow-hidden rounded-2xl border border-app-line-soft bg-app-sunken/40">
+              <ChatRelationshipHud goal={relationship.goal} />
+            </View>
+
+            <WebButton
+              label="View profile"
+              onPress={() => router.push(`/companion/${encodeURIComponent(companionId)}`)}
+              variant="outline"
+              iconLeft={<Ionicons color="#2A1F1A" name="person-circle-outline" size={16} />}
+            />
+          </WebCard>
+        </View>
+
+        {/* Twilight conversation workspace */}
+        <View className="overflow-hidden rounded-2xl border border-app-line bg-app-twilight shadow-float">
+          {/* Header strip */}
+          <View className="flex-row items-center justify-between border-b border-white/5 bg-app-twilight-soft px-7 py-4">
+            <View className="flex-row items-center gap-3">
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-rose-soft">
+                <Ionicons color="#9A2F4F" name="chatbubbles" size={16} />
+              </View>
+              <View>
+                <Text className="font-serif text-title-sm text-white">{companion?.name ?? 'Companion'}</Text>
+                <Text className="text-caption text-white/60">
+                  {stream.isStreaming
+                    ? 'Composing a reply...'
+                    : remainingSeconds > 0
+                      ? `Slow down — reply in ${remainingSeconds}s`
+                      : 'Tap into the moment.'}
+                </Text>
+              </View>
+            </View>
+            <WebTag size="sm" variant="rose">
+              Live
+            </WebTag>
+          </View>
+
           <ActivityContextBanner
             activity={activity}
             isMutating={activityActions.isMutating}
@@ -274,22 +323,29 @@ export default function WebChatScreen() {
           />
           <SignalFeedback signals={lastSignals} token={signalToken} />
           <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
-          <View className="h-[620px] justify-end bg-app-bg">
-            <View className="gap-2 px-2 py-4">
-              {history.hasMore ? (
-                <View className="items-center">
-                  <Pressable accessibilityRole="button" onPress={() => void history.loadMore()} className="rounded-full border border-app-line bg-white px-4 py-2">
-                    <Text className="text-sm font-semibold text-app-primary">{history.isLoadingMore ? 'Loading...' : 'Load earlier messages'}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
+
+          {/* Messages scroll area */}
+          <View style={twilightStyles.thread}>
+            {history.hasMore ? (
+              <View className="items-center pb-4 pt-2">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => void history.loadMore()}
+                  className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
+                >
+                  <Text className="text-caption font-semibold text-app-rose-deep">
+                    {history.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <View className="gap-3 px-3 pb-6">
               {items.map((item) => {
                 if (isStreamingItem(item)) {
                   return <StreamingBubble key={item.id} text={item.text} />;
                 }
                 const role = item.role === 'assistant' ? 'companion' : item.role;
-                const showCapture =
-                  role === 'companion' && typeof item.scene_id === 'string' && item.scene_id.length > 0;
+                const showCapture = role === 'companion' && !item.id.startsWith('local-');
                 return (
                   <View key={item.id}>
                     <MessageBubble content={item.content} role={role} />
@@ -301,66 +357,89 @@ export default function WebChatScreen() {
               })}
             </View>
           </View>
-          {remainingSeconds > 0 ? (
-            <View className="border-t border-app-line bg-app-warning/10 px-4 py-2">
-              <Text className="text-center text-sm font-medium text-app-warning">{`Slow down - try again in ${remainingSeconds}s`}</Text>
-            </View>
-          ) : null}
-          <View className="border-t border-app-line bg-white p-4">
+
+          {/* Composer */}
+          <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
             <View className="flex-row items-end gap-3">
-              <TextInput
-                editable={!stream.isStreaming}
-                multiline
-                onChangeText={setDraft}
-                onKeyPress={handleKeyPress}
-                placeholder="Write a message..."
-                placeholderTextColor="#8B949E"
-                value={draft}
-                className="max-h-32 min-h-12 flex-1 rounded-lg border border-app-line bg-app-bg px-4 py-3 text-base text-app-text"
-              />
+              <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
+                <TextInput
+                  editable={!stream.isStreaming}
+                  multiline
+                  onChangeText={setDraft}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Write a message..."
+                  placeholderTextColor="rgba(255,255,255,0.40)"
+                  value={draft}
+                  className="max-h-32 min-h-10 flex-1 py-1 text-body text-white"
+                />
+              </View>
               <Pressable
                 accessibilityRole="button"
-                disabled={stream.isStreaming || remainingSeconds > 0 || draft.trim().length === 0}
+                accessibilityLabel="Send message"
+                disabled={!canSend}
                 onPress={() => void handleSend()}
-                className={`h-12 w-12 items-center justify-center rounded-lg ${
-                  stream.isStreaming || remainingSeconds > 0 || draft.trim().length === 0 ? 'bg-app-line' : 'bg-app-primary'
+                className={`h-12 w-12 items-center justify-center rounded-2xl ${
+                  canSend ? 'bg-rose shadow-glow' : 'bg-white/10'
                 }`}
               >
-                <Ionicons color="#FFFFFF" name="send" size={18} />
+                <Ionicons color={canSend ? '#FFFFFF' : 'rgba(255,255,255,0.4)'} name="send" size={18} />
               </Pressable>
             </View>
+            {remainingSeconds > 0 ? (
+              <View className="mt-3 flex-row items-center gap-2 self-start rounded-full border border-ember/30 bg-ember/10 px-3 py-1">
+                <Ionicons color="#D97757" name="hourglass-outline" size={12} />
+                <Text className="text-caption font-semibold text-ember">{`Slow down — try again in ${remainingSeconds}s`}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </View>
 
-      <Modal animationType="fade" transparent visible={quotaModalVisible} onRequestClose={() => setQuotaModalVisible(false)}>
-        <View className="flex-1 items-center justify-center bg-black/40 px-6">
-          <View className="w-full max-w-sm rounded-lg bg-white p-6">
-            <Text className="text-xl font-semibold text-app-text">Daily limit reached</Text>
-            <Text className="mt-3 text-sm leading-5 text-app-muted">Upgrade to Pro to keep conversations going today.</Text>
-            <View className="mt-5 gap-2">
-              <Button label="Upgrade to Pro" onPress={() => router.push('/billing')} />
-              <Button label="Not now" onPress={() => setQuotaModalVisible(false)} variant="secondary" />
-            </View>
+      <WebDialog
+        description="You've used today's free messages. Upgrade to Pro to keep the conversation going."
+        footer={
+          <View className="flex-row items-center justify-end gap-3">
+            <WebButton label="Not now" onPress={() => setQuotaModalVisible(false)} variant="ghost" />
+            <WebButton
+              label="Upgrade to Pro"
+              onPress={() => {
+                setQuotaModalVisible(false);
+                router.push('/billing');
+              }}
+              variant="primary"
+            />
           </View>
-        </View>
-      </Modal>
+        }
+        onClose={() => setQuotaModalVisible(false)}
+        open={quotaModalVisible}
+        size="sm"
+        title="Daily limit reached"
+      />
     </WebAppShell>
   );
 }
 
 const chatPortraitStyles = StyleSheet.create({
   portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: 'rgba(255,255,255,0.45)',
     bottom: 0,
-    height: 58,
+    height: 56,
     left: 0,
     position: 'absolute',
     right: 0,
   },
   portraitImage: {
     height: '112%',
-    transform: [{ translateY: 9 }],
+    transform: [{ translateY: 10 }],
     width: '112%',
+  },
+});
+
+const twilightStyles = StyleSheet.create({
+  thread: {
+    backgroundColor: '#0E0B14',
+    flexGrow: 1,
+    maxHeight: 620,
+    minHeight: 420,
   },
 });

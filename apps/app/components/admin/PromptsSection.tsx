@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
+import { WebCard, WebLoading, WebTabs } from '@/components/web/ui';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
-import { AdminDropdown } from './AdminDropdown';
 import { ExpressionPromptsSection } from './ExpressionPromptsSection';
 import { SettingRow } from './SettingsSection';
 
@@ -33,23 +33,21 @@ export function PromptsSection() {
 
   return (
     <View className="gap-4">
-      <View className="rounded-lg border border-app-line bg-white p-5">
-        <Text className="text-lg font-semibold text-app-text">Prompts</Text>
-        <Text className="mt-1 text-sm leading-6 text-app-muted">
+      <WebCard padding="md">
+        <Text className="font-serif text-title text-app-ink">Prompts</Text>
+        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
           System prompts are grouped by module so future prompt surfaces can live here without mixing contexts.
         </Text>
-        <View className="mt-4">
-          <AdminDropdown
-            labelForValue={(value) =>
-              PROMPT_MODULES.find((module) => module.id === value)?.label ?? PROMPT_MODULES[0].label
-            }
-            onChange={(value) => setModuleId((value as PromptModuleId) ?? moduleId)}
-            options={PROMPT_MODULES.map((module) => ({ label: module.label, value: module.id as string }))}
-            value={moduleId}
+        <View className="mt-4 gap-3">
+          <WebTabs
+            active={moduleId}
+            onChange={(id) => setModuleId(id as PromptModuleId)}
+            tabs={PROMPT_MODULES.map((module) => ({ id: module.id, label: module.label }))}
+            variant="underline"
           />
-          <Text className="mt-2 text-sm text-app-muted">{active.description}</Text>
+          <Text className="text-body-sm text-app-muted">{active.description}</Text>
         </View>
-      </View>
+      </WebCard>
 
       {moduleId === 'wf1-base' ? <Wf1BasePromptSection /> : null}
       {moduleId === 'expression-portraits' ? <ExpressionPromptsSection /> : null}
@@ -61,29 +59,25 @@ function Wf1BasePromptSection() {
   const { settings, isLoading, error, reveal, save } = useAdminSettings();
 
   if (isLoading) {
-    return (
-      <View className="items-center py-12">
-        <ActivityIndicator color="#1E6B52" />
-      </View>
-    );
+    return <WebLoading fullscreen={false} label="Loading WF1 prompt..." />;
   }
 
   const item = settings.find((row) => row.key === WF1_BASE_PROMPT_KEY) as AdminSettingItem | undefined;
 
   return (
-    <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-base font-semibold text-app-text">WF1 base prompt (global)</Text>
-      <Text className="mt-1 text-sm leading-6 text-app-muted">
+    <WebCard padding="md">
+      <Text className="font-serif text-title-sm text-app-ink">WF1 base prompt (global)</Text>
+      <Text className="mt-1 text-body-sm leading-6 text-app-muted">
         A single style/quality preamble prepended to every WF1 create prompt, regardless of art style.
       </Text>
-      {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
+      {error ? <Text className="mt-2 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
       <View className="mt-4">
         {item ? (
           <SettingRow item={item} onReveal={reveal} onSave={save} />
         ) : (
-          <Text className="text-sm text-app-muted">WF1 base prompt setting is not registered.</Text>
+          <Text className="text-body-sm text-app-muted">WF1 base prompt setting is not registered.</Text>
         )}
       </View>
-    </View>
+    </WebCard>
   );
 }

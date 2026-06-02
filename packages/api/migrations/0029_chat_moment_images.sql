@@ -16,7 +16,7 @@ CREATE TABLE story_moment_images (
   companion_id    TEXT NOT NULL REFERENCES companions(id),
   thread_id       TEXT NOT NULL REFERENCES threads(id),
   message_id      TEXT NOT NULL REFERENCES messages(id),
-  scene_id        TEXT NOT NULL REFERENCES scenes(id),
+  scene_id        TEXT REFERENCES scenes(id),
   activity_id     TEXT REFERENCES activity_contexts(id),
   story_beat_id   TEXT REFERENCES companion_story_beats(id),
   emotion         TEXT,

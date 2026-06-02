@@ -103,6 +103,16 @@ export type MagicLinkResponse = {
   verify_url?: string;
 };
 
+export type ApiRequestError = Error & {
+  apiBaseUrl?: string;
+  code?: 'api_unreachable';
+  status?: number;
+};
+
+export function isApiRequestError(error: unknown): error is ApiRequestError {
+  return error instanceof Error && 'code' in error;
+}
+
 export function objectUrl(key: string): string {
   return `${API_BASE_URL}/objects/${encodeURIComponent(key)}`;
 }
@@ -1038,12 +1048,20 @@ export async function requestJson<T>(
     }
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  } catch {
+    const error: ApiRequestError = new Error(`API is unreachable at ${API_BASE_URL}`);
+    error.apiBaseUrl = API_BASE_URL;
+    error.code = 'api_unreachable';
+    throw error;
+  }
   const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
 
   if (!response.ok) {
-    const error = new Error(payload.error ?? `HTTP ${response.status}`);
-    (error as Error & { status?: number }).status = response.status;
+    const error: ApiRequestError = new Error(payload.error ?? `HTTP ${response.status}`);
+    error.status = response.status;
     throw error;
   }
 

@@ -16,8 +16,9 @@ import {
 /**
  * Chat moment image pipeline (spec-027).
  *
- * Captures a single "this just happened" full-scene image from a companion
- * reply that carries scene context. Runs through the generic
+ * Captures a single "this just happened" image from a companion reply. When
+ * scene context is present it becomes a full-scene image; otherwise it falls
+ * back to a private-chat moment. Runs through the generic
  * image_generation_jobs queue (task = chat_moment_image, create mode) and is
  * pinned back to the source message via story_moment_images.
  */
@@ -33,7 +34,7 @@ export type StoryMomentImageRow = {
   companion_id: string;
   thread_id: string;
   message_id: string;
-  scene_id: string;
+  scene_id: string | null;
   activity_id: string | null;
   story_beat_id: string | null;
   emotion: string | null;
@@ -176,7 +177,7 @@ export type CreateMomentImageInput = {
   companionId: string;
   threadId: string;
   messageId: string;
-  sceneId: string;
+  sceneId: string | null;
   activityId: string | null;
   storyBeatId: string | null;
   emotion: string | null;
@@ -285,7 +286,7 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
       prompt: job.prompt,
       workflow_key: job.workflow_key ?? MOMENT_WORKFLOW_KEY,
     };
-    const provider = await getImageGenProvider(env, "create");
+    const provider = await getImageGenProvider(env, "create", request.workflow_key);
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {

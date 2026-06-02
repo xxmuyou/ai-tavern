@@ -220,6 +220,15 @@ export const SETTINGS: readonly SettingDef[] = [
       'Engine for expression portrait variants: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
   },
   {
+    key: "image_gen.wf_moment_provider",
+    group: "image_gen",
+    label: "WF_MOMENT (chat scene moment) provider",
+    type: "text",
+    envKey: "IMAGE_GEN_WF_MOMENT_PROVIDER",
+    description:
+      'Engine for chat moment images: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
+  },
+  {
     key: "image_gen.wf1_base_prompt",
     group: "image_gen",
     label: "WF1 base prompt (global)",

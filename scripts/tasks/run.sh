@@ -134,6 +134,7 @@ task_app_export_web_prod() {
 
 task_app_local() {
     load_env_file "$REPO_ROOT/.env.local"
+    export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://dev.aiappsbox.com/api}"
     run_in "apps/app" npx expo start --web
 }
 

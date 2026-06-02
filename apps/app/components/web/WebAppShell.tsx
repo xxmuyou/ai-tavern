@@ -1,93 +1,90 @@
 import { Ionicons } from '@expo/vector-icons';
-import { usePathname, useRouter, type Href } from 'expo-router';
+import { usePathname, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import { QuotaBadge } from '@/components/QuotaBadge';
 import { ADMIN_ROUTE, BILLING_ROUTE, COMPANIONS_ROUTE, ME_ROUTE, SCENES_ROUTE } from '@/constants/routes';
 import { useMe } from '@/hooks/use-me';
-import { useSession } from '@/hooks/use-session';
+
+import { WebAuthControls } from './WebAuthControls';
+import {
+  WebButton,
+  WebCard,
+  WebPanel,
+  WebQuotaBadge,
+  WebSidebar,
+  WebTag,
+  WebTopBar,
+  type WebNavItem,
+} from './ui';
 
 type WebAppShellProps = {
   actions?: ReactNode;
+  breadcrumbs?: { href?: Href; label: string }[];
   children: ReactNode;
+  hero?: ReactNode;
+  hideChrome?: boolean;
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
   subtitle?: string;
   title: string;
 };
 
-type NavItem = { href: Href; icon: keyof typeof Ionicons.glyphMap; label: string };
-
-const BASE_NAV_ITEMS: NavItem[] = [
-  { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
+const BASE_NAV_ITEMS: WebNavItem[] = [
   { href: COMPANIONS_ROUTE, icon: 'people-outline', label: 'Companions' },
+  { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
   { href: ME_ROUTE, icon: 'person-circle-outline', label: 'Me' },
   { href: BILLING_ROUTE, icon: 'card-outline', label: 'Billing' },
 ];
 
-const ADMIN_NAV_ITEM: NavItem = { href: ADMIN_ROUTE, icon: 'shield-checkmark-outline', label: 'Admin' };
+const ADMIN_NAV_ITEM: WebNavItem = { href: ADMIN_ROUTE, icon: 'shield-checkmark-outline', label: 'Admin' };
 
-export function WebAppShell({ actions, children, subtitle, title }: WebAppShellProps) {
+export function WebAppShell({
+  actions,
+  breadcrumbs,
+  children,
+  hero,
+  hideChrome = false,
+  maxWidth = '2xl',
+  subtitle,
+  title,
+}: WebAppShellProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { session, signOut } = useSession();
   const { me } = useMe();
-  const navItems: NavItem[] = me?.is_admin ? [...BASE_NAV_ITEMS, ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
+  const navItems: WebNavItem[] = me?.is_admin ? [...BASE_NAV_ITEMS, ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
+
+  if (hideChrome) {
+    return (
+      <AuthGuard>
+        <View className="min-h-screen flex-1 bg-app-canvas">
+          <View className="mx-auto w-full max-w-[1280px] px-8 py-10">{children}</View>
+        </View>
+      </AuthGuard>
+    );
+  }
 
   return (
     <AuthGuard>
-      <View className="h-screen min-h-0 flex-1 overflow-hidden bg-[#F3F5F7]">
-        <View className="mx-auto flex h-full min-h-0 w-full max-w-[1440px] flex-row">
-          <View className="h-full w-72 border-r border-app-line bg-white px-5 py-6">
-            <Pressable accessibilityRole="button" onPress={() => router.push(SCENES_ROUTE)} className="mb-8">
-              <Text className="text-2xl font-semibold text-app-text">AI Apps Box</Text>
-              <Text className="mt-1 text-sm text-app-muted">Relationship sandbox</Text>
-            </Pressable>
-
-            <View className="gap-1">
-              {navItems.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                return (
-                  <Pressable
-                    key={String(item.href)}
-                    accessibilityRole="link"
-                    onPress={() => router.push(item.href)}
-                    className={`min-h-11 flex-row items-center gap-3 rounded-md px-3 ${
-                      active ? 'bg-app-primarySoft' : 'bg-transparent'
-                    }`}
-                  >
-                    <Ionicons color={active ? '#1E6B52' : '#687076'} name={item.icon} size={19} />
-                    <Text className={`text-sm font-semibold ${active ? 'text-app-primary' : 'text-app-muted'}`}>{item.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View className="mt-auto rounded-lg border border-app-line bg-app-bg p-4">
-              <Text numberOfLines={1} className="text-sm font-semibold text-app-text">
-                {session?.email ?? 'Signed in'}
-              </Text>
-              <Pressable accessibilityRole="button" onPress={() => void signOut()} className="mt-3">
-                <Text className="text-sm font-semibold text-app-primary">Sign out</Text>
-              </Pressable>
-            </View>
-          </View>
+      <View className="h-screen min-h-0 flex-1 overflow-hidden bg-app-canvas">
+        <View className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-row">
+          <WebSidebar items={navItems} />
 
           <View className="min-h-0 min-w-0 flex-1">
-            <View className="border-b border-app-line bg-white px-8 py-5">
-              <View className="flex-row items-start justify-between gap-6">
-                <View className="min-w-0 flex-1">
-                  <Text className="text-3xl font-semibold text-app-text">{title}</Text>
-                  {subtitle ? <Text className="mt-1 text-base text-app-muted">{subtitle}</Text> : null}
-                </View>
-                <View className="flex-row items-center gap-3">
-                  <QuotaBadge />
-                  {actions}
-                </View>
+            <WebTopBar actions={
+              <View className="flex-row items-center gap-3">
+                <WebQuotaBadge />
+                {actions}
+                <WebAuthControls />
               </View>
-            </View>
-            <ScrollView className="min-h-0 flex-1" contentContainerStyle={{ flexGrow: 1, padding: 32 }}>
-              {children}
+            } breadcrumbs={breadcrumbs ?? defaultBreadcrumbs(pathname)} subtitle={subtitle} title={title} />
+            <ScrollView
+              className="editorial-scroll min-h-0 flex-1"
+              contentContainerStyle={{ flexGrow: 1 }}
+            >
+              {hero ? <View>{hero}</View> : null}
+              <View className={`mx-auto w-full px-8 ${maxWidth === 'full' ? '' : maxWidthToClass(maxWidth)} ${hero ? 'py-10' : 'py-10'}`}>
+                {children}
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -96,17 +93,39 @@ export function WebAppShell({ actions, children, subtitle, title }: WebAppShellP
   );
 }
 
-export function WebPanel({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <View className={`rounded-lg border border-app-line bg-white p-6 ${className}`}>{children}</View>;
+function maxWidthToClass(width: NonNullable<WebAppShellProps['maxWidth']>): string {
+  switch (width) {
+    case 'sm': return 'max-w-3xl';
+    case 'md': return 'max-w-5xl';
+    case 'lg': return 'max-w-6xl';
+    case 'xl': return 'max-w-7xl';
+    case '2xl': return 'max-w-[1280px]';
+    case '3xl': return 'max-w-[1440px]';
+    case 'full': return 'max-w-none';
+  }
 }
 
-export function WebInfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="flex-row items-center justify-between gap-5 border-b border-app-line py-3 last:border-b-0">
-      <Text className="text-sm text-app-muted">{label}</Text>
-      <Text numberOfLines={2} className="max-w-[65%] text-right text-sm font-semibold text-app-text">
-        {value}
-      </Text>
-    </View>
-  );
+type Crumb = { href?: Href; label: string };
+
+const ROUTE_CRUMBS: { match: Href; crumb: Crumb }[] = [
+  { match: SCENES_ROUTE, crumb: { label: 'Scenes' } },
+  { match: COMPANIONS_ROUTE, crumb: { label: 'Companions' } },
+  { match: ME_ROUTE, crumb: { label: 'Me' } },
+  { match: BILLING_ROUTE, crumb: { label: 'Billing' } },
+  { match: ADMIN_ROUTE, crumb: { label: 'Admin' } },
+];
+
+function defaultBreadcrumbs(pathname: string): Crumb[] {
+  for (const { match, crumb } of ROUTE_CRUMBS) {
+    if (pathname === match || pathname.startsWith(`${match}/`)) {
+      return [{ href: match, label: 'Home' }, crumb];
+    }
+  }
+  return [];
 }
+
+export { WebCard, WebPanel, WebTag, WebButton, WebTopBar };
+
+// Re-export the old `WebInfoRow` name as `WebFieldRow` to keep call sites
+// easy to migrate without renaming the import everywhere.
+export { WebFieldRow as WebInfoRow } from './ui';

@@ -71,7 +71,7 @@ function createEnv(): {
         created_at,
         updated_at,
       ] = values as [
-        string,
+        string | null,
         string,
         string,
         string,
@@ -267,5 +267,24 @@ describe("moment image job pipeline", () => {
     const row = (await loadMomentByMessage(env, "usr_1", "msg_2")) as StoryMomentImageRow;
     expect(row.message_id).toBe("msg_2");
     expect(row.scene_id).toBe("scene_1");
+  });
+
+  it("allows private chat moments without scene context", async () => {
+    const { env } = createEnv();
+    await createMomentImageJob(env, {
+      activityId: null,
+      companionId: "maya",
+      emotion: "warm",
+      messageId: "msg_private",
+      promptSnapshot: "private chat moment",
+      sceneId: null,
+      storyBeatId: null,
+      threadId: "thr_1",
+      userId: "usr_1",
+    });
+
+    const row = (await loadMomentByMessage(env, "usr_1", "msg_private")) as StoryMomentImageRow;
+    expect(row.message_id).toBe("msg_private");
+    expect(row.scene_id).toBeNull();
   });
 });

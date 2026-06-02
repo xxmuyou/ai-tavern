@@ -12,7 +12,7 @@ import { PortraitViewerModal, type ViewerEmotion } from '@/components/PortraitVi
 import { useBilling } from '@/hooks/use-billing';
 import { EMOTION_LABEL, EMOTION_ORDER, PORTRAIT_ASPECT, type ArtEmotions } from '@/utils/portrait';
 
-const CELL_WIDTH = 104;
+const CELL_WIDTH = 120;
 const CELL_HEIGHT = Math.round(CELL_WIDTH / PORTRAIT_ASPECT);
 const BILLING_ROUTE = '/billing' as Href;
 const POLL_INTERVAL_MS = 5000;
@@ -104,10 +104,20 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
   );
 
   return (
-    <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
-      <View className="gap-1">
-        <Text className="text-xl font-semibold text-app-text">Portraits</Text>
-        <Text className="text-sm text-app-muted">
+    <View className="gap-5 rounded-3xl border border-app-rose/20 bg-app-rose-soft/70 p-5 shadow-card">
+      <View className="gap-2">
+        <View className="flex-row items-center justify-between gap-3">
+          <View>
+            <Text className="font-serif text-title text-app-ink">Portraits</Text>
+            <Text className="mt-1 text-overline text-app-rose-deep">Emotion unlock gallery</Text>
+          </View>
+          <View className="rounded-full border border-app-rose/25 bg-app-canvas px-3 py-1">
+            <Text className="text-caption font-semibold text-app-rose-deep">
+              {viewerEmotions.length}/{EMOTION_ORDER.length} unlocked
+            </Text>
+          </View>
+        </View>
+        <Text className="text-body-sm leading-6 text-app-ink-soft">
           {isPro
             ? 'Tap a locked portrait to unlock and generate it. Tap an unlocked one to view it full screen.'
             : 'Subscribe to unlock more expressions. Tap an unlocked portrait to view it full screen.'}
@@ -181,7 +191,9 @@ function PortraitCell({
         accessibilityRole={onPress ? 'button' : 'image'}
         disabled={!onPress || busy}
         onPress={onPress}
-        className="overflow-hidden rounded-lg border border-app-line bg-app-primarySoft"
+        className={`overflow-hidden rounded-2xl border shadow-sm ${
+          unlocked ? 'border-app-rose/20 bg-app-canvas' : 'border-app-ember/25 bg-app-ember-soft'
+        }`}
         style={{ height: CELL_HEIGHT, alignItems: 'center', justifyContent: 'flex-end' }}
       >
         {unlocked && source ? (
@@ -196,13 +208,13 @@ function PortraitCell({
         )}
       </Pressable>
 
-      <View className="mt-1.5 flex-row items-center justify-center gap-1">
-        {!unlocked ? <Text className="text-xs">🔒</Text> : null}
-        <Text className={`text-xs font-medium ${unlocked ? 'text-app-text' : 'text-app-muted'}`}>{label}</Text>
+      <View className="mt-2 flex-row items-center justify-center gap-1">
+        {!unlocked ? <Text className="text-xs text-app-rose-deep">Locked</Text> : null}
+        <Text className={`text-caption font-semibold ${unlocked ? 'text-app-ink' : 'text-app-rose-deep'}`}>{label}</Text>
       </View>
       {!unlocked ? (
-        <Text className="mt-0.5 text-center text-[11px] leading-4 text-app-muted">
-          {errored ? 'Failed — tap to retry' : isPro ? 'Tap to unlock' : 'Subscribe to unlock'}
+        <Text className="mt-1 text-center text-[11px] font-semibold leading-4 text-app-ink-soft">
+          {errored ? 'Failed - tap to retry' : isPro ? 'Tap to unlock' : 'Subscribe to unlock'}
         </Text>
       ) : null}
     </View>
@@ -234,10 +246,12 @@ function LockedCell({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.28)',
+          backgroundColor: 'rgba(42,31,26,0.26)',
         }}
       />
-      {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={{ fontSize: 26 }}>🔒</Text>}
+      <View className="rounded-full border border-app-canvas/70 bg-app-canvas/90 px-3 py-2">
+        {busy ? <ActivityIndicator color="#9A2F4F" /> : <Text className="text-caption font-bold text-app-rose-deep">LOCKED</Text>}
+      </View>
     </View>
   );
 }

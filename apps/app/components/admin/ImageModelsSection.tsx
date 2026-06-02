@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import type { AdminImageModel, AdminImageWorkflow, ImageModelInput, ImageWorkflowInput } from '@/api/types';
-import { Button } from '@/components/Button';
+import { WebButton, WebLoading } from '@/components/web/ui';
 import { useAdminImageModels, useAdminImageWorkflows } from '@/hooks/use-admin-image-models';
 
-const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text';
+const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-app-surface px-4 text-base text-app-ink';
 
 /**
  * RunningHub catalog admin.
@@ -22,7 +22,7 @@ export function ImageModelsSection() {
   if (isLoading) {
     return (
       <View className="items-center py-12">
-        <ActivityIndicator color="#1E6B52" />
+        <WebLoading fullscreen={false} label="Loading..." />
       </View>
     );
   }
@@ -62,14 +62,14 @@ function CheckpointCatalog({
   onSave: (id: string, input: ImageModelInput) => Promise<void>;
 }) {
   return (
-    <View className="gap-4 rounded-lg border border-app-line bg-white p-5">
+    <View className="gap-4 rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
       <View>
-        <Text className="text-lg font-semibold text-app-text">Checkpoint catalog</Text>
+        <Text className="text-lg font-semibold text-app-ink">Checkpoint catalog</Text>
         <Text className="mt-1 text-sm leading-6 text-app-muted">
           Add uploaded RunningHub checkpoints here first. Tags are free-form categories for filtering
           and display; checkpoint node field names are managed on workflows.
         </Text>
-        {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
+        {error ? <Text className="mt-2 text-sm font-semibold text-rose-deep">{error}</Text> : null}
       </View>
       <View className="gap-3">
         {models.map((model) => (
@@ -104,14 +104,14 @@ function CheckpointRow({
   }
 
   return (
-    <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-4">
+    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
       <ModelFields draft={draft} setDraft={setDraft} />
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <Button disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(model.id, draft))} />
+          <WebButton disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(model.id, draft))} />
         </View>
         <View className="w-28">
-          <Button disabled={busy} label="Delete" onPress={() => void run(() => onDelete(model.id))} variant="secondary" />
+          <WebButton disabled={busy} label="Delete" onPress={() => void run(() => onDelete(model.id))} variant="secondary" />
         </View>
       </View>
       {model.updated_by_email ? <Text className="text-xs text-app-muted">updated by {model.updated_by_email}</Text> : null}
@@ -136,10 +136,10 @@ function AddCheckpointForm({ onCreate }: { onCreate: (input: ImageModelInput) =>
   }
 
   return (
-    <View className="gap-3 rounded-lg border border-app-line bg-app-card p-4">
-      <Text className="text-base font-semibold text-app-text">Add checkpoint</Text>
+    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+      <Text className="text-base font-semibold text-app-ink">Add checkpoint</Text>
       <ModelFields draft={draft} setDraft={setDraft} />
-      <Button disabled={busy || !draft.label.trim() || !draft.ckpt_name.trim()} isLoading={busy} label="Add checkpoint" onPress={() => void submit()} />
+      <WebButton disabled={busy || !draft.label.trim() || !draft.ckpt_name.trim()} isLoading={busy} label="Add checkpoint" onPress={() => void submit()} />
     </View>
   );
 }
@@ -186,14 +186,14 @@ function WorkflowCatalog({
   workflows: AdminImageWorkflow[];
 }) {
   return (
-    <View className="gap-4 rounded-lg border border-app-line bg-white p-5">
+    <View className="gap-4 rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
       <View>
-        <Text className="text-lg font-semibold text-app-text">RunningHub workflows</Text>
+        <Text className="text-lg font-semibold text-app-ink">RunningHub workflows</Text>
         <Text className="mt-1 text-sm leading-6 text-app-muted">
           A workflow owns node IDs and the checkpoint field name. Pick which catalog checkpoints are
           available for each create workflow.
         </Text>
-        {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
+        {error ? <Text className="mt-2 text-sm font-semibold text-rose-deep">{error}</Text> : null}
       </View>
       <View className="gap-3">
         {workflows.map((workflow) => (
@@ -230,14 +230,14 @@ function WorkflowRow({
   }
 
   return (
-    <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-4">
+    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
       <WorkflowFields draft={draft} isNew={false} models={models} setDraft={setDraft} />
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <Button disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(workflow.key, draft))} />
+          <WebButton disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(workflow.key, draft))} />
         </View>
         <View className="w-28">
-          <Button disabled={busy} label="Delete" onPress={() => void run(() => onDelete(workflow.key))} variant="secondary" />
+          <WebButton disabled={busy} label="Delete" onPress={() => void run(() => onDelete(workflow.key))} variant="secondary" />
         </View>
       </View>
       {workflow.updated_by_email ? <Text className="text-xs text-app-muted">updated by {workflow.updated_by_email}</Text> : null}
@@ -262,10 +262,10 @@ function AddWorkflowForm({ models, onCreate }: { models: AdminImageModel[]; onCr
   }
 
   return (
-    <View className="gap-3 rounded-lg border border-app-line bg-app-card p-4">
-      <Text className="text-base font-semibold text-app-text">Add workflow</Text>
+    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+      <Text className="text-base font-semibold text-app-ink">Add workflow</Text>
       <WorkflowFields draft={draft} isNew models={models} setDraft={setDraft} />
-      <Button disabled={busy || !draft.key.trim() || !draft.label.trim()} isLoading={busy} label="Add workflow" onPress={() => void submit()} />
+      <WebButton disabled={busy || !draft.key.trim() || !draft.label.trim()} isLoading={busy} label="Add workflow" onPress={() => void submit()} />
     </View>
   );
 }
@@ -298,9 +298,9 @@ function WorkflowFields({
             key={mode}
             accessibilityRole="button"
             onPress={() => setDraft({ ...draft, mode })}
-            className={`rounded-full border px-3 py-2 ${draft.mode === mode ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
+            className={`rounded-full border px-3 py-2 ${draft.mode === mode ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
           >
-            <Text className={`text-sm font-semibold ${draft.mode === mode ? 'text-white' : 'text-app-muted'}`}>{mode}</Text>
+            <Text className={`text-sm font-semibold ${draft.mode === mode ? 'text-rose-deep' : 'text-app-muted'}`}>{mode}</Text>
           </Pressable>
         ))}
       </View>
@@ -356,9 +356,9 @@ function ModelPicker({ draft, models, setDraft }: { draft: ImageWorkflowInput; m
               accessibilityRole="checkbox"
               accessibilityState={{ checked: active }}
               onPress={() => toggle(model.id)}
-              className={`rounded-full border px-3 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
+              className={`rounded-full border px-3 py-2 ${active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
             >
-              <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-muted'}`}>{model.label}</Text>
+              <Text className={`text-sm font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>{model.label}</Text>
             </Pressable>
           );
         })}
@@ -382,9 +382,9 @@ function ActiveToggle({ active, onPress }: { active: boolean; onPress: () => voi
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`mt-5 rounded-full border px-3 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
+      className={`mt-5 rounded-full border px-3 py-2 ${active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
     >
-      <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-muted'}`}>{active ? 'Active' : 'Inactive'}</Text>
+      <Text className={`text-sm font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>{active ? 'Active' : 'Inactive'}</Text>
     </Pressable>
   );
 }

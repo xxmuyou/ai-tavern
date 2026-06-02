@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -5,9 +6,17 @@ import { Image, Pressable, Text, View } from 'react-native';
 
 import { fetchMe, listImageAssets, mediaSource, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
 import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types';
-import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { WebAppShell, WebInfoRow, WebPanel } from '@/components/web/WebAppShell';
+import { WebAppShell } from '@/components/web/WebAppShell';
+import {
+  WebAvatar,
+  WebButton,
+  WebCard,
+  WebEmptyState,
+  WebFieldRow,
+  WebSection,
+  WebTag,
+} from '@/components/web/ui';
 import { ADMIN_ROUTE, BILLING_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -15,6 +24,12 @@ import { usePush } from '@/hooks/use-push';
 import { useSession } from '@/hooks/use-session';
 import { formatDateTime, formatProvider } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
+
+const PREFERENCE_OPTIONS: { label: string; value: RomancePreference }[] = [
+  { label: 'Women', value: 'female' },
+  { label: 'Men', value: 'male' },
+  { label: 'Anyone', value: 'any' },
+];
 
 export default function WebMeScreen() {
   const router = useRouter();
@@ -55,6 +70,7 @@ export default function WebMeScreen() {
   const isPro = billing?.subscription.tier === 'pro' || me?.subscription.tier === 'pro';
   const messagesUsed = billing?.usage.messages_used_today ?? me?.quota.messages_used_today ?? 0;
   const messageLimit = billing?.usage.message_limit_daily ?? me?.quota.message_limit_daily ?? me?.quota.messages_limit_today ?? null;
+  const providers = me?.linked_providers?.length ? me.linked_providers : ['email'];
 
   async function handlePortal() {
     setIsOpeningPortal(true);
@@ -69,83 +85,175 @@ export default function WebMeScreen() {
 
   return (
     <WebAppShell title="Me" subtitle="Account, subscription, usage, and workspace controls.">
-      <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <WebPanel className="xl:col-span-1">
-          <View className="h-20 w-20 items-center justify-center rounded-lg bg-app-primarySoft">
-            <Text className="text-3xl font-semibold text-app-primary">{displayName.slice(0, 1).toUpperCase()}</Text>
-          </View>
-          <Text className="mt-5 text-2xl font-semibold text-app-text">{displayName}</Text>
-          <Text className="mt-1 text-sm text-app-muted">{email}</Text>
-          <View className="mt-5 flex-row flex-wrap gap-2">
-            {(me?.linked_providers?.length ? me.linked_providers : ['email']).map((provider) => (
-              <View key={provider} className="rounded-full bg-app-primarySoft px-3 py-1">
-                <Text className="text-sm font-semibold text-app-primary">{formatProvider(provider)}</Text>
-              </View>
-            ))}
-          </View>
-          <View className="mt-6 gap-3">
-            {me?.is_admin ? <Button label="Admin workspace" onPress={() => router.push(ADMIN_ROUTE)} variant="secondary" /> : null}
-            <Button label="Sign out" onPress={() => void signOut()} variant="secondary" />
-          </View>
-        </WebPanel>
-
-        <View className="gap-6 xl:col-span-2">
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">Account</Text>
-            <WebInfoRow label="Email verified" value={me?.email_verified ? 'Yes' : 'No'} />
-            <WebInfoRow label="Version" value={Constants.expoConfig?.version ?? '0.1.0'} />
-          </WebPanel>
-
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">Romance preference</Text>
-            <PreferencePicker
-              value={me?.romance_preference ?? 'any'}
-              onChange={(next) => {
-                if (!me) return;
-                const previous = me.romance_preference;
-                setMe({ ...me, romance_preference: next });
-                void updateRomancePreference(next).catch(() => {
-                  setMe({ ...me, romance_preference: previous });
-                  pushError('Could not update preference.');
-                });
-              }}
+      <View className="grid grid-cols-1 gap-8 xl:grid-cols-[340px_1fr]">
+        {/* Profile card */}
+        <View className="gap-5">
+          <WebCard padding="lg" className="items-center gap-5">
+            <WebAvatar
+              fallback={displayName}
+              ring="rose"
+              size="2xl"
+              source={null}
             />
-          </WebPanel>
-
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">Subscription and usage</Text>
-            <WebInfoRow label="Plan" value={isPro ? 'Pro' : 'Free'} />
-            <WebInfoRow label="Messages today" value={formatUsage(messagesUsed, messageLimit)} />
-            <WebInfoRow label="Next billing date" value={formatDateTime(billing?.subscription.current_period_end ?? me?.subscription.current_period_end)} />
-            <View className="mt-5">
-              {isPro ? (
-                <Button isLoading={isOpeningPortal} label="Manage subscription" onPress={handlePortal} />
-              ) : (
-                <Button label="Upgrade to Pro" onPress={() => router.push(BILLING_ROUTE)} />
-              )}
+            <View className="items-center gap-1.5">
+              <Text className="font-serif text-title text-app-ink">{displayName}</Text>
+              <Text className="text-body-sm text-app-muted">{email}</Text>
             </View>
-          </WebPanel>
+            <View className="flex-row flex-wrap justify-center gap-1.5">
+              {providers.map((provider) => (
+                <WebTag key={provider} size="sm" variant="brand">
+                  {formatProvider(provider)}
+                </WebTag>
+              ))}
+            </View>
+            <View className="w-full border-t border-app-line-soft pt-5">
+              <View className="flex-row items-center justify-between gap-3">
+                <View>
+                  <Text className="text-overline text-app-muted">Plan</Text>
+                  <Text className="mt-1 font-serif text-title-sm text-app-ink">{isPro ? 'Pro' : 'Free'}</Text>
+                </View>
+                <WebTag size="sm" variant={isPro ? 'rose' : 'neutral'}>
+                  {isPro ? 'Unlocked' : 'Upgrade me'}
+                </WebTag>
+              </View>
+            </View>
+            <View className="w-full gap-2">
+              {me?.is_admin ? (
+                <WebButton
+                  label="Admin workspace"
+                  onPress={() => router.push(ADMIN_ROUTE)}
+                  variant="outline"
+                  iconLeft={<Ionicons color="#2A1F1A" name="shield-checkmark-outline" size={16} />}
+                />
+              ) : null}
+              <WebButton
+                label="Sign out"
+                onPress={() => void signOut()}
+                variant="ghost"
+                iconLeft={<Ionicons color="#4A3B33" name="log-out-outline" size={16} />}
+              />
+            </View>
+          </WebCard>
+        </View>
 
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">My image assets</Text>
+        {/* Sections */}
+        <View className="gap-8">
+          <WebSection eyebrow="Profile" title="Account" description="Identity and the build of the app you're running.">
+            <WebCard padding="md">
+              <WebFieldRow label="Display name" value={displayName} />
+              <WebFieldRow label="Email" value={email} />
+              <WebFieldRow label="Email verified" value={me?.email_verified ? 'Yes' : 'No'} />
+              <WebFieldRow label="Version" value={Constants.expoConfig?.version ?? '0.1.0'} />
+            </WebCard>
+          </WebSection>
+
+          <WebSection
+            eyebrow="Story"
+            title="Romance preference"
+            description="A soft hint that steers which companions are recommended for you."
+          >
+            <WebCard padding="md">
+              <View className="flex-row flex-wrap gap-2">
+                {PREFERENCE_OPTIONS.map((opt) => {
+                  const active = opt.value === (me?.romance_preference ?? 'any');
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      onPress={() => {
+                        if (active || !me) return;
+                        const previous = me.romance_preference;
+                        setMe({ ...me, romance_preference: opt.value });
+                        void updateRomancePreference(opt.value).catch(() => {
+                          setMe({ ...me, romance_preference: previous });
+                          pushError('Could not update preference.');
+                        });
+                      }}
+                      className={`min-w-[100px] rounded-full border px-5 py-2.5 ${
+                        active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
+                      }`}
+                    >
+                      <Text
+                        className={`text-center text-body-sm font-semibold ${
+                          active ? 'text-rose-deep' : 'text-app-ink-soft'
+                        }`}
+                      >
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </WebCard>
+          </WebSection>
+
+          <WebSection
+            eyebrow="Plan"
+            title="Subscription and usage"
+            description="Where you are on the journey and how today's conversations are tracking."
+          >
+            <WebCard padding="md">
+              <WebFieldRow label="Plan" value={isPro ? 'Pro' : 'Free'} />
+              <WebFieldRow label="Status" value={billing?.subscription.status ?? '—'} />
+              <WebFieldRow label="Messages today" value={formatUsage(messagesUsed, messageLimit)} />
+              <WebFieldRow
+                label="Next billing date"
+                value={formatDateTime(billing?.subscription.current_period_end ?? me?.subscription.current_period_end)}
+              />
+              <View className="mt-5 flex-row flex-wrap gap-3">
+                {isPro ? (
+                  <WebButton
+                    label="Manage subscription"
+                    isLoading={isOpeningPortal}
+                    onPress={handlePortal}
+                    variant="primary"
+                    iconLeft={<Ionicons color="#9A2F4F" name="settings-outline" size={16} />}
+                  />
+                ) : (
+                  <WebButton
+                    label="Upgrade to Pro"
+                    onPress={() => router.push(BILLING_ROUTE)}
+                    variant="primary"
+                    iconLeft={<Ionicons color="#9A2F4F" name="sparkles-outline" size={16} />}
+                  />
+                )}
+              </View>
+            </WebCard>
+          </WebSection>
+
+          <WebSection eyebrow="Atelier" title="My image assets" description="Generations you've saved into your workspace.">
             <ImageAssetGrid assets={imageAssets} />
-          </WebPanel>
+          </WebSection>
 
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">Push notifications</Text>
-            <Text className="text-sm leading-6 text-app-muted">Mobile push can be enabled in the native app. Browser push is not part of v1.</Text>
-            <View className="mt-4 flex-row items-center justify-between gap-4">
-              <Text className="text-sm font-semibold text-app-text">Daily relationship prompts</Text>
-              <Pressable
-                accessibilityRole="switch"
-                accessibilityState={{ checked: push.enabled }}
-                disabled
-                className="h-8 w-14 justify-center rounded-full bg-app-line px-1 opacity-50"
-              >
-                <View className="h-6 w-6 self-start rounded-full bg-white" />
-              </Pressable>
-            </View>
-          </WebPanel>
+          <WebSection
+            eyebrow="Reach"
+            title="Push notifications"
+            description="Daily relationship prompts can be enabled inside the native app. Browser push is not part of v1."
+          >
+            <WebCard padding="md">
+              <View className="flex-row items-center justify-between gap-4">
+                <View className="min-w-0 flex-1">
+                  <Text className="text-body-sm font-semibold text-app-ink">Daily relationship prompts</Text>
+                  <Text className="mt-1 text-caption text-app-muted">
+                    {push.enabled ? 'Enabled' : 'Currently off — open the app to switch it on.'}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: push.enabled, disabled: true }}
+                  disabled
+                  className="h-7 w-12 justify-center rounded-full border border-app-line bg-app-sunken/60 px-0.5 opacity-50"
+                >
+                  <View
+                    className={`h-6 w-6 rounded-full bg-white shadow-card ${
+                      push.enabled ? 'self-end' : 'self-start'
+                    }`}
+                  />
+                </Pressable>
+              </View>
+            </WebCard>
+          </WebSection>
         </View>
       </View>
     </WebAppShell>
@@ -154,52 +262,39 @@ export default function WebMeScreen() {
 
 function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
   if (!assets.length) {
-    return <Text className="text-sm text-app-muted">No saved images yet.</Text>;
+    return (
+      <WebCard padding="md" className="items-center">
+        <WebEmptyState
+          title="No saved images yet"
+          description="Portraits and story composites you generate will be saved here."
+          icon="image-outline"
+        />
+      </WebCard>
+    );
   }
 
   return (
-    <View className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <View className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
       {assets.map((asset) => {
         const source = mediaSource(asset.art_key);
         return (
-          <View key={asset.id} className="overflow-hidden rounded-md border border-app-line bg-app-primarySoft">
+          <View
+            key={asset.id}
+            className="overflow-hidden rounded-2xl border border-app-line bg-app-surface shadow-card"
+          >
             {source ? (
-              <Image accessibilityLabel="Saved image asset" resizeMode="cover" source={source} className="aspect-[4/5] w-full" />
+              <Image
+                accessibilityLabel="Saved image asset"
+                resizeMode="cover"
+                source={source}
+                className="aspect-[4/5] w-full"
+              />
             ) : (
-              <View className="aspect-[4/5] w-full items-center justify-center">
-                <Text className="text-xs text-app-muted">Image</Text>
+              <View className="aspect-[4/5] w-full items-center justify-center bg-app-sunken">
+                <Ionicons color="#7A6A5E" name="image-outline" size={24} />
               </View>
             )}
           </View>
-        );
-      })}
-    </View>
-  );
-}
-
-const PREFERENCE_OPTIONS: { label: string; value: RomancePreference }[] = [
-  { label: 'Women', value: 'female' },
-  { label: 'Men', value: 'male' },
-  { label: 'Anyone', value: 'any' },
-];
-
-function PreferencePicker({ value, onChange }: { value: RomancePreference; onChange: (next: RomancePreference) => void }) {
-  return (
-    <View className="flex-row gap-2">
-      {PREFERENCE_OPTIONS.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <Pressable
-            key={opt.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-            onPress={() => {
-              if (!active) onChange(opt.value);
-            }}
-            className={`rounded-md border px-4 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
-          >
-            <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-text'}`}>{opt.label}</Text>
-          </Pressable>
         );
       })}
     </View>

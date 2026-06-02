@@ -1,9 +1,11 @@
-import { ActivityIndicator, Pressable, Text } from 'react-native';
+import type { ReactNode } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
-type ButtonVariant = 'danger' | 'primary' | 'secondary';
+type ButtonVariant = 'danger' | 'google' | 'primary' | 'secondary';
 
 type ButtonProps = {
   disabled?: boolean;
+  iconLeft?: ReactNode;
   isLoading?: boolean;
   label: string;
   onPress?: () => void;
@@ -11,18 +13,20 @@ type ButtonProps = {
 };
 
 const variantClassName: Record<ButtonVariant, string> = {
-  danger: 'bg-app-danger',
-  primary: 'bg-app-primary',
-  secondary: 'border border-app-line bg-app-card',
+  danger: 'border border-app-danger/25 bg-app-danger-soft',
+  google: 'border border-app-info/25 bg-app-info-soft',
+  primary: 'border border-app-primary/25 bg-app-primarySoft',
+  secondary: 'border border-app-primary/20 bg-app-primarySoft',
 };
 
 const textClassName: Record<ButtonVariant, string> = {
-  danger: 'text-white',
-  primary: 'text-white',
-  secondary: 'text-app-text',
+  danger: 'text-app-danger',
+  google: 'text-app-info',
+  primary: 'text-app-primary',
+  secondary: 'text-app-primary',
 };
 
-export function Button({ disabled, isLoading, label, onPress, variant = 'primary' }: ButtonProps) {
+export function Button({ disabled, iconLeft, isLoading, label, onPress, variant = 'primary' }: ButtonProps) {
   const isDisabled = disabled || isLoading;
 
   return (
@@ -35,9 +39,12 @@ export function Button({ disabled, isLoading, label, onPress, variant = 'primary
       }`}
     >
       {isLoading ? (
-        <ActivityIndicator color={variant === 'secondary' ? '#11181C' : '#FFFFFF'} />
+        <ActivityIndicator color="#11181C" />
       ) : (
-        <Text className={`text-base font-semibold ${textClassName[variant]}`}>{label}</Text>
+        <View className="flex-row items-center gap-2">
+          {iconLeft ? <View>{iconLeft}</View> : null}
+          <Text className={`text-base font-semibold ${textClassName[variant]}`}>{label}</Text>
+        </View>
       )}
     </Pressable>
   );

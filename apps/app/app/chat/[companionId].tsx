@@ -337,8 +337,7 @@ function ChatScreenInner() {
       return <StreamingBubble text={item.text} />;
     }
     const role = item.role === 'assistant' ? 'companion' : item.role;
-    const showCapture =
-      role === 'companion' && typeof item.scene_id === 'string' && item.scene_id.length > 0;
+    const showCapture = role === 'companion' && !item.id.startsWith('local-');
     return (
       <View>
         <MessageBubble content={item.content} role={role} />
