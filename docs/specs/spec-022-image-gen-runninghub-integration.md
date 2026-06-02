@@ -2,18 +2,18 @@
 
 > **类型：** 新建  |  **依赖：** spec-020, spec-021  |  **估时：** 3-5 天（不含 workflow 搭建周期）  |  **状态：** 🟡 in-progress（WF-1 create 文生图切片已落地：通用 `image_generation_jobs` 表 + provider `create` 模式 + base-art 端点 + webhook/cron 识别 + 前端生成面板；待 RunningHub 回填 workflowId/promptNodeId 后端到端验证。WF-2 variation / WF-3 edit 仍待做）
 
-> **重构（2026-06-02）：「workflow → models」统一结构。** 生图配置从「按写死的 style 枚举分散管理」收敛为 **workflow 顶层 → 下挂 0..N 个 model**（仅 RunningHub；OpenAI/mock 不受影响）：
-> - **checkpoint 单一来源在 model 上。** workflow 配置不再带默认 `ckptName`/`checkpointFieldName`；每个 model 自带 `ckpt_name` + `checkpoint_field_name` + 所属 `workflow_key`。
-> - **style 枚举降级为 model 的自由 `tag`。** `ArtStyle`（realistic/anime_jp/anime_kr）已从代码删除；model 用自由文本 `tag` 标注/分类。`image_models.style_tag` → `tag`，新增 `workflow_key`、`checkpoint_field_name`（migration `0026`）。
-> - **统一配置键。** D1 旧键 `image_gen.create_workflows` + `image_gen.wf2_*` 合并为单一 `image_gen.workflows`（按 workflow key 的 JSON，每条带 `mode: create|variation`）。详见 §C.7。
-> - **WF2 套同一外壳但 model 列表为空。** WF2 仍是单条 img2img（载图+prompt），不切 checkpoint、不挂 model；admin 面板对 variation workflow 显示「无 model 目录」。
-> - 生图请求 `ImageGenRequest`：`style?: ArtStyle` → `workflow_key?: string` + `checkpoint_field_name?: string`（详见 §C.0）。
+> **重构（2026-06-02 修正）：「checkpoint catalog + workflow catalog + binding」统一结构。** 生图配置从「按写死 style 枚举」和错误的「model 自带 workflow/fieldName」收敛为三层（仅 RunningHub；OpenAI/mock 不受影响）：
+> - **checkpoint/model 是独立目录。** `image_models` 只保存 `label` / `tag` / `ckpt_name` / active / 排序，用于命名、分类、管理 RunningHub 已上传 checkpoint。
+> - **workflow 拥有节点接线。** `image_workflows` 保存 `workflowId` / `promptNodeId` / `checkpointNodeId` / `checkpointFieldName` / `loadImageNodeId`。`checkpointFieldName` 属于 workflow，默认 `ckpt_name`。
+> - **workflow 与 checkpoint 多对多绑定。** `image_workflow_models` 决定某条 create workflow 可选哪些 checkpoint；同一个 checkpoint 可复用于多个 workflow。
+> - **配置文件只做 seed。** `config/runninghub-workflows.<env>.json` 可声明默认 `checkpoints[]` 和 `workflows{}`，同步脚本 upsert 到 D1；运行时和 Admin 均读 DB catalog。
+> - 生图请求 `ImageGenRequest`：`style?: ArtStyle` → `workflow_key?: string` + `ckpt_name?: string`；`checkpoint_field_name` 只允许来自 workflow 解析结果（详见 §C.0）。
 >
 > 下文历史小节中按 `style` 选 workflow、per-style `ckptName`/`checkpointFieldName` 的描述均已被本结构取代，保留作演进背景。
 
 > **本期落地偏差（v1 WF-1 create 切片）：**
-> - 仅 `create`（txt2img）路径落地。provider 覆盖 **prompt 节点**；**checkpoint 切换已落地**：当 model 所属 workflow 配了 `checkpointNodeId` 时，provider 用该 model 的 `checkpoint_field_name`（缺省 `ckpt_name`）+ `ckpt_name` 覆盖该节点。workflow/node 长期治理方式已收敛为 repo workflow 配置文件 → 部署同步 → D1 `app_settings`。⚠️ 若 workflow 未配 `checkpointNodeId`，则其下 model 的 `ckpt_name` 被静默忽略（回退 workflow 内置底模）——admin「模型目录」面板对受影响 model 显示警告，provider 也会 `console.warn`。
-> - **WF1 可选模型目录已落地：** `image_models` 表（migration `0022`，`0026` 重构）+ admin「模型目录」面板（[`ImageModelsSection.tsx`](../../apps/app/components/admin/ImageModelsSection.tsx)），每个 model = `workflow_key` + `tag` + `ckpt_name` + `checkpoint_field_name`，创建角色时供用户选。
+> - 仅 `create`（txt2img）路径落地。provider 覆盖 **prompt 节点**；**checkpoint 切换已落地**：用户选择 workflow-model option 后，后端解析 workflow 的 `checkpointFieldName`（默认 `ckpt_name`）+ checkpoint 的 `ckpt_name` 覆盖该节点。⚠️ 若 workflow 未配 `checkpointNodeId`，则选中的 checkpoint 文件名会被忽略（回退 workflow 内置底模），provider 会 `console.warn`。
+> - **WF1 可选模型目录已落地并修正：** `image_models` 是 checkpoint catalog，`image_workflows` 是 workflow catalog，`image_workflow_models` 是绑定表。Admin「Portrait generation」面板分区管理 checkpoint 和 workflow。
 > - 落地了 spec-020 §C 的通用 `image_generation_jobs` 表（migration `0018`）；**未建** `image_generation_config` 表。provider 配置通过 settings store 读取（`image_gen.*`，见 [`registry.ts`](../../packages/api/src/settings/registry.ts) 与 [`admin-settings-workspace.md`](../ops/admin-settings-workspace.md)）：secret / provider 开关可从 env 兜底，workflow/node/checkpoint 配置只以部署同步进 D1 的值为准。
 > - base-art 草稿走 spec-020 §F 的 `POST /companions/base-art/generate` + `GET /companions/base-art/jobs/{jobId}`；结果落 `user-art/{user_id}/base-art/{uuid}.{ext}` + `asset_objects`。webhook（`/webhooks/runninghub`）与 cron 兜底（`pollStaleRunningHubArtJobs`）均已扩展为识别 `image_generation_jobs`。
 > - **本期不接积分**（spec-021 扣费后续再接）。
@@ -46,7 +46,7 @@
 | **WF-2 变体 + 抠图** | 从确认的基础图生成 5 个非 neutral 情绪变体，尾部去背输出透明背景 | `variation` |
 | **WF-3 编辑** | 按 prompt（+可选 mask）换装 / 换姿势；MVP 暂不交付 | `edit` |
 
-风格固定 3 种：`realistic`（写实）/ `anime_jp`（日漫）/ `anime_kr`（韩漫）。后端通过覆盖 checkpoint 节点的 checkpoint field 切换底模（**已落地**，依赖该风格 workflow 配置配了 `checkpointNodeId`；fieldName 默认 `ckpt_name`，可通过 `checkpointFieldName` 改）；同一风格下可挂多个 checkpoint（WF1 模型目录多行）。代码当前兼容「一风格一 workflow」过渡配置；长期配置来源是 repo workflow 配置文件同步到 D1。运营操作步骤（含上传自有 checkpoint）见 [`admin-settings-workspace.md`](../ops/admin-settings-workspace.md) §6。
+风格不再是代码枚举。Admin 用 checkpoint 的 `tag` 做分类（如 `realistic`、`anime,jp`、`anime,kr`），并在 workflow 上勾选可用 checkpoint。后端通过 workflow 的 `checkpointNodeId` + `checkpointFieldName` 覆盖底模，checkpoint 文件名来自用户选择的 catalog row。运营操作步骤（含上传自有 checkpoint）见 [`admin-settings-workspace.md`](../ops/admin-settings-workspace.md) §6。
 
 > 术语统一：[`spec-020`](./spec-020-companion-emotion-art-generation.md) 的「6 emotion 变体」就是产品语境里说的「6 个姿势/立绘」，本 spec 的 WF-2 即生成这套变体，不是额外的姿势集合。
 
@@ -198,9 +198,9 @@ Content-Type: application/json
 | `NODE_INFO_MISMATCH(nodeId=…, fieldName=…, field_not_found_in_node_inputs)` | `nodeInfoList` 里给某节点指定的 **fieldName 在该节点的输入里不存在** | `provider_error`（原文存入 `error_message`） |
 | 其它 | **待客服补充** | 默认 `provider_error`（可重试） |
 
-> **model 的 `checkpoint_field_name` 必须是节点上的真实输入字段名。** provider 把它当作 checkpoint 节点（workflow 的 `checkpointNodeId`）上的输入字段名直接发给 RunningHub（缺省 `ckpt_name`）；填错就会得到上面的 `NODE_INFO_MISMATCH ... field_not_found_in_node_inputs`。重构后字段名随 **model** 走（不再是 per-style 的 workflow 配置）。
+> **checkpoint fieldName 属于 workflow，不属于 model。** provider 把 workflow 的 `checkpointFieldName` 当作 checkpoint 节点（workflow 的 `checkpointNodeId`）上的输入字段名发给 RunningHub（缺省 `ckpt_name`）；checkpoint/model 只提供 `ckpt_name` 文件名。
 >
-> 真实踩坑（2026-06-01，dev）：曾把三个 model 的 `checkpoint_field_name` 填成 `Realistic`/`Anime_JP`/`Anime_KR`。`Realistic` 恰好是节点 1 的真实输入名所以跑通，`Anime_JP`/`Anime_KR` 在节点 1 上不存在 → 直接被拒。排查方式见下「可观测性」。
+> 真实踩坑（2026-06-02，dev）：旧迁移曾把三个 model 的 `checkpoint_field_name` 回填为 `Realistic`/`Anime_JP`/`Anime_KR`。生成 `anime_jp` 时 RunningHub 收到 `fieldName=Anime_JP`，但节点 1 没有这个输入 → `NODE_INFO_MISMATCH(nodeId=1, fieldName=Anime_JP, reason=field_not_found_in_node_inputs)`。修正后新 job 不再读取 model 上的 legacy `checkpoint_field_name`，统一使用 workflow 的 `checkpointFieldName = ckpt_name`。
 
 #### B.5.1 失败可观测性（2026-06-01）
 
@@ -222,9 +222,9 @@ type ImageGenRequest = {
   /** 选哪条 workflow（image_gen.workflows 的 key）。create 由所选 model 决定，缺省 wf1；variation 缺省 wf2 */
   workflow_key?: string;
   prompt: string;
-  /** 切 model 时的 checkpoint 文件名（来自所选 model） */
+  /** 切 checkpoint 时的文件名（来自所选 checkpoint catalog row） */
   ckpt_name?: string;
-  /** workflow checkpoint 节点上的字段名（来自所选 model，缺省 ckpt_name） */
+  /** workflow checkpoint 节点上的字段名（来自 workflow，缺省 ckpt_name） */
   checkpoint_field_name?: string;
   /** variation/edit 必填；create 当前不使用，后续 img2img 能力可复用 */
   source_art_url?: string;
@@ -236,7 +236,7 @@ type ImageGenRequest = {
 };
 ```
 
-> 重构（2026-06-02）：原 `style: ArtStyle` 已删除，改由 `workflow_key` 选 workflow，checkpoint 文件名/字段名随所选 model 传入。
+> 重构（2026-06-02 修正）：原 `style: ArtStyle` 已删除，改由 workflow-model option 解析 `workflow_key` 与 checkpoint 文件名；checkpoint 字段名只来自 workflow。
 
 mock provider 与既有 variation 路径保持兼容（mode 缺省视为 `variation`）。
 
@@ -246,7 +246,7 @@ mock provider 与既有 variation 路径保持兼容（mode 缺省视为 `variat
 
 1. 通过 settings store 读取配置：apiKey / webhook secret 仍来自 env/Wrangler secret；workflowId + node id 映射来自 D1 `app_settings`（由 repo 配置部署同步）；缺失任一抛 `ImageGenError("provider_not_configured", retryable=false)`
 2. 若有 `source_art_url`，用 `signed-url.ts` 转成短期签名 URL（create 文生图时跳过）
-3. 拼接 `nodeInfoList`：按 mode 覆盖 load-image / prompt / mask，并在 workflow 配置存在 `checkpointNodeId` 时注入 checkpoint 覆盖（fieldName 与文件名都来自请求 = 用户所选 `image_models` 行的 `checkpoint_field_name`（缺省 `ckpt_name`）+ `ckpt_name`；无 model 选择则不注入 checkpoint；找不到 `workflow_key` 对应 workflow 抛 `provider_not_configured`）
+3. 拼接 `nodeInfoList`：按 mode 覆盖 load-image / prompt / mask，并在 workflow 配置存在 `checkpointNodeId` 时注入 checkpoint 覆盖（fieldName 来自 workflow 的 `checkpointFieldName`，文件名来自所选 checkpoint 的 `ckpt_name`；无 checkpoint 选择则不注入 checkpoint；找不到 `workflow_key` 对应 workflow 抛 `provider_not_configured`）
 4. `POST .../task/openapi/create`（workflowId = 按 mode 选）创建任务，收到 `taskId`
 5. **不下载图、不写 R2、不标 succeeded**；返回 `{ type: "pending", external_task_id, ... }`，consumer 等 webhook
 6. `MODEL` 写死值改为按 mode 派生（如 `companion-create-v1` / `companion-variation-v1` / `companion-edit-v1`），写入 job 便于审计
@@ -310,30 +310,37 @@ workflowId / nodeId 不是 secret，但也不适合继续放在 `.env.*` 或 `wr
 3. runtime 继续通过 settings store 读取 `image_gen.*`。
 4. Admin UI 可查看和临时编辑 D1 当前值；长期修改必须回写 repo 配置文件，否则下一次部署会被覆盖。
 
-配置内容只包含非 secret —— **按 workflow key 的扁平列表，每条带 `mode`；不含任何 checkpoint 文件名/字段名**（checkpoint 在 model 目录里管）：
+配置内容只包含非 secret，并作为 DB catalog 的默认 seed：
 
 ```json
 {
+  "checkpoints": [
+    { "id": "anime_jp_animagine", "label": "Anime JP - Animagine XL", "ckptName": "animagineXL40_v4Opt.safetensors", "tags": ["anime", "jp"] }
+  ],
   "workflows": {
-    "wf1": { "mode": "create",    "workflowId": "", "promptNodeId": "", "checkpointNodeId": "" },
+    "wf1": { "label": "WF1 - base portrait", "mode": "create", "workflowId": "", "promptNodeId": "", "checkpointNodeId": "", "checkpointFieldName": "ckpt_name", "modelIds": ["anime_jp_animagine"] },
     "wf2": { "mode": "variation", "workflowId": "", "loadImageNodeId": "", "promptNodeId": "" }
   }
 }
 ```
 
-- `create` workflow：`workflowId` + `promptNodeId` +（可选）`checkpointNodeId`（要支持切 model 就必须配）。
+- `checkpoints[]`：默认 checkpoint/model catalog，部署同步 upsert 到 `image_models`。
+- `create` workflow：`workflowId` + `promptNodeId` +（可选）`checkpointNodeId` + `checkpointFieldName` + `modelIds`。
 - `variation` workflow：`workflowId` + `promptNodeId` + `loadImageNodeId`，无 checkpoint。
-- 要新增 workflow，在此列表加一个 key 即可（model 通过 `workflow_key` 挂上去）。
+- 要新增 workflow，在此列表加一个 key，或直接在 Admin 里新增；`modelIds` 负责绑定可选 checkpoint。
 
-同步后写入**单一** D1 settings key：
+同步后写入 D1 catalog 表，并保留 `image_gen.workflows` 作为旧 runtime fallback：
 
-| D1 key | 来源 |
+| D1 位置 | 来源 |
 |---|---|
-| `image_gen.workflows` | 整个 `workflows` JSON（解析见 [`image-gen/workflows.ts`](../../packages/api/src/image-gen/workflows.ts)） |
+| `image_models` | `checkpoints[]` |
+| `image_workflows` | `workflows{}` 的 node wiring |
+| `image_workflow_models` | 每条 workflow 的 `modelIds` |
+| `app_settings.image_gen.workflows` | legacy fallback JSON |
 
 > 同步脚本会顺带 `DELETE` 旧键 `image_gen.create_workflows` / `image_gen.wf2_workflow_id` / `image_gen.wf2_load_image_node_id` / `image_gen.wf2_prompt_node_id`，清理历史漂移。
 
-> 部署同步是 workflow/node 配置的唯一标准路径。`.env.*` 与 `wrangler.jsonc vars` 不再承载 workflow/node id；checkpoint 文件名 + 字段名由 `image_models`（admin 可改）管理；admin 手写 workflow 值只用于临时验证或救急。
+> `.env.*` 与 `wrangler.jsonc vars` 不承载 workflow/node id。checkpoint 文件名由 `image_models` 管；checkpoint fieldName 由 `image_workflows` 管；Admin 和 config sync 都写同一套 DB catalog。
 
 secrets（不入仓库，`wrangler secret put`）：
 
@@ -350,17 +357,14 @@ ALTER TABLE companion_art_jobs ADD COLUMN external_task_id TEXT;
 CREATE INDEX idx_companion_art_jobs_external_task_id ON companion_art_jobs(external_task_id);
 ```
 
-`packages/api/migrations/0026_workflow_models_refactor.sql`（「workflow → models」重构）：
+`packages/api/migrations/0026_workflow_models_refactor.sql` 是历史过渡迁移，曾新增 `workflow_key` / `checkpoint_field_name`。这些列保留兼容旧 DB，但新代码不再读取 model 上的 `checkpoint_field_name`。
+
+`packages/api/migrations/0028_runninghub_workflow_catalog.sql`（历史修正）：
 
 ```sql
--- image_models: style_tag -> tag; 新增 workflow 归属 + checkpoint 字段名
-ALTER TABLE image_models RENAME COLUMN style_tag TO tag;
-ALTER TABLE image_models ADD COLUMN workflow_key TEXT NOT NULL DEFAULT 'wf1';
-ALTER TABLE image_models ADD COLUMN checkpoint_field_name TEXT;
--- 回填：realistic->Realistic / anime_jp->Anime_JP / anime_kr->Anime_KR
--- image_generation_jobs: 携带 workflow + checkpoint 字段供 provider 回放（style 列保留作历史）
-ALTER TABLE image_generation_jobs ADD COLUMN workflow_key TEXT;
-ALTER TABLE image_generation_jobs ADD COLUMN checkpoint_field_name TEXT;
+CREATE TABLE image_workflows (... checkpoint_field_name TEXT NOT NULL DEFAULT 'ckpt_name' ...);
+CREATE TABLE image_workflow_models (... PRIMARY KEY (workflow_key, model_id));
+-- 从旧 image_models.workflow_key 回填绑定；忽略旧 checkpoint_field_name，防止 Anime_JP 等 style 名继续进入 RunningHub fieldName。
 ```
 
 #### C.9 Cron 兜底（防止 webhook 丢失）

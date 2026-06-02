@@ -24,6 +24,7 @@ import type {
   CreditLedgerResponse,
   AdminImageGenJobsResponse,
   AdminImageModelsResponse,
+  AdminImageWorkflowsResponse,
   AdminSettingsResponse,
   CreditPackageId,
   DailyState,
@@ -34,6 +35,7 @@ import type {
   ImageModelInput,
   ImageModelOption,
   ImageModelsResponse,
+  ImageWorkflowInput,
   LlmConfigItem,
   LlmConfigResponse,
   LlmConfigUpdateInput,
@@ -278,6 +280,10 @@ export async function listAdminImageModels(): Promise<AdminImageModelsResponse> 
   return requestJson<AdminImageModelsResponse>('/admin/image-models');
 }
 
+export async function listAdminImageWorkflows(): Promise<AdminImageWorkflowsResponse> {
+  return requestJson<AdminImageWorkflowsResponse>('/admin/image-workflows');
+}
+
 export async function listAdminImageGenJobs(
   options: { status?: string; limit?: number } = {},
 ): Promise<AdminImageGenJobsResponse> {
@@ -308,6 +314,28 @@ export async function updateAdminImageModel(id: string, input: ImageModelInput):
 
 export async function deleteAdminImageModel(id: string): Promise<{ ok: true }> {
   return requestJson<{ ok: true }>(`/admin/image-models/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function createAdminImageWorkflow(input: ImageWorkflowInput): Promise<{ key: string }> {
+  return requestJson<{ key: string }>('/admin/image-workflows', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function updateAdminImageWorkflow(key: string, input: ImageWorkflowInput): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/image-workflows/${encodeURIComponent(key)}`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PUT',
+  });
+}
+
+export async function deleteAdminImageWorkflow(key: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/image-workflows/${encodeURIComponent(key)}`, {
     method: 'DELETE',
   });
 }

@@ -27,7 +27,7 @@
 在表情包之外，本 spec 把 companion 的**基础图来源**和**风格**也纳入：
 
 1. **基础图来源新增「文生图创建」**：创建 companion 时，用户可以填提示词由后端文生图生成基础图；也可以上传本地图片并直接作为最终 neutral 图。当前产品创建流程不把上传图再送 RunningHub img2img 重画。
-2. **模型属性**：创建生图由 admin 配置的 active image model 决定走哪条 workflow（`workflow_key`）与 checkpoint（`ckpt_name` + `checkpoint_field_name`）；旧的 3 风格枚举已降级为 model 上的自由 `tag`（spec-022 2026-06-02 重构）。
+2. **模型属性**：创建生图由 admin 配置的 active workflow-model option 决定走哪条 workflow 与 checkpoint 文件；checkpoint fieldName 属于 workflow，默认 `ckpt_name`。旧的 3 风格枚举已降级为 checkpoint 上的自由 `tag`（spec-022 2026-06-02 修正）。
 3. **变体输出统一透明背景**：5 个非 neutral 变体由生图链路对**角色立绘去背**，输出透明背景。这里的“背景抠图”不是生成场景背景图。
 4. **新增编辑接口**：按 prompt（+可选 mask）换装 / 换姿势，**留接口、优先级最低**。
 

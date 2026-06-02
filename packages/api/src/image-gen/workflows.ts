@@ -3,11 +3,10 @@ import type { ImageGenMode } from "./types";
 /**
  * Unified RunningHub workflow wiring (deployment-managed, admin-overridable).
  *
- * Stored as a single JSON object under `image_gen.workflows`, keyed by an
- * arbitrary workflow key (e.g. `wf1`, `wf2`). Each entry declares its product
- * `mode` and the RunningHub node ids to override at submit time. Checkpoints are
- * NOT configured here — they live on the model catalog (`image_models`), which
- * references a workflow via `workflow_key`. See spec-022.
+ * Legacy/fallback parser for the repo-managed `image_gen.workflows` JSON.
+ * Runtime workflow management now lives in the `image_workflows` and
+ * `image_workflow_models` tables, but this parser keeps old tests and
+ * pre-migration deployments readable.
  *
  * Shape:
  *   {
@@ -17,13 +16,18 @@ import type { ImageGenMode } from "./types";
  */
 export type WorkflowConfig = {
   key: string;
+  label?: string;
   mode: ImageGenMode;
   workflowId: string;
   promptNodeId: string;
   /** create mode: node where the model's checkpoint override is injected. */
   checkpointNodeId?: string;
+  /** create mode: field on the checkpoint node. Defaults to ckpt_name. */
+  checkpointFieldName?: string;
   /** variation mode: node that loads the source image. */
   loadImageNodeId?: string;
+  /** Checkpoint ids enabled for this workflow by config seed. */
+  modelIds?: string[];
 };
 
 function str(value: unknown): string {
@@ -51,11 +55,16 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
     const mode: ImageGenMode = entry.mode === "variation" ? "variation" : "create";
     out[key] = {
       key,
+      label: str(entry.label) || undefined,
       mode,
       workflowId,
       promptNodeId,
       checkpointNodeId: str(entry.checkpointNodeId) || undefined,
+      checkpointFieldName: str(entry.checkpointFieldName) || "ckpt_name",
       loadImageNodeId: str(entry.loadImageNodeId) || undefined,
+      modelIds: Array.isArray(entry.modelIds)
+        ? entry.modelIds.map((id) => str(id)).filter(Boolean)
+        : undefined,
     };
   }
   return out;

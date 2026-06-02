@@ -51,11 +51,10 @@ export type ImageGenRequest = {
   workflow_key?: string;
   /**
    * Checkpoint file to inject for `create`. Comes from the creator-selected WF1
-   * model; the model also supplies `checkpoint_field_name`. Ignored when the
-   * workflow declares no checkpoint node.
+   * checkpoint/model. Ignored when the workflow declares no checkpoint node.
    */
   ckpt_name?: string;
-  /** Field name on the workflow's checkpoint node (model-defined). */
+  /** Field name on the workflow's checkpoint node. Source is workflow config, not the model. */
   checkpoint_field_name?: string;
   /**
    * R2 object key OR full URL of the source portrait. Required for

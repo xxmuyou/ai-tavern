@@ -6,7 +6,7 @@
 >
 > **管理员工作台边界：** Admin UI 只管理非敏感运行时配置。API key / secret / signing key 只能通过 `.env.*`、Wrangler secrets、`pnpm upload:secrets:*` 或 `wrangler secret put` 管理。工作台只显示这些 secret 是否已配置，不显示值，也不允许覆盖；历史 D1 中如果存在同 key 覆盖值，运行时代码会忽略。
 >
-> **RunningHub workflow 接线不是 secret。** `workflowId`、`promptNodeId`、`checkpointNodeId`、`loadImageNodeId` 不放本文件的 secret 清单，也不应长期放 `.env.*`。它们由 repo 中按环境区分的 RunningHub workflow 配置文件管理，部署时同步到 D1 `app_settings`（单一 key `image_gen.workflows`）。checkpoint 文件名/字段名则在 `image_models`（admin 持久数据），也不是 secret。
+> **RunningHub workflow 接线不是 secret。** `workflowId`、`promptNodeId`、`checkpointNodeId`、`checkpointFieldName`、`loadImageNodeId` 不放本文件的 secret 清单，也不应长期放 `.env.*`。它们由 repo 中按环境区分的 RunningHub 配置文件 seed 到 D1 catalog；checkpoint 文件名在 `image_models`，workflow/checkpoint 绑定在 `image_workflow_models`，都不是 secret。
 
 ---
 

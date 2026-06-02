@@ -1,17 +1,19 @@
 import { requireAdminUser } from "../../auth";
 import { jsonResponse } from "../../http";
 import { loadUpdatedByEmails } from "../../llm/admin/repo";
-import { resolveImageGenConfig } from "../../settings/store";
 import {
   createImageModel,
+  deleteImageWorkflow,
   deleteImageModel,
   isExpressionGender,
   listExpressionPrompts,
   listImageModelRows,
+  listImageWorkflowRows,
   updateImageModel,
+  upsertImageWorkflow,
   upsertExpressionPrompt,
-  workflowHasCheckpointNode,
   type ImageModelInput,
+  type ImageWorkflowInput,
 } from "../index";
 import { isNonNeutralEmotion } from "../expression-prompts";
 
@@ -26,6 +28,9 @@ export async function handleAdminImageGenRequest(
 ): Promise<Response | null> {
   if (pathname.startsWith("/admin/image-models")) {
     return handleImageModels(request, env, pathname);
+  }
+  if (pathname.startsWith("/admin/image-workflows")) {
+    return handleImageWorkflows(request, env, pathname);
   }
   if (pathname.startsWith("/admin/expression-prompts")) {
     return handleExpressionPrompts(request, env, pathname);
@@ -90,15 +95,10 @@ async function handleImageModels(
       env,
       rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
     );
-    // Flag models whose ckpt_name would be silently ignored: their workflow has
-    // no checkpoint node configured, so generation falls back to the workflow's
-    // built-in checkpoint.
-    const { workflows } = await resolveImageGenConfig(env);
     const models = rows.map((r) => ({
       ...r,
       is_active: r.is_active === 1,
       updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
-      checkpoint_applies: workflowHasCheckpointNode(workflows, r.workflow_key),
     }));
     return jsonResponse({ models });
   }
@@ -131,6 +131,60 @@ async function handleImageModels(
     if (request.method === "DELETE") {
       await requireAdminUser(env, request);
       await deleteImageModel(env, id);
+      return jsonResponse({ ok: true });
+    }
+  }
+
+  return null;
+}
+
+async function handleImageWorkflows(
+  request: Request,
+  env: Env,
+  pathname: string,
+): Promise<Response | null> {
+  if (pathname === "/admin/image-workflows" && request.method === "GET") {
+    await requireAdminUser(env, request);
+    const rows = await listImageWorkflowRows(env);
+    const emails = await loadUpdatedByEmails(
+      env,
+      rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
+    );
+    const workflows = rows.map((r) => ({
+      ...r,
+      updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
+    }));
+    return jsonResponse({ workflows });
+  }
+
+  if (pathname === "/admin/image-workflows" && request.method === "POST") {
+    const admin = await requireAdminUser(env, request);
+    const body = await request.json().catch(() => null);
+    const parsed = parseWorkflowInput(body);
+    if (!parsed.ok) {
+      return jsonResponse({ error: parsed.error }, { status: 400 });
+    }
+    await upsertImageWorkflow(env, parsed.value, admin.id);
+    return jsonResponse({ key: parsed.value.key, ok: true }, { status: 201 });
+  }
+
+  const keyMatch = pathname.match(/^\/admin\/image-workflows\/([^/]+)$/);
+  if (keyMatch) {
+    const key = decodeURIComponent(keyMatch[1] ?? "");
+    if (request.method === "PUT") {
+      const admin = await requireAdminUser(env, request);
+      const body = await request.json().catch(() => null);
+      const raw = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+      const parsed = parseWorkflowInput({ ...raw, key });
+      if (!parsed.ok) {
+        return jsonResponse({ error: parsed.error }, { status: 400 });
+      }
+      await upsertImageWorkflow(env, parsed.value, admin.id);
+      return jsonResponse({ ok: true });
+    }
+    if (request.method === "DELETE") {
+      await requireAdminUser(env, request);
+      await deleteImageWorkflow(env, key);
       return jsonResponse({ ok: true });
     }
   }
@@ -189,24 +243,68 @@ function parseModelInput(body: unknown): ParseResult {
     return { ok: false, error: "invalid_model" };
   }
   const tag = typeof raw.tag === "string" ? raw.tag.trim() : "";
-  const checkpointFieldName =
-    typeof raw.checkpoint_field_name === "string" ? raw.checkpoint_field_name.trim() : "";
-  const workflowKey =
-    typeof raw.workflow_key === "string" && raw.workflow_key.trim()
-      ? raw.workflow_key.trim()
-      : "wf1";
   return {
     ok: true,
     value: {
       label,
       tag,
       ckpt_name: ckptName,
-      checkpoint_field_name: checkpointFieldName || null,
-      workflow_key: workflowKey,
       is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),
-      sort_order: Number.isFinite(raw.sort_order) ? Number(raw.sort_order) : 0,
+      sort_order: readNumber(raw.sort_order),
     },
   };
+}
+
+type WorkflowParseResult =
+  | { ok: true; value: ImageWorkflowInput }
+  | { ok: false; error: string };
+
+function parseWorkflowInput(body: unknown): WorkflowParseResult {
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const key = typeof raw.key === "string" ? raw.key.trim() : "";
+  const label = typeof raw.label === "string" ? raw.label.trim() : "";
+  const mode = raw.mode === "variation" ? "variation" : raw.mode === "create" ? "create" : null;
+  if (!key || !label || !mode) {
+    return { ok: false, error: "invalid_workflow" };
+  }
+  const workflowId = typeof raw.workflow_id === "string" ? raw.workflow_id.trim() : "";
+  const promptNodeId = typeof raw.prompt_node_id === "string" ? raw.prompt_node_id.trim() : "";
+  const checkpointNodeId =
+    typeof raw.checkpoint_node_id === "string" && raw.checkpoint_node_id.trim()
+      ? raw.checkpoint_node_id.trim()
+      : null;
+  const checkpointFieldName =
+    typeof raw.checkpoint_field_name === "string" && raw.checkpoint_field_name.trim()
+      ? raw.checkpoint_field_name.trim()
+      : "ckpt_name";
+  const loadImageNodeId =
+    typeof raw.load_image_node_id === "string" && raw.load_image_node_id.trim()
+      ? raw.load_image_node_id.trim()
+      : null;
+  const modelIds = Array.isArray(raw.model_ids)
+    ? raw.model_ids.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)
+    : [];
+  return {
+    ok: true,
+    value: {
+      checkpoint_field_name: checkpointFieldName,
+      checkpoint_node_id: checkpointNodeId,
+      is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),
+      key,
+      label,
+      load_image_node_id: loadImageNodeId,
+      mode,
+      model_ids: [...new Set(modelIds)],
+      prompt_node_id: promptNodeId,
+      sort_order: readNumber(raw.sort_order),
+      workflow_id: workflowId,
+    },
+  };
+}
+
+function readNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function slugifyModelId(label: string): string {

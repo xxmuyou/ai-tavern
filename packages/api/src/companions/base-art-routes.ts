@@ -1,7 +1,7 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import type { UserRecord } from "../identity";
-import { getImageModel, listActiveImageModels } from "../image-gen";
+import { getImageModelSelection, listActiveImageModels } from "../image-gen";
 import { LLMRouterError, llmCall } from "../llm";
 import { LLMError } from "../llm/types";
 import {
@@ -28,7 +28,16 @@ export async function handleBaseArtRequest(
     await requireAuthUser(env, request);
     const models = await listActiveImageModels(env);
     return jsonResponse({
-      models: models.map((m) => ({ id: m.id, label: m.label, tag: m.tag })),
+      models: models.map((m) => ({
+        checkpoint_applies: m.checkpoint_applies,
+        ckpt_name: m.ckpt_name,
+        id: m.id,
+        label: m.label,
+        model_id: m.model_id,
+        tag: m.tag,
+        workflow_key: m.workflow_key,
+        workflow_label: m.workflow_label,
+      })),
     });
   }
 
@@ -129,17 +138,17 @@ async function handleGenerate(
     return jsonResponse({ error: "invalid_source" }, { status: 400 });
   }
 
-  // A creator-selected model resolves the workflow + checkpoint to run.
+  // A creator-selected workflow/model option resolves the workflow + checkpoint to run.
   if (typeof raw.model !== "string" || !raw.model.trim()) {
     return jsonResponse({ error: "invalid_model" }, { status: 400 });
   }
-  const model = await getImageModel(env, raw.model.trim());
-  if (!model) {
+  const selection = await getImageModelSelection(env, raw.model.trim());
+  if (!selection) {
     return jsonResponse({ error: "invalid_model" }, { status: 400 });
   }
-  const workflowKey = model.workflow_key;
-  const ckptName = model.ckpt_name;
-  const checkpointFieldName = model.checkpoint_field_name;
+  const workflowKey = selection.workflow.key;
+  const ckptName = selection.model.ckpt_name;
+  const checkpointFieldName = selection.workflow.checkpoint_field_name || "ckpt_name";
 
   const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";
   const uploadKey = typeof raw.upload_key === "string" ? raw.upload_key.trim() : "";

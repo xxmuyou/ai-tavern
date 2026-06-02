@@ -2,7 +2,7 @@
 
 > **类型：** 新建  |  **依赖：** spec-009, spec-021  |  **估时：** 2-3 天  |  **状态：** 🟡 in-progress（后端 3 端点 + `adjustCredits` helper + 单测已落地；admin「用户积分」UI 归 spec-018，待做）
 
-> **已落地范围超出本 spec 原始口径（2026-05）：** 管理员工作台实际已扩展为多面板——除本 spec 的「用户积分」外，还含 **Settings（运行时运营配置 / DB 覆盖层）**、**Portrait generation（按 workflow 选择 → 其下挂模型目录；2026-06-02「workflow → models」重构见 spec-022 顶部）**、**Expression prompts（WF2 表情）**、**LLM 配置**。其中运营配置与生图/checkpoint 配置的完整说明见 [`../ops/admin-settings-workspace.md`](../ops/admin-settings-workspace.md)（含 `app_settings` 表 migration `0024`、`image_models` migration `0022`/`0026`）。本 spec 仍只承载积分端点契约，其余面板按各自模块（spec-011 / spec-022）演进。
+> **已落地范围超出本 spec 原始口径（2026-05）：** 管理员工作台实际已扩展为多面板——除本 spec 的「用户积分」外，还含 **Settings（运行时运营配置 / DB 覆盖层）**、**Portrait generation（checkpoint catalog + workflow catalog + binding；2026-06-02 修正见 spec-022 顶部）**、**Expression prompts（WF2 表情）**、**LLM 配置**。其中运营配置与生图/checkpoint 配置的完整说明见 [`../ops/admin-settings-workspace.md`](../ops/admin-settings-workspace.md)（含 `app_settings` 表 migration `0024`、`image_models` migration `0022`/`0026`、`image_workflows` migration `0028`）。本 spec 仍只承载积分端点契约，其余面板按各自模块（spec-011 / spec-022）演进。
 
 ---
 

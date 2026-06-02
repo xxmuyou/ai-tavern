@@ -8,14 +8,12 @@ import { useAdminSettings } from '@/hooks/use-admin-settings';
 import { AdminDropdown } from './AdminDropdown';
 import { ImageGenJobsSection } from './ImageGenJobsSection';
 import { ImageModelsSection } from './ImageModelsSection';
-import { SettingRow, SourceTag, WorkflowWiringRow } from './SettingsSection';
+import { SettingRow, SourceTag } from './SettingsSection';
 import type { RevealSettingFn, SaveSettingFn } from './SettingsSection';
 
 const DEFAULT_PROVIDER_KEY = 'image_gen.provider';
 const WF1_PROVIDER_KEY = 'image_gen.wf1_provider';
 const WF2_PROVIDER_KEY = 'image_gen.wf2_provider';
-const WORKFLOWS_KEY = 'image_gen.workflows';
-
 // Engines the backend can actually route to (see image-gen/index.ts).
 const IMAGE_PROVIDERS = ['mock', 'runninghub', 'openai'] as const;
 
@@ -106,7 +104,6 @@ function WorkflowPanel({
   workflow: Workflow;
 }) {
   const providerSetting = byKey(workflow.providerKey);
-  const workflowsSetting = byKey(WORKFLOWS_KEY);
   const [saving, setSaving] = useState(false);
   // Empty per-workflow value falls back to the default provider (matches backend).
   const selected = providerSetting?.value?.trim() || defaultProvider;
@@ -163,15 +160,7 @@ function WorkflowPanel({
 
       {selected === 'runninghub' ? (
         <View className="gap-3">
-          {workflowsSetting ? (
-            <WorkflowWiringRow
-              item={workflowsSetting}
-              workflowKey={workflow.id}
-              mode={workflow.mode}
-              onSave={onSave}
-            />
-          ) : null}
-          <ImageModelsSection workflowKey={workflow.id} mode={workflow.mode} />
+          <ImageModelsSection />
           <Text className="text-xs font-semibold uppercase text-app-muted">RunningHub shared</Text>
           {rowsFor(RUNNINGHUB_SHARED_KEYS)}
         </View>

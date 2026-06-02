@@ -6,6 +6,7 @@ import {
   type ImageGenRequest,
   type ImageGenResponse,
 } from "./types";
+import { getImageWorkflow } from "./models";
 import { getWorkflowConfig, type WorkflowConfig } from "./workflows";
 
 type NodeInfo = { nodeId: string; fieldName: string; fieldValue: string };
@@ -29,25 +30,24 @@ export const runningHubImageGenProvider: ImageGenProvider = {
   async generate(req: ImageGenRequest, env: Env): Promise<ImageGenResponse> {
     const cfg = await resolveImageGenConfig(env);
     if (req.mode === "create" && !req.source_art_url) {
-      return generateCreate(req, cfg);
+      return generateCreate(req, env, cfg);
     }
     return generateVariation(req, env, cfg);
   },
 };
 
 /** WF-1 create (txt2img): override prompt node, plus checkpoint when switching models. */
-function generateCreate(req: ImageGenRequest, cfg: ImageGenConfig): Promise<ImageGenResponse> {
+async function generateCreate(req: ImageGenRequest, env: Env, cfg: ImageGenConfig): Promise<ImageGenResponse> {
   const workflowKey = req.workflow_key?.trim() || "wf1";
-  const config = readWorkflowConfig(cfg, workflowKey);
+  const config = await readWorkflowConfig(env, cfg, workflowKey);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
-  // The creator-selected model supplies both the checkpoint file and the field
-  // name on the workflow's checkpoint node (single source of truth).
+  // Checkpoint file comes from the selected model; the node field belongs to the workflow.
   const ckptName = req.ckpt_name?.trim();
   if (config.checkpointNodeId && ckptName) {
     nodeInfoList.push({
-      fieldName: req.checkpoint_field_name?.trim() || "ckpt_name",
+      fieldName: config.checkpointFieldName?.trim() || req.checkpoint_field_name?.trim() || "ckpt_name",
       fieldValue: ckptName,
       nodeId: config.checkpointNodeId,
     });
@@ -70,7 +70,7 @@ async function generateVariation(
   cfg: ImageGenConfig,
 ): Promise<ImageGenResponse> {
   const workflowKey = req.workflow_key?.trim() || "wf2";
-  const config = readWorkflowConfig(cfg, workflowKey);
+  const config = await readWorkflowConfig(env, cfg, workflowKey);
   if (!config.loadImageNodeId) {
     throw new ImageGenError(
       "provider_not_configured",
@@ -163,13 +163,32 @@ function requireApiKey(cfg: ImageGenConfig): string {
   return cfg.apiKey;
 }
 
-function readWorkflowConfig(cfg: ImageGenConfig, key: string): WorkflowConfig {
+async function readWorkflowConfig(env: Env, cfg: ImageGenConfig, key: string): Promise<WorkflowConfig> {
   requireApiKey(cfg);
-  const config = getWorkflowConfig(cfg.workflows, key);
+  const dbWorkflow = await getImageWorkflow(env, key).catch(() => null);
+  const config = dbWorkflow
+    ? {
+        checkpointFieldName: dbWorkflow.checkpoint_field_name || "ckpt_name",
+        checkpointNodeId: dbWorkflow.checkpoint_node_id ?? undefined,
+        key: dbWorkflow.key,
+        label: dbWorkflow.label,
+        loadImageNodeId: dbWorkflow.load_image_node_id ?? undefined,
+        mode: dbWorkflow.mode,
+        promptNodeId: dbWorkflow.prompt_node_id,
+        workflowId: dbWorkflow.workflow_id,
+      }
+    : getWorkflowConfig(cfg.workflows, key);
   if (!config) {
     throw new ImageGenError(
       "provider_not_configured",
       `RunningHub workflow not configured: ${key}`,
+      { retryable: false },
+    );
+  }
+  if (!config.workflowId || !config.promptNodeId) {
+    throw new ImageGenError(
+      "provider_not_configured",
+      `RunningHub workflow "${key}" missing workflow id or prompt node id`,
       { retryable: false },
     );
   }

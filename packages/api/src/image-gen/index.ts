@@ -34,15 +34,27 @@ export {
   upsertExpressionPrompt,
 } from "./expression-prompts";
 export {
+  type ImageModelOption,
   type ImageModel,
   type ImageModelInput,
   type ImageModelRow,
+  type ImageModelSelection,
+  type ImageWorkflow,
+  type ImageWorkflowInput,
+  type ImageWorkflowRow,
+  type ImageWorkflowWithModels,
   createImageModel,
+  deleteImageWorkflow,
   deleteImageModel,
   getImageModel,
+  getImageModelSelection,
+  getImageWorkflow,
   listActiveImageModels,
+  listActiveImageModelOptions,
   listImageModelRows,
+  listImageWorkflowRows,
   updateImageModel,
+  upsertImageWorkflow,
 } from "./models";
 
 /**

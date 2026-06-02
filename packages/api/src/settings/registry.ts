@@ -303,10 +303,10 @@ export const SETTINGS: readonly SettingDef[] = [
   {
     key: "image_gen.workflows",
     group: "image_gen",
-    label: "Workflow wiring (WF1 + WF2)",
+    label: "Legacy workflow fallback JSON",
     type: "json",
     description:
-      "Deployment-managed RunningHub workflow wiring (keyed by workflow: wf1 create, wf2 variation), synced from config/runninghub-workflows.<env>.json. Checkpoints live on the model catalog, not here. Admin edits are temporary and are overwritten by deploy.",
+      "Legacy RunningHub fallback JSON for pre-catalog runtimes. Use Portrait generation's checkpoint catalog and workflow catalog for normal edits; config sync writes this only as a compatibility fallback.",
   },
 
   // --- llm ---

@@ -2,11 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   createAdminImageModel,
+  createAdminImageWorkflow,
   deleteAdminImageModel,
+  deleteAdminImageWorkflow,
   listAdminImageModels,
+  listAdminImageWorkflows,
   updateAdminImageModel,
+  updateAdminImageWorkflow,
 } from '@/api/companion-client';
-import type { AdminImageModel, ImageModelInput } from '@/api/types';
+import type { AdminImageModel, AdminImageWorkflow, ImageModelInput, ImageWorkflowInput } from '@/api/types';
 
 export function useAdminImageModels() {
   const [models, setModels] = useState<AdminImageModel[]>([]);
@@ -55,4 +59,53 @@ export function useAdminImageModels() {
   );
 
   return { models, isLoading, error, reload, create, update, remove } as const;
+}
+
+export function useAdminImageWorkflows() {
+  const [workflows, setWorkflows] = useState<AdminImageWorkflow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await listAdminImageWorkflows();
+      setWorkflows(data.workflows);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Failed to load workflows.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const create = useCallback(
+    async (input: ImageWorkflowInput) => {
+      await createAdminImageWorkflow(input);
+      await reload();
+    },
+    [reload],
+  );
+
+  const update = useCallback(
+    async (key: string, input: ImageWorkflowInput) => {
+      await updateAdminImageWorkflow(key, input);
+      await reload();
+    },
+    [reload],
+  );
+
+  const remove = useCallback(
+    async (key: string) => {
+      await deleteAdminImageWorkflow(key);
+      await reload();
+    },
+    [reload],
+  );
+
+  return { workflows, isLoading, error, reload, create, update, remove } as const;
 }

@@ -673,13 +673,15 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 // Response 200
 {
   "jobs": [
-    { "id": "job_1", "status": "failed", "task": "companion_base_art", "style": "anime_jp",
-      "model": null, "provider": null, "error_code": "provider_error",
+    { "id": "job_1", "status": "failed", "task": "companion_base_art", "workflow_key": "wf1",
+      "model": "anime_jp_animagine", "provider": "runninghub", "error_code": "provider_error",
       "error_message": "NODE_INFO_MISMATCH(nodeId=1, fieldName=Anime_JP, reason=field_not_found_in_node_inputs)",
       "provider_task_id": null, "created_at": 1748785108000, "completed_at": 1748785109000 }
   ]
 }
 ```
+
+`fieldName=Anime_JP` 代表旧数据把 style/model 标签误写成 RunningHub 节点字段名；新任务应由 workflow 的 `checkpointFieldName`（通常 `ckpt_name`）提供字段名。
 
 > 配套：base-art job status（`GET /companions/base-art/jobs/{jobId}`）现也透传 `error_message`；生成 companion 表情立绘（`POST /companions/{id}/emotion-art/{emotion}/generate`）对非 Pro 用户返回 402 `subscription_required`。
 

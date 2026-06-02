@@ -265,9 +265,14 @@ export type BaseArtGenerateInput = {
 };
 
 export type ImageModelOption = {
+  checkpoint_applies?: boolean;
+  ckpt_name?: string;
   id: string;
   label: string;
+  model_id?: string;
   tag: string;
+  workflow_key?: string;
+  workflow_label?: string;
 };
 
 export type ImageModelsResponse = {
@@ -665,22 +670,34 @@ export type AdminImageModel = {
   label: string;
   tag: string;
   ckpt_name: string;
-  checkpoint_field_name: string | null;
-  workflow_key: string;
   is_active: boolean;
   sort_order: number;
   updated_at: number;
   updated_by_email: string | null;
-  /**
-   * False when this model's workflow has no checkpoint node configured, so its
-   * ckpt_name is ignored at generation time (falls back to the workflow's
-   * built-in checkpoint).
-   */
-  checkpoint_applies: boolean;
 };
 
 export type AdminImageModelsResponse = {
   models: AdminImageModel[];
+};
+
+export type AdminImageWorkflow = {
+  checkpoint_field_name: string;
+  checkpoint_node_id: string | null;
+  is_active: boolean;
+  key: string;
+  label: string;
+  load_image_node_id: string | null;
+  mode: 'create' | 'variation';
+  model_ids: string[];
+  prompt_node_id: string;
+  sort_order: number;
+  updated_at: number;
+  updated_by_email: string | null;
+  workflow_id: string;
+};
+
+export type AdminImageWorkflowsResponse = {
+  workflows: AdminImageWorkflow[];
 };
 
 // --- Admin: image generation job diagnostics ---
@@ -706,10 +723,22 @@ export type ImageModelInput = {
   label: string;
   tag: string;
   ckpt_name: string;
-  checkpoint_field_name: string | null;
-  workflow_key: string;
   is_active: boolean;
   sort_order: number;
+};
+
+export type ImageWorkflowInput = {
+  checkpoint_field_name: string | null;
+  checkpoint_node_id: string | null;
+  is_active: boolean;
+  key: string;
+  label: string;
+  load_image_node_id: string | null;
+  mode: 'create' | 'variation';
+  model_ids: string[];
+  prompt_node_id: string;
+  sort_order: number;
+  workflow_id: string;
 };
 
 // --- Admin: WF2 expression prompts (gender × emotion) ---

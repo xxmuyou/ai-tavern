@@ -96,7 +96,7 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
-  it("injects the checkpoint using the model's field name and file", async () => {
+  it("injects the checkpoint using the workflow field name and selected file", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({ code: 0, data: { taskId: "rh-create-2", taskStatus: "QUEUED" } }),
@@ -114,6 +114,7 @@ describe("runningHubImageGenProvider", () => {
             promptNodeId: "6",
             workflowId: "kr-workflow",
             checkpointNodeId: "4",
+            checkpointFieldName: "ckpt_name",
           },
         }),
       },
@@ -125,7 +126,7 @@ describe("runningHubImageGenProvider", () => {
         prompt: "x",
         workflow_key: "wf1",
         ckpt_name: "myCustom.safetensors",
-        checkpoint_field_name: "model_name",
+        checkpoint_field_name: "Anime_JP",
       },
       env,
     );
@@ -134,7 +135,7 @@ describe("runningHubImageGenProvider", () => {
     const body = JSON.parse(String(calls[0]![1].body));
     expect(body.nodeInfoList).toEqual([
       { fieldName: "text", fieldValue: "x", nodeId: "6" },
-      { fieldName: "model_name", fieldValue: "myCustom.safetensors", nodeId: "4" },
+      { fieldName: "ckpt_name", fieldValue: "myCustom.safetensors", nodeId: "4" },
     ]);
   });
 
