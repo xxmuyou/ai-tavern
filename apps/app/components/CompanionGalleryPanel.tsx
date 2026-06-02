@@ -43,6 +43,10 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
   const [generated, setGenerated] = useState<Partial<Record<ChatEmotionKey, string>>>({});
   const [busyEmotion, setBusyEmotion] = useState<ChatEmotionKey | null>(null);
   const [errorEmotion, setErrorEmotion] = useState<ChatEmotionKey | null>(null);
+  // Poll window ran out while the job was still generating (not a real failure).
+  // Shown as a soft "still generating" hint rather than "Failed", since the
+  // backend webhook/cron will finish it and the portrait appears on next load.
+  const [pendingEmotion, setPendingEmotion] = useState<ChatEmotionKey | null>(null);
 
   const blurredNeutral = useMemo(() => mediaSource(artEmotions?.neutral ?? artUrl), [artEmotions, artUrl]);
 
@@ -64,7 +68,7 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
   );
 
   const unlock = useCallback(
-    async (emotion: ChatEmotionKey) => {
+    async (emotion: ChatEmotionKey, opts?: { force?: boolean }) => {
       if (emotion === 'neutral') return;
       if (!isPro) {
         router.push(BILLING_ROUTE);
@@ -72,8 +76,9 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
       }
       setBusyEmotion(emotion);
       setErrorEmotion(null);
+      setPendingEmotion(null);
       try {
-        const res = await generateCompanionEmotionArt(companionId, emotion);
+        const res = await generateCompanionEmotionArt(companionId, emotion, { force: opts?.force });
         if (res.status === 'cached') {
           setGenerated((prev) => ({ ...prev, [emotion]: res.key }));
           return;
@@ -92,7 +97,9 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
             return;
           }
         }
-        setErrorEmotion(emotion);
+        // Still pending/processing when we stopped polling — not a failure.
+        // The backend finishes it asynchronously; surface a soft hint.
+        setPendingEmotion(emotion);
       } catch {
         // Most likely subscription_required (race) or a transient error.
         setErrorEmotion(emotion);
@@ -132,6 +139,7 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
             busy={busyEmotion === cell.emotion}
             emotion={cell.emotion}
             errored={errorEmotion === cell.emotion}
+            pending={pendingEmotion === cell.emotion}
             isPro={isPro}
             name={name}
             source={cell.unlocked ? cell.source : null}
@@ -148,11 +156,14 @@ export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }
       </View>
 
       <PortraitViewerModal
+        busyEmotion={busyEmotion}
+        canRegenerate={isPro}
         emotion={viewerEmotion}
         emotions={viewerEmotions}
         name={name}
         onChangeEmotion={setViewerEmotion}
         onClose={() => setViewerEmotion(null)}
+        onRegenerate={(emotion) => void unlock(emotion, { force: true })}
         visible={viewerEmotion != null}
       />
     </View>
@@ -164,6 +175,7 @@ type PortraitCellProps = {
   busy: boolean;
   emotion: ChatEmotionKey;
   errored: boolean;
+  pending: boolean;
   isPro: boolean;
   name: string;
   source: ReturnType<typeof mediaSource>;
@@ -176,6 +188,7 @@ function PortraitCell({
   busy,
   emotion,
   errored,
+  pending,
   isPro,
   name,
   source,
@@ -214,7 +227,13 @@ function PortraitCell({
       </View>
       {!unlocked ? (
         <Text className="mt-1 text-center text-[11px] font-semibold leading-4 text-app-ink-soft">
-          {errored ? 'Failed - tap to retry' : isPro ? 'Tap to unlock' : 'Subscribe to unlock'}
+          {errored
+            ? 'Failed - tap to retry'
+            : pending
+              ? 'Still generating - check back soon'
+              : isPro
+                ? 'Tap to unlock'
+                : 'Subscribe to unlock'}
         </Text>
       ) : null}
     </View>

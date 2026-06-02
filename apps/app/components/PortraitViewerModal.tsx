@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Modal, Pressable, Text, View, type ImageSourcePropType } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, Text, View, type ImageSourcePropType } from 'react-native';
 
 import type { ChatEmotionKey } from '@/api/types';
 import { EMOTION_EMOJI, EMOTION_LABEL, PORTRAIT_ASPECT } from '@/utils/portrait';
@@ -16,6 +16,11 @@ type PortraitViewerModalProps = {
   emotions: ViewerEmotion[];
   onChangeEmotion: (emotion: ChatEmotionKey) => void;
   onClose: () => void;
+  // Regenerate support. Only non-neutral expressions can be re-rolled, and only
+  // when the viewer (a Pro/admin user) is allowed to.
+  canRegenerate?: boolean;
+  busyEmotion?: ChatEmotionKey | null;
+  onRegenerate?: (emotion: ChatEmotionKey) => void;
 };
 
 /**
@@ -31,9 +36,15 @@ export function PortraitViewerModal({
   emotions,
   onChangeEmotion,
   onClose,
+  canRegenerate = false,
+  busyEmotion = null,
+  onRegenerate,
 }: PortraitViewerModalProps) {
   const active = emotion ?? emotions[0]?.key ?? null;
   const current = emotions.find((item) => item.key === active) ?? emotions[0] ?? null;
+  const isRegenerating = active != null && busyEmotion === active;
+  const showRegenerate =
+    canRegenerate && !!onRegenerate && active != null && active !== 'neutral';
 
   return (
     <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
@@ -61,15 +72,38 @@ export function PortraitViewerModal({
                 </Text>
               ) : null}
             </View>
-            <Pressable
-              accessibilityLabel="Close"
-              accessibilityRole="button"
-              hitSlop={12}
-              onPress={onClose}
-              className="h-10 w-10 items-center justify-center rounded-full bg-white/15"
-            >
-              <Ionicons color="#FFFFFF" name="close" size={22} />
-            </Pressable>
+            <View className="flex-row items-center gap-2" pointerEvents="box-none">
+              {showRegenerate ? (
+                <Pressable
+                  accessibilityLabel={isRegenerating ? 'Regenerating' : 'Regenerate this portrait'}
+                  accessibilityRole="button"
+                  disabled={isRegenerating}
+                  hitSlop={12}
+                  onPress={() => active && onRegenerate?.(active)}
+                  className={`h-10 flex-row items-center gap-1.5 rounded-full bg-white/15 px-4 ${
+                    isRegenerating ? 'opacity-60' : 'opacity-100'
+                  }`}
+                >
+                  {isRegenerating ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Ionicons color="#FFFFFF" name="refresh" size={18} />
+                  )}
+                  <Text className="text-xs font-semibold text-white">
+                    {isRegenerating ? 'Regenerating…' : 'Regenerate'}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+                hitSlop={12}
+                onPress={onClose}
+                className="h-10 w-10 items-center justify-center rounded-full bg-white/15"
+              >
+                <Ionicons color="#FFFFFF" name="close" size={22} />
+              </Pressable>
+            </View>
           </View>
 
           <View

@@ -11,6 +11,8 @@ import {
   type CompanionPromptContext,
   NON_NEUTRAL_EMOTIONS,
   buildEmotionPrompt,
+  getExpressionPrompt,
+  toExpressionGender,
 } from "../image-gen";
 
 type PrewarmRequest = { force?: boolean };
@@ -67,15 +69,18 @@ export async function handleAdminCompanionArtRequest(
   const queued: ArtJobRow[] = [];
   const cached: string[] = [];
 
+  const gender = toExpressionGender(refreshed.gender);
+
   for (const emotion of NON_NEUTRAL_EMOTIONS) {
     if (artMap[emotion]) {
       cached.push(emotion);
       continue;
     }
+    const intentOverride = await getExpressionPrompt(env, gender, emotion);
     const result = await enqueueGenerationJob(env, {
       companionId,
       emotion,
-      prompt: buildEmotionPrompt(emotion, context),
+      prompt: buildEmotionPrompt(emotion, context, intentOverride),
       sourceArtUrl: refreshed.art_url,
       userId: admin.id,
     });

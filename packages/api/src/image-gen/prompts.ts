@@ -8,17 +8,23 @@ import type { CompanionPromptContext, NonNeutralEmotion } from "./types";
  * generations.
  */
 const EMOTION_INTENT: Record<NonNeutralEmotion, string> = {
-  annoyed: "irritated expression, frown, clear displeasure without caricature",
-  guarded: "reserved expression, lips pressed, slightly turned away",
-  playful: "teasing smile, slight eyebrow raise, light mischievous energy",
-  tense: "worried or conflicted expression, tightened mouth, subtle anxiety",
-  warm: "soft eyes, gentle smile, approachable posture",
+  annoyed:
+    "irritated expression, frown, clear displeasure without caricature; arms crossed or one hand resting on the hip",
+  guarded:
+    "reserved expression, lips pressed, slightly turned away; one arm drawn partially across the torso, shoulders angled back",
+  playful:
+    "teasing smile, slight eyebrow raise, light mischievous energy; one hand raised near the mouth or chin in a playful gesture",
+  tense:
+    "worried or conflicted expression, tightened mouth, subtle anxiety; hands clasped together or arms held slightly inward",
+  warm:
+    "soft eyes, gentle smile, approachable posture; open relaxed shoulders with one hand resting near the chest",
 };
 
 const BASE_CONSTRAINTS = [
-  "Create a consistent portrait variation of the same companion using the provided neutral portrait as the visual reference.",
-  "Keep the same identity, face structure, hairstyle, body type, outfit style, color palette, camera angle, and portrait composition.",
-  "Only change facial expression and subtle body posture to match the requested emotion.",
+  "Create a consistent half-body portrait variation of the same companion using the provided neutral portrait as the visual reference.",
+  "Keep the same identity, face structure, hairstyle, body type, outfit style, color palette, and camera framing.",
+  "Use a half-body (waist-up) composition with the hands and arms visible.",
+  "Change the facial expression, upper-body posture, and hand/arm gestures to express the requested emotion, while preserving identity.",
   "Transparent or clean simple background. No text. No extra characters. No age change. No style change.",
 ].join(" ");
 

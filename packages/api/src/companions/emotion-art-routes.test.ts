@@ -78,6 +78,63 @@ describe("companion emotion-art routes", () => {
     ]);
   });
 
+  it("returns cached for an already-unlocked emotion (no force)", async () => {
+    const env = createEnv({
+      companions: [
+        {
+          ...userCompanion("echo", "user-1"),
+          art_emotions: JSON.stringify({
+            neutral: "companions/user/user-1/neutral.webp",
+            warm: "companions/user/user-1/warm.webp",
+          }),
+        },
+      ],
+      proUserIds: ["user-1"],
+    });
+    const token = await issueToken(env, "player@example.com");
+
+    const response = await handleCompanionEmotionArtRequest(
+      authedRequest("http://api/companions/echo/emotion-art/warm/generate", token, "POST"),
+      env,
+      "/companions/echo/emotion-art/warm/generate",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response!.json()) as { status: string; key: string };
+    expect(body.status).toBe("cached");
+    expect(body.key).toBe("companions/user/user-1/warm.webp");
+    expect(env.jobs).toHaveLength(0);
+    expect(env.queue).toHaveLength(0);
+  });
+
+  it("force=1 regenerates an already-unlocked emotion (skips cache, enqueues)", async () => {
+    const env = createEnv({
+      companions: [
+        {
+          ...userCompanion("echo", "user-1"),
+          art_emotions: JSON.stringify({
+            neutral: "companions/user/user-1/neutral.webp",
+            warm: "companions/user/user-1/warm.webp",
+          }),
+        },
+      ],
+      proUserIds: ["user-1"],
+    });
+    const token = await issueToken(env, "player@example.com");
+
+    const response = await handleCompanionEmotionArtRequest(
+      authedRequest("http://api/companions/echo/emotion-art/warm/generate?force=1", token, "POST"),
+      env,
+      "/companions/echo/emotion-art/warm/generate",
+    );
+
+    expect(response?.status).toBe(202);
+    const body = (await response!.json()) as { status: string };
+    expect(body.status).toBe("queued");
+    expect(env.jobs).toHaveLength(1);
+    expect(env.queue).toHaveLength(1);
+  });
+
   it("blocks a free (non-Pro) user from queueing emotion art", async () => {
     const env = createEnv({
       companions: [userCompanion("echo", "user-1")],

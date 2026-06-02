@@ -6,6 +6,8 @@ import {
   type CompanionPromptContext,
   type NonNeutralEmotion,
   buildEmotionPrompt,
+  getExpressionPrompt,
+  toExpressionGender,
 } from "../image-gen";
 import {
   type ArtJobRow,
@@ -51,7 +53,8 @@ export async function handleCompanionEmotionArtRequest(
       return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
     }
     const user = await requireAuthUser(env, request);
-    return handleGenerate(env, user, companionId, rawEmotion);
+    const force = new URL(request.url).searchParams.get("force") === "1";
+    return handleGenerate(env, user, companionId, rawEmotion, force);
   }
 
   const jobsMatch = pathname.match(/^\/companions\/([^/]+)\/emotion-art\/jobs$/);
@@ -75,6 +78,7 @@ async function handleGenerate(
   user: UserRecord,
   companionId: string,
   rawEmotion: string,
+  force = false,
 ): Promise<Response> {
   if (!isNonNeutralEmotion(rawEmotion)) {
     return jsonResponse({ error: "invalid_emotion" }, { status: 400 });
@@ -94,8 +98,12 @@ async function handleGenerate(
     return jsonResponse({ error: "neutral_art_required" }, { status: 400 });
   }
 
+  // Regenerate (force) skips the cached short-circuit so an already-unlocked
+  // expression can be re-rolled. The enqueue UPSERT resets the existing row to
+  // pending and clears its output, and a successful run overwrites the emotion
+  // key. All other gates (neutral_art_required, Pro/admin) still apply below.
   const artMap = parseArtEmotions(companion.art_emotions);
-  if (artMap[emotion]) {
+  if (!force && artMap[emotion]) {
     return jsonResponse({ key: artMap[emotion], status: "cached" });
   }
 
@@ -105,10 +113,18 @@ async function handleGenerate(
     return jsonResponse({ error: "subscription_required" }, { status: 402 });
   }
 
+  // Admin-configured per gender×emotion prompt override (expression_prompts).
+  // Falls back to the built-in EMOTION_INTENT when no row exists.
+  const intentOverride = await getExpressionPrompt(
+    env,
+    toExpressionGender(companion.gender),
+    emotion,
+  );
+
   const result = await enqueueGenerationJob(env, {
     companionId,
     emotion,
-    prompt: buildEmotionPrompt(emotion, toPromptContext(companion)),
+    prompt: buildEmotionPrompt(emotion, toPromptContext(companion), intentOverride),
     sourceArtUrl: companion.art_url,
     userId: user.id,
   });
