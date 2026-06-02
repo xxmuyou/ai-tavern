@@ -4,6 +4,7 @@ import { handleAdminRequest } from "./admin";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
 import { handleChatRequest } from "./chat";
+import { handleMomentImageRequest } from "./chat/moment-routes";
 import { handleCompanionsRequest } from "./companions";
 import { handleCreditsRequest } from "./credits";
 import { dispatchQueueBatch } from "./queue-dispatcher";
@@ -119,6 +120,11 @@ export default {
       const chatResponse = await handleChatRequest(request, env, ctx, pathname);
       if (chatResponse) {
         return await withCors(request, env, chatResponse);
+      }
+
+      const momentImageResponse = await handleMomentImageRequest(request, env, pathname);
+      if (momentImageResponse) {
+        return await withCors(request, env, momentImageResponse);
       }
 
       const eventsResponse = await handleEventsRequest(request, env, pathname);

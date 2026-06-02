@@ -34,6 +34,7 @@ import type {
   ImageModelInput,
   ImageModelOption,
   ImageModelsResponse,
+  MomentImageJobResponse,
   LlmConfigItem,
   LlmConfigResponse,
   LlmConfigUpdateInput,
@@ -474,6 +475,19 @@ export async function generateBaseArt(
 export async function getBaseArtJob(jobId: string): Promise<BaseArtJobResponse> {
   return requestJson<BaseArtJobResponse>(
     `/companions/base-art/jobs/${encodeURIComponent(jobId)}`,
+  );
+}
+
+export async function generateMomentImage(messageId: string): Promise<MomentImageJobResponse> {
+  return requestJson<MomentImageJobResponse>(
+    `/chat/messages/${encodeURIComponent(messageId)}/moment-image/generate`,
+    { method: 'POST' },
+  );
+}
+
+export async function getMomentImageJob(jobId: string): Promise<MomentImageJobResponse> {
+  return requestJson<MomentImageJobResponse>(
+    `/moment-images/jobs/${encodeURIComponent(jobId)}`,
   );
 }
 

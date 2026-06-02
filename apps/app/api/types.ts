@@ -421,13 +421,38 @@ export type SceneEnterResponse = {
   scene: SceneEntered;
 };
 
+export type MomentImageStatus =
+  | 'queued'
+  | 'pending'
+  | 'processing'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export type ChatMomentImage = {
+  job_id: string;
+  status: MomentImageStatus;
+  output_key: string | null;
+};
+
 export type ChatMessage = {
   companion_id?: string;
   content: string;
   created_at: string;
   emotion?: string | null;
   id: string;
+  moment_image?: ChatMomentImage | null;
   role: 'user' | 'companion' | 'assistant';
+  scene_id?: string | null;
+};
+
+export type MomentImageJobResponse = {
+  job_id: string;
+  moment_id?: string;
+  status: MomentImageStatus;
+  output_key?: string;
+  error_code?: string;
+  error_message?: string;
 };
 
 export type ChatHistoryResponse = {

@@ -1,6 +1,6 @@
 # spec-027: Chat Moment Images（场景聊天瞬间图）
 
-> **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-007(scenes), spec-014/024(life + HUD), spec-020/022(image-gen), spec-026(story beats)  |  **估时：** 3-5 天  |  **状态：** 📝 draft
+> **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-007(scenes), spec-014/024(life + HUD), spec-020/022(image-gen), spec-026(story beats)  |  **估时：** 3-5 天  |  **状态：** 🟡 in-progress
 
 ---
 

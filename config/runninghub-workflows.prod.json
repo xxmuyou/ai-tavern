@@ -11,6 +11,11 @@
       "workflowId": "",
       "loadImageNodeId": "",
       "promptNodeId": ""
+    },
+    "wf_moment": {
+      "mode": "create",
+      "workflowId": "",
+      "promptNodeId": ""
     }
   }
 }
