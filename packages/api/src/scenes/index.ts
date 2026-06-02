@@ -11,6 +11,7 @@ import { pickOpener } from "../events/openers";
 import type { EventResponseItem } from "../events/types";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
+import { loadStoryBeatForScene, type StoryBeatPublic } from "../story-beats";
 import { evaluateUnlock } from "./unlock";
 
 type SceneRow = {
@@ -70,6 +71,7 @@ type EnterSceneResponse = {
     art_url: string | null;
   };
   companions_present: Array<{
+    active_story_beat: StoryBeatPublic | null;
     id: string;
     name: string;
     opener: string;
@@ -167,19 +169,26 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
   const preference = await loadRomancePreference(env, user.id);
   const present = pickPresentCompanions(companions, preference);
   const now = Date.now();
-  const companionsPresent = present.map(({ id, name, art_url }) => ({
-    art_url,
-    id,
-    name,
-    opener: pickOpener({
-      companionId: id,
-      companionName: name,
-      now,
-      sceneId: row.id,
-      sceneName: row.name,
-      userId: user.id,
+  const companionsPresent = await Promise.all(
+    present.map(async ({ id, name, art_url }) => {
+      const activeStoryBeat = await loadStoryBeatForScene(env, user.id, id, row.id);
+      const fallbackOpener = pickOpener({
+        companionId: id,
+        companionName: name,
+        now,
+        sceneId: row.id,
+        sceneName: row.name,
+        userId: user.id,
+      });
+      return {
+        active_story_beat: activeStoryBeat,
+        art_url,
+        id,
+        name,
+        opener: activeStoryBeat?.status === "active" ? activeStoryBeat.opener : fallbackOpener,
+      };
     }),
-  }));
+  );
 
   const candidate = await evaluateTriggersForScene(
     env,

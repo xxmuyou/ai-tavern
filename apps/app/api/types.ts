@@ -396,7 +396,22 @@ export type SceneEntered = {
   tags: string[];
 };
 
+export type StoryBeatStatus = 'active' | 'waiting_stage' | 'completed';
+
+export type StoryBeat = {
+  beat_order: number;
+  id: string;
+  objective: string;
+  opener: string;
+  reward_unlock_key: string | null;
+  scene_id: string | null;
+  stage_gate: string;
+  status: StoryBeatStatus;
+  title: string;
+};
+
 export type SceneCompanionPresent = {
+  active_story_beat: StoryBeat | null;
   art_url: string | null;
   id: string;
   name: string;

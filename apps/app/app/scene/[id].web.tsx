@@ -84,7 +84,19 @@ export default function WebSceneDetailScreen() {
                     </View>
                     <View className="min-w-0 flex-1">
                       <Text className="font-semibold text-app-text">{companion.name}</Text>
+                      {companion.active_story_beat ? (
+                        <Text numberOfLines={1} className="mt-1 text-xs font-semibold text-app-primary">
+                          {companion.active_story_beat.status === 'waiting_stage'
+                            ? `Reach ${prettyStage(companion.active_story_beat.stage_gate)}`
+                            : companion.active_story_beat.title}
+                        </Text>
+                      ) : null}
                       <Text numberOfLines={2} className="mt-1 text-sm text-app-muted">{companion.opener}</Text>
+                      {companion.active_story_beat?.objective ? (
+                        <Text numberOfLines={2} className="mt-1 text-xs text-app-muted">
+                          {companion.active_story_beat.objective}
+                        </Text>
+                      ) : null}
                     </View>
                   </Pressable>
                 );
@@ -103,4 +115,12 @@ export default function WebSceneDetailScreen() {
       </View>
     </WebAppShell>
   );
+}
+
+function prettyStage(stage: string): string {
+  return stage
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }

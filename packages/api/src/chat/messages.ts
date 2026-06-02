@@ -8,6 +8,7 @@ import { applySignals, ensureRelationship, loadRelationship } from "../relations
 import type { DimensionValues } from "../relationships/level";
 import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
+import { completeCurrentStoryBeat, loadStoryBeatForScene } from "../story-beats";
 import {
   detectAndRecordUnlocks,
   isSecretUnlocked,
@@ -126,6 +127,9 @@ export async function handlePostMessage(
   const stage = deriveStage(relationship?.dimensions ?? { ...ZERO_DIMENSIONS }).stage;
   const unlockedKeys = await loadUnlockedKeys(env, user.id, companionId);
   const secretToReveal = isSecretUnlocked(unlockedKeys) ? companion.secret : null;
+  const storyBeat = sceneIdInput
+    ? await loadStoryBeatForScene(env, user.id, companionId, sceneIdInput)
+    : null;
 
   const promptMessages = buildChatPrompt({
     companion,
@@ -133,6 +137,7 @@ export async function handlePostMessage(
     recentMessages,
     secretToReveal,
     stage,
+    storyBeat,
     scene: scene
       ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
       : null,
@@ -287,6 +292,11 @@ async function runChat(args: RunChatArgs): Promise<void> {
         unlockEvents = unlockResult.newlyUnlocked;
       } catch {
         // Unlock detection is best-effort; never break the reply for it.
+      }
+      try {
+        await completeCurrentStoryBeat(env, user.id, companionId, scene_id, now);
+      } catch {
+        // Story progression is best-effort; never break the reply for it.
       }
     } catch (err) {
       // Persistence of signals failed but reply is already saved; degrade to warning.

@@ -51,7 +51,7 @@ describe("events endpoints", () => {
           user_id: "u-1",
         }),
       ],
-      relationships: [{ closeness: 20, companion_id: "maya", user_id: "u-1" }],
+      relationships: [{ closeness: 10, companion_id: "maya", user_id: "u-1" }],
     });
 
     const response = await resolveEvent(
@@ -64,12 +64,64 @@ describe("events endpoints", () => {
       USER,
       "e-1",
     );
-    const body = (await response.json()) as { result: { signals: { closeness: number } } };
+    const body = (await response.json()) as {
+      result: { signals: { closeness: number } };
+      unlocks: Array<{ key: string; label: string }>;
+    };
 
     expect(response.status).toBe(200);
     expect(body.result.signals.closeness).toBe(2);
+    expect(body.unlocks).toEqual([]);
     expect(env.state.resolution?.option_id).toBe("accept_eager");
-    expect(env.state.relationship?.closeness).toBe(22);
+    expect(env.state.relationship?.closeness).toBe(12);
+  });
+
+  it("returns unlocks when resolving an event advances the relationship stage", async () => {
+    const env = createEnv({
+      companions: [{ id: "maya", name: "Maya", personality: null, speech_style: null }],
+      events: [
+        eventRow({
+          id: "e-2",
+          payload: JSON.stringify({
+            description: "Maya asks if you will stay.",
+            options: [{ id: "stay", label: "I'll stay" }],
+          }),
+          template_snapshot: JSON.stringify({
+            companion_filter: "all",
+            event_type: "invitation",
+            options: [
+              {
+                id: "stay",
+                prompt_hint: "stay",
+                semantic: "warm commitment",
+                signals: { closeness: 2 },
+              },
+            ],
+            template_id: "old-template",
+            version: 1,
+          }),
+          user_id: "u-1",
+        }),
+      ],
+      relationships: [{ closeness: 18, companion_id: "maya", user_id: "u-1" }],
+    });
+
+    const response = await resolveEvent(
+      new Request("http://x/events/e-2/resolve", {
+        body: JSON.stringify({ option_id: "stay" }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+      env,
+      USER,
+      "e-2",
+    );
+    const body = (await response.json()) as { unlocks: Array<{ key: string; label: string }> };
+
+    expect(response.status).toBe(200);
+    expect(body.unlocks).toEqual([
+      { key: "title:familiar", kind: "title", label: "They use your name now" },
+    ]);
   });
 });
 
@@ -90,13 +142,20 @@ function createEnv(opts: {
   events?: EventRow[];
   relationships?: RelationshipFixture[];
   companions?: CompanionFixture[];
-}): Env & { state: { resolution: Record<string, unknown> | null; relationship: RelationshipFixture | null } } {
+}): Env & {
+  state: {
+    resolution: Record<string, unknown> | null;
+    relationship: RelationshipFixture | null;
+    unlocked: Set<string>;
+  };
+} {
   const events = opts.events ?? [];
   const relationships = opts.relationships ?? [];
   const companions = opts.companions ?? [];
   const state = {
     relationship: relationships[0] ?? null,
     resolution: null as Record<string, unknown> | null,
+    unlocked: new Set<string>(),
   };
 
   return {
@@ -111,6 +170,11 @@ function createEnv(opts: {
                   .filter((event) => event.user_id === userId && event.status === status)
                   .sort((a, b) => b.created_at - a.created_at)
                   .slice(0, values.at(-1) as number) as T[],
+              };
+            }
+            if (sql.includes("SELECT unlock_key FROM relationship_unlocks")) {
+              return {
+                results: [...state.unlocked].map((unlock_key) => ({ unlock_key })) as T[],
               };
             }
             return { results: [] };
@@ -146,8 +210,11 @@ function createEnv(opts: {
             return null;
           },
           async run(): Promise<{ meta: { changes: number } }> {
-            if (sql.includes("UPDATE relationships") && state.relationship) {
+            if (sql.includes("UPDATE relationships") && sql.includes("SET closeness") && state.relationship) {
               state.relationship.closeness = values[0] as number;
+            }
+            if (sql.includes("INSERT OR IGNORE INTO relationship_unlocks")) {
+              state.unlocked.add(values[2] as string);
             }
             if (sql.includes("UPDATE events SET status = 'resolved'")) {
               state.resolution = JSON.parse(values[0] as string) as Record<string, unknown>;
@@ -162,9 +229,19 @@ function createEnv(opts: {
           },
         };
       },
+      async batch(stmts: Array<{ run: () => Promise<unknown> }>) {
+        for (const stmt of stmts) await stmt.run();
+        return [];
+      },
     },
     state,
-  } as unknown as Env & { state: { resolution: Record<string, unknown> | null; relationship: RelationshipFixture | null } };
+  } as unknown as Env & {
+    state: {
+      resolution: Record<string, unknown> | null;
+      relationship: RelationshipFixture | null;
+      unlocked: Set<string>;
+    };
+  };
 }
 
 function eventRow(partial: Partial<EventRow>): EventRow {

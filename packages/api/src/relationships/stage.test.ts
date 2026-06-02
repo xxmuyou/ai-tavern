@@ -9,13 +9,21 @@ describe("deriveStage", () => {
   });
 
   it("walks the positive ladder", () => {
+    expect(deriveStage({ ...ZERO_DIMENSIONS, closeness: 20 }).stage).toBe("familiar");
     expect(deriveStage({ ...ZERO_DIMENSIONS, closeness: 25 }).stage).toBe("familiar");
+    expect(deriveStage({ ...ZERO_DIMENSIONS, trust: 35 }).stage).toBe("trusted");
     expect(deriveStage({ ...ZERO_DIMENSIONS, closeness: 25, trust: 40 }).stage).toBe("trusted");
+    expect(
+      deriveStage({ ...ZERO_DIMENSIONS, closeness: 60, friendship: 50, trust: 40 }).stage,
+    ).toBe("close_friend");
     expect(
       deriveStage({ ...ZERO_DIMENSIONS, closeness: 65, friendship: 55, trust: 45 }).stage,
     ).toBe("close_friend");
+    expect(deriveStage({ ...ZERO_DIMENSIONS, romance: 30 }).stage).toBe("romantic_tension");
     expect(deriveStage({ ...ZERO_DIMENSIONS, romance: 40 }).stage).toBe("romantic_tension");
+    expect(deriveStage({ ...ZERO_DIMENSIONS, romance: 50 }).stage).toBe("dating");
     expect(deriveStage({ ...ZERO_DIMENSIONS, romance: 60 }).stage).toBe("dating");
+    expect(deriveStage({ ...ZERO_DIMENSIONS, romance: 75, trust: 55 }).stage).toBe("committed");
     expect(deriveStage({ ...ZERO_DIMENSIONS, romance: 80, trust: 60 }).stage).toBe("committed");
   });
 

@@ -38,10 +38,24 @@ type RelationshipFixture = {
   level_label?: string | null;
 };
 
+type StoryBeatFixture = {
+  id: string;
+  companion_id: string;
+  beat_order: number;
+  title: string;
+  stage_gate: string;
+  scene_id: string | null;
+  opener: string;
+  objective: string;
+  reward_unlock_key: string | null;
+  is_active?: number;
+};
+
 type Fixtures = {
   scenes: SceneFixture[];
   companions: CompanionFixture[];
   relationships: RelationshipFixture[];
+  storyBeats?: StoryBeatFixture[];
 };
 
 describe("scenes module", () => {
@@ -206,7 +220,18 @@ describe("scenes module", () => {
     expect(response?.status).toBe(200);
     const body = (await response?.json()) as {
       scene: { id: string; tags: string[]; art_url: string | null };
-      companions_present: Array<{ id: string; name: string; opener: string; art_url: string | null }>;
+      companions_present: Array<{
+        active_story_beat: {
+          id: string;
+          objective: string;
+          status: string;
+          title: string;
+        } | null;
+        id: string;
+        name: string;
+        opener: string;
+        art_url: string | null;
+      }>;
       event: null;
     };
 
@@ -217,7 +242,63 @@ describe("scenes module", () => {
     expect(body.companions_present[0]?.id).toBe("iris");
     expect(body.companions_present[0]?.name).toBe("Iris");
     expect(body.companions_present[0]?.opener).toContain("Iris");
+    expect(body.companions_present[0]?.active_story_beat).toBeNull();
     expect(body.event).toBeNull();
+  });
+
+  it("returns an active story beat for a companion in the matching scene", async () => {
+    const env = createEnv({
+      companions: [{ id: "maya", name: "Maya" }],
+      relationships: [{ companion_id: "maya", closeness: 0, user_id: "user-1" }],
+      scenes: [
+        {
+          art_url: null,
+          default_companions: '["maya"]',
+          display_order: 1,
+          id: "cafe",
+          mood: "Golden hour",
+          name: "Cafe",
+          tags: '["cafe"]',
+          unlock_condition: null,
+        },
+      ],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "maya",
+          id: "maya-b1",
+          objective: "Ask about the sketch without pushing.",
+          opener: "Maya hides the sketchbook half a second too late.",
+          reward_unlock_key: null,
+          scene_id: "cafe",
+          stage_gate: "first_contact",
+          title: "The Unfinished Sketch",
+        },
+      ],
+    });
+
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleScenesRequest(
+      authedRequest("http://localhost/scenes/cafe/enter", token, "POST"),
+      env,
+      "/scenes/cafe/enter",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as {
+      companions_present: Array<{
+        active_story_beat: { id: string; objective: string; status: string; title: string } | null;
+        opener: string;
+      }>;
+    };
+
+    expect(body.companions_present[0]?.opener).toBe("Maya hides the sketchbook half a second too late.");
+    expect(body.companions_present[0]?.active_story_beat).toMatchObject({
+      id: "maya-b1",
+      objective: "Ask about the sketch without pushing.",
+      status: "active",
+      title: "The Unfinished Sketch",
+    });
   });
 });
 
@@ -327,7 +408,24 @@ function queryFirst<T>(
     const found = fixtures.relationships.find(
       (r) => r.user_id === userId && r.companion_id === companionId,
     );
-    return (found ?? null) as T | null;
+    return found
+      ? ({
+          closeness: found.closeness ?? 0,
+          distance: found.distance ?? 0,
+          first_met_at: 0,
+          friendship: found.friendship ?? 0,
+          hostility: found.hostility ?? 0,
+          last_interaction_at: 0,
+          level_label: found.level_label ?? "Stranger",
+          romance: found.romance ?? 0,
+          tension: found.tension ?? 0,
+          trust: found.trust ?? 0,
+        } as T)
+      : null;
+  }
+
+  if (sql.includes("FROM user_story_progress")) {
+    return { completed_beat_ids: "[]" } as T;
   }
 
   return null;
@@ -358,6 +456,13 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
         };
       });
     return results as unknown as T[];
+  }
+
+  if (sql.includes("FROM companion_story_beats")) {
+    const companionId = values[0] as string;
+    return (fixtures.storyBeats ?? [])
+      .filter((beat) => beat.companion_id === companionId && (beat.is_active ?? 1) === 1)
+      .sort((a, b) => a.beat_order - b.beat_order || a.id.localeCompare(b.id)) as unknown as T[];
   }
 
   return [];

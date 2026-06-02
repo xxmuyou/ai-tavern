@@ -51,6 +51,8 @@
 | 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 🟡 in-progress（积分端点 + 单测落地；工作台已扩展 Settings/图像模型/表情/LLM，见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)） |
 | 024 | [聊天内关系可见化 + 每轮反馈（沉浸感阶段 0）](./spec-024-in-chat-relationship-feedback.md) | 前端接线 | 006, 005, 012 | 2-3 天 | 🟡 in-progress（两端接线+HUD+每轮反馈已落地，typecheck/lint 通过，待运行端到端验证） |
 | 025 | [角色深度 + 解锁系统（沉浸感阶段 1）](./spec-025-character-depth-and-unlocks.md) | 后端+前端 | 004, 006, 005, 013, 019, 024 | 6-9 天 | 🟡 in-progress（persona 字段+prompt 强化+解锁系统全链路已落地，API 366 单测通过、两端 typecheck/lint 通过，待运行端到端验证；表情/场景的 Pro 门禁见实现记录待确认） |
+| 026 | [Companion Story Beats（角色剧情拍框架）](./spec-026-companion-story-beats.md) | 后端+前端+内容 | 005, 006, 007, 008, 024, 025 | 4-6 天 | 🟡 in-progress（修复 first_contact 100% 断点；新增通用 story beat 框架，让 scene 承载 companion 当前剧情目标） |
+| 027 | [Chat Moment Images（场景聊天瞬间图）](./spec-027-chat-moment-images.md) | 后端+前端+image-gen | 006, 007, 020, 022, 024, 026 | 3-5 天 | 📝 draft（最新 companion 回复旁小相机按钮；根据聊天/行为/场景/时间/人物/状态生成完整场景图） |
 
 **估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
 

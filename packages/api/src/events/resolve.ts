@@ -1,6 +1,8 @@
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { loadRelationship, applySignals } from "../relationships/engine";
+import { detectAndRecordUnlocks, type UnlockEvent } from "../relationships/unlocks";
+import { completeCurrentStoryBeat } from "../story-beats";
 import { loadCompanionForEvent } from "./support";
 import { generateResolutionDescription } from "./generator";
 import { parseEventPayload, parseTemplateSnapshot, stringifyJson } from "./parse";
@@ -47,6 +49,24 @@ export async function resolveEvent(
   const now = Date.now();
   const oldState = await loadRelationship(env, user.id, event.companion_id);
   const newState = await applySignals(env, user.id, event.companion_id, snapshotOption.signals, now);
+  let unlocks: UnlockEvent[] = [];
+  try {
+    const unlockResult = await detectAndRecordUnlocks(
+      env,
+      user.id,
+      event.companion_id,
+      newState.dimensions,
+      now,
+    );
+    unlocks = unlockResult.newlyUnlocked;
+  } catch {
+    unlocks = [];
+  }
+  try {
+    await completeCurrentStoryBeat(env, user.id, event.companion_id, event.scene_id, now);
+  } catch {
+    // Story progression should not break event resolution.
+  }
   const companion = await loadCompanionForEvent(env, event.companion_id);
   const description = companion
     ? await generateResolutionDescription(env, {
@@ -80,5 +100,6 @@ export async function resolveEvent(
       description,
       signals: snapshotOption.signals,
     },
+    unlocks,
   });
 }
