@@ -455,9 +455,29 @@ export async function enterScene(sceneId: string): Promise<SceneEnterResponse> {
   });
 }
 
-export async function listCompanions(source: 'official' | 'user' | 'all' = 'all'): Promise<CompanionsListResponse> {
+export async function listCompanions(
+  source: 'official' | 'user' | 'public' | 'all' = 'all',
+): Promise<CompanionsListResponse> {
   const params = new URLSearchParams({ source });
   return requestJson<CompanionsListResponse>(`/companions?${params.toString()}`);
+}
+
+/**
+ * Admin-only: publish (or unpublish) one of the admin's own companions into the
+ * shared public area. Mirrors PUT /companions/{id}/publish.
+ */
+export async function setCompanionPublic(
+  id: string,
+  isPublic: boolean,
+): Promise<{ id: string; is_public: boolean }> {
+  return requestJson<{ id: string; is_public: boolean }>(
+    `/companions/${encodeURIComponent(id)}/publish`,
+    {
+      body: JSON.stringify({ is_public: isPublic }),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    },
+  );
 }
 
 export async function getCompanion(id: string): Promise<CompanionDetailResponse> {
@@ -561,9 +581,11 @@ export async function deleteImageAsset(id: string): Promise<{ ok: boolean }> {
 export async function generateCompanionEmotionArt(
   companionId: string,
   emotion: string,
+  options?: { force?: boolean },
 ): Promise<EmotionArtGenerateResponse> {
+  const query = options?.force ? '?force=1' : '';
   return requestJson<EmotionArtGenerateResponse>(
-    `/companions/${encodeURIComponent(companionId)}/emotion-art/${encodeURIComponent(emotion)}/generate`,
+    `/companions/${encodeURIComponent(companionId)}/emotion-art/${encodeURIComponent(emotion)}/generate${query}`,
     { method: 'POST' },
   );
 }

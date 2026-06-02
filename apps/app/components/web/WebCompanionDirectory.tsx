@@ -16,6 +16,7 @@ const FILTERS: { id: CompanionSourceFilter; label: string }[] = [
   { id: 'all', label: 'All companions' },
   { id: 'user', label: 'My companions' },
   { id: 'official', label: 'Official' },
+  { id: 'public', label: 'Public' },
 ];
 
 type WebCompanionDirectoryProps = {

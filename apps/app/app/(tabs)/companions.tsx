@@ -15,6 +15,7 @@ const FILTERS: { label: string; value: CompanionSourceFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Mine', value: 'user' },
   { label: 'Official', value: 'official' },
+  { label: 'Public', value: 'public' },
 ];
 
 export default function CompanionsScreen() {

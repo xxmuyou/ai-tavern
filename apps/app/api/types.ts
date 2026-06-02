@@ -168,6 +168,7 @@ export type CompanionListItem = {
   current_level: string | null;
   gender: Gender | null;
   id: string;
+  is_public: boolean;
   last_interaction_at: number | null;
   name: string;
   preferred_scenes: string[];
@@ -192,6 +193,7 @@ export type CompanionDetail = {
   background: string | null;
   gender: Gender | null;
   id: string;
+  is_public?: boolean;
   name: string;
   personality: string | null;
   preferred_scenes: string[];

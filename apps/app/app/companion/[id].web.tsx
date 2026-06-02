@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { deleteCompanion, mediaSource } from '@/api/companion-client';
+import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, WebTabs, WebTag } from '@/components/web/ui';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
@@ -16,6 +16,7 @@ import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
 import { COMPANIONS_ROUTE } from '@/constants/routes';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { useMe } from '@/hooks/use-me';
 import { formatDateTime } from '@/utils/format';
 import { relationshipGoalFromSummary } from '@/utils/relationship';
 
@@ -36,9 +37,11 @@ export default function WebCompanionDetailScreen() {
   const companionId = Array.isArray(id) ? id[0] : id;
   const { data, error, isLoading, refetch } = useCompanion(companionId);
   const { pushError } = useErrorBanner();
+  const { me } = useMe();
   const [tab, setTab] = useState<string>('overview');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   if (isLoading) {
     return <WebLoading label="Loading companion..." />;
@@ -63,9 +66,26 @@ export default function WebCompanionDetailScreen() {
 
   const companion = data;
   const imageSource = mediaSource(companion.art_url);
-  const canEdit = companion.source === 'user';
+  // Persona driver fields ship only to the owner, so they signal ownership now
+  // that public companions are readable by everyone.
+  const isOwner = companion.source === 'user' && companion.want !== undefined;
+  const canEdit = isOwner;
+  const canPublish = isOwner && Boolean(me?.is_admin);
+  const isPublic = companion.is_public === true;
   const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
   const traits = (companion.personality ?? '').split(/[.,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4);
+
+  async function handleTogglePublish() {
+    setIsPublishing(true);
+    try {
+      await setCompanionPublic(companion.id, !isPublic);
+      await refetch();
+    } catch (nextError) {
+      pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.');
+    } finally {
+      setIsPublishing(false);
+    }
+  }
 
   async function handleDelete() {
     setIsDeleting(true);
@@ -89,6 +109,14 @@ export default function WebCompanionDetailScreen() {
             variant="primary"
             iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
           />
+          {canPublish ? (
+            <WebButton
+              label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
+              onPress={() => void handleTogglePublish()}
+              variant="outline"
+              iconLeft={<Ionicons color="#9A2F4F" name={isPublic ? 'earth' : 'earth-outline'} size={16} />}
+            />
+          ) : null}
           {canEdit ? (
             <>
               <WebButton

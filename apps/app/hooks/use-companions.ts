@@ -9,7 +9,7 @@ import type {
 
 import { useApi } from './use-api';
 
-export type CompanionSourceFilter = CompanionSource | 'all';
+export type CompanionSourceFilter = CompanionSource | 'all' | 'public';
 
 export function useCompanions(source: CompanionSourceFilter) {
   return useApi<CompanionsListResponse>(() => listCompanions(source), [source]);

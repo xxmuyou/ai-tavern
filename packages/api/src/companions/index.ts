@@ -1,4 +1,4 @@
-import { requireAuthUser } from "../auth";
+import { isAdminUser, requireAuthUser } from "../auth";
 import { isProUser } from "../billing/entitlements";
 import { QUOTA_LIMITS } from "../billing/quota";
 import { jsonResponse, notFound, readJson } from "../http";
@@ -33,6 +33,7 @@ type CompanionRow = {
   source: "official" | "user";
   created_by: string | null;
   is_active: number;
+  is_public: number;
   name: string;
   appearance: string | null;
   personality: string | null;
@@ -67,6 +68,7 @@ type RelationshipRow = {
 type CompanionListItem = {
   id: string;
   source: "official" | "user";
+  is_public: boolean;
   name: string;
   gender: Gender | null;
   relationship_role: string | null;
@@ -110,6 +112,20 @@ export async function handleCompanionsRequest(
   const emotionArtResponse = await handleCompanionEmotionArtRequest(request, env, pathname);
   if (emotionArtResponse) {
     return emotionArtResponse;
+  }
+
+  const publishMatch = pathname.match(/^\/companions\/([^/]+)\/publish$/);
+  if (publishMatch) {
+    if (request.method !== "PUT") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const companionId = decodeURIComponent(publishMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    const user = await requireAuthUser(env, request);
+    const body = await readJson<unknown>(request);
+    return setCompanionPublic(env, user, companionId, body);
   }
 
   const dailyStateMatch = pathname.match(/^\/companions\/([^/]+)\/daily-state$/);
@@ -172,6 +188,10 @@ async function listCompanions(env: Env, user: UserRecord, source: string): Promi
       whereClause = "c.source = 'user' AND c.created_by = ? AND c.is_active = 1";
       binds = [user.id];
       break;
+    case "public":
+      // The shared public area: every companion an admin has published.
+      whereClause = "c.is_public = 1 AND c.is_active = 1";
+      break;
     case "all":
     default:
       whereClause = "c.is_active = 1 AND (c.source = 'official' OR c.created_by = ?)";
@@ -179,7 +199,7 @@ async function listCompanions(env: Env, user: UserRecord, source: string): Promi
   }
 
   const { results } = await env.DB.prepare(
-    `SELECT c.id, c.source, c.created_by, c.is_active, c.name,
+    `SELECT c.id, c.source, c.created_by, c.is_active, c.is_public, c.name,
             c.appearance, c.personality, c.background, c.speech_style,
             c.relationship_role, c.preferred_scenes, c.art_url, c.gender,
             c.initial_dims, c.created_at, c.updated_at,
@@ -198,6 +218,7 @@ async function listCompanions(env: Env, user: UserRecord, source: string): Promi
     current_level: row.level_label,
     gender: normalizeGender(row.gender),
     id: row.id,
+    is_public: row.is_public === 1,
     last_interaction_at: row.last_interaction_at,
     name: row.name,
     preferred_scenes: parseStringArray(row.preferred_scenes),
@@ -243,6 +264,50 @@ async function loadUserTimezone(env: Env, userId: string): Promise<string> {
   return row?.timezone ?? "UTC";
 }
 
+/**
+ * Publish (or unpublish) a companion into the shared public area. Restricted to
+ * admins acting on their own user-created companion: an admin earns the right to
+ * surface a companion they built (portraits and all) to every player. Ownership
+ * and `source` are untouched — only the `is_public` flag flips.
+ */
+async function setCompanionPublic(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+  body: unknown,
+): Promise<Response> {
+  const isAdmin = await isAdminUser(env, user.email);
+  if (!isAdmin) {
+    return jsonResponse({ error: "forbidden" }, { status: 403 });
+  }
+
+  const raw = (body ?? {}) as Record<string, unknown>;
+  if (typeof raw.is_public !== "boolean") {
+    return jsonResponse({ error: "is_public_required" }, { status: 400 });
+  }
+  const makePublic = raw.is_public;
+
+  const row = await loadCompanion(env, companionId);
+  if (!row) return notFound();
+  if (row.source !== "user") {
+    return jsonResponse({ error: "official_not_publishable" }, { status: 400 });
+  }
+  if (row.created_by !== user.id) {
+    return jsonResponse({ error: "forbidden_not_owner" }, { status: 403 });
+  }
+  if (makePublic && !row.art_url) {
+    return jsonResponse({ error: "neutral_art_required" }, { status: 400 });
+  }
+
+  await env.DB.prepare(
+    `UPDATE companions SET is_public = ?, updated_at = ? WHERE id = ?`,
+  )
+    .bind(makePublic ? 1 : 0, Date.now(), companionId)
+    .run();
+
+  return jsonResponse({ id: companionId, is_public: makePublic });
+}
+
 async function getCompanion(env: Env, user: UserRecord, companionId: string): Promise<Response> {
   const row = await loadCompanion(env, companionId);
   if (!row) {
@@ -273,6 +338,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     background: row.background,
     gender: normalizeGender(row.gender),
     id: row.id,
+    is_public: row.is_public === 1,
     name: row.name,
     personality: row.personality,
     preferred_scenes: parseStringArray(row.preferred_scenes),
@@ -484,15 +550,19 @@ function canRead(row: CompanionRow, user: UserRecord): boolean {
   if (row.source === "official") {
     return true;
   }
+  // Published (public) companions are readable by anyone, like official ones.
+  if (row.is_public === 1) {
+    return true;
+  }
   return row.created_by === user.id;
 }
 
 async function loadCompanion(env: Env, companionId: string): Promise<CompanionRow | null> {
   return env.DB.prepare(
-    `SELECT id, source, created_by, is_active, name, appearance, personality,
-            background, speech_style, relationship_role, want, secret, boundary,
-            preferred_scenes, art_url, art_emotions, gender, initial_dims,
-            created_at, updated_at
+    `SELECT id, source, created_by, is_active, is_public, name, appearance,
+            personality, background, speech_style, relationship_role, want,
+            secret, boundary, preferred_scenes, art_url, art_emotions, gender,
+            initial_dims, created_at, updated_at
      FROM companions
      WHERE id = ?`,
   )
@@ -534,6 +604,7 @@ function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
     gender: normalizeGender(row.gender),
     boundary: row.boundary,
     id: row.id,
+    is_public: row.is_public === 1,
     name: row.name,
     personality: row.personality,
     preferred_scenes: parseStringArray(row.preferred_scenes),

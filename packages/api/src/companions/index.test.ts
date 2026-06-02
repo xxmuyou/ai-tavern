@@ -8,6 +8,7 @@ type CompanionRow = {
   source: "official" | "user";
   created_by: string | null;
   is_active: number;
+  is_public: number;
   name: string;
   appearance: string | null;
   personality: string | null;
@@ -532,6 +533,79 @@ describe("companions module", () => {
     expect(oversized?.status).toBe(400);
     expect(await oversized?.json()).toMatchObject({ error: "file_too_large" });
   });
+
+  it("PUT /publish makes an admin's own companion public and lists it under ?source=public", async () => {
+    const env = createEnv({
+      companions: [
+        userCompanion("alex", "user-1", "female", { art_url: "companions/user/user-1/a.webp" }),
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const published = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/alex/publish", token, "PUT", { is_public: true }),
+      env,
+      "/companions/alex/publish",
+    );
+    expect(published?.status).toBe(200);
+    expect(await published?.json()).toMatchObject({ id: "alex", is_public: true });
+
+    const list = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions?source=public", token),
+      env,
+      "/companions",
+    );
+    const body = (await list?.json()) as { items: Array<{ id: string; is_public: boolean }> };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({ id: "alex", is_public: true });
+  });
+
+  it("PUT /publish refuses to publish a companion that has no neutral portrait", async () => {
+    const env = createEnv({
+      companions: [userCompanion("alex", "user-1")],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/alex/publish", token, "PUT", { is_public: true }),
+      env,
+      "/companions/alex/publish",
+    );
+    expect(response?.status).toBe(400);
+    expect(await response?.json()).toMatchObject({ error: "neutral_art_required" });
+  });
+
+  it("PUT /publish rejects official companions and other users' companions", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya"),
+        userCompanion("foreign", "user-2", "female", { art_url: "companions/user/user-2/f.webp" }),
+      ],
+      relationships: [],
+      users: [
+        { email: "player@example.com", id: "user-1" },
+        { email: "other@example.com", id: "user-2" },
+      ],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const official = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/publish", token, "PUT", { is_public: true }),
+      env,
+      "/companions/maya/publish",
+    );
+    expect(official?.status).toBe(400);
+    expect(await official?.json()).toMatchObject({ error: "official_not_publishable" });
+
+    const foreign = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/foreign/publish", token, "PUT", { is_public: true }),
+      env,
+      "/companions/foreign/publish",
+    );
+    expect(foreign?.status).toBe(403);
+    expect(await foreign?.json()).toMatchObject({ error: "forbidden_not_owner" });
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -551,6 +625,7 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
     id,
     initial_dims: null,
     is_active: 1,
+    is_public: 0,
     name: id[0]!.toUpperCase() + id.slice(1),
     personality: null,
     preferred_scenes: null,
@@ -563,7 +638,12 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
   };
 }
 
-function userCompanion(id: string, ownerId: string, gender: "male" | "female" = "female"): CompanionRow {
+function userCompanion(
+  id: string,
+  ownerId: string,
+  gender: "male" | "female" = "female",
+  overrides: Partial<CompanionRow> = {},
+): CompanionRow {
   return {
     appearance: null,
     art_emotions: null,
@@ -576,6 +656,7 @@ function userCompanion(id: string, ownerId: string, gender: "male" | "female" = 
     id,
     initial_dims: null,
     is_active: 1,
+    is_public: 0,
     name: id[0]!.toUpperCase() + id.slice(1),
     personality: null,
     preferred_scenes: null,
@@ -585,6 +666,7 @@ function userCompanion(id: string, ownerId: string, gender: "male" | "female" = 
     speech_style: null,
     updated_at: 1747000000000,
     want: null,
+    ...overrides,
   };
 }
 
@@ -695,7 +777,9 @@ function queryAll<T>(
     const userId = values[0] as string;
     let rows = [...companions.values()].filter((c) => c.is_active === 1);
 
-    if (sql.includes("c.source = 'official' AND c.is_active = 1")) {
+    if (sql.includes("c.is_public = 1 AND c.is_active = 1")) {
+      rows = rows.filter((c) => c.is_public === 1);
+    } else if (sql.includes("c.source = 'official' AND c.is_active = 1")) {
       rows = rows.filter((c) => c.source === "official");
     } else if (sql.includes("c.source = 'user' AND c.created_by = ?")) {
       const ownerId = values[1] as string;
@@ -858,6 +942,7 @@ function mutate(
       id,
       initial_dims: null,
       is_active: 1,
+      is_public: 0,
       name,
       personality,
       preferred_scenes,
@@ -934,6 +1019,15 @@ function mutate(
     const existing = companions.get(id);
     if (existing) {
       companions.set(id, { ...existing, is_active: 0, updated_at: updatedAt });
+    }
+    return;
+  }
+
+  if (sql.startsWith("UPDATE companions") && sql.includes("SET is_public = ?")) {
+    const [isPublic, updatedAt, id] = values as [number, number, string];
+    const existing = companions.get(id);
+    if (existing) {
+      companions.set(id, { ...existing, is_public: isPublic, updated_at: updatedAt });
     }
   }
 }

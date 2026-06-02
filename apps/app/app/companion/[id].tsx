@@ -3,7 +3,7 @@ import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { deleteCompanion, mediaSource } from '@/api/companion-client';
+import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
@@ -16,6 +16,7 @@ import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
 import { TopBar } from '@/components/TopBar';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { useMe } from '@/hooks/use-me';
 import { formatDateTime } from '@/utils/format';
 import { relationshipGoalFromSummary } from '@/utils/relationship';
 
@@ -25,6 +26,7 @@ export default function CompanionDetailScreen() {
   const companionId = Array.isArray(id) ? id[0] : id;
   const { data, error, isLoading, refetch } = useCompanion(companionId);
   const { pushError } = useErrorBanner();
+  const { me } = useMe();
 
   if (isLoading) {
     return <LoadingScreen label="Loading companion..." />;
@@ -46,8 +48,37 @@ export default function CompanionDetailScreen() {
 
   const companion = data;
   const imageSource = mediaSource(companion.art_url);
-  const canEdit = companion.source === 'user';
+  // Persona driver fields are only sent to the owner of a user companion, so
+  // their presence is a reliable "this is mine" signal — needed now that public
+  // companions are readable by everyone.
+  const isOwner = companion.source === 'user' && companion.want !== undefined;
+  const canEdit = isOwner;
+  const canPublish = isOwner && Boolean(me?.is_admin);
+  const isPublic = companion.is_public === true;
   const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
+
+  function togglePublish() {
+    const next = !isPublic;
+    Alert.alert(
+      next ? `Publish ${companion.name}?` : `Unpublish ${companion.name}?`,
+      next
+        ? `${companion.name} (and its portraits) will appear in the public area for all players.`
+        : `${companion.name} will be removed from the public area.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          onPress: () => {
+            void setCompanionPublic(companion.id, next)
+              .then(() => refetch())
+              .catch((nextError) =>
+                pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.'),
+              );
+          },
+          text: next ? 'Publish' : 'Unpublish',
+        },
+      ],
+    );
+  }
 
   function confirmDelete() {
     Alert.alert(
@@ -73,6 +104,16 @@ export default function CompanionDetailScreen() {
       <TopBar
         right={canEdit ? (
           <>
+            {canPublish ? (
+              <Pressable
+                accessibilityLabel={isPublic ? 'Unpublish from public area' : 'Publish to public area'}
+                accessibilityRole="button"
+                onPress={togglePublish}
+                className={`h-10 w-10 items-center justify-center rounded-lg border ${isPublic ? 'border-app-primary bg-app-primarySoft' : 'border-app-line'}`}
+              >
+                <Ionicons color={isPublic ? '#2E7D32' : '#11181C'} name={isPublic ? 'earth' : 'earth-outline'} size={20} />
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
