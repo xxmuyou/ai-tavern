@@ -8,17 +8,23 @@ describe("runningHubImageGenProvider", () => {
     vi.restoreAllMocks();
   });
 
-  it("creates a RunningHub task with signed source URL and webhook secret", async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(
+  it("uploads the source image then creates a task referencing its fileName", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).endsWith("/task/openapi/upload")) {
+        return new Response(
+          JSON.stringify({ code: 0, msg: "success", data: { fileName: "api/abc123.webp" } }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
         JSON.stringify({
           code: 0,
           msg: "success",
           data: { taskId: "rh-task-1", taskStatus: "QUEUED" },
         }),
         { headers: { "content-type": "application/json" } },
-      ),
-    );
+      );
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const provider = await getImageGenProvider(createEnv(), "variation");
@@ -31,31 +37,29 @@ describe("runningHubImageGenProvider", () => {
       type: "pending",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://www.runninghub.ai/task/openapi/create",
-      expect.objectContaining({ method: "POST" }),
-    );
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    const [, init] = calls[0]!;
-    const body = JSON.parse(String((init as RequestInit).body));
+    // First call uploads the source bytes as multipart form-data.
+    const [uploadUrl, uploadInit] = calls[0]!;
+    expect(uploadUrl).toBe("https://www.runninghub.ai/task/openapi/upload");
+    expect(uploadInit.method).toBe("POST");
+    expect(uploadInit.body).toBeInstanceOf(FormData);
+    const uploadForm = uploadInit.body as unknown as FormData;
+    expect(uploadForm.get("fileType")).toBe("image");
+    expect(uploadForm.get("apiKey")).toBe("runninghub-api-key");
+    expect(uploadForm.get("file")).toBeInstanceOf(Blob);
+
+    // Second call creates the task and references the uploaded fileName.
+    const [createUrl, createInit] = calls[1]!;
+    expect(createUrl).toBe("https://www.runninghub.ai/task/openapi/create");
+    const body = JSON.parse(String((createInit as RequestInit).body));
     expect(body.workflowId).toBe("workflow-1");
     expect(body.webhookUrl).toBe(
       "https://dev.aiappsbox.com/api/webhooks/runninghub?secret=webhook-secret",
     );
     expect(body.nodeInfoList).toEqual([
-      expect.objectContaining({
-        fieldName: "image",
-        nodeId: "load-image-node",
-      }),
-      {
-        fieldName: "text",
-        fieldValue: "make a warm portrait",
-        nodeId: "prompt-node",
-      },
+      { fieldName: "image", fieldValue: "api/abc123.webp", nodeId: "load-image-node" },
+      { fieldName: "prompt", fieldValue: "make a warm portrait", nodeId: "prompt-node" },
     ]);
-    expect(body.nodeInfoList[0].fieldValue).toMatch(
-      /^https:\/\/dev\.aiappsbox\.com\/api\/objects\/signed\/companions%2Fuser%2Fu1%2Fneutral\.webp\?exp=\d+&sig=[a-f0-9]{64}$/,
-    );
   });
 
   it("creates a WF-1 create task overriding only the prompt node", async () => {
@@ -291,6 +295,7 @@ function createEnv(
           mode: "variation",
           workflowId: "workflow-1",
           promptNodeId: "prompt-node",
+          promptFieldName: "prompt",
           loadImageNodeId: "load-image-node",
         },
       }),
@@ -312,6 +317,12 @@ function createEnv(
           },
         };
       },
+    },
+    ASSETS: {
+      get: async () => ({
+        arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer,
+        httpMetadata: { contentType: "image/webp" },
+      }),
     },
     IMAGE_GEN_PROVIDER: "runninghub",
     IMAGE_GEN_PUBLIC_BASE_URL: "https://dev.aiappsbox.com/api",

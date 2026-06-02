@@ -269,6 +269,10 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
   }
   const workflowId = typeof raw.workflow_id === "string" ? raw.workflow_id.trim() : "";
   const promptNodeId = typeof raw.prompt_node_id === "string" ? raw.prompt_node_id.trim() : "";
+  const promptFieldName =
+    typeof raw.prompt_field_name === "string" && raw.prompt_field_name.trim()
+      ? raw.prompt_field_name.trim()
+      : "text";
   const checkpointNodeId =
     typeof raw.checkpoint_node_id === "string" && raw.checkpoint_node_id.trim()
       ? raw.checkpoint_node_id.trim()
@@ -295,6 +299,7 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
       load_image_node_id: loadImageNodeId,
       mode,
       model_ids: [...new Set(modelIds)],
+      prompt_field_name: promptFieldName,
       prompt_node_id: promptNodeId,
       sort_order: readNumber(raw.sort_order),
       workflow_id: workflowId,

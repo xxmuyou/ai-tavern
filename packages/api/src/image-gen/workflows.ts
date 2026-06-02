@@ -20,6 +20,9 @@ export type WorkflowConfig = {
   mode: ImageGenMode;
   workflowId: string;
   promptNodeId: string;
+  /** Field name on the prompt node. Defaults to "text" (CLIPTextEncode); Qwen
+   * image-edit nodes (TextEncodeQwenImageEditPlus) use "prompt". */
+  promptFieldName?: string;
   /** create mode: node where the model's checkpoint override is injected. */
   checkpointNodeId?: string;
   /** create mode: field on the checkpoint node. Defaults to ckpt_name. */
@@ -59,6 +62,7 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
       mode,
       workflowId,
       promptNodeId,
+      promptFieldName: str(entry.promptFieldName) || "text",
       checkpointNodeId: str(entry.checkpointNodeId) || undefined,
       checkpointFieldName: str(entry.checkpointFieldName) || "ckpt_name",
       loadImageNodeId: str(entry.loadImageNodeId) || undefined,

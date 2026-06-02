@@ -43,6 +43,7 @@
       "workflowId": "",
       "loadImageNodeId": "",
       "promptNodeId": "",
+      "promptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 20
     },
@@ -51,6 +52,7 @@
       "mode": "create",
       "workflowId": "",
       "promptNodeId": "",
+      "promptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 30
     }

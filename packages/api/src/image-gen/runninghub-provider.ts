@@ -1,5 +1,5 @@
 import { resolveImageGenConfig, type ImageGenConfig } from "../settings/store";
-import { createSignedObjectUrl } from "./signed-url";
+import { normalizeObjectKey } from "./signed-url";
 import {
   ImageGenError,
   type ImageGenProvider,
@@ -18,6 +18,14 @@ type RunningHubCreateResponse = {
     taskId?: string;
     taskStatus?: string;
     promptTips?: string;
+  };
+};
+
+type RunningHubUploadResponse = {
+  code: number;
+  msg?: string;
+  data?: {
+    fileName?: string;
   };
 };
 
@@ -41,7 +49,7 @@ async function generateCreate(req: ImageGenRequest, env: Env, cfg: ImageGenConfi
   const workflowKey = req.workflow_key?.trim() || "wf1";
   const config = await readWorkflowConfig(env, cfg, workflowKey);
   const nodeInfoList: NodeInfo[] = [
-    { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
+    { fieldName: config.promptFieldName || "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
   // Checkpoint file comes from the selected model; the node field belongs to the workflow.
   const ckptName = req.ckpt_name?.trim();
@@ -90,12 +98,84 @@ async function generateVariation(
       retryable: false,
     });
   }
-  const sourceUrl = await createSignedObjectUrl(env, req.source_art_url);
+  // RunningHub's LoadImage node takes the *fileName* of an image already
+  // uploaded into its input dir — not a URL. Upload the source bytes first,
+  // then inject the returned fileName. (Feeding a URL here makes RunningHub
+  // accept the task but fail at the LoadImage node during render.)
+  const fileName = await uploadSourceImage(cfg, env, req.source_art_url);
   const nodeInfoList: NodeInfo[] = [
-    { fieldName: "image", fieldValue: sourceUrl, nodeId: config.loadImageNodeId },
-    { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
+    { fieldName: "image", fieldValue: fileName, nodeId: config.loadImageNodeId },
+    { fieldName: config.promptFieldName || "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
   return submitTask(cfg, config.workflowId, nodeInfoList, MODEL);
+}
+
+/**
+ * Upload an R2-stored source image to RunningHub and return its `fileName`.
+ *
+ * The standard ComfyUI LoadImage node references an image by the filename it
+ * has in the server's input directory, which is populated via this upload
+ * endpoint. We read the bytes straight from R2 (no public round-trip) and POST
+ * them as multipart form-data; the host must match the create host so the
+ * uploaded file is visible to the task.
+ */
+async function uploadSourceImage(
+  cfg: ImageGenConfig,
+  env: Env,
+  sourceArtUrl: string,
+): Promise<string> {
+  const key = normalizeObjectKey(sourceArtUrl);
+  if (!key) {
+    throw new ImageGenError("invalid_source_art_url", "source_art_url missing or invalid", {
+      retryable: false,
+    });
+  }
+  const object = await env.ASSETS.get(key);
+  if (!object) {
+    throw new ImageGenError("source_art_not_found", `Source art not found in R2: ${key}`, {
+      retryable: false,
+    });
+  }
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  const contentType = object.httpMetadata?.contentType ?? "image/png";
+
+  const apiKey = requireApiKey(cfg);
+  const baseUrl = (cfg.runninghubBaseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const form = new FormData();
+  form.append("apiKey", apiKey);
+  form.append("fileType", "image");
+  form.append("file", new Blob([bytes], { type: contentType }), fileNameFor(key, contentType));
+
+  const response = await fetch(`${baseUrl}/task/openapi/upload`, {
+    body: form,
+    headers: { authorization: `Bearer ${apiKey}` },
+    method: "POST",
+  });
+
+  const json = await readJson<RunningHubUploadResponse>(response);
+  if (!response.ok || json.code !== 0) {
+    const msg = json.msg || `RunningHub upload failed with HTTP ${response.status}`;
+    throw new ImageGenError("provider_upload_failed", msg, {
+      retryable: response.status >= 500 && response.status < 600,
+    });
+  }
+  const fileName = json.data?.fileName;
+  if (!fileName) {
+    throw new ImageGenError(
+      "provider_bad_response",
+      "RunningHub upload response did not include fileName",
+      { retryable: true },
+    );
+  }
+  return fileName;
+}
+
+/** Derive a sensible upload filename (with extension) from the R2 key + type. */
+function fileNameFor(key: string, contentType: string): string {
+  const base = key.split("/").pop() || "source";
+  if (/\.[a-z0-9]+$/i.test(base)) return base;
+  const ext = contentType.split("/")[1]?.split("+")[0] || "png";
+  return `${base}.${ext}`;
 }
 
 async function submitTask(
@@ -174,6 +254,7 @@ async function readWorkflowConfig(env: Env, cfg: ImageGenConfig, key: string): P
         label: dbWorkflow.label,
         loadImageNodeId: dbWorkflow.load_image_node_id ?? undefined,
         mode: dbWorkflow.mode,
+        promptFieldName: dbWorkflow.prompt_field_name || "text",
         promptNodeId: dbWorkflow.prompt_node_id,
         workflowId: dbWorkflow.workflow_id,
       }

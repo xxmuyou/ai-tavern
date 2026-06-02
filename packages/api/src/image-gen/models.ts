@@ -41,6 +41,7 @@ export type ImageWorkflowRow = {
   mode: ImageGenMode;
   workflow_id: string;
   prompt_node_id: string;
+  prompt_field_name: string;
   checkpoint_node_id: string | null;
   checkpoint_field_name: string;
   load_image_node_id: string | null;
@@ -56,6 +57,7 @@ export type ImageWorkflow = {
   mode: ImageGenMode;
   workflow_id: string;
   prompt_node_id: string;
+  prompt_field_name: string;
   checkpoint_node_id: string | null;
   checkpoint_field_name: string;
   load_image_node_id: string | null;
@@ -69,6 +71,7 @@ export type ImageWorkflowInput = {
   mode: ImageGenMode;
   workflow_id: string;
   prompt_node_id: string;
+  prompt_field_name: string | null;
   checkpoint_node_id: string | null;
   checkpoint_field_name: string | null;
   load_image_node_id: string | null;
@@ -103,7 +106,7 @@ export type ImageModelSelection = {
 const COLUMNS =
   "id, label, tag, ckpt_name, is_active, sort_order, updated_at, updated_by";
 const WORKFLOW_COLUMNS =
-  "key, label, mode, workflow_id, prompt_node_id, checkpoint_node_id, checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by";
+  "key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by";
 
 function toImageModel(row: ImageModelRow): ImageModel {
   return {
@@ -123,6 +126,7 @@ function toImageWorkflow(row: ImageWorkflowRow): ImageWorkflow {
     label: row.label,
     load_image_node_id: row.load_image_node_id,
     mode: row.mode,
+    prompt_field_name: row.prompt_field_name || "text",
     prompt_node_id: row.prompt_node_id,
     sort_order: row.sort_order,
     workflow_id: row.workflow_id,
@@ -363,17 +367,19 @@ export async function upsertImageWorkflow(
 ): Promise<void> {
   const now = Date.now();
   const checkpointFieldName = input.checkpoint_field_name?.trim() || "ckpt_name";
+  const promptFieldName = input.prompt_field_name?.trim() || "text";
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO image_workflows
-         (key, label, mode, workflow_id, prompt_node_id, checkpoint_node_id,
+         (key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id,
           checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET
          label = excluded.label,
          mode = excluded.mode,
          workflow_id = excluded.workflow_id,
          prompt_node_id = excluded.prompt_node_id,
+         prompt_field_name = excluded.prompt_field_name,
          checkpoint_node_id = excluded.checkpoint_node_id,
          checkpoint_field_name = excluded.checkpoint_field_name,
          load_image_node_id = excluded.load_image_node_id,
@@ -387,6 +393,7 @@ export async function upsertImageWorkflow(
       input.mode,
       input.workflow_id,
       input.prompt_node_id,
+      promptFieldName,
       input.checkpoint_node_id,
       checkpointFieldName,
       input.load_image_node_id,

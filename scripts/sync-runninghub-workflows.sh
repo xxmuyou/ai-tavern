@@ -184,6 +184,8 @@ for (const key of Object.keys(workflowsRaw)) {
   }
   const workflowId = readString(`workflows.${key}.workflowId`, entry.workflowId);
   const promptNodeId = readString(`workflows.${key}.promptNodeId`, entry.promptNodeId);
+  const promptFieldName =
+    readString(`workflows.${key}.promptFieldName`, entry.promptFieldName) || "text";
   const checkpointNodeId = readString(`workflows.${key}.checkpointNodeId`, entry.checkpointNodeId);
   const checkpointFieldName =
     readString(`workflows.${key}.checkpointFieldName`, entry.checkpointFieldName) || "ckpt_name";
@@ -208,6 +210,7 @@ for (const key of Object.keys(workflowsRaw)) {
     mode,
     workflowId,
     promptNodeId,
+    promptFieldName,
     ...(checkpointNodeId ? { checkpointNodeId } : {}),
     ...(checkpointFieldName ? { checkpointFieldName } : {}),
     ...(loadImageNodeId ? { loadImageNodeId } : {}),
@@ -221,6 +224,7 @@ for (const key of Object.keys(workflowsRaw)) {
     label,
     loadImageNodeId,
     mode,
+    promptFieldName,
     promptNodeId,
     sortOrder: Number.isFinite(entry.sortOrder) ? Number(entry.sortOrder) : workflowRows.length + 1,
     workflowId,
@@ -259,13 +263,14 @@ for (const checkpoint of checkpoints) {
 for (const workflow of workflowRows) {
   statements.push([
     "INSERT INTO image_workflows",
-    "  (key, label, mode, workflow_id, prompt_node_id, checkpoint_node_id, checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by)",
-    `VALUES (${sqlString(workflow.key)}, ${sqlString(workflow.label)}, ${sqlString(workflow.mode)}, ${sqlString(workflow.workflowId)}, ${sqlString(workflow.promptNodeId)}, ${workflow.checkpointNodeId ? sqlString(workflow.checkpointNodeId) : "NULL"}, ${sqlString(workflow.checkpointFieldName)}, ${workflow.loadImageNodeId ? sqlString(workflow.loadImageNodeId) : "NULL"}, ${workflow.isActive ? 1 : 0}, ${workflow.sortOrder}, ${now}, NULL)`,
+    "  (key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by)",
+    `VALUES (${sqlString(workflow.key)}, ${sqlString(workflow.label)}, ${sqlString(workflow.mode)}, ${sqlString(workflow.workflowId)}, ${sqlString(workflow.promptNodeId)}, ${sqlString(workflow.promptFieldName)}, ${workflow.checkpointNodeId ? sqlString(workflow.checkpointNodeId) : "NULL"}, ${sqlString(workflow.checkpointFieldName)}, ${workflow.loadImageNodeId ? sqlString(workflow.loadImageNodeId) : "NULL"}, ${workflow.isActive ? 1 : 0}, ${workflow.sortOrder}, ${now}, NULL)`,
     "ON CONFLICT(key) DO UPDATE SET",
     "  label = excluded.label,",
     "  mode = excluded.mode,",
     "  workflow_id = excluded.workflow_id,",
     "  prompt_node_id = excluded.prompt_node_id,",
+    "  prompt_field_name = excluded.prompt_field_name,",
     "  checkpoint_node_id = excluded.checkpoint_node_id,",
     "  checkpoint_field_name = excluded.checkpoint_field_name,",
     "  load_image_node_id = excluded.load_image_node_id,",
