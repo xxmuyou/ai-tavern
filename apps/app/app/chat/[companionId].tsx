@@ -31,6 +31,7 @@ import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
+import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { PortraitBar } from '@/components/PortraitBar';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
@@ -217,9 +218,13 @@ function ChatScreenInner() {
     setDraft('');
     shouldScrollOnNextRef.current = true;
 
+    let serverMessageId = '';
     try {
       const result = await stream.send(text, {
         activityId,
+        onDone: (info) => {
+          serverMessageId = info.messageId;
+        },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
         },
@@ -238,8 +243,9 @@ function ChatScreenInner() {
         content: result.text,
         created_at: new Date().toISOString(),
         emotion: result.emotion,
-        id: `local-companion-${Date.now()}`,
+        id: serverMessageId || `local-companion-${Date.now()}`,
         role: 'companion',
+        scene_id: sceneId ?? null,
       };
       history.appendMessage(finalMessage);
       shouldScrollOnNextRef.current = true;
@@ -331,7 +337,15 @@ function ChatScreenInner() {
       return <StreamingBubble text={item.text} />;
     }
     const role = item.role === 'assistant' ? 'companion' : item.role;
-    return <MessageBubble content={item.content} role={role} />;
+    const showCapture = role === 'companion' && !item.id.startsWith('local-');
+    return (
+      <View>
+        <MessageBubble content={item.content} role={role} />
+        {showCapture ? (
+          <MomentImageCapture messageId={item.id} initialMoment={item.moment_image ?? null} />
+        ) : null}
+      </View>
+    );
   }, []);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);

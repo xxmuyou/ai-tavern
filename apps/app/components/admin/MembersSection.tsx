@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { Button } from '@/components/Button';
+import { WebButton, WebCard, WebFieldRow, WebInput, WebLoading, WebTag } from '@/components/web/ui';
 import { useAdminMembers } from '@/hooks/use-admin-members';
-
-const INPUT_CLASS =
-  'min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text';
 
 export function MembersSection() {
   const { addEmail, emails, isLoading, isSaving, removeEmail, removingEmail } = useAdminMembers();
@@ -21,72 +18,68 @@ export function MembersSection() {
   }
 
   if (isLoading) {
-    return (
-      <View className="items-center py-12">
-        <ActivityIndicator color="#1E6B52" />
-      </View>
-    );
+    return <WebLoading fullscreen={false} label="Loading admin members..." />;
   }
 
   return (
     <View className="gap-4">
-      <View className="rounded-lg border border-app-line bg-white p-5">
-        <Text className="text-lg font-semibold text-app-text">Admin members</Text>
-        <Text className="mt-1 text-sm leading-6 text-app-muted">
+      <WebCard padding="md">
+        <Text className="font-serif text-title text-app-ink">Admin members</Text>
+        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
           Add emails to grant admin access. Built-in admins (from environment config) cannot be removed here.
         </Text>
         <View className="mt-4 gap-3">
-          <TextInput
+          <WebInput
             autoCapitalize="none"
             autoComplete="email"
             inputMode="email"
+            label="Email"
             onChangeText={setEmail}
             placeholder="user@example.com"
-            placeholderTextColor="#8B949E"
             value={email}
-            className={INPUT_CLASS}
           />
-          <TextInput
+          <WebInput
+            label="Note"
             onChangeText={setNote}
-            placeholder="Note"
-            placeholderTextColor="#8B949E"
+            placeholder="Why this person needs admin access"
             value={note}
-            className={INPUT_CLASS}
           />
-          <Button isLoading={isSaving} label="Add email" onPress={handleAdd} />
+          <View className="self-start">
+            <WebButton isLoading={isSaving} label="Add email" onPress={handleAdd} />
+          </View>
         </View>
-      </View>
+      </WebCard>
 
       <View className="gap-3">
         {emails.map((item) => (
-          <View
-            key={`${item.source}:${item.email}`}
-            className="rounded-lg border border-app-line bg-white p-4"
-          >
-            <View className="flex-row items-start justify-between gap-3">
-              <View className="min-w-0 flex-1">
-                <Text numberOfLines={1} className="text-base font-semibold text-app-text">
-                  {item.email}
-                </Text>
-                <Text className="mt-1 text-sm text-app-muted">
-                  {item.source === 'builtin' ? 'Built-in admin' : item.note || 'Custom admin member'}
-                </Text>
-                {item.created_by_email ? (
-                  <Text className="mt-1 text-xs text-app-muted">Added by {item.created_by_email}</Text>
-                ) : null}
-              </View>
-              {item.source === 'custom' ? (
-                <View className="w-28">
-                  <Button
+          <WebCard key={`${item.source}:${item.email}`} padding="sm">
+            <WebFieldRow
+              description={
+                item.created_by_email
+                  ? `Added by ${item.created_by_email}`
+                  : item.source === 'builtin'
+                    ? 'Managed by environment configuration'
+                    : item.note || 'Custom admin member'
+              }
+              label={item.email}
+              value={
+                <WebTag size="sm" variant={item.source === 'builtin' ? 'brand' : 'rose'}>
+                  {item.source === 'builtin' ? 'Built-in' : 'Custom'}
+                </WebTag>
+              }
+              trailing={
+                item.source === 'custom' ? (
+                  <WebButton
                     isLoading={removingEmail === item.email}
                     label="Remove"
                     onPress={() => void removeEmail(item.email)}
+                    size="sm"
                     variant="danger"
                   />
-                </View>
-              ) : null}
-            </View>
-          </View>
+                ) : null
+              }
+            />
+          </WebCard>
         ))}
       </View>
     </View>

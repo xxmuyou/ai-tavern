@@ -216,13 +216,17 @@ export async function completeImageJobWithImage(
 
   const ext = CONTENT_TYPE_EXTENSIONS[input.contentType] ?? "webp";
   const owner = job.user_id ?? "anonymous";
-  const outputKey = `user-art/${owner}/base-art/${crypto.randomUUID()}.${ext}`;
+  // The path segment comes from the job's output_prefix so each task type
+  // (companion-base-art, chat-moments, …) lands in its own R2 folder while
+  // sharing this single completion path (also used by RunningHub webhook/poll).
+  const prefix = job.output_prefix || "base-art";
+  const outputKey = `user-art/${owner}/${prefix}/${crypto.randomUUID()}.${ext}`;
 
   await env.ASSETS.put(outputKey, input.bytes, {
     customMetadata: {
       job_id: job.id,
       provider: input.provider,
-      source: "companion-base-art",
+      source: job.task,
     },
     httpMetadata: { contentType: input.contentType },
   });
@@ -267,7 +271,7 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       ckpt_name: job.ckpt_name ?? undefined,
       checkpoint_field_name: job.checkpoint_field_name ?? undefined,
     };
-    const provider = await getImageGenProvider(env, "create");
+    const provider = await getImageGenProvider(env, "create", request.workflow_key);
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {

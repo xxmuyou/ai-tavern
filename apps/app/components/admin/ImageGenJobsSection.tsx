@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { AdminImageGenJob } from '@/api/types';
-import { Button } from '@/components/Button';
+import { WebButton, WebCard, WebLoading, WebTabs, WebTag } from '@/components/web/ui';
 import { useAdminImageGenJobs } from '@/hooks/use-admin-image-gen-jobs';
 
-const FILTERS: { label: string; value: string | null }[] = [
-  { label: 'Failed', value: 'failed' },
-  { label: 'All', value: null },
+const FILTERS: { id: 'failed' | 'all'; label: string }[] = [
+  { id: 'failed', label: 'Failed' },
+  { id: 'all', label: 'All' },
 ];
 
 /**
@@ -16,82 +16,70 @@ const FILTERS: { label: string; value: string | null }[] = [
  * so admins can debug without querying D1 by hand.
  */
 export function ImageGenJobsSection() {
-  const [status, setStatus] = useState<string | null>('failed');
-  const { jobs, isLoading, error, reload } = useAdminImageGenJobs(status, 50);
+  const [filter, setFilter] = useState<'failed' | 'all'>('failed');
+  const { jobs, isLoading, error, reload } = useAdminImageGenJobs(filter === 'all' ? null : filter, 50);
 
   return (
-    <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-lg font-semibold text-app-text">Recent generation jobs</Text>
-      <Text className="mt-1 text-sm leading-6 text-app-muted">
+    <WebCard padding="md">
+      <Text className="font-serif text-title text-app-ink">Recent generation jobs</Text>
+      <Text className="mt-1 text-body-sm leading-6 text-app-muted">
         The real provider failure reason for each job. Use this to debug RunningHub errors
         (e.g. NODE_INFO_MISMATCH means a node id / field name in the WF1 config does not match
         the workflow).
       </Text>
 
       <View className="mt-3 flex-row items-center gap-2">
-        {FILTERS.map((filter) => (
-          <Pressable
-            key={filter.label}
-            accessibilityRole="button"
-            onPress={() => setStatus(filter.value)}
-            className={`rounded-full border px-3 py-2 ${
-              status === filter.value ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
-            }`}
-          >
-            <Text
-              className={`text-sm font-semibold ${status === filter.value ? 'text-white' : 'text-app-muted'}`}
-            >
-              {filter.label}
-            </Text>
-          </Pressable>
-        ))}
-        <View className="ml-auto w-24">
-          <Button disabled={isLoading} label="Refresh" onPress={() => void reload()} variant="secondary" />
+        <WebTabs
+          active={filter}
+          className="max-w-xs flex-1"
+          onChange={(id) => setFilter(id as 'failed' | 'all')}
+          size="sm"
+          tabs={FILTERS}
+          variant="pill"
+        />
+        <View className="ml-auto">
+          <WebButton disabled={isLoading} label="Refresh" onPress={() => void reload()} size="sm" variant="outline" />
         </View>
       </View>
 
-      {error ? <Text className="mt-3 text-sm font-semibold text-app-danger">{error}</Text> : null}
+      {error ? <Text className="mt-3 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
 
       {isLoading ? (
-        <View className="items-center py-8">
-          <ActivityIndicator color="#1E6B52" />
-        </View>
+        <WebLoading fullscreen={false} label="Loading jobs..." />
       ) : (
         <View className="mt-4 gap-3">
           {jobs.map((job) => (
             <JobRow key={job.id} job={job} />
           ))}
           {jobs.length === 0 ? (
-            <Text className="text-sm text-app-muted">No jobs to show.</Text>
+            <Text className="text-body-sm text-app-muted">No jobs to show.</Text>
           ) : null}
         </View>
       )}
-    </View>
+    </WebCard>
   );
 }
 
 function JobRow({ job }: { job: AdminImageGenJob }) {
   const failed = job.status === 'failed' || job.status === 'cancelled';
   return (
-    <View className="gap-1 rounded-lg border border-app-line bg-app-bg p-3">
+    <View className="gap-1 rounded-xl border border-app-line bg-app-sunken/60 p-3">
       <View className="flex-row flex-wrap items-center gap-2">
-        <Text
-          className={`text-xs font-semibold ${failed ? 'text-app-danger' : 'text-app-text'}`}
-        >
+        <WebTag size="sm" variant={failed ? 'danger' : 'neutral'}>
           {job.status}
-        </Text>
-        <Text className="text-xs text-app-muted">{job.task}</Text>
+        </WebTag>
+        <Text className="text-caption text-app-muted">{job.task}</Text>
         {job.workflow_key ? (
-          <Text className="text-xs text-app-muted">· {job.workflow_key}</Text>
+          <Text className="text-caption text-app-muted">· {job.workflow_key}</Text>
         ) : null}
-        {job.model ? <Text className="text-xs text-app-muted">· {job.model}</Text> : null}
-        <Text className="ml-auto text-xs text-app-muted">{formatTime(job.created_at)}</Text>
+        {job.model ? <Text className="text-caption text-app-muted">· {job.model}</Text> : null}
+        <Text className="ml-auto text-caption text-app-muted">{formatTime(job.created_at)}</Text>
       </View>
       {job.error_code ? (
-        <Text className="text-xs font-semibold text-app-danger">{job.error_code}</Text>
+        <Text className="text-caption font-semibold text-rose-deep">{job.error_code}</Text>
       ) : null}
       {job.error_message ? (
-        <Text className="text-xs leading-4 text-app-text">{job.error_message}</Text>
+        <Text className="text-body-sm leading-5 text-app-ink">{job.error_message}</Text>
       ) : null}
       {job.provider_task_id ? (
         <Text className="text-[11px] text-app-muted">task {job.provider_task_id}</Text>

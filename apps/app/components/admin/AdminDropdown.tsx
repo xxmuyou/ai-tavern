@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { cn } from '@/components/web/ui';
+
 /**
  * Shared admin dropdown: a pressable that toggles a list of options below it.
  * Replaces the near-identical local dropdowns previously inlined in
@@ -23,12 +25,12 @@ export function AdminDropdown<T extends string | null>({
       <Pressable
         accessibilityRole="button"
         onPress={() => setOpen((current) => !current)}
-        className="min-h-12 justify-center rounded-lg border border-app-line bg-white px-4"
+        className="min-h-12 justify-center rounded-xl border border-app-line bg-app-surface px-4 shadow-card"
       >
-        <Text className="text-base font-semibold text-app-text">{labelForValue(value)}</Text>
+        <Text className="text-body font-semibold text-app-ink">{labelForValue(value)}</Text>
       </Pressable>
       {open ? (
-        <View className="mt-2 overflow-hidden rounded-lg border border-app-line bg-white">
+        <View className="mt-2 overflow-hidden rounded-xl border border-app-line bg-app-surface shadow-card">
           {options.map((option) => (
             <Pressable
               key={option.value ?? 'none'}
@@ -37,14 +39,13 @@ export function AdminDropdown<T extends string | null>({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={`border-b border-app-line px-4 py-3 last:border-b-0 ${
-                option.value === value ? 'bg-app-primarySoft' : 'bg-white'
-              }`}
+              className={cn(
+                'border-b border-app-line px-4 py-3 last:border-b-0 hover:bg-rose-soft',
+                option.value === value ? 'bg-app-sunken/60' : 'bg-app-surface',
+              )}
             >
               <Text
-                className={`text-sm font-semibold ${
-                  option.value === value ? 'text-app-primary' : 'text-app-text'
-                }`}
+                className={cn('text-body-sm font-semibold', option.value === value ? 'text-rose-deep' : 'text-app-ink')}
               >
                 {option.label}
               </Text>

@@ -1,22 +1,34 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { deleteCompanion, mediaSource } from '@/api/companion-client';
-import { Button } from '@/components/Button';
+import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, WebTabs, WebTag } from '@/components/web/ui';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
-import { EmptyState } from '@/components/EmptyState';
-import { LoadingScreen } from '@/components/LoadingScreen';
 import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
-import { WebAppShell, WebInfoRow, WebPanel } from '@/components/web/WebAppShell';
+import { COMPANIONS_ROUTE } from '@/constants/routes';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
 import { relationshipGoalFromSummary } from '@/utils/relationship';
+
+type Tab = { id: string; label: string };
+
+const TABS: Tab[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'gallery', label: 'Gallery' },
+  { id: 'today', label: 'Today' },
+  { id: 'unlocks', label: 'Unlocks' },
+  { id: 'memories', label: 'Memories' },
+  { id: 'profile', label: 'Profile' },
+];
 
 export default function WebCompanionDetailScreen() {
   const router = useRouter();
@@ -24,15 +36,27 @@ export default function WebCompanionDetailScreen() {
   const companionId = Array.isArray(id) ? id[0] : id;
   const { data, error, isLoading, refetch } = useCompanion(companionId);
   const { pushError } = useErrorBanner();
+  const [tab, setTab] = useState<string>('overview');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (isLoading) {
-    return <LoadingScreen label="Loading companion..." />;
+    return <WebLoading label="Loading companion..." />;
   }
 
   if (error || !data) {
     return (
-      <WebAppShell title="Companion" subtitle="This profile could not be loaded.">
-        <EmptyState actionLabel="Try again" description="The companion profile could not be loaded." onAction={refetch} title="Companion unavailable" />
+      <WebAppShell
+        title="Companion"
+        subtitle="This profile could not be loaded."
+        breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }]}
+      >
+        <WebEmptyState
+          actionLabel="Try again"
+          description="The companion profile could not be loaded."
+          onAction={refetch}
+          title="Companion unavailable"
+        />
       </WebAppShell>
     );
   }
@@ -41,91 +65,201 @@ export default function WebCompanionDetailScreen() {
   const imageSource = mediaSource(companion.art_url);
   const canEdit = companion.source === 'user';
   const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
+  const traits = (companion.personality ?? '').split(/[.,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4);
 
-  async function removeCompanion() {
-    if (!window.confirm(`Delete ${companion.name}? This will remove the custom companion from your list.`)) {
-      return;
-    }
+  async function handleDelete() {
+    setIsDeleting(true);
     try {
       await deleteCompanion(companion.id);
-      router.replace('/companions' as Href);
+      router.replace(COMPANIONS_ROUTE as Href);
     } catch (nextError) {
+      setIsDeleting(false);
+      setConfirmDelete(false);
       pushError(nextError instanceof Error ? nextError.message : 'Companion could not be deleted.');
     }
   }
 
   return (
     <WebAppShell
-      actions={canEdit ? (
-        <>
-          <Button label="Edit" onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)} variant="secondary" />
-          <Button label="Delete" onPress={() => void removeCompanion()} variant="danger" />
-        </>
-      ) : null}
+      actions={
+        <View className="flex-row items-center gap-2">
+          <WebButton
+            label="Start chat"
+            onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+            variant="primary"
+            iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
+          />
+          {canEdit ? (
+            <>
+              <WebButton
+                label="Edit"
+                onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
+                variant="outline"
+              />
+              <WebButton label="Delete" onPress={() => setConfirmDelete(true)} variant="ghost" />
+            </>
+          ) : null}
+        </View>
+      }
       title={companion.name}
       subtitle={companion.relationship_role ?? 'Companion profile'}
+      breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }, { label: companion.name }]}
     >
-      <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <WebPanel>
-          <View className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
-            <View pointerEvents="none" style={portraitStyles.portraitFloor} />
-            {imageSource ? (
-              <Image accessibilityLabel={companion.name} resizeMode="contain" source={imageSource} style={portraitStyles.portraitImage} />
-            ) : (
-              <View className="h-full w-full items-center justify-center">
-                <Text className="text-6xl font-semibold text-app-primary">{companion.name.slice(0, 1).toUpperCase()}</Text>
+      <View className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_2fr]">
+        {/* Profile card */}
+        <View className="gap-5">
+          <WebCard padding="lg" className="gap-5">
+            <View className="items-center gap-4">
+              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-rose-soft shadow-float">
+                <View pointerEvents="none" style={portraitStyles.portraitFloor} />
+                {imageSource ? (
+                  <Image
+                    accessibilityLabel={companion.name}
+                    resizeMode="contain"
+                    source={imageSource}
+                    style={portraitStyles.portraitImage}
+                  />
+                ) : (
+                  <View className="h-full w-full items-center justify-center">
+                    <Text className="font-serif text-display-2xl text-rose-deep/60">
+                      {companion.name.slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View className="absolute left-3 top-3">
+                  <WebTag size="sm" variant={companion.source === 'user' ? 'ember' : 'rose'}>
+                    {companion.source === 'user' ? 'Yours' : 'Official'}
+                  </WebTag>
+                </View>
               </View>
-            )}
-          </View>
-          <View className="mt-5 gap-2">
-            <Text className="text-2xl font-semibold text-app-text">{companion.name}</Text>
-            <Text className="text-sm uppercase tracking-normal text-app-muted">{companion.relationship_role}</Text>
-            <Button label="Start chat" onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)} />
-          </View>
-        </WebPanel>
+              <View className="items-center gap-2">
+                <Text className="font-serif text-display-sm text-app-ink">{companion.name}</Text>
+                {companion.relationship_role ? (
+                  <Text className="text-caption uppercase tracking-wider text-rose-deep">
+                    {companion.relationship_role}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
 
-        <View className="gap-6 xl:col-span-2">
-          <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
-          <RelationshipGoalPanel goal={relationshipGoal} />
-          <CompanionUnlocksPanel companionId={companion.id} />
-          <CompanionGalleryPanel
-            artEmotions={companion.art_emotions}
-            artUrl={companion.art_url}
-            companionId={companion.id}
-            name={companion.name}
-          />
-          <CompanionTodayPanel companionId={companion.id} recommended={relationshipGoal.recommended_activity} />
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">Timeline</Text>
-            <WebInfoRow label="First met" value={formatDateTime(companion.relationship.first_met_at)} />
-            <WebInfoRow label="Last interaction" value={formatDateTime(companion.relationship.last_interaction_at)} />
-          </WebPanel>
-          <WebPanel>
-            <Text className="mb-3 text-xl font-semibold text-app-text">Profile</Text>
-            <TextBlock label="Personality" value={companion.personality} />
-            <TextBlock label="Background" value={companion.background} />
-            <TextBlock label="Appearance" value={companion.appearance} />
-            <TextBlock label="Speech style" value={companion.speech_style} />
-          </WebPanel>
-          <CompanionMemoriesPreview companionId={companion.id} portraitUrl={companion.art_url} />
+            {traits.length > 0 ? (
+              <View className="flex-row flex-wrap justify-center gap-1.5">
+                {traits.map((trait) => (
+                  <WebTag key={trait} size="sm" variant="rose">
+                    {trait}
+                  </WebTag>
+                ))}
+              </View>
+            ) : null}
+
+            <View className="border-t border-app-line-soft pt-4">
+              <Text className="text-overline text-rose-deep">Relationship goal</Text>
+              <Text className="mt-2 font-serif text-title-sm text-app-ink">{relationshipGoal.label}</Text>
+              <Text className="mt-1 text-caption text-app-muted">Stage · {relationshipGoal.stage}</Text>
+            </View>
+
+            <View className="flex-row items-center justify-between gap-3 border-t border-app-line-soft pt-4">
+              <View>
+                <Text className="text-overline text-app-muted">First met</Text>
+                <Text className="mt-1 text-body-sm text-app-ink-soft">{formatDateTime(companion.relationship.first_met_at)}</Text>
+              </View>
+              <View>
+                <Text className="text-overline text-app-muted text-right">Last seen</Text>
+                <Text className="mt-1 text-body-sm text-app-ink-soft text-right">{formatDateTime(companion.relationship.last_interaction_at)}</Text>
+              </View>
+            </View>
+          </WebCard>
+        </View>
+
+        {/* Tabbed content */}
+        <View className="gap-6">
+          <WebTabs active={tab} onChange={setTab} tabs={TABS} variant="underline" />
+
+          {tab === 'overview' ? (
+            <View className="gap-6">
+              <CompanionGalleryPanel
+                artEmotions={companion.art_emotions}
+                artUrl={companion.art_url}
+                companionId={companion.id}
+                name={companion.name}
+              />
+              <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
+              <RelationshipGoalPanel goal={relationshipGoal} />
+              <WebPanel>
+                <Text className="mb-2 text-overline text-rose-deep">Current stage</Text>
+                <Text className="font-serif text-title text-app-ink">{companion.relationship.stage ?? '—'}</Text>
+                <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">
+                  A snapshot of how this companion is presenting today. It shifts with your conversations, time of day, and story beat.
+                </Text>
+              </WebPanel>
+            </View>
+          ) : null}
+
+          {tab === 'gallery' ? (
+            <CompanionGalleryPanel
+              artEmotions={companion.art_emotions}
+              artUrl={companion.art_url}
+              companionId={companion.id}
+              name={companion.name}
+            />
+          ) : null}
+
+          {tab === 'today' ? (
+            <CompanionTodayPanel
+              companionId={companion.id}
+              recommended={relationshipGoal.recommended_activity}
+            />
+          ) : null}
+
+          {tab === 'unlocks' ? (
+            <CompanionUnlocksPanel companionId={companion.id} />
+          ) : null}
+
+          {tab === 'memories' ? (
+            <CompanionMemoriesPreview companionId={companion.id} portraitUrl={companion.art_url} />
+          ) : null}
+
+          {tab === 'profile' ? (
+            <WebCard padding="lg" className="gap-1">
+              <Text className="mb-3 text-overline text-rose-deep">Character card</Text>
+              <TextBlock label="Personality" value={companion.personality} />
+              <TextBlock label="Background" value={companion.background} />
+              <TextBlock label="Appearance" value={companion.appearance} />
+              <TextBlock label="Speech style" value={companion.speech_style} />
+            </WebCard>
+          ) : null}
         </View>
       </View>
+
+      <WebDialog
+        description={`"${companion.name}" and all its memories will be removed from your sandbox. This cannot be undone.`}
+        footer={
+          <View className="flex-row items-center justify-end gap-3">
+            <WebButton label="Cancel" onPress={() => setConfirmDelete(false)} variant="ghost" />
+            <WebButton label="Delete" onPress={handleDelete} variant="danger" isLoading={isDeleting} />
+          </View>
+        }
+        onClose={() => setConfirmDelete(false)}
+        open={confirmDelete}
+        size="sm"
+        title={`Delete ${companion.name}?`}
+      />
     </WebAppShell>
   );
 }
 
 const portraitStyles = StyleSheet.create({
   portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: 'rgba(255,255,255,0.45)',
     bottom: 0,
-    height: 58,
+    height: 64,
     left: 0,
     position: 'absolute',
     right: 0,
   },
   portraitImage: {
     height: '112%',
-    transform: [{ translateY: 9 }],
+    transform: [{ translateY: 12 }],
     width: '112%',
   },
 });
@@ -133,9 +267,9 @@ const portraitStyles = StyleSheet.create({
 function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <View className="mb-4">
-      <Text className="text-sm font-semibold text-app-text">{label}</Text>
-      <Text className="mt-1 text-sm leading-6 text-app-muted">{value}</Text>
+    <View className="mb-4 border-b border-app-line-soft pb-4 last:border-b-0 last:pb-0">
+      <Text className="text-overline text-rose-deep">{label}</Text>
+      <Text className="mt-1.5 text-body-sm leading-7 text-app-ink-soft">{value}</Text>
     </View>
   );
 }

@@ -1,6 +1,8 @@
 # spec-026: Companion Story Beats（角色剧情拍框架）
 
-> **类型：** 后端 + 前端 + 内容 seed  |  **依赖：** spec-005(relationships), spec-006(chat), spec-007(scenes), spec-008(events), spec-024/025(沉浸感)  |  **估时：** 4-6 天  |  **状态：** 🟡 in-progress
+> **类型：** 后端 + 前端 + 内容 seed  |  **依赖：** spec-005(relationships), spec-006(chat), spec-007(scenes), spec-008(events), spec-024/025(沉浸感)  |  **估时：** 4-6 天  |  **状态：** ✅ done（已合并 `0b8f31c` / 合并点 `99a0548`）
+
+> **进度备注：** 本 spec 已实现并合入 main。已完成项：阶段边界 `closeness >= 20 → familiar`（[stage.ts](../../packages/api/src/relationships/stage.ts)）、`title:familiar` unlock 接入 chat 与 event resolve（[unlocks.ts](../../packages/api/src/relationships/unlocks.ts)）、`companion_story_beats` / `user_story_progress`（migration 0027）、`/scenes/{id}/enter` 返回 `active_story_beat`、chat prompt 注入 active beat、官方 companion 示例 seed。spec-027 在此基础上消费 scene/chat 上下文。
 
 ---
 

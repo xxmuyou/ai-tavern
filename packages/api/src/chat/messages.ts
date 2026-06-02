@@ -170,6 +170,7 @@ export async function handlePostMessage(
   const sse = createSSEStream();
   ctx.waitUntil(
     runChat({
+      activity_id: activityIdInput,
       companionId,
       ctx,
       env,
@@ -197,6 +198,7 @@ type RunChatArgs = {
   companionId: string;
   thread: ChatThreadRow;
   scene_id: string | null;
+  activity_id: string | null;
   narrative: string;
   userText: string;
   subscriber: boolean;
@@ -205,7 +207,7 @@ type RunChatArgs = {
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, narrative, userText, subscriber, now, ctx } =
+  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, narrative, userText, subscriber, now, ctx } =
     args;
 
   let replyBuffer = "";
@@ -242,6 +244,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
   // Persist both messages and bump the thread before signal extraction.
   try {
     const persistResult = await persistMessages({
+      activityId: activity_id,
       companionId,
       companionReply: replyBuffer,
       env,
@@ -342,6 +345,7 @@ type PersistInput = {
   companionId: string;
   thread: ChatThreadRow;
   sceneId: string | null;
+  activityId: string | null;
   userText: string;
   companionReply: string;
   tokens: LLMUsage;
@@ -349,30 +353,31 @@ type PersistInput = {
 };
 
 async function persistMessages(input: PersistInput): Promise<{ companionMessageId: string }> {
-  const { env, thread, sceneId, userText, companionReply, tokens, now } = input;
+  const { env, thread, sceneId, activityId, userText, companionReply, tokens, now } = input;
   const userMessageId = crypto.randomUUID();
   const companionMessageId = crypto.randomUUID();
 
   await env.DB.prepare(
     `INSERT INTO messages
-       (id, thread_id, role, content, scene_id, signals, emotion,
+       (id, thread_id, role, content, scene_id, activity_id, signals, emotion,
         llm_provider, llm_model, token_input, token_output, created_at)
-     VALUES (?, ?, 'user', ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, ?)`,
+     VALUES (?, ?, 'user', ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, ?)`,
   )
-    .bind(userMessageId, thread.id, userText, sceneId, now)
+    .bind(userMessageId, thread.id, userText, sceneId, activityId, now)
     .run();
 
   await env.DB.prepare(
     `INSERT INTO messages
-       (id, thread_id, role, content, scene_id, signals, emotion,
+       (id, thread_id, role, content, scene_id, activity_id, signals, emotion,
         llm_provider, llm_model, token_input, token_output, created_at)
-     VALUES (?, ?, 'companion', ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)`,
+     VALUES (?, ?, 'companion', ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?, ?)`,
   )
     .bind(
       companionMessageId,
       thread.id,
       companionReply,
       sceneId,
+      activityId,
       tokens.input_tokens,
       tokens.output_tokens,
       now + 1,

@@ -7,6 +7,7 @@ import type { CompanionCreateInput } from '@/api/types';
 import { BaseArtPanel } from '@/components/BaseArtPanel';
 import { CompanionForm } from '@/components/CompanionForm';
 import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebCard, WebSection } from '@/components/web/ui';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useScenes } from '@/hooks/use-scenes';
 
@@ -38,18 +39,30 @@ export default function WebCompanionCreateScreen() {
       title="Create companion"
       subtitle={artKey ? 'Fill in the character card to finish.' : 'Pick a style and describe the portrait to generate.'}
     >
-      {artKey ? (
-        <CompanionForm
-          initialArtUrl={artKey}
-          isSubmitting={isSubmitting}
-          mode="create"
-          onPickArt={pickWebArt}
-          onSubmit={submit}
-          scenes={scenes.data?.scenes}
-        />
-      ) : (
-        <BaseArtPanel onConfirm={confirmArt} onUploadArt={pickWebArt} />
-      )}
+      <WebSection
+        description={
+          artKey
+            ? 'Complete the character details that shape conversation and scene recommendations.'
+            : 'Start with a portrait, then move into the companion card.'
+        }
+        eyebrow="Atelier"
+        title={artKey ? 'Companion card' : 'Base portrait'}
+      >
+        <WebCard padding="md">
+          {artKey ? (
+            <CompanionForm
+              initialArtUrl={artKey}
+              isSubmitting={isSubmitting}
+              mode="create"
+              onPickArt={pickWebArt}
+              onSubmit={submit}
+              scenes={scenes.data?.scenes}
+            />
+          ) : (
+            <BaseArtPanel onConfirm={confirmArt} onUploadArt={pickWebArt} />
+          )}
+        </WebCard>
+      </WebSection>
     </WebAppShell>
   );
 }

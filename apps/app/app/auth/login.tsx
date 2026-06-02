@@ -1,12 +1,21 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 
+import { isApiRequestError } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
+
+function signInErrorMessage(error: unknown): string {
+  if (isApiRequestError(error) && error.code === 'api_unreachable') {
+    return `The API is not reachable at ${error.apiBaseUrl}.`;
+  }
+  return 'Could not send the sign-in link. Please try again later.';
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -42,8 +51,8 @@ export default function LoginScreen() {
       setNotice(response.verify_url
         ? `Sign-in link is ready for ${trimmedEmail}. Open it within 15 minutes.`
         : `A sign-in link has been sent to ${trimmedEmail}. Please open it within 15 minutes.`);
-    } catch {
-      pushError('Could not send the sign-in link. Please try again later.');
+    } catch (error) {
+      pushError(signInErrorMessage(error));
     } finally {
       setIsSendingLink(false);
     }
@@ -56,7 +65,12 @@ export default function LoginScreen() {
         <Text className="mt-2 text-center text-sm leading-5 text-app-muted">Sign in to enter an urban fantasy relationship sandbox.</Text>
 
         <View className="mt-8 gap-3">
-          <Button label="Continue with Google" onPress={signInGoogle} />
+          <Button
+            iconLeft={<Ionicons color="#3B6EA5" name="logo-google" size={18} />}
+            label="Continue with Google"
+            onPress={signInGoogle}
+            variant="google"
+          />
           <View className="my-2 flex-row items-center gap-3">
             <View className="h-px flex-1 bg-app-line" />
             <Text className="text-xs uppercase tracking-normal text-app-muted">or email</Text>

@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 
 import type {
   AdminSettingItem,
@@ -12,7 +12,7 @@ import type {
   LlmUsageTotals,
   LlmUsageWindow,
 } from '@/api/types';
-import { Button } from '@/components/Button';
+import { WebButton, WebLoading } from '@/components/web/ui';
 import { LLM_PROVIDERS } from '@/constants/llm';
 import { useAdminLlm } from '@/hooks/use-admin-llm';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
@@ -21,7 +21,7 @@ import { AdminDropdown } from './AdminDropdown';
 import { SettingRow } from './SettingsSection';
 
 const INPUT_CLASS =
-  'min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text';
+  'min-h-12 rounded-lg border border-app-line bg-app-surface px-4 text-base text-app-ink';
 
 const USAGE_WINDOWS: LlmUsageWindow[] = ['today', '7d', '30d'];
 const LLM_SECRET_KEYS: Partial<Record<LlmProvider, string>> = {
@@ -64,19 +64,19 @@ export function LlmSection() {
   if (isLoadingConfig || isLoadingSettings) {
     return (
       <View className="items-center py-12">
-        <ActivityIndicator color="#1E6B52" />
+        <WebLoading fullscreen={false} label="Loading..." />
       </View>
     );
   }
 
   return (
     <View className="gap-4">
-      <View className="rounded-lg border border-app-line bg-white p-5">
-        <Text className="text-lg font-semibold text-app-text">Companion chat models</Text>
+      <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
+        <Text className="text-lg font-semibold text-app-ink">Companion chat models</Text>
         <Text className="mt-1 text-sm leading-6 text-app-muted">
           Manage model routing used by companion conversations and related LLM tasks. Provider keys are managed in environment secrets.
         </Text>
-        {settingsError ? <Text className="mt-2 text-sm font-semibold text-app-danger">{settingsError}</Text> : null}
+        {settingsError ? <Text className="mt-2 text-sm font-semibold text-rose-deep">{settingsError}</Text> : null}
       </View>
       <ProviderPanel
         onReveal={reveal}
@@ -140,8 +140,8 @@ function ProviderPanel({
   const providerTasks = tasks.filter((task) => task.provider === selected);
 
   return (
-    <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-lg font-semibold text-app-text">Provider</Text>
+    <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
+      <Text className="text-lg font-semibold text-app-ink">Provider</Text>
       <Text className="mt-1 text-sm leading-6 text-app-muted">
         Pick a provider to check its key status, see its integrated models, and route tasks to it.
       </Text>
@@ -164,7 +164,7 @@ function ProviderPanel({
           {secretItem ? (
             <SettingRow item={secretItem} onReveal={onReveal} onSave={onSave} />
           ) : (
-            <Text className="rounded-lg border border-app-line bg-app-bg p-4 text-xs text-app-muted">
+            <Text className="rounded-xl border border-app-line bg-app-sunken/60 p-4 text-xs text-app-muted">
               No API key setting is registered for this provider yet.
             </Text>
           )}
@@ -177,8 +177,8 @@ function ProviderPanel({
           ) : (
             <View className="flex-row flex-wrap gap-2">
               {models.map((model) => (
-                <View key={model} className="rounded-full border border-app-line bg-app-bg px-3 py-1">
-                  <Text className="text-xs font-semibold text-app-text">{model}</Text>
+                <View key={model} className="rounded-full border border-app-line bg-app-canvas px-3 py-1">
+                  <Text className="text-xs font-semibold text-app-ink">{model}</Text>
                 </View>
               ))}
             </View>
@@ -218,10 +218,10 @@ function ProviderPanel({
 
 function ConfigRow({ onEdit, row }: { onEdit: () => void; row: LlmConfigItem }) {
   return (
-    <View className="rounded-lg border border-app-line bg-app-bg p-4">
+    <View className="rounded-xl border border-app-line bg-app-sunken/60 p-4">
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
-          <Text className="text-base font-semibold text-app-text">{row.task}</Text>
+          <Text className="text-base font-semibold text-app-ink">{row.task}</Text>
           <Text className="mt-1 text-sm text-app-muted">
             {row.provider} · {row.model}
           </Text>
@@ -235,7 +235,7 @@ function ConfigRow({ onEdit, row }: { onEdit: () => void; row: LlmConfigItem }) 
           ) : null}
         </View>
         <View className="w-24">
-          <Button label="Edit" onPress={onEdit} variant="secondary" />
+          <WebButton label="Edit" onPress={onEdit} variant="secondary" />
         </View>
       </View>
     </View>
@@ -271,8 +271,8 @@ function ConfigEditor({
   }
 
   return (
-    <View className="rounded-lg border border-app-primary bg-app-bg p-4">
-      <Text className="text-base font-semibold text-app-text">{row.task}</Text>
+    <View className="rounded-xl border border-rose bg-rose-soft p-4">
+      <Text className="text-base font-semibold text-app-ink">{row.task}</Text>
       <View className="mt-3 gap-3">
         <Field label="Provider">
           <ProviderPicker onChange={(p) => setProvider(p ?? provider)} value={provider} />
@@ -294,10 +294,10 @@ function ConfigEditor({
         ) : null}
         <View className="flex-row gap-3">
           <View className="flex-1">
-            <Button label="Cancel" onPress={onCancel} variant="secondary" />
+            <WebButton label="Cancel" onPress={onCancel} variant="secondary" />
           </View>
           <View className="flex-1">
-            <Button isLoading={isSaving} label="Save" onPress={handleSave} />
+            <WebButton isLoading={isSaving} label="Save" onPress={handleSave} />
           </View>
         </View>
       </View>
@@ -340,8 +340,8 @@ function TestPanel({
   }
 
   return (
-    <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-lg font-semibold text-app-text">Test call</Text>
+    <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
+      <Text className="text-lg font-semibold text-app-ink">Test call</Text>
       <Text className="mt-1 text-sm leading-6 text-app-muted">
         Sends a one-off prompt. Leave the override as Default to use the task&apos;s configured provider.
       </Text>
@@ -365,7 +365,7 @@ function TestPanel({
             placeholder="Say hello"
             placeholderTextColor="#8B949E"
             value={prompt}
-            className="min-h-24 rounded-lg border border-app-line bg-white px-4 py-3 text-base text-app-text"
+            className="min-h-24 rounded-lg border border-app-line bg-app-surface px-4 py-3 text-base text-app-ink"
           />
         </Field>
         <Field label="Override provider (optional)">
@@ -380,7 +380,7 @@ function TestPanel({
             />
           </Field>
         ) : null}
-        <Button disabled={!activeTask} isLoading={isTesting} label="Run test" onPress={handleRun} />
+        <WebButton disabled={!activeTask} isLoading={isTesting} label="Run test" onPress={handleRun} />
       </View>
 
       {result ? <TestResult result={result} /> : null}
@@ -391,23 +391,23 @@ function TestPanel({
 function TestResult({ result }: { result: LlmTestResult }) {
   if (result.ok) {
     return (
-      <View className="mt-4 rounded-lg border border-app-line bg-app-bg p-4">
-        <Text className="text-xs font-semibold uppercase text-app-primary">Success</Text>
+      <View className="mt-4 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+        <Text className="text-xs font-semibold uppercase text-rose-deep">Success</Text>
         <Text className="mt-1 text-xs text-app-muted">
           {result.provider} · {result.model} · {result.tokens.input}/{result.tokens.output} tok · $
           {result.cost_usd.toFixed(4)} · {result.latency_ms}ms
         </Text>
-        <Text className="mt-2 text-sm text-app-text">{result.text}</Text>
+        <Text className="mt-2 text-sm text-app-ink">{result.text}</Text>
       </View>
     );
   }
   return (
-    <View className="mt-4 rounded-lg border border-app-danger bg-app-bg p-4">
-      <Text className="text-xs font-semibold uppercase text-app-danger">{result.error_code}</Text>
+    <View className="mt-4 rounded-lg border border-app-danger bg-app-canvas p-4">
+      <Text className="text-xs font-semibold uppercase text-rose-deep">{result.error_code}</Text>
       <Text className="mt-1 text-xs text-app-muted">
         {result.provider} · {result.model} · {result.latency_ms}ms
       </Text>
-      <Text className="mt-2 text-sm text-app-text">{result.error_message}</Text>
+      <Text className="mt-2 text-sm text-app-ink">{result.error_message}</Text>
     </View>
   );
 }
@@ -428,8 +428,8 @@ function UsagePanel({
   usageWindow: LlmUsageWindow;
 }) {
   return (
-    <View className="rounded-lg border border-app-line bg-white p-5">
-      <Text className="text-lg font-semibold text-app-text">Usage</Text>
+    <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
+      <Text className="text-lg font-semibold text-app-ink">Usage</Text>
       <View className="mt-3 flex-row gap-2">
         {USAGE_WINDOWS.map((window) => (
           <Chip
@@ -447,7 +447,7 @@ function UsagePanel({
         <View className="mt-4 gap-4">
           <TotalsRow totals={usage.totals} />
           <View className="gap-2">
-            <Text className="text-sm font-semibold text-app-text">By task · provider</Text>
+            <Text className="text-sm font-semibold text-app-ink">By task · provider</Text>
             {usage.by_task_provider.length === 0 ? (
               <Text className="text-sm text-app-muted">No calls in this window.</Text>
             ) : (
@@ -475,7 +475,7 @@ function TotalsRow({ totals }: { totals: LlmUsageTotals }) {
 function UsageRow({ row }: { row: LlmUsageByTaskProvider }) {
   return (
     <View className="border-b border-app-line py-2 last:border-b-0">
-      <Text className="text-sm font-semibold text-app-text">
+      <Text className="text-sm font-semibold text-app-ink">
         {row.task} · {row.provider}
       </Text>
       <Text className="mt-0.5 text-xs text-app-muted">
@@ -501,9 +501,9 @@ function Field({ children, label }: { children: ReactNode; label: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <View className="min-w-20 flex-1 rounded-lg border border-app-line bg-app-bg p-3">
+    <View className="min-w-20 flex-1 rounded-xl border border-app-line bg-app-sunken/60 p-3">
       <Text className="text-xs uppercase text-app-muted">{label}</Text>
-      <Text className="mt-1 text-base font-semibold text-app-text">{value}</Text>
+      <Text className="mt-1 text-base font-semibold text-app-ink">{value}</Text>
     </View>
   );
 }
@@ -514,10 +514,10 @@ function Chip({ active, label, onPress }: { active: boolean; label: string; onPr
       accessibilityRole="button"
       onPress={onPress}
       className={`min-h-9 items-center justify-center rounded-full border px-3 ${
-        active ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-white'
+        active ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-surface'
       }`}
     >
-      <Text className={`text-xs font-semibold ${active ? 'text-app-primary' : 'text-app-muted'}`}>
+      <Text className={`text-xs font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>
         {label}
       </Text>
     </Pressable>

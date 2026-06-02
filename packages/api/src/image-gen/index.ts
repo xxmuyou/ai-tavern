@@ -68,9 +68,15 @@ export {
 export async function getImageGenProvider(
   env: Env,
   mode: ImageGenMode,
+  workflowKey?: string | null,
 ): Promise<ImageGenProvider> {
   const cfg = await resolveImageGenConfig(env);
-  const perMode = mode === "create" ? cfg.wf1Provider : cfg.wf2Provider;
+  const perMode =
+    workflowKey === "wf_moment"
+      ? cfg.wfMomentProvider
+      : mode === "create"
+        ? cfg.wf1Provider
+        : cfg.wf2Provider;
   const provider = (perMode?.trim() || cfg.provider || "mock").toLowerCase();
   switch (provider) {
     case "runninghub":
