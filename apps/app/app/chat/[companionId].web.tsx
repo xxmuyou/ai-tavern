@@ -21,6 +21,7 @@ import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
+import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
@@ -133,9 +134,13 @@ export default function WebChatScreen() {
     });
     setDraft('');
 
+    let serverMessageId = '';
     try {
       const result = await stream.send(text, {
         activityId,
+        onDone: (info) => {
+          serverMessageId = info.messageId;
+        },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onSignals: (signals) => {
           setLastSignals(signals);
@@ -152,8 +157,9 @@ export default function WebChatScreen() {
         content: result.text,
         created_at: new Date().toISOString(),
         emotion: result.emotion,
-        id: `local-companion-${Date.now()}`,
+        id: serverMessageId || `local-companion-${Date.now()}`,
         role: 'companion',
+        scene_id: sceneId ?? null,
       });
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
@@ -277,13 +283,22 @@ export default function WebChatScreen() {
                   </Pressable>
                 </View>
               ) : null}
-              {items.map((item) =>
-                isStreamingItem(item) ? (
-                  <StreamingBubble key={item.id} text={item.text} />
-                ) : (
-                  <MessageBubble key={item.id} content={item.content} role={item.role === 'assistant' ? 'companion' : item.role} />
-                ),
-              )}
+              {items.map((item) => {
+                if (isStreamingItem(item)) {
+                  return <StreamingBubble key={item.id} text={item.text} />;
+                }
+                const role = item.role === 'assistant' ? 'companion' : item.role;
+                const showCapture =
+                  role === 'companion' && typeof item.scene_id === 'string' && item.scene_id.length > 0;
+                return (
+                  <View key={item.id}>
+                    <MessageBubble content={item.content} role={role} />
+                    {showCapture ? (
+                      <MomentImageCapture messageId={item.id} initialMoment={item.moment_image ?? null} />
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           </View>
           {remainingSeconds > 0 ? (

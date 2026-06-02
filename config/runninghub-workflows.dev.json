@@ -45,6 +45,14 @@
       "promptNodeId": "13",
       "isActive": true,
       "sortOrder": 20
+    },
+    "wf_moment": {
+      "label": "WF_MOMENT - chat scene moment (create)",
+      "mode": "create",
+      "workflowId": "",
+      "promptNodeId": "",
+      "isActive": true,
+      "sortOrder": 30
     }
   }
 }

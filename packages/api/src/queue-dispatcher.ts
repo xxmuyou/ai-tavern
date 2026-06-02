@@ -2,7 +2,8 @@ import { LLMError } from "./llm";
 import { processSummary } from "./chat/summary-consumer";
 import type { SummaryJobPayload } from "./chat/summary-queue";
 import { isArtJobPayload, processArtJob } from "./companions/art-consumer";
-import { isBaseArtJobPayload, processBaseArtJob } from "./image-gen/base-art";
+import { isBaseArtJobPayload, loadBaseArtJob, processBaseArtJob } from "./image-gen/base-art";
+import { TASK_MOMENT_IMAGE, processMomentImageJob } from "./image-gen/moment-image";
 
 function isSummaryPayload(value: unknown): value is SummaryJobPayload {
   if (!value || typeof value !== "object") return false;
@@ -72,14 +73,21 @@ export async function dispatchQueueBatch(
 
     if (isBaseArtJobPayload(body)) {
       try {
-        await processBaseArtJob(env, body.job_id);
+        // The image.generate payload is shared across image_generation_jobs
+        // tasks; disambiguate by the job's task column.
+        const job = await loadBaseArtJob(env, body.job_id);
+        if (job?.task === TASK_MOMENT_IMAGE) {
+          await processMomentImageJob(env, body.job_id);
+        } else {
+          await processBaseArtJob(env, body.job_id);
+        }
         message.ack();
       } catch (err) {
         console.error(
           JSON.stringify({
             error: err instanceof Error ? err.message : String(err),
             job_id: body.job_id,
-            message: "Base-art job failed, will retry",
+            message: "Image-gen job failed, will retry",
           }),
         );
         message.retry();

@@ -177,7 +177,7 @@ describe("base-art job pipeline", () => {
 
     const job = (await loadBaseArtJob(env, jobId)) as ImageGenJobRow;
     expect(job.status).toBe("succeeded");
-    expect(job.output_key).toMatch(/^user-art\/usr_1\/base-art\/.+\.png$/);
+    expect(job.output_key).toMatch(/^user-art\/usr_1\/companion-base-art\/.+\.png$/);
     expect(assets.has(job.output_key!)).toBe(true);
   });
 
