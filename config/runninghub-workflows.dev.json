@@ -1,25 +1,25 @@
 {
   "checkpoints": [
     {
-      "id": "realistic_juggernaut",
+      "id": "realistic_firstup",
       "label": "Realistic - Juggernaut XL",
-      "ckptName": "juggernautXL_ragnarokBy.safetensors",
+      "ckptName": "excelaxl_20251018b.safetensors",
       "tags": ["realistic"],
       "isActive": true,
       "sortOrder": 10
     },
     {
-      "id": "anime_jp_animagine",
+      "id": "anime_jp_动漫二次元",
       "label": "Anime JP - Animagine XL",
-      "ckptName": "animagineXL40_v4Opt.safetensors",
+      "ckptName": "sdxl-动漫二次元_4.0.safetensors",
       "tags": ["anime", "jp"],
       "isActive": true,
       "sortOrder": 20
     },
     {
-      "id": "anime_kr_ghostxl",
+      "id": "anime_kr_selfup",
       "label": "Anime KR - Ghost XL",
-      "ckptName": "ghostxl_v10BakedVAE.safetensors",
+      "ckptName": "illustraversa_vektor.safetensors",
       "tags": ["anime", "kr"],
       "isActive": true,
       "sortOrder": 30
@@ -33,7 +33,7 @@
       "promptNodeId": "2",
       "checkpointNodeId": "1",
       "checkpointFieldName": "ckpt_name",
-      "modelIds": ["realistic_juggernaut", "anime_jp_animagine", "anime_kr_ghostxl"],
+      "modelIds": ["realistic_firstup", "anime_jp_动漫二次元", "anime_kr_selfup"],
       "isActive": true,
       "sortOrder": 10
     },
