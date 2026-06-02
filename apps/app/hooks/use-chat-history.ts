@@ -5,6 +5,10 @@ import type { ChatMessage } from '@/api/types';
 
 const PAGE_SIZE = 30;
 
+export type ChatHistoryRefreshOptions = {
+  silent?: boolean;
+};
+
 export type UseChatHistoryResult = {
   appendMessage: (message: ChatMessage) => void;
   error: Error | null;
@@ -13,7 +17,7 @@ export type UseChatHistoryResult = {
   isLoadingMore: boolean;
   loadMore: () => Promise<void>;
   messages: ChatMessage[];
-  refresh: () => Promise<void>;
+  refresh: (options?: ChatHistoryRefreshOptions) => Promise<void>;
   replaceMessage: (id: string, next: ChatMessage) => void;
   reset: () => void;
 };
@@ -33,9 +37,12 @@ export function useChatHistory(companionId: string): UseChatHistoryResult {
     };
   }, []);
 
-  const refresh = useCallback(async () => {
-    setIsLoadingInitial(true);
-    setError(null);
+  const refresh = useCallback(async (options: ChatHistoryRefreshOptions = {}) => {
+    const isSilent = options.silent === true;
+    if (!isSilent) {
+      setIsLoadingInitial(true);
+      setError(null);
+    }
     try {
       const response = await getChatHistory(companionId, { limit: PAGE_SIZE });
       if (!isMountedRef.current) {
@@ -43,12 +50,13 @@ export function useChatHistory(companionId: string): UseChatHistoryResult {
       }
       setMessages(response.messages);
       setHasMore(response.next_cursor !== null);
+      setError(null);
     } catch (nextError) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !isSilent) {
         setError(nextError instanceof Error ? nextError : new Error('Failed to load history.'));
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !isSilent) {
         setIsLoadingInitial(false);
       }
     }
