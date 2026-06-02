@@ -19,6 +19,7 @@ import { clearChatHistory, getCompanion } from '@/api/companion-client';
 import type {
   ChatEmotionKey,
   ChatMessage,
+  ChatMomentImage,
   ChatUnlock,
   CompanionSource,
   NonNeutralChatEmotionKey,
@@ -332,6 +333,12 @@ function ChatScreenInner() {
     source: companion.source,
   });
 
+  const updateHistoryMessage = history.updateMessage;
+  const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
+    updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
+    shouldScrollOnNextRef.current = true;
+  }, [updateHistoryMessage]);
+
   const renderItem = useCallback(({ item }: { item: ChatListItem }) => {
     if (isStreamingItem(item)) {
       return <StreamingBubble text={item.text} />;
@@ -342,11 +349,15 @@ function ChatScreenInner() {
       <View>
         <MessageBubble content={item.content} role={role} />
         {showCapture ? (
-          <MomentImageCapture messageId={item.id} initialMoment={item.moment_image ?? null} />
+          <MomentImageCapture
+            messageId={item.id}
+            initialMoment={item.moment_image ?? null}
+            onMomentReady={(moment) => handleMomentReady(item.id, moment)}
+          />
         ) : null}
       </View>
     );
-  }, []);
+  }, [handleMomentReady]);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
 

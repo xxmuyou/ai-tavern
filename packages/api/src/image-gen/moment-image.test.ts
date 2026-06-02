@@ -205,9 +205,19 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("no text, no UI");
   });
 
+  it("constrains scene moments to the companion only, looking at camera", () => {
+    const prompt = buildMomentPrompt(sampleContext());
+    expect(prompt).toContain("single-character scene image");
+    expect(prompt).toContain("Only one visible person: the companion");
+    expect(prompt).toContain("Do not show the user, an opponent, a second character");
+    expect(prompt).toContain("eyes looking directly at the viewer");
+    expect(prompt).toContain("no extra characters");
+    expect(prompt).not.toContain("first-person perspective from the user's point of view");
+  });
+
   it("includes the companion's relationship role", () => {
     const prompt = buildMomentPrompt(sampleContext());
-    expect(prompt).toContain("Relationship to the user: friend");
+    expect(prompt).toContain("Relationship context: friend");
   });
 });
 

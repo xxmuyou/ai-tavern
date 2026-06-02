@@ -94,7 +94,10 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   const lines: string[] = [];
 
   lines.push(
-    "Create a cinematic in-scene moment, first-person perspective from the user's point of view.",
+    "Create a cinematic single-character scene image centered on the companion.",
+    "Only one visible person: the companion. Do not show the user, an opponent, a second character, a crowd, reflections of another person, or duplicate bodies.",
+    "The companion faces the camera with both eyes looking directly at the viewer.",
+    "Use the scene as background/environment only.",
   );
 
   const companionBits = [
@@ -107,7 +110,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   );
 
   if (companion.relationship_role?.trim()) {
-    lines.push(`Relationship to the user: ${companion.relationship_role.trim()}.`);
+    lines.push(`Relationship context: ${companion.relationship_role.trim()}.`);
   }
 
   const sceneTags = scene.tags.length ? `, ${scene.tags.join(", ")}` : "";
@@ -115,7 +118,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
 
   const action = extractNarration(ctx.sourceReply);
   if (ctx.previousUserText) {
-    lines.push(`Recent action: the user just said/did "${truncate(ctx.previousUserText, 160)}".`);
+    lines.push(`Recent off-camera context: "${truncate(ctx.previousUserText, 160)}".`);
   }
   if (action) {
     lines.push(`In this moment: ${truncate(action, 240)}`);
@@ -145,7 +148,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   }
 
   lines.push(
-    "Full environment image, natural composition, no text, no UI, no speech bubbles.",
+    "Single companion in environment, natural composition, no text, no UI, no speech bubbles, no extra characters.",
   );
 
   return lines.join("\n");

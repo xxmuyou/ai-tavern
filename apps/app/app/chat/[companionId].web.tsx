@@ -14,7 +14,15 @@ import {
 } from 'react-native';
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
-import type { ChatEmotionKey, ChatMessage, ChatUnlock, CompanionDetail, NonNeutralChatEmotionKey, RelationshipDimensions } from '@/api/types';
+import type {
+  ChatEmotionKey,
+  ChatMessage,
+  ChatMomentImage,
+  ChatUnlock,
+  CompanionDetail,
+  NonNeutralChatEmotionKey,
+  RelationshipDimensions,
+} from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { MessageBubble } from '@/components/MessageBubble';
@@ -155,6 +163,13 @@ export default function WebChatScreen() {
     if (!stream.isStreaming) return history.messages;
     return [...history.messages, { __streaming: true, id: STREAMING_ID, text: stream.streamingText }];
   }, [history.messages, stream.isStreaming, stream.streamingText]);
+
+  const updateHistoryMessage = history.updateMessage;
+  const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
+    updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
+    shouldAutoScrollRef.current = true;
+    scrollThreadToEnd(false);
+  }, [scrollThreadToEnd, updateHistoryMessage]);
 
   const remainingSeconds = useMemo(() => {
     if (!rateLimitedUntil) return 0;
@@ -402,7 +417,11 @@ export default function WebChatScreen() {
                   <View key={item.id}>
                     <MessageBubble content={item.content} role={role} />
                     {showCapture ? (
-                      <MomentImageCapture messageId={item.id} initialMoment={item.moment_image ?? null} />
+                      <MomentImageCapture
+                        messageId={item.id}
+                        initialMoment={item.moment_image ?? null}
+                        onMomentReady={(moment) => handleMomentReady(item.id, moment)}
+                      />
                     ) : null}
                   </View>
                 );

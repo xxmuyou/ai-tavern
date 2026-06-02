@@ -13,6 +13,7 @@ type Phase = 'idle' | 'capturing' | 'ready' | 'error';
 type MomentImageCaptureProps = {
   messageId: string;
   initialMoment?: ChatMomentImage | null;
+  onMomentReady?: (moment: ChatMomentImage) => void;
 };
 
 function delay(ms: number): Promise<void> {
@@ -29,7 +30,7 @@ function isTerminalFailure(status: MomentImageStatus): boolean {
  * becomes a full-scene image; otherwise it falls back to a private-chat moment
  * (the backend allows a null scene_id).
  */
-export function MomentImageCapture({ messageId, initialMoment }: MomentImageCaptureProps) {
+export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: MomentImageCaptureProps) {
   const initialSucceeded = initialMoment?.status === 'succeeded' && initialMoment.output_key;
   const initialPending =
     !!initialMoment && !initialSucceeded && !isTerminalFailure(initialMoment.status);
@@ -42,6 +43,11 @@ export function MomentImageCapture({ messageId, initialMoment }: MomentImageCapt
   });
   const [outputKey, setOutputKey] = useState<string | null>(initialMoment?.output_key ?? null);
   const activeRef = useRef(true);
+  const onMomentReadyRef = useRef(onMomentReady);
+
+  useEffect(() => {
+    onMomentReadyRef.current = onMomentReady;
+  }, [onMomentReady]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -49,6 +55,12 @@ export function MomentImageCapture({ messageId, initialMoment }: MomentImageCapt
       activeRef.current = false;
     };
   }, []);
+
+  function markReady(jobId: string, key: string) {
+    setOutputKey(key);
+    setPhase('ready');
+    onMomentReadyRef.current?.({ job_id: jobId, output_key: key, status: 'succeeded' });
+  }
 
   async function poll(jobId: string) {
     for (let i = 0; i < MAX_POLLS; i += 1) {
@@ -62,8 +74,7 @@ export function MomentImageCapture({ messageId, initialMoment }: MomentImageCapt
       }
       if (res.status === 'succeeded' && res.output_key) {
         if (activeRef.current) {
-          setOutputKey(res.output_key);
-          setPhase('ready');
+          markReady(res.job_id || jobId, res.output_key);
         }
         return;
       }
@@ -90,8 +101,7 @@ export function MomentImageCapture({ messageId, initialMoment }: MomentImageCapt
       const res = await generateMomentImage(messageId);
       if (!activeRef.current) return;
       if (res.status === 'succeeded' && res.output_key) {
-        setOutputKey(res.output_key);
-        setPhase('ready');
+        markReady(res.job_id, res.output_key);
         return;
       }
       if (isTerminalFailure(res.status)) {
