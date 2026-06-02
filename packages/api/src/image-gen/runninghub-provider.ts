@@ -92,7 +92,7 @@ async function generateVariation(
   }
   const sourceUrl = await createSignedObjectUrl(env, req.source_art_url);
   const nodeInfoList: NodeInfo[] = [
-    { fieldName: "url", fieldValue: sourceUrl, nodeId: config.loadImageNodeId },
+    { fieldName: "image", fieldValue: sourceUrl, nodeId: config.loadImageNodeId },
     { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
   return submitTask(cfg, config.workflowId, nodeInfoList, MODEL);

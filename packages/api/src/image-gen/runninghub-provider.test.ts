@@ -44,7 +44,7 @@ describe("runningHubImageGenProvider", () => {
     );
     expect(body.nodeInfoList).toEqual([
       expect.objectContaining({
-        fieldName: "url",
+        fieldName: "image",
         nodeId: "load-image-node",
       }),
       {

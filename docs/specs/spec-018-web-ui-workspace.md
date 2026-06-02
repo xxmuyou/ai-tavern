@@ -79,3 +79,38 @@ dev 部署后至少验证：
 
 - 删除新增的 `*.web.tsx` 页面与 `components/web/*` 后，Expo 会回退到默认 `.tsx` 页面。
 - 保留共享 API/hooks/session/types，不需要回滚后端或数据库。
+
+## 2026-06 收尾范围（web-only）
+
+本轮 Web UI Redesign 收尾以 `/.codex/worktrees/web-ui-redesign` worktree、`codex/web-ui-redesign` 分支为准。附件或会话里的旧长计划不再作为权威来源；后续范围变化先回写本 spec，再动代码。
+
+### 范围
+
+- 只处理 Web 页面与 `apps/app/components/web/*`、`apps/app/components/admin/*` 的视觉层。
+- 不改 mobile/native 页面，不改共享 hooks，不改 API shape，不提交 commit。
+- 收尾页面为：
+  - `apps/app/app/billing/index.web.tsx`
+  - `apps/app/app/memories.web.tsx`
+  - `apps/app/app/companion-create.web.tsx`
+  - `apps/app/app/admin/index.web.tsx` 及现有 admin web 子组件
+- Admin 范围按当前真实结构表述为 5 个顶层区域 + 若干已存在子面板：`Users`、`Chat models`、`Portrait generation`、`Prompts`、`Settings`。不要再使用旧的多 section 口径。
+
+### 实现约定
+
+- `WebSidebar` 允许通过 `activeId` 驱动选中态；admin web 仍用单页 state 切换当前区域，不拆新路由。
+- `WebFieldRow` 扩展为 `value?: ReactNode` 与 `trailing?: ReactNode`，以便承载只读值、状态 tag、行级按钮或轻量操作区。
+- `WebTabs` 继续只接受 `string` id。筛选“全部”用 `'all'` 这类 UI sentinel，在组件外映射回 hook/API 需要的 `null`。
+
+### 验证方式
+
+```bash
+pnpm --dir apps/app typecheck
+pnpm --dir apps/app export:web
+```
+
+文档与实现都应保持以下检查标准：
+
+- `spec-018` 能单独回答本轮改哪些页面、哪些不改、如何验证。
+- 文档不再出现与当前代码结构不一致的旧 admin section 口径。
+- 命令、组件接口假设、admin 顶层区域名称与当前仓库保持一致。
+- `spec-023` 与 `docs/ops/admin-settings-workspace.md` 不暗示本轮会改后端或配置语义。

@@ -1,4 +1,4 @@
-import { requireAuthUser } from "../auth";
+import { isAdminUser, requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import { readBillingConfig } from "./config";
 import { getBillingStatus } from "./entitlements";
@@ -128,7 +128,8 @@ async function handleStatus(request: Request, env: Env): Promise<Response> {
   }
 
   const user = await requireAuthUser(env, request);
-  return jsonResponse(await getBillingStatus(env, user.id));
+  const adminOverride = await isAdminUser(env, user.email);
+  return jsonResponse(await getBillingStatus(env, user.id, undefined, { adminOverride }));
 }
 
 async function handleWebhook(request: Request, env: BillingEnv): Promise<Response> {

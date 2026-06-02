@@ -43,6 +43,25 @@ describe("billing routes", () => {
     });
   });
 
+  it("returns pro status for admins without a paid subscription", async () => {
+    const env = createEnv();
+    const token = await issueAdminToken(env);
+    const response = await handleBillingRequest(
+      new Request("http://api/billing/status", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      env,
+      ctx(),
+      "/billing/status",
+    );
+
+    expect(response?.status).toBe(200);
+    await expect(response?.json()).resolves.toMatchObject({
+      entitlements: { tier: "pro" },
+      subscription: { tier: "pro" },
+    });
+  });
+
   it("creates checkout sessions with server-side price config", async () => {
     const env = createEnv();
     const token = await issueToken(env);
@@ -88,15 +107,30 @@ async function issueToken(env: Env): Promise<string> {
   return session.token;
 }
 
+async function issueAdminToken(env: Env): Promise<string> {
+  const session = await signSession(env, { email: "admin@aiappsbox.com", userId: "user-admin" });
+  return session.token;
+}
+
 function createEnv(overrides: Record<string, unknown> = {}): Env {
-  const usersStore = createUsersStore([{
-    created_at: 1000,
-    display_name: "Player",
-    email: "player@example.com",
-    email_verified: 1,
-    id: "user-1",
-    last_seen_at: 1000,
-  }]);
+  const usersStore = createUsersStore([
+    {
+      created_at: 1000,
+      display_name: "Player",
+      email: "player@example.com",
+      email_verified: 1,
+      id: "user-1",
+      last_seen_at: 1000,
+    },
+    {
+      created_at: 1000,
+      display_name: "Admin",
+      email: "admin@aiappsbox.com",
+      email_verified: 1,
+      id: "user-admin",
+      last_seen_at: 1000,
+    },
+  ]);
   const sessionsStore = createSessionsStore();
 
   const env = {

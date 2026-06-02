@@ -221,20 +221,41 @@ export type EnqueueJobResult =
   | { reused: false; job: ArtJobRow };
 
 /**
+ * A `processing` job that hasn't progressed in this long is treated as stuck
+ * (e.g. its webhook/cron completion never landed) and may be re-queued instead
+ * of blocking the user on a dead task. Kept under the client's 5-minute poll
+ * window so a manual retry actually re-submits.
+ */
+const STUCK_PROCESSING_MS = 3 * 60 * 1000;
+
+/**
+ * Is this active job genuinely in-flight, or a stuck `processing` job that a
+ * retry should be allowed to supersede? `pending` and recently-updated
+ * `processing` jobs are real; a `processing` job stale past STUCK_PROCESSING_MS
+ * is considered dead and re-queueable.
+ */
+function isStuckProcessingJob(job: ArtJobRow): boolean {
+  return job.status === "processing" && Date.now() - job.updated_at > STUCK_PROCESSING_MS;
+}
+
+/**
  * Insert or reuse a `companion_art_jobs` row and dispatch the queue message.
  *
  * Dedup rule: if an active (pending/processing) job already exists for the
  * same (companion, emotion, source_art_url), return it without queueing a
- * second job. If a previous attempt for the same triplet ended in
- * failed/cancelled, a new pending row is created (UNIQUE constraint allows
- * this because we update-in-place via the same id).
+ * second job. Exception: a `processing` job stale past STUCK_PROCESSING_MS is
+ * treated as dead and re-queued in place (the UPSERT below resets it to
+ * pending), so a stuck task never permanently blocks retry. If a previous
+ * attempt for the same triplet ended in failed/cancelled, a new pending row is
+ * created (UNIQUE constraint allows this because we update-in-place via the
+ * same id).
  */
 export async function enqueueGenerationJob(
   env: Env,
   input: EnqueueJobInput,
 ): Promise<EnqueueJobResult> {
   const existing = await findActiveJob(env, input.companionId, input.emotion, input.sourceArtUrl);
-  if (existing) {
+  if (existing && !isStuckProcessingJob(existing)) {
     return { job: existing, reused: true };
   }
 

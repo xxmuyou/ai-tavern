@@ -4,6 +4,8 @@
 
 > **已落地范围超出本 spec 原始口径（2026-05）：** 管理员工作台实际已扩展为多面板——除本 spec 的「用户积分」外，还含 **Settings（运行时运营配置 / DB 覆盖层）**、**Portrait generation（checkpoint catalog + workflow catalog + binding；2026-06-02 修正见 spec-022 顶部）**、**Expression prompts（WF2 表情）**、**LLM 配置**。其中运营配置与生图/checkpoint 配置的完整说明见 [`../ops/admin-settings-workspace.md`](../ops/admin-settings-workspace.md)（含 `app_settings` 表 migration `0024`、`image_models` migration `0022`/`0026`、`image_workflows` migration `0028`）。本 spec 仍只承载积分端点契约，其余面板按各自模块（spec-011 / spec-022）演进。
 
+> **2026-06 Web admin UI 收尾边界：** 本轮 admin web 改造归 [`spec-018`](./spec-018-web-ui-workspace.md)，只涉及桌面布局、导航形态、组件替换和信息密度提升；不新增 admin API，不改 credits / allowlist / settings / llm / image-gen 的后端契约。当前 Web Admin 顶层区域标准叫法为 `Users`、`Chat models`、`Portrait generation`、`Prompts`、`Settings`。
+
 ---
 
 ## Context

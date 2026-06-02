@@ -57,6 +57,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 新增通用配置项仍然只改 registry；如果它属于 LLM 或生图，应放入对应业务模块的过滤列表，而不是重新塞回 Settings。
 
+后续 Web Admin 可以调整 sidebar、cards、tabs、表单样式和信息密度，但这些 UI 改动不改变 `source: db/env/unset` 语义，不改变 RunningHub catalog 的 checkpoint / workflow / binding 三层分工，也不把 workflow/node 配置重新搬回 `.env.*`。
+
 ### 类型与交互
 
 - **editable**（默认）：后台可保存 D1 覆盖；空值表示 Reset 回 env fallback（deployment-managed 项除外）。

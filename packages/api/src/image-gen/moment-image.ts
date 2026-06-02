@@ -106,6 +106,10 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     `Companion: ${companion.name}${genderHint}${companionBits.length ? `, ${companionBits.join(", ")}` : ""}.`,
   );
 
+  if (companion.relationship_role?.trim()) {
+    lines.push(`Relationship to the user: ${companion.relationship_role.trim()}.`);
+  }
+
   const sceneTags = scene.tags.length ? `, ${scene.tags.join(", ")}` : "";
   lines.push(`Scene: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}.`);
 
@@ -170,6 +174,19 @@ export async function loadMomentByJob(
   return env.DB.prepare(`SELECT * FROM story_moment_images WHERE job_id = ?`)
     .bind(jobId)
     .first<StoryMomentImageRow>();
+}
+
+/**
+ * Base portrait (R2 object key) for a companion. Fed as the wf_moment
+ * load-image reference so the scene's character matches the companion's
+ * 立绘. Returns null when the companion has no base art (graceful txt2img
+ * fallback in processMomentImageJob).
+ */
+async function loadCompanionArtUrl(env: Env, companionId: string): Promise<string | null> {
+  const row = await env.DB.prepare(`SELECT art_url FROM companions WHERE id = ?`)
+    .bind(companionId)
+    .first<{ art_url: string | null }>();
+  return row?.art_url ?? null;
 }
 
 export type CreateMomentImageInput = {
@@ -281,10 +298,16 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
   await updateImageJob(env, job.id, { status: "processing" });
 
   try {
+    // Feed the companion's base 立绘 as the wf_moment load-image reference so the
+    // scene character stays consistent. When it's missing, omit source_art_url and
+    // fall back to txt2img (the provider routes create+source_art_url to img2img).
+    const moment = await loadMomentByJob(env, job.id);
+    const sourceArtUrl = moment ? await loadCompanionArtUrl(env, moment.companion_id) : null;
     const request: ImageGenRequest = {
       mode: "create",
       prompt: job.prompt,
       workflow_key: job.workflow_key ?? MOMENT_WORKFLOW_KEY,
+      ...(sourceArtUrl ? { source_art_url: sourceArtUrl } : {}),
     };
     const provider = await getImageGenProvider(env, "create", request.workflow_key);
     const response = await provider.generate(request, env);

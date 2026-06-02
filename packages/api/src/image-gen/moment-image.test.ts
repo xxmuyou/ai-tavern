@@ -16,11 +16,13 @@ function createEnv(): {
   env: Env;
   jobs: Map<string, Row>;
   moments: Map<string, Row>;
+  companions: Map<string, Row>;
   assets: Map<string, Uint8Array>;
   queue: unknown[];
 } {
   const jobs = new Map<string, Row>();
   const moments = new Map<string, Row>();
+  const companions = new Map<string, Row>();
   const assets = new Map<string, Uint8Array>();
   const queue: unknown[] = [];
 
@@ -71,12 +73,12 @@ function createEnv(): {
         created_at,
         updated_at,
       ] = values as [
+        string,
+        string,
+        string,
+        string,
+        string,
         string | null,
-        string,
-        string,
-        string,
-        string,
-        string,
         string | null,
         string | null,
         string | null,
@@ -110,6 +112,16 @@ function createEnv(): {
       return (
         [...moments.values()].find((m) => m.user_id === userId && m.message_id === messageId) ?? null
       );
+    }
+
+    if (sql.includes("FROM story_moment_images WHERE job_id = ?")) {
+      const [jobId] = values as [string];
+      return [...moments.values()].find((m) => m.job_id === jobId) ?? null;
+    }
+
+    if (sql.includes("SELECT art_url FROM companions WHERE id = ?")) {
+      const [id] = values as [string];
+      return companions.get(id) ?? null;
     }
 
     if (sql.includes("FROM image_generation_jobs WHERE id = ?")) {
@@ -157,7 +169,7 @@ function createEnv(): {
     JOB_QUEUE: { send: async (msg: unknown) => void queue.push(msg) },
   } as unknown as Env;
 
-  return { assets, env, jobs, moments, queue };
+  return { assets, companions, env, jobs, moments, queue };
 }
 
 function sampleContext(): MomentPromptContext {
@@ -191,6 +203,11 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Maya wraps her hands around the cup");
     expect(prompt).toContain("familiar");
     expect(prompt).toContain("no text, no UI");
+  });
+
+  it("includes the companion's relationship role", () => {
+    const prompt = buildMomentPrompt(sampleContext());
+    expect(prompt).toContain("Relationship to the user: friend");
   });
 });
 
@@ -248,6 +265,30 @@ describe("moment image job pipeline", () => {
     expect(job.status).toBe("succeeded");
     expect(job.output_key).toMatch(/^user-art\/usr_1\/chat-moments\/.+\.(png|webp)$/);
     expect(assets.has(job.output_key!)).toBe(true);
+  });
+
+  it("processMomentImageJob succeeds when the companion has a base 立绘 art_url", async () => {
+    const { env, assets, companions } = createEnv(); // no provider configured -> mock
+    const artKey = "companions/official/maya/neutral.webp";
+    companions.set("maya", { art_url: artKey });
+    assets.set(artKey, Uint8Array.from([1, 2, 3, 4])); // mock provider reads source from R2
+
+    const { jobId } = await createMomentImageJob(env, {
+      activityId: null,
+      companionId: "maya",
+      emotion: "warm",
+      messageId: "msg_3",
+      promptSnapshot: "a cinematic moment",
+      sceneId: "scene_1",
+      storyBeatId: null,
+      threadId: "thr_1",
+      userId: "usr_1",
+    });
+
+    await processMomentImageJob(env, jobId);
+
+    const job = (await loadBaseArtJob(env, jobId)) as ImageGenJobRow;
+    expect(job.status).toBe("succeeded");
   });
 
   it("loadMomentByMessage returns the persisted moment row", async () => {
