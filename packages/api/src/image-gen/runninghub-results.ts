@@ -5,6 +5,8 @@ import {
   failImageJob,
   getImageJobByProviderTaskId,
   listStaleImageJobs,
+  listStalePendingImageJobs,
+  reenqueueImageJob,
   type ImageGenJobRow,
 } from "./base-art";
 import { jsonResponse } from "../http";
@@ -31,6 +33,13 @@ type RunningHubTaskResult =
 
 const DEFAULT_BASE_URL = "https://www.runninghub.ai";
 const MAX_RESULT_BYTES = 10 * 1024 * 1024;
+// A `processing` job with no progress for this long is eligible for cron
+// reconciliation. Kept short so a missed webhook is recovered on the next cron
+// tick rather than stranding the job until the hard timeout below.
+const STALE_AFTER_MS = 2 * 60 * 1000;
+// Absolute ceiling: a task still unresolved this long after its last update is
+// marked failed so it can't sit in `processing` forever.
+const HARD_TIMEOUT_MS = 15 * 60 * 1000;
 
 export async function handleRunningHubWebhookRequest(
   request: Request,
@@ -78,11 +87,11 @@ export async function handleRunningHubWebhookRequest(
 
 export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
   const now = Date.now();
-  const staleJobs = await listStaleExternalJobs(env, now - 5 * 60 * 1000);
+  const staleJobs = await listStaleExternalJobs(env, now - STALE_AFTER_MS);
 
   for (const job of staleJobs) {
     if (!job.external_task_id) continue;
-    if (now - job.updated_at > 15 * 60 * 1000) {
+    if (now - job.updated_at > HARD_TIMEOUT_MS) {
       await markArtJobFailed(env, job, "timeout", "RunningHub task exceeded 15 minutes");
       continue;
     }
@@ -104,10 +113,10 @@ export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
 
   // Generic image_generation_jobs (base-art drafts, etc.) — same fallback so a
   // missed webhook doesn't strand a job in `processing`.
-  const staleImageJobs = await listStaleImageJobs(env, now - 5 * 60 * 1000);
+  const staleImageJobs = await listStaleImageJobs(env, now - STALE_AFTER_MS);
   for (const job of staleImageJobs) {
     if (!job.provider_task_id) continue;
-    if (now - job.updated_at > 15 * 60 * 1000) {
+    if (now - job.updated_at > HARD_TIMEOUT_MS) {
       await failImageJob(env, job, "timeout", "RunningHub task exceeded 15 minutes");
       continue;
     }
@@ -122,6 +131,28 @@ export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
           job_id: job.id,
           message: "RunningHub image-job poll failed; will retry on next cron",
           provider_task_id: job.provider_task_id,
+        }),
+      );
+    }
+  }
+
+  // Recover `pending` image jobs whose queue message was never delivered (no
+  // provider_task_id yet). Past the hard ceiling they're failed so the UI stops
+  // spinning; otherwise they're re-enqueued once to self-heal a lost message.
+  const stalePending = await listStalePendingImageJobs(env, now - STALE_AFTER_MS);
+  for (const job of stalePending) {
+    if (now - job.updated_at > HARD_TIMEOUT_MS) {
+      await failImageJob(env, job, "stuck_pending", "Job was never picked up by the queue consumer");
+      continue;
+    }
+    try {
+      await reenqueueImageJob(env, job.id);
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+          job_id: job.id,
+          message: "Re-enqueue of stale pending image job failed; will retry on next cron",
         }),
       );
     }

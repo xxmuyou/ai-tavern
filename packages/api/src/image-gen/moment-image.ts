@@ -235,30 +235,46 @@ export async function createMomentImageJob(
   const momentId = crypto.randomUUID();
 
   await insertImageJob(env, jobId, input.userId, input.promptSnapshot, now);
-  await env.DB.prepare(
-    `INSERT INTO story_moment_images
-       (id, user_id, companion_id, thread_id, message_id, scene_id, activity_id,
-        story_beat_id, emotion, prompt_snapshot, job_id, output_key, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'queued', ?, ?)`,
-  )
-    .bind(
-      momentId,
-      input.userId,
-      input.companionId,
-      input.threadId,
-      input.messageId,
-      input.sceneId,
-      input.activityId,
-      input.storyBeatId,
-      input.emotion,
-      input.promptSnapshot,
-      jobId,
-      now,
-      now,
-    )
-    .run();
 
-  await enqueue(env, jobId, now);
+  // The job row is inserted first; if linking the moment row or enqueueing then
+  // fails, mark the job failed instead of leaving an orphaned `pending` job that
+  // no consumer will ever pick up (the bug behind "Capture this moment" → always
+  // "Try again"). Re-throw so the caller still surfaces the error to the client.
+  try {
+    await env.DB.prepare(
+      `INSERT INTO story_moment_images
+         (id, user_id, companion_id, thread_id, message_id, scene_id, activity_id,
+          story_beat_id, emotion, prompt_snapshot, job_id, output_key, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'queued', ?, ?)`,
+    )
+      .bind(
+        momentId,
+        input.userId,
+        input.companionId,
+        input.threadId,
+        input.messageId,
+        input.sceneId,
+        input.activityId,
+        input.storyBeatId,
+        input.emotion,
+        input.promptSnapshot,
+        jobId,
+        now,
+        now,
+      )
+      .run();
+
+    await enqueue(env, jobId, now);
+  } catch (err) {
+    await updateImageJob(env, jobId, {
+      completed_at: Date.now(),
+      error_code: "moment_enqueue_failed",
+      error_message: err instanceof Error ? err.message : String(err),
+      status: "failed",
+    });
+    throw err;
+  }
+
   return { jobId, momentId };
 }
 

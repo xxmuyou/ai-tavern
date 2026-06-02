@@ -244,6 +244,65 @@ describe("moment image job pipeline", () => {
     ]);
   });
 
+  it("createMomentImageJob enqueues a sceneless (null scene_id) moment", async () => {
+    const { env, moments, queue } = createEnv();
+
+    const { jobId, momentId } = await createMomentImageJob(env, {
+      activityId: null,
+      companionId: "maya",
+      emotion: "warm",
+      messageId: "msg_private",
+      promptSnapshot: "a private-chat moment",
+      sceneId: null,
+      storyBeatId: null,
+      threadId: "thr_1",
+      userId: "usr_1",
+    });
+
+    expect(moments.get(momentId)!.scene_id).toBeNull();
+    expect(queue).toEqual([
+      expect.objectContaining({ job_id: jobId, type: "image.generate" }),
+    ]);
+  });
+
+  it("createMomentImageJob marks the job failed and does not enqueue when the moment insert throws", async () => {
+    const base = createEnv();
+    const originalPrepare = (base.env.DB.prepare as (sql: string) => unknown).bind(base.env.DB);
+    const env = {
+      ...base.env,
+      DB: {
+        prepare: (sql: string) => {
+          if (sql.startsWith("INSERT INTO story_moment_images")) {
+            const fail = async () => {
+              throw new Error("NOT NULL constraint failed: story_moment_images.scene_id");
+            };
+            return { all: fail, bind: () => ({ run: fail }), first: fail, run: fail };
+          }
+          return originalPrepare(sql);
+        },
+      },
+    } as unknown as Env;
+
+    await expect(
+      createMomentImageJob(env, {
+        activityId: null,
+        companionId: "maya",
+        emotion: "warm",
+        messageId: "msg_boom",
+        promptSnapshot: "a cinematic moment",
+        sceneId: null,
+        storyBeatId: null,
+        threadId: "thr_1",
+        userId: "usr_1",
+      }),
+    ).rejects.toThrow(/scene_id/);
+
+    const job = [...base.jobs.values()][0]!;
+    expect(job.status).toBe("failed");
+    expect(job.error_code).toBe("moment_enqueue_failed");
+    expect(base.queue).toEqual([]);
+  });
+
   it("processMomentImageJob with mock provider writes R2 under chat-moments and succeeds", async () => {
     const { env, assets } = createEnv(); // no provider configured -> mock
 

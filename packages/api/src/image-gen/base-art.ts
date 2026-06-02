@@ -156,6 +156,40 @@ export async function listStaleImageJobs(
   return results ?? [];
 }
 
+/**
+ * Jobs stuck in `pending` long past when a consumer should have picked them up —
+ * i.e. their queue message was never sent or got lost (no provider_task_id yet).
+ * Used by cron to re-enqueue them once so a dropped message self-heals instead of
+ * stranding the job (and the UI) forever.
+ */
+export async function listStalePendingImageJobs(
+  env: Env,
+  beforeUpdatedAt: number,
+  limit = 20,
+): Promise<ImageGenJobRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM image_generation_jobs
+     WHERE status = 'pending'
+       AND provider_task_id IS NULL
+       AND updated_at < ?
+     ORDER BY updated_at ASC
+     LIMIT ?`,
+  )
+    .bind(beforeUpdatedAt, limit)
+    .all<ImageGenJobRow>();
+  return results ?? [];
+}
+
+/** Re-send the queue message for an existing image_generation_jobs row. */
+export async function reenqueueImageJob(env: Env, jobId: string): Promise<void> {
+  const payload: BaseArtQueuePayload = {
+    created_at: new Date().toISOString(),
+    job_id: jobId,
+    type: "image.generate",
+  };
+  await env.JOB_QUEUE.send(payload);
+}
+
 type UpdateImageJobInput = {
   status?: ImageGenJobStatus;
   provider?: string | null;

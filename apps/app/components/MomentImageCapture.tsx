@@ -24,9 +24,10 @@ function isTerminalFailure(status: MomentImageStatus): boolean {
 }
 
 /**
- * spec-027 — capture a full-scene "moment image" from a companion reply that
- * carries scene context. Rendered under the bubble; only mounted by the chat
- * screen when the message has a scene_id.
+ * spec-027 — capture a "moment image" from a companion reply. Rendered under
+ * every companion message bubble. When the message carries scene context it
+ * becomes a full-scene image; otherwise it falls back to a private-chat moment
+ * (the backend allows a null scene_id).
  */
 export function MomentImageCapture({ messageId, initialMoment }: MomentImageCaptureProps) {
   const initialSucceeded = initialMoment?.status === 'succeeded' && initialMoment.output_key;
