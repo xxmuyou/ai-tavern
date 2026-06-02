@@ -76,7 +76,7 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 点「+ 创建」弹浮窗（未达配额时；达上限走 QuotaModal）：
 
-1. **选择生成模型**：从 `/image-models` 拉取 admin 配置的 active 模型。模型决定 `style_tag` 与 `ckpt_name`；前端展示 label，不硬编码三种风格。
+1. **选择生成模型**：从 `/image-models` 拉取 admin 配置的 active 模型（返回 `{id, label, tag}`）。模型决定走哪条 workflow（`workflow_key`）与 checkpoint（`ckpt_name` + `checkpoint_field_name`，后端解析）；前端只展示 label，不硬编码风格枚举。
 2. **二选一拿基础图**：
    - **上传本地图片**：`POST /companions/upload-art` 拿到原图 key，直接作为最终 `art_url` / neutral 图；不调用 RunningHub，不做 img2img 重画，不消耗生图流程。
    - **文生图**：填外貌描述 prompt → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `model`）。

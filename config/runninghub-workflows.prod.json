@@ -1,32 +1,16 @@
 {
-  "wf1": {
-    "createWorkflows": {
-      "realistic": {
-        "workflowId": "",
-        "promptNodeId": "",
-        "checkpointNodeId": "",
-        "checkpointFieldName": "",
-        "ckptName": ""
-      },
-      "anime_jp": {
-        "workflowId": "",
-        "promptNodeId": "",
-        "checkpointNodeId": "",
-        "checkpointFieldName": "",
-        "ckptName": ""
-      },
-      "anime_kr": {
-        "workflowId": "",
-        "promptNodeId": "",
-        "checkpointNodeId": "",
-        "checkpointFieldName": "",
-        "ckptName": ""
-      }
+  "workflows": {
+    "wf1": {
+      "mode": "create",
+      "workflowId": "",
+      "promptNodeId": "",
+      "checkpointNodeId": ""
+    },
+    "wf2": {
+      "mode": "variation",
+      "workflowId": "",
+      "loadImageNodeId": "",
+      "promptNodeId": ""
     }
-  },
-  "wf2": {
-    "workflowId": "",
-    "loadImageNodeId": "",
-    "promptNodeId": ""
   }
 }

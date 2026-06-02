@@ -81,7 +81,9 @@ function JobRow({ job }: { job: AdminImageGenJob }) {
           {job.status}
         </Text>
         <Text className="text-xs text-app-muted">{job.task}</Text>
-        {job.style ? <Text className="text-xs text-app-muted">· {job.style}</Text> : null}
+        {job.workflow_key ? (
+          <Text className="text-xs text-app-muted">· {job.workflow_key}</Text>
+        ) : null}
         {job.model ? <Text className="text-xs text-app-muted">· {job.model}</Text> : null}
         <Text className="ml-auto text-xs text-app-muted">{formatTime(job.created_at)}</Text>
       </View>

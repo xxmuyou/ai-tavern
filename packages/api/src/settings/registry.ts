@@ -301,36 +301,12 @@ export const SETTINGS: readonly SettingDef[] = [
     description: "HMAC key used to sign source-image URLs handed to RunningHub.",
   },
   {
-    key: "image_gen.create_workflows",
+    key: "image_gen.workflows",
     group: "image_gen",
-    label: "WF1 create workflows (per style)",
+    label: "Workflow wiring (WF1 + WF2)",
     type: "json",
     description:
-      "Deployment-managed per-style WF1 wiring synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
-  },
-  {
-    key: "image_gen.wf2_workflow_id",
-    group: "image_gen",
-    label: "WF2 workflow ID",
-    type: "text",
-    description:
-      "Deployment-managed WF2 workflow id synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
-  },
-  {
-    key: "image_gen.wf2_load_image_node_id",
-    group: "image_gen",
-    label: "WF2 load-image node ID",
-    type: "text",
-    description:
-      "Deployment-managed WF2 load-image node id synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
-  },
-  {
-    key: "image_gen.wf2_prompt_node_id",
-    group: "image_gen",
-    label: "WF2 prompt node ID",
-    type: "text",
-    description:
-      "Deployment-managed WF2 prompt node id synced from config/runninghub-workflows.<env>.json. Admin edits are temporary and are overwritten by deploy.",
+      "Deployment-managed RunningHub workflow wiring (keyed by workflow: wf1 create, wf2 variation), synced from config/runninghub-workflows.<env>.json. Checkpoints live on the model catalog, not here. Admin edits are temporary and are overwritten by deploy.",
   },
 
   // --- llm ---

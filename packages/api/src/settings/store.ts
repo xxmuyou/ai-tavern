@@ -115,16 +115,12 @@ export type ImageGenConfig = {
   webhookUrl: string | null;
   webhookSecret: string | null;
   r2SigningKey: string | null;
-  createWorkflows: string | null;
+  /** Unified RunningHub workflow wiring (JSON keyed by workflow key). */
+  workflows: string | null;
   openai: {
     apiKey: string | null;
     model: string;
     size: string;
-  };
-  wf2: {
-    workflowId: string | null;
-    loadImageNodeId: string | null;
-    promptNodeId: string | null;
   };
 };
 
@@ -143,16 +139,11 @@ export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
     webhookUrl: p("image_gen.webhook_url"),
     webhookSecret: p("image_gen.webhook_secret"),
     r2SigningKey: p("image_gen.r2_signing_key"),
-    createWorkflows: p("image_gen.create_workflows"),
+    workflows: p("image_gen.workflows"),
     openai: {
       apiKey: p("image_gen.openai_api_key"),
       model: p("image_gen.openai_model") ?? "gpt-image-1",
       size: p("image_gen.openai_image_size") ?? "1024x1024",
-    },
-    wf2: {
-      workflowId: p("image_gen.wf2_workflow_id"),
-      loadImageNodeId: p("image_gen.wf2_load_image_node_id"),
-      promptNodeId: p("image_gen.wf2_prompt_node_id"),
     },
   };
 }

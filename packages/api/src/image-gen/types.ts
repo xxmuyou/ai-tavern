@@ -37,27 +37,26 @@ export type CompanionPromptContext = {
  */
 export type ImageGenMode = "create" | "variation";
 
-export type ArtStyle = "realistic" | "anime_jp" | "anime_kr";
-
-export const ART_STYLES: readonly ArtStyle[] = ["realistic", "anime_jp", "anime_kr"];
-
-export function isArtStyle(value: unknown): value is ArtStyle {
-  return typeof value === "string" && (ART_STYLES as readonly string[]).includes(value);
-}
-
 export type ImageGenRequest = {
   /**
    * Product mode. Defaults to `variation` for backward compatibility with the
    * existing companion emotion-art pipeline (which never sets it).
    */
   mode?: ImageGenMode;
-  /** Art style; drives checkpoint/workflow selection in real providers. */
-  style?: ArtStyle;
   /**
-   * Explicit checkpoint name to use for `create`, overriding the env workflow's
-   * default ckpt. Set when the creator picked a specific WF1 model.
+   * Workflow to run, keyed into the unified `image_gen.workflows` config.
+   * Resolved from the chosen model for `create` (defaults to `wf1`); `wf2` for
+   * `variation`. See image-gen/workflows.ts.
+   */
+  workflow_key?: string;
+  /**
+   * Checkpoint file to inject for `create`. Comes from the creator-selected WF1
+   * model; the model also supplies `checkpoint_field_name`. Ignored when the
+   * workflow declares no checkpoint node.
    */
   ckpt_name?: string;
+  /** Field name on the workflow's checkpoint node (model-defined). */
+  checkpoint_field_name?: string;
   /**
    * R2 object key OR full URL of the source portrait. Required for
    * `variation`; for `create` only set when re-painting an uploaded image.

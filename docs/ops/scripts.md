@@ -84,11 +84,11 @@ pnpm upload:secrets:prod            # 推 prod 密钥
 
 ### `sync-runninghub-workflows.sh`(`pnpm sync:runninghub:*`)
 
-把 repo 中的 RunningHub workflow/node 配置同步到对应环境 D1 的 `app_settings`。这是 workflow/node、checkpoint fieldName、默认 checkpoint 文件名的长期标准来源；admin 后台手写只用于临时验证,下一次同步会被 repo 配置覆盖。
+把 repo 中的 RunningHub workflow 接线（按 workflow key 的列表，每条带 `mode`）同步到对应环境 D1 的 `app_settings`。这是 workflow/node 接线的长期标准来源；admin 后台手写只用于临时验证,下一次同步会被 repo 配置覆盖。checkpoint 文件名/字段名不在这里——它们在 `image_models`（admin 持久数据）。
 
 - dev 来源:`config/runninghub-workflows.dev.json`
 - prod 来源:`config/runninghub-workflows.prod.json`
-- 写入 keys:`image_gen.create_workflows`、`image_gen.wf2_workflow_id`、`image_gen.wf2_load_image_node_id`、`image_gen.wf2_prompt_node_id`
+- 写入单一 key:`image_gen.workflows`（并顺带 `DELETE` 旧键 `image_gen.create_workflows` / `image_gen.wf2_workflow_id` / `image_gen.wf2_load_image_node_id` / `image_gen.wf2_prompt_node_id` 清理历史漂移）
 
 ```bash
 pnpm sync:runninghub:dev              # 同步 dev 配置到 dev D1

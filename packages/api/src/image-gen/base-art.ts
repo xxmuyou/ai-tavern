@@ -2,7 +2,6 @@ import { resolveImageGenConfig } from "../settings/store";
 import {
   ImageGenError,
   getImageGenProvider,
-  type ArtStyle,
   type ImageGenRequest,
 } from "./index";
 
@@ -31,11 +30,13 @@ export type ImageGenJobRow = {
   mode: string;
   status: ImageGenJobStatus;
   style: string | null;
+  workflow_key: string | null;
   provider: string | null;
   model: string | null;
   prompt: string;
   negative_prompt: string | null;
   ckpt_name: string | null;
+  checkpoint_field_name: string | null;
   input_keys: string | null;
   mask_key: string | null;
   output_prefix: string;
@@ -69,10 +70,11 @@ const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
 export type CreateBaseArtJobInput = {
   userId: string;
   source: BaseArtSource;
-  style: ArtStyle;
+  workflowKey: string;
   prompt?: string;
   uploadKey?: string;
   ckptName?: string;
+  checkpointFieldName?: string | null;
 };
 
 export async function createBaseArtJob(
@@ -86,18 +88,19 @@ export async function createBaseArtJob(
 
   await env.DB.prepare(
     `INSERT INTO image_generation_jobs
-       (id, user_id, task, mode, status, style, prompt, ckpt_name, input_keys,
-        output_prefix, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)`,
+       (id, user_id, task, mode, status, workflow_key, prompt, ckpt_name, checkpoint_field_name,
+        input_keys, output_prefix, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
       input.userId,
       TASK_BASE_ART,
       mode,
-      input.style,
+      input.workflowKey,
       input.prompt ?? "",
       input.ckptName ?? null,
+      input.checkpointFieldName ?? null,
       inputKeys,
       OUTPUT_PREFIX,
       now,
@@ -260,8 +263,9 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       mode: "create",
       prompt: basePrompt ? `${basePrompt}\n\n${job.prompt}` : job.prompt,
       source_art_url: sourceArtUrl ?? undefined,
-      style: (job.style as ArtStyle | null) ?? undefined,
+      workflow_key: job.workflow_key ?? "wf1",
       ckpt_name: job.ckpt_name ?? undefined,
+      checkpoint_field_name: job.checkpoint_field_name ?? undefined,
     };
     const provider = await getImageGenProvider(env, "create");
     const response = await provider.generate(request, env);

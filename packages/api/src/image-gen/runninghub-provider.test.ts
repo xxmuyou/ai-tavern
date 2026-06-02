@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getImageGenProvider, styleHasCheckpointNode } from ".";
+import { getImageGenProvider, workflowHasCheckpointNode } from ".";
 import { ImageGenError, type ImageGenRequest } from "./types";
 
 describe("runningHubImageGenProvider", () => {
@@ -70,20 +70,20 @@ describe("runningHubImageGenProvider", () => {
     const env = createEnv(
       {},
       {
-        "image_gen.create_workflows": JSON.stringify({
-          anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+        "image_gen.workflows": JSON.stringify({
+          wf1: { mode: "create", promptNodeId: "6", workflowId: "kr-workflow" },
         }),
       },
     );
 
     const result = await (await getImageGenProvider(env, "create")).generate(
-      { mode: "create", prompt: "a calm girl in a sweater", style: "anime_kr" },
+      { mode: "create", prompt: "a calm girl in a sweater", workflow_key: "wf1" },
       env,
     );
 
     expect(result).toEqual({
       external_task_id: "rh-create-1",
-      model: "companion-create-anime_kr",
+      model: "companion-create-wf1",
       provider: "runninghub",
       type: "pending",
     });
@@ -96,7 +96,7 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
-  it("overrides the checkpoint node when checkpointNodeId is configured", async () => {
+  it("injects the checkpoint using the model's field name and file", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({ code: 0, data: { taskId: "rh-create-2", taskStatus: "QUEUED" } }),
@@ -108,19 +108,25 @@ describe("runningHubImageGenProvider", () => {
     const env = createEnv(
       {},
       {
-        "image_gen.create_workflows": JSON.stringify({
-          anime_kr: {
+        "image_gen.workflows": JSON.stringify({
+          wf1: {
+            mode: "create",
             promptNodeId: "6",
             workflowId: "kr-workflow",
             checkpointNodeId: "4",
-            checkpointFieldName: "model_name",
           },
         }),
       },
     );
 
     await (await getImageGenProvider(env, "create")).generate(
-      { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
+      {
+        mode: "create",
+        prompt: "x",
+        workflow_key: "wf1",
+        ckpt_name: "myCustom.safetensors",
+        checkpoint_field_name: "model_name",
+      },
       env,
     );
 
@@ -132,10 +138,10 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
-  it("uses the workflow default ckptName when the request has no selected model", async () => {
+  it("does not inject a checkpoint when the request has no ckpt_name", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
-        JSON.stringify({ code: 0, data: { taskId: "rh-create-2", taskStatus: "QUEUED" } }),
+        JSON.stringify({ code: 0, data: { taskId: "rh-create-2b", taskStatus: "QUEUED" } }),
         { headers: { "content-type": "application/json" } },
       ),
     );
@@ -144,19 +150,52 @@ describe("runningHubImageGenProvider", () => {
     const env = createEnv(
       {},
       {
-        "image_gen.create_workflows": JSON.stringify({
-          anime_kr: {
+        "image_gen.workflows": JSON.stringify({
+          wf1: {
+            mode: "create",
             promptNodeId: "6",
             workflowId: "kr-workflow",
             checkpointNodeId: "4",
-            ckptName: "workflowDefault.safetensors",
           },
         }),
       },
     );
 
     await (await getImageGenProvider(env, "create")).generate(
-      { mode: "create", prompt: "x", style: "anime_kr" },
+      { mode: "create", prompt: "x", workflow_key: "wf1" },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.nodeInfoList).toEqual([{ fieldName: "text", fieldValue: "x", nodeId: "6" }]);
+  });
+
+  it("falls back to ckpt_name field name when the model omits one", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-create-2c", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          wf1: {
+            mode: "create",
+            promptNodeId: "6",
+            workflowId: "kr-workflow",
+            checkpointNodeId: "4",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "create")).generate(
+      { mode: "create", prompt: "x", workflow_key: "wf1", ckpt_name: "model.safetensors" },
       env,
     );
 
@@ -164,7 +203,7 @@ describe("runningHubImageGenProvider", () => {
     const body = JSON.parse(String(calls[0]![1].body));
     expect(body.nodeInfoList).toEqual([
       { fieldName: "text", fieldValue: "x", nodeId: "6" },
-      { fieldName: "ckpt_name", fieldValue: "workflowDefault.safetensors", nodeId: "4" },
+      { fieldName: "ckpt_name", fieldValue: "model.safetensors", nodeId: "4" },
     ]);
   });
 
@@ -181,14 +220,14 @@ describe("runningHubImageGenProvider", () => {
     const env = createEnv(
       {},
       {
-        "image_gen.create_workflows": JSON.stringify({
-          anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+        "image_gen.workflows": JSON.stringify({
+          wf1: { mode: "create", promptNodeId: "6", workflowId: "kr-workflow" },
         }),
       },
     );
 
     await (await getImageGenProvider(env, "create")).generate(
-      { mode: "create", prompt: "x", style: "anime_kr", ckpt_name: "myCustom.safetensors" },
+      { mode: "create", prompt: "x", workflow_key: "wf1", ckpt_name: "myCustom.safetensors" },
       env,
     );
 
@@ -198,12 +237,12 @@ describe("runningHubImageGenProvider", () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
-  it("fails create when the style has no configured workflow", async () => {
-    const env = createEnv({}, { "image_gen.create_workflows": "{}" });
+  it("fails create when the workflow is not configured", async () => {
+    const env = createEnv({}, { "image_gen.workflows": "{}" });
 
     await expect(
       (await getImageGenProvider(env, "create")).generate(
-        { mode: "create", prompt: "x", style: "anime_kr" },
+        { mode: "create", prompt: "x", workflow_key: "wf1" },
         env,
       ),
     ).rejects.toMatchObject({ code: "provider_not_configured", retryable: false });
@@ -220,22 +259,22 @@ describe("runningHubImageGenProvider", () => {
   });
 });
 
-describe("styleHasCheckpointNode", () => {
-  it("is true only when the style has a non-empty checkpointNodeId", () => {
+describe("workflowHasCheckpointNode", () => {
+  it("is true only when the workflow has a non-empty checkpointNodeId", () => {
     const raw = JSON.stringify({
-      anime_kr: { promptNodeId: "6", workflowId: "kr", checkpointNodeId: "4" },
-      anime_jp: { promptNodeId: "6", workflowId: "jp" },
-      realistic: { promptNodeId: "6", workflowId: "r", checkpointNodeId: "  " },
+      wf1: { mode: "create", promptNodeId: "6", workflowId: "kr", checkpointNodeId: "4" },
+      wfb: { mode: "create", promptNodeId: "6", workflowId: "jp" },
+      wfc: { mode: "create", promptNodeId: "6", workflowId: "r", checkpointNodeId: "  " },
     });
-    expect(styleHasCheckpointNode(raw, "anime_kr")).toBe(true);
-    expect(styleHasCheckpointNode(raw, "anime_jp")).toBe(false);
-    expect(styleHasCheckpointNode(raw, "realistic")).toBe(false);
-    expect(styleHasCheckpointNode(raw, "missing")).toBe(false);
+    expect(workflowHasCheckpointNode(raw, "wf1")).toBe(true);
+    expect(workflowHasCheckpointNode(raw, "wfb")).toBe(false);
+    expect(workflowHasCheckpointNode(raw, "wfc")).toBe(false);
+    expect(workflowHasCheckpointNode(raw, "missing")).toBe(false);
   });
 
   it("returns false for null or malformed JSON", () => {
-    expect(styleHasCheckpointNode(null, "anime_kr")).toBe(false);
-    expect(styleHasCheckpointNode("not json", "anime_kr")).toBe(false);
+    expect(workflowHasCheckpointNode(null, "wf1")).toBe(false);
+    expect(workflowHasCheckpointNode("not json", "wf1")).toBe(false);
   });
 });
 
@@ -244,9 +283,17 @@ function createEnv(
   settings: Record<string, string> = {},
 ): Env {
   const rows = new Map<string, string>([
-    ["image_gen.wf2_workflow_id", "workflow-1"],
-    ["image_gen.wf2_load_image_node_id", "load-image-node"],
-    ["image_gen.wf2_prompt_node_id", "prompt-node"],
+    [
+      "image_gen.workflows",
+      JSON.stringify({
+        wf2: {
+          mode: "variation",
+          workflowId: "workflow-1",
+          promptNodeId: "prompt-node",
+          loadImageNodeId: "load-image-node",
+        },
+      }),
+    ],
     ...Object.entries(settings),
   ]);
 

@@ -1,14 +1,26 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 
-import type { AdminImageModel, ArtStyle, ImageModelInput } from '@/api/types';
+import type { AdminImageModel, ImageModelInput } from '@/api/types';
 import { Button } from '@/components/Button';
 import { useAdminImageModels } from '@/hooks/use-admin-image-models';
 
-const STYLE_TAGS: ArtStyle[] = ['realistic', 'anime_jp', 'anime_kr'];
 const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text';
 
-export function ImageModelsSection() {
+/**
+ * Model catalog for a single workflow ("workflow -> models", spec-022). Models
+ * are the single source of truth for checkpoints: each carries a free-form tag,
+ * a checkpoint file, and the field name on the workflow's checkpoint node.
+ * Variation workflows (e.g. WF2) don't switch checkpoints, so they show no
+ * catalog.
+ */
+export function ImageModelsSection({
+  workflowKey,
+  mode,
+}: {
+  workflowKey: string;
+  mode: 'create' | 'variation';
+}) {
   const { models, isLoading, error, create, update, remove } = useAdminImageModels();
 
   if (isLoading) {
@@ -19,27 +31,54 @@ export function ImageModelsSection() {
     );
   }
 
+  if (mode === 'variation') {
+    return (
+      <View className="rounded-lg border border-app-line bg-white p-5">
+        <Text className="text-lg font-semibold text-app-text">Model catalog</Text>
+        <Text className="mt-1 text-sm leading-6 text-app-muted">
+          This workflow is image-to-image and doesn&apos;t switch checkpoints, so it has no model
+          catalog.
+        </Text>
+      </View>
+    );
+  }
+
+  const scoped = models.filter((model) => model.workflow_key === workflowKey);
+
   return (
     <View className="gap-4">
       <View className="rounded-lg border border-app-line bg-white p-5">
-        <Text className="text-lg font-semibold text-app-text">WF1 model catalog</Text>
+        <Text className="text-lg font-semibold text-app-text">Model catalog</Text>
         <Text className="mt-1 text-sm leading-6 text-app-muted">
-          Models offered when creating a companion. Each model maps to a RunningHub checkpoint.
+          Models offered when creating a companion on this workflow. Each model maps to a RunningHub
+          checkpoint.
         </Text>
         {error ? <Text className="mt-2 text-sm font-semibold text-app-danger">{error}</Text> : null}
         <View className="mt-4 gap-3">
-          {models.map((model) => (
+          {scoped.map((model) => (
             <ModelRow key={model.id} model={model} onSave={update} onDelete={remove} />
           ))}
-          {models.length === 0 ? (
+          {scoped.length === 0 ? (
             <Text className="text-sm text-app-muted">No models yet — add one below.</Text>
           ) : null}
         </View>
       </View>
 
-      <AddModelForm onCreate={create} />
+      <AddModelForm workflowKey={workflowKey} onCreate={create} />
     </View>
   );
+}
+
+function toDraft(model: AdminImageModel): ImageModelInput {
+  return {
+    label: model.label,
+    tag: model.tag,
+    ckpt_name: model.ckpt_name,
+    checkpoint_field_name: model.checkpoint_field_name ?? '',
+    workflow_key: model.workflow_key,
+    is_active: model.is_active,
+    sort_order: model.sort_order,
+  };
 }
 
 function ModelRow({
@@ -51,13 +90,7 @@ function ModelRow({
   onSave: (id: string, input: ImageModelInput) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<ImageModelInput>({
-    label: model.label,
-    style_tag: model.style_tag,
-    ckpt_name: model.ckpt_name,
-    is_active: model.is_active,
-    sort_order: model.sort_order,
-  });
+  const [draft, setDraft] = useState<ImageModelInput>(() => toDraft(model));
   const [busy, setBusy] = useState(false);
 
   async function run(action: () => Promise<void>) {
@@ -74,9 +107,9 @@ function ModelRow({
       <ModelFields draft={draft} setDraft={setDraft} />
       {!model.checkpoint_applies ? (
         <Text className="text-xs font-semibold text-app-danger">
-          ⚠ Checkpoint won&apos;t apply: style &quot;{model.style_tag}&quot; has no checkpoint node configured.
-          Set its checkpoint node id under Settings → Image generation → WF1 create workflows, or this model
-          falls back to the workflow&apos;s built-in checkpoint.
+          ⚠ Checkpoint won&apos;t apply: this workflow has no checkpoint node configured. Set its
+          checkpoint node id in the workflow wiring above, or this model falls back to the
+          workflow&apos;s built-in checkpoint.
         </Text>
       ) : null}
       <View className="flex-row gap-2">
@@ -99,11 +132,19 @@ function ModelRow({
   );
 }
 
-function AddModelForm({ onCreate }: { onCreate: (input: ImageModelInput) => Promise<void> }) {
+function AddModelForm({
+  workflowKey,
+  onCreate,
+}: {
+  workflowKey: string;
+  onCreate: (input: ImageModelInput) => Promise<void>;
+}) {
   const empty: ImageModelInput = {
     label: '',
-    style_tag: 'realistic',
+    tag: '',
     ckpt_name: '',
+    checkpoint_field_name: '',
+    workflow_key: workflowKey,
     is_active: true,
     sort_order: 0,
   };
@@ -114,7 +155,7 @@ function AddModelForm({ onCreate }: { onCreate: (input: ImageModelInput) => Prom
     if (!draft.label.trim() || !draft.ckpt_name.trim()) return;
     setBusy(true);
     try {
-      await onCreate(draft);
+      await onCreate({ ...draft, workflow_key: workflowKey });
       setDraft(empty);
     } finally {
       setBusy(false);
@@ -165,23 +206,26 @@ function ModelFields({
         />
       </View>
       <View>
-        <Text className="mb-1 text-xs font-semibold text-app-muted">Style tag</Text>
-        <View className="flex-row flex-wrap gap-2">
-          {STYLE_TAGS.map((tag) => (
-            <Pressable
-              key={tag}
-              accessibilityRole="button"
-              onPress={() => setDraft({ ...draft, style_tag: tag })}
-              className={`rounded-full border px-3 py-2 ${
-                draft.style_tag === tag ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
-              }`}
-            >
-              <Text className={`text-sm font-semibold ${draft.style_tag === tag ? 'text-white' : 'text-app-muted'}`}>
-                {tag}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text className="mb-1 text-xs font-semibold text-app-muted">Tag (free label / category)</Text>
+        <TextInput
+          className={INPUT_CLASS}
+          onChangeText={(tag) => setDraft({ ...draft, tag })}
+          placeholder="realistic"
+          placeholderTextColor="#687076"
+          value={draft.tag}
+        />
+      </View>
+      <View>
+        <Text className="mb-1 text-xs font-semibold text-app-muted">
+          Checkpoint field name (node field, e.g. Realistic)
+        </Text>
+        <TextInput
+          className={INPUT_CLASS}
+          onChangeText={(checkpoint_field_name) => setDraft({ ...draft, checkpoint_field_name })}
+          placeholder="ckpt_name"
+          placeholderTextColor="#687076"
+          value={draft.checkpoint_field_name ?? ''}
+        />
       </View>
       <View className="flex-row items-center gap-4">
         <View className="flex-1">

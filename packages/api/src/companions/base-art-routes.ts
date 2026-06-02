@@ -1,7 +1,7 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import type { UserRecord } from "../identity";
-import { getImageModel, isArtStyle, listActiveImageModels, type ArtStyle } from "../image-gen";
+import { getImageModel, listActiveImageModels } from "../image-gen";
 import { LLMRouterError, llmCall } from "../llm";
 import { LLMError } from "../llm/types";
 import {
@@ -28,7 +28,7 @@ export async function handleBaseArtRequest(
     await requireAuthUser(env, request);
     const models = await listActiveImageModels(env);
     return jsonResponse({
-      models: models.map((m) => ({ id: m.id, label: m.label, style_tag: m.style_tag })),
+      models: models.map((m) => ({ id: m.id, label: m.label, tag: m.tag })),
     });
   }
 
@@ -129,22 +129,17 @@ async function handleGenerate(
     return jsonResponse({ error: "invalid_source" }, { status: 400 });
   }
 
-  // Prefer an explicit model selection; fall back to a bare style for
-  // backward compatibility.
-  let style: ArtStyle | undefined;
-  let ckptName: string | undefined;
-  if (typeof raw.model === "string" && raw.model.trim()) {
-    const model = await getImageModel(env, raw.model.trim());
-    if (!model) {
-      return jsonResponse({ error: "invalid_model" }, { status: 400 });
-    }
-    style = model.style_tag;
-    ckptName = model.ckpt_name;
-  } else if (isArtStyle(raw.style)) {
-    style = raw.style;
-  } else {
+  // A creator-selected model resolves the workflow + checkpoint to run.
+  if (typeof raw.model !== "string" || !raw.model.trim()) {
     return jsonResponse({ error: "invalid_model" }, { status: 400 });
   }
+  const model = await getImageModel(env, raw.model.trim());
+  if (!model) {
+    return jsonResponse({ error: "invalid_model" }, { status: 400 });
+  }
+  const workflowKey = model.workflow_key;
+  const ckptName = model.ckpt_name;
+  const checkpointFieldName = model.checkpoint_field_name;
 
   const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";
   const uploadKey = typeof raw.upload_key === "string" ? raw.upload_key.trim() : "";
@@ -159,8 +154,9 @@ async function handleGenerate(
   const jobId = await createBaseArtJob(env, {
     prompt: prompt || undefined,
     source: source as BaseArtSource,
-    style,
+    workflowKey,
     ckptName,
+    checkpointFieldName,
     uploadKey: uploadKey || undefined,
     userId: user.id,
   });

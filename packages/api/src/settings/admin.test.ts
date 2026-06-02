@@ -51,11 +51,11 @@ describe("admin settings", () => {
     const env = createEnv({
       DEEPSEEK_API_KEY: "env-secret",
     });
-    env.settingsRows.set("image_gen.create_workflows", {
-      key: "image_gen.create_workflows",
+    env.settingsRows.set("image_gen.workflows", {
+      key: "image_gen.workflows",
       updated_at: 123,
       updated_by: "admin-1",
-      value: "{\"anime_kr\":{\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
+      value: "{\"wf1\":{\"mode\":\"create\",\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
     });
     const token = await issueToken(env, ADMIN_EMAIL);
 
@@ -77,11 +77,11 @@ describe("admin settings", () => {
     });
     expect(secret).not.toHaveProperty("value");
 
-    const workflows = body.settings.find((row) => row.key === "image_gen.create_workflows")!;
+    const workflows = body.settings.find((row) => row.key === "image_gen.workflows")!;
     expect(workflows).toMatchObject({
       env_key: null,
       source: "db",
-      value: "{\"anime_kr\":{\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
+      value: "{\"wf1\":{\"mode\":\"create\",\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
     });
   });
 
@@ -147,11 +147,11 @@ describe("admin settings", () => {
     const token = await issueToken(env, ADMIN_EMAIL);
 
     const response = await handleAdminSettingsRequest(
-      authedPut("http://api/admin/settings/image_gen.create_workflows", token, {
+      authedPut("http://api/admin/settings/image_gen.workflows", token, {
         value: "{",
       }),
       env,
-      "/admin/settings/image_gen.create_workflows",
+      "/admin/settings/image_gen.workflows",
     );
 
     expect(response?.status).toBe(400);

@@ -1,32 +1,16 @@
 {
-  "wf1": {
-    "createWorkflows": {
-      "realistic": {
-        "workflowId": "2060270467856035841",
-        "promptNodeId": "2",
-        "checkpointNodeId": "1",
-        "checkpointFieldName": "Realistic",
-        "ckptName": "excelaxl_20251018b.safetensors"
-      },
-      "anime_jp": {
-        "workflowId": "2060270467856035841",
-        "promptNodeId": "2",
-        "checkpointNodeId": "1",
-        "checkpointFieldName": "Anime_JP",
-        "ckptName": "sdxl-动漫二次元_4.0.safetensors"
-      },
-      "anime_kr": {
-        "workflowId": "2060270467856035841",
-        "promptNodeId": "2",
-        "checkpointNodeId": "1",
-        "checkpointFieldName": "Anime_KR",
-        "ckptName": "illustraversa_vektor.safetensors"
-      }
+  "workflows": {
+    "wf1": {
+      "mode": "create",
+      "workflowId": "2060270467856035841",
+      "promptNodeId": "2",
+      "checkpointNodeId": "1"
+    },
+    "wf2": {
+      "mode": "variation",
+      "workflowId": "2060982275310964738",
+      "loadImageNodeId": "1",
+      "promptNodeId": "13"
     }
-  },
-  "wf2": {
-    "workflowId": "2060982275310964738",
-    "loadImageNodeId": "1",
-    "promptNodeId": "13"
   }
 }

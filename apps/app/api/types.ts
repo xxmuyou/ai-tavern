@@ -255,14 +255,11 @@ export type RelationshipUnlocksResponse = {
   scenes: RelationshipSceneUnlock[];
 };
 
-export type ArtStyle = 'realistic' | 'anime_jp' | 'anime_kr';
-
 export type BaseArtJobStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
 
 export type BaseArtGenerateInput = {
   source: 'text' | 'upload';
   model?: string;
-  style?: ArtStyle;
   prompt?: string;
   upload_key?: string;
 };
@@ -270,7 +267,7 @@ export type BaseArtGenerateInput = {
 export type ImageModelOption = {
   id: string;
   label: string;
-  style_tag: ArtStyle;
+  tag: string;
 };
 
 export type ImageModelsResponse = {
@@ -651,16 +648,18 @@ export type LlmUsageResponse = {
 export type AdminImageModel = {
   id: string;
   label: string;
-  style_tag: ArtStyle;
+  tag: string;
   ckpt_name: string;
+  checkpoint_field_name: string | null;
+  workflow_key: string;
   is_active: boolean;
   sort_order: number;
   updated_at: number;
   updated_by_email: string | null;
   /**
-   * False when this model's style has no checkpoint node configured in the WF1
-   * create workflows, so its ckpt_name is ignored at generation time (falls back
-   * to the workflow's built-in checkpoint).
+   * False when this model's workflow has no checkpoint node configured, so its
+   * ckpt_name is ignored at generation time (falls back to the workflow's
+   * built-in checkpoint).
    */
   checkpoint_applies: boolean;
 };
@@ -674,7 +673,7 @@ export type AdminImageGenJob = {
   id: string;
   status: BaseArtJobStatus;
   task: string;
-  style: string | null;
+  workflow_key: string | null;
   model: string | null;
   provider: string | null;
   error_code: string | null;
@@ -690,8 +689,10 @@ export type AdminImageGenJobsResponse = {
 
 export type ImageModelInput = {
   label: string;
-  style_tag: ArtStyle;
+  tag: string;
   ckpt_name: string;
+  checkpoint_field_name: string | null;
+  workflow_key: string;
   is_active: boolean;
   sort_order: number;
 };

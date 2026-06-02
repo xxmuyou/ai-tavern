@@ -22,9 +22,36 @@ function createEnv(extra: Record<string, unknown> = {}): {
     }
 
     if (sql.startsWith("INSERT INTO image_generation_jobs")) {
-      const [id, user_id, task, mode_, style, prompt, input_keys, output_prefix, created_at, updated_at] =
-        values as [string, string, string, string, string, string, string | null, string, number, number];
+      const [
+        id,
+        user_id,
+        task,
+        mode_,
+        workflow_key,
+        prompt,
+        ckpt_name,
+        checkpoint_field_name,
+        input_keys,
+        output_prefix,
+        created_at,
+        updated_at,
+      ] = values as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string | null,
+        string | null,
+        string | null,
+        string,
+        number,
+        number,
+      ];
       jobs.set(id, {
+        checkpoint_field_name,
+        ckpt_name,
         completed_at: null,
         created_at,
         error_code: null,
@@ -43,10 +70,11 @@ function createEnv(extra: Record<string, unknown> = {}): {
         provider_task_id: null,
         retry_count: 0,
         status: "pending",
-        style,
+        style: null,
         task,
         updated_at,
         user_id,
+        workflow_key,
       });
       return { meta: { changes: 1 } };
     }
@@ -122,7 +150,7 @@ describe("base-art job pipeline", () => {
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      style: "anime_kr",
+      workflowKey: "wf1",
       userId: "usr_1",
     });
 
@@ -130,7 +158,7 @@ describe("base-art job pipeline", () => {
     expect(row.status).toBe("pending");
     expect(row.task).toBe("companion_base_art");
     expect(row.mode).toBe("text_to_image");
-    expect(row.style).toBe("anime_kr");
+    expect(row.workflow_key).toBe("wf1");
     expect(queue).toEqual([
       expect.objectContaining({ job_id: jobId, type: "image.generate" }),
     ]);
@@ -142,7 +170,7 @@ describe("base-art job pipeline", () => {
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      style: "anime_kr",
+      workflowKey: "wf1",
       userId: "usr_1",
     });
     await processBaseArtJob(env, jobId);
@@ -168,16 +196,16 @@ describe("base-art job pipeline", () => {
       RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
     });
     settings.set(
-      "image_gen.create_workflows",
+      "image_gen.workflows",
       JSON.stringify({
-        anime_kr: { promptNodeId: "6", workflowId: "kr-workflow" },
+        wf1: { mode: "create", promptNodeId: "6", workflowId: "kr-workflow" },
       }),
     );
 
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      style: "anime_kr",
+      workflowKey: "wf1",
       userId: "usr_1",
     });
     await processBaseArtJob(env, jobId);

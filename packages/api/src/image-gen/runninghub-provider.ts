@@ -2,19 +2,11 @@ import { resolveImageGenConfig, type ImageGenConfig } from "../settings/store";
 import { createSignedObjectUrl } from "./signed-url";
 import {
   ImageGenError,
-  type ArtStyle,
   type ImageGenProvider,
   type ImageGenRequest,
   type ImageGenResponse,
 } from "./types";
-
-type CreateWorkflowConfig = {
-  workflowId: string;
-  promptNodeId: string;
-  checkpointNodeId?: string;
-  checkpointFieldName?: string;
-  ckptName?: string;
-};
+import { getWorkflowConfig, type WorkflowConfig } from "./workflows";
 
 type NodeInfo = { nodeId: string; fieldName: string; fieldValue: string };
 
@@ -45,16 +37,17 @@ export const runningHubImageGenProvider: ImageGenProvider = {
 
 /** WF-1 create (txt2img): override prompt node, plus checkpoint when switching models. */
 function generateCreate(req: ImageGenRequest, cfg: ImageGenConfig): Promise<ImageGenResponse> {
-  const config = readCreateConfig(cfg, req.style);
+  const workflowKey = req.workflow_key?.trim() || "wf1";
+  const config = readWorkflowConfig(cfg, workflowKey);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
-  // The creator-selected model's checkpoint (req.ckpt_name) takes precedence
-  // over the env/admin workflow default ckpt.
-  const ckptName = req.ckpt_name?.trim() || config.ckptName;
+  // The creator-selected model supplies both the checkpoint file and the field
+  // name on the workflow's checkpoint node (single source of truth).
+  const ckptName = req.ckpt_name?.trim();
   if (config.checkpointNodeId && ckptName) {
     nodeInfoList.push({
-      fieldName: config.checkpointFieldName ?? "ckpt_name",
+      fieldName: req.checkpoint_field_name?.trim() || "ckpt_name",
       fieldValue: ckptName,
       nodeId: config.checkpointNodeId,
     });
@@ -63,11 +56,11 @@ function generateCreate(req: ImageGenRequest, cfg: ImageGenConfig): Promise<Imag
     // the model silently falls back to the workflow's built-in checkpoint.
     // The admin workspace flags this; log it here as a runtime safety net.
     console.warn(
-      `[runninghub] ckpt_name "${ckptName}" ignored for style "${req.style}": ` +
-        `create workflow has no checkpointNodeId; using the workflow's built-in checkpoint.`,
+      `[runninghub] ckpt_name "${ckptName}" ignored for workflow "${workflowKey}": ` +
+        `no checkpointNodeId configured; using the workflow's built-in checkpoint.`,
     );
   }
-  return submitTask(cfg, config.workflowId, nodeInfoList, `companion-create-${req.style}`);
+  return submitTask(cfg, config.workflowId, nodeInfoList, `companion-create-${workflowKey}`);
 }
 
 /** WF-2 variation (img2img): load-image + prompt. */
@@ -76,7 +69,22 @@ async function generateVariation(
   env: Env,
   cfg: ImageGenConfig,
 ): Promise<ImageGenResponse> {
-  const config = readVariationConfig(cfg);
+  const workflowKey = req.workflow_key?.trim() || "wf2";
+  const config = readWorkflowConfig(cfg, workflowKey);
+  if (!config.loadImageNodeId) {
+    throw new ImageGenError(
+      "provider_not_configured",
+      `RunningHub workflow "${workflowKey}" missing config: load-image node id`,
+      { retryable: false },
+    );
+  }
+  if (!cfg.webhookUrl) {
+    throw new ImageGenError(
+      "provider_not_configured",
+      "RunningHub image provider missing config: webhook url",
+      { retryable: false },
+    );
+  }
   if (!req.source_art_url) {
     throw new ImageGenError("invalid_source_art_url", "source_art_url is required for variation", {
       retryable: false,
@@ -155,73 +163,17 @@ function requireApiKey(cfg: ImageGenConfig): string {
   return cfg.apiKey;
 }
 
-function readCreateConfig(cfg: ImageGenConfig, style: ArtStyle | undefined): CreateWorkflowConfig {
+function readWorkflowConfig(cfg: ImageGenConfig, key: string): WorkflowConfig {
   requireApiKey(cfg);
-  if (!style) {
-    throw new ImageGenError("provider_config_error", "create mode requires a style", {
-      retryable: false,
-    });
-  }
-
-  let parsed: Record<string, Partial<CreateWorkflowConfig>> = {};
-  if (cfg.createWorkflows) {
-    try {
-      parsed = JSON.parse(cfg.createWorkflows) as Record<string, Partial<CreateWorkflowConfig>>;
-    } catch {
-      throw new ImageGenError(
-        "provider_config_error",
-        "create workflows config is not valid JSON",
-        { retryable: false },
-      );
-    }
-  }
-
-  const entry = parsed[style];
-  if (!entry?.workflowId?.trim() || !entry?.promptNodeId?.toString().trim()) {
+  const config = getWorkflowConfig(cfg.workflows, key);
+  if (!config) {
     throw new ImageGenError(
       "provider_not_configured",
-      `RunningHub create workflow not configured for style: ${style}`,
+      `RunningHub workflow not configured: ${key}`,
       { retryable: false },
     );
   }
-
-  return {
-    checkpointFieldName: entry.checkpointFieldName?.toString().trim() || undefined,
-    checkpointNodeId: entry.checkpointNodeId?.toString().trim() || undefined,
-    ckptName: entry.ckptName?.trim() || undefined,
-    promptNodeId: entry.promptNodeId.toString().trim(),
-    workflowId: entry.workflowId.trim(),
-  };
-}
-
-function readVariationConfig(cfg: ImageGenConfig): {
-  workflowId: string;
-  loadImageNodeId: string;
-  promptNodeId: string;
-} {
-  const missing = [
-    ["api key", cfg.apiKey],
-    ["WF2 workflow id", cfg.wf2.workflowId],
-    ["WF2 load-image node id", cfg.wf2.loadImageNodeId],
-    ["WF2 prompt node id", cfg.wf2.promptNodeId],
-    ["webhook url", cfg.webhookUrl],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missing.length > 0) {
-    throw new ImageGenError(
-      "provider_not_configured",
-      `RunningHub image provider missing config: ${missing.join(", ")}`,
-      { retryable: false },
-    );
-  }
-
-  return {
-    loadImageNodeId: cfg.wf2.loadImageNodeId!,
-    promptNodeId: cfg.wf2.promptNodeId!,
-    workflowId: cfg.wf2.workflowId!,
-  };
+  return config;
 }
 
 function buildWebhookUrl(webhookUrl: string, webhookSecret: string | null): string {

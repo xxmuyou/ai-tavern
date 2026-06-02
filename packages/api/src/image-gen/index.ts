@@ -5,7 +5,6 @@ import { runningHubImageGenProvider } from "./runninghub-provider";
 import type { ImageGenMode, ImageGenProvider } from "./types";
 
 export {
-  type ArtStyle,
   type CompanionPromptContext,
   type CompletedImageGenResponse,
   type ImageGenMode,
@@ -14,11 +13,15 @@ export {
   type ImageGenResponse,
   type NonNeutralEmotion,
   type PendingImageGenResponse,
-  ART_STYLES,
   ImageGenError,
   NON_NEUTRAL_EMOTIONS,
-  isArtStyle,
 } from "./types";
+export {
+  type WorkflowConfig,
+  getWorkflowConfig,
+  parseWorkflows,
+  workflowHasCheckpointNode,
+} from "./workflows";
 export { buildEmotionPrompt } from "./prompts";
 export {
   type ExpressionGender,
@@ -39,7 +42,6 @@ export {
   getImageModel,
   listActiveImageModels,
   listImageModelRows,
-  styleHasCheckpointNode,
   updateImageModel,
 } from "./models";
 

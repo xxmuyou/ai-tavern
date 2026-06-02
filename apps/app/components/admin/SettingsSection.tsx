@@ -15,8 +15,6 @@ const GROUP_LABELS: Record<string, string> = {
 };
 
 const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text';
-const CREATE_WORKFLOWS_KEY = 'image_gen.create_workflows';
-const STYLES = ['realistic', 'anime_jp', 'anime_kr'] as const;
 
 export type SaveSettingFn = (key: string, value: string, confirm?: string) => Promise<void>;
 export type RevealSettingFn = (key: string) => Promise<{ value: string | null }>;
@@ -64,13 +62,9 @@ export function SettingsSection() {
         <View className="rounded-lg border border-app-line bg-white p-5">
           <Text className="text-base font-semibold text-app-text">{GROUP_LABELS[activeGroup] ?? activeGroup}</Text>
           <View className="mt-3 gap-3">
-            {rows.map((item) =>
-              item.key === CREATE_WORKFLOWS_KEY ? (
-                <CreateWorkflowsRow key={item.key} item={item} onSave={save} />
-              ) : (
-                <SettingRow key={item.key} item={item} onReveal={reveal} onSave={save} />
-              ),
-            )}
+            {rows.map((item) => (
+              <SettingRow key={item.key} item={item} onReveal={reveal} onSave={save} />
+            ))}
           </View>
         </View>
       ) : null}
@@ -270,44 +264,65 @@ export function RowHeader({ item }: { item: AdminSettingItem }) {
   );
 }
 
+type WorkflowMode = 'create' | 'variation';
+
 type WorkflowEntry = {
+  mode: WorkflowMode;
   workflowId: string;
   promptNodeId: string;
   checkpointNodeId: string;
-  checkpointFieldName: string;
-  ckptName: string;
+  loadImageNodeId: string;
 };
 
-export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; onSave: SaveSettingFn }) {
-  const [draft, setDraft] = useState<Record<string, WorkflowEntry>>(() => parseWorkflows(item.value));
+/**
+ * Edits one workflow's wiring inside the unified `image_gen.workflows` JSON.
+ * Checkpoints live on the model catalog, not here (spec-022). Other workflows in
+ * the same JSON are preserved on save.
+ */
+export function WorkflowWiringRow({
+  item,
+  workflowKey,
+  mode,
+  onSave,
+}: {
+  item: AdminSettingItem;
+  workflowKey: string;
+  mode: WorkflowMode;
+  onSave: SaveSettingFn;
+}) {
+  const [all, setAll] = useState<Record<string, WorkflowEntry>>(() => parseWorkflows(item.value));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setDraft(parseWorkflows(item.value));
+    setAll(parseWorkflows(item.value));
   }, [item.value]);
 
-  function setField(style: string, field: keyof WorkflowEntry, value: string) {
-    setDraft((cur) => ({
+  const entry = all[workflowKey] ?? emptyEntry(mode);
+
+  function setField(field: keyof WorkflowEntry, value: string) {
+    setAll((cur) => ({
       ...cur,
-      [style]: { ...emptyEntry(), ...cur[style], [field]: value },
+      [workflowKey]: { ...emptyEntry(mode), ...cur[workflowKey], mode, [field]: value },
     }));
   }
 
   async function save() {
     setBusy(true);
     try {
-      const out: Record<string, WorkflowEntry> = {};
-      for (const style of STYLES) {
-        const e = draft[style];
-        if (e?.workflowId?.trim()) {
-          out[style] = {
-            workflowId: e.workflowId.trim(),
-            promptNodeId: e.promptNodeId.trim(),
-            checkpointNodeId: e.checkpointNodeId.trim(),
-            checkpointFieldName: e.checkpointFieldName.trim(),
-            ckptName: e.ckptName.trim(),
-          };
+      const out: Record<string, Record<string, string>> = {};
+      for (const [key, e] of Object.entries(all)) {
+        if (!e?.workflowId?.trim()) continue;
+        const serialized: Record<string, string> = {
+          mode: e.mode,
+          workflowId: e.workflowId.trim(),
+          promptNodeId: e.promptNodeId.trim(),
+        };
+        if (e.mode === 'variation') {
+          if (e.loadImageNodeId.trim()) serialized.loadImageNodeId = e.loadImageNodeId.trim();
+        } else if (e.checkpointNodeId.trim()) {
+          serialized.checkpointNodeId = e.checkpointNodeId.trim();
         }
+        out[key] = serialized;
       }
       await onSave(item.key, JSON.stringify(out));
     } finally {
@@ -318,19 +333,16 @@ export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; o
   return (
     <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-4">
       <RowHeader item={item} />
-      {STYLES.map((style) => {
-        const e = draft[style] ?? emptyEntry();
-        return (
-          <View key={style} className="gap-2 rounded-lg border border-app-line bg-white p-3">
-            <Text className="text-sm font-semibold text-app-text">{style}</Text>
-            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'workflowId', v)} placeholder="workflowId" placeholderTextColor="#687076" value={e.workflowId} />
-            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'promptNodeId', v)} placeholder="prompt node id" placeholderTextColor="#687076" value={e.promptNodeId} />
-            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'checkpointNodeId', v)} placeholder="checkpoint node id (required to switch models)" placeholderTextColor="#687076" value={e.checkpointNodeId} />
-            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'checkpointFieldName', v)} placeholder="checkpoint field name (default: ckpt_name)" placeholderTextColor="#687076" value={e.checkpointFieldName} />
-            <TextInput className={INPUT_CLASS} onChangeText={(v) => setField(style, 'ckptName', v)} placeholder="default checkpoint file name" placeholderTextColor="#687076" value={e.ckptName} />
-          </View>
-        );
-      })}
+      <View className="gap-2 rounded-lg border border-app-line bg-white p-3">
+        <Text className="text-sm font-semibold text-app-text">{workflowKey} · {mode}</Text>
+        <TextInput className={INPUT_CLASS} onChangeText={(v) => setField('workflowId', v)} placeholder="workflowId" placeholderTextColor="#687076" value={entry.workflowId} />
+        <TextInput className={INPUT_CLASS} onChangeText={(v) => setField('promptNodeId', v)} placeholder="prompt node id" placeholderTextColor="#687076" value={entry.promptNodeId} />
+        {mode === 'create' ? (
+          <TextInput className={INPUT_CLASS} onChangeText={(v) => setField('checkpointNodeId', v)} placeholder="checkpoint node id (required to switch models)" placeholderTextColor="#687076" value={entry.checkpointNodeId} />
+        ) : (
+          <TextInput className={INPUT_CLASS} onChangeText={(v) => setField('loadImageNodeId', v)} placeholder="load-image node id" placeholderTextColor="#687076" value={entry.loadImageNodeId} />
+        )}
+      </View>
       <View className="flex-row items-center justify-between">
         <SourceTag item={item} />
         <View className="w-24">
@@ -341,8 +353,8 @@ export function CreateWorkflowsRow({ item, onSave }: { item: AdminSettingItem; o
   );
 }
 
-function emptyEntry(): WorkflowEntry {
-  return { workflowId: '', promptNodeId: '', checkpointNodeId: '', checkpointFieldName: '', ckptName: '' };
+function emptyEntry(mode: WorkflowMode): WorkflowEntry {
+  return { mode, workflowId: '', promptNodeId: '', checkpointNodeId: '', loadImageNodeId: '' };
 }
 
 function parseWorkflows(raw: string | null | undefined): Record<string, WorkflowEntry> {
@@ -350,17 +362,15 @@ function parseWorkflows(raw: string | null | undefined): Record<string, Workflow
   if (!raw) return out;
   try {
     const parsed = JSON.parse(raw) as Record<string, Partial<WorkflowEntry>>;
-    for (const style of STYLES) {
-      const e = parsed[style];
-      if (e) {
-        out[style] = {
-          workflowId: String(e.workflowId ?? ''),
-          promptNodeId: String(e.promptNodeId ?? ''),
-          checkpointNodeId: String(e.checkpointNodeId ?? ''),
-          checkpointFieldName: String(e.checkpointFieldName ?? ''),
-          ckptName: String(e.ckptName ?? ''),
-        };
-      }
+    for (const [key, e] of Object.entries(parsed)) {
+      if (!e || typeof e !== 'object') continue;
+      out[key] = {
+        mode: e.mode === 'variation' ? 'variation' : 'create',
+        workflowId: String(e.workflowId ?? ''),
+        promptNodeId: String(e.promptNodeId ?? ''),
+        checkpointNodeId: String(e.checkpointNodeId ?? ''),
+        loadImageNodeId: String(e.loadImageNodeId ?? ''),
+      };
     }
   } catch {
     // ignore malformed JSON

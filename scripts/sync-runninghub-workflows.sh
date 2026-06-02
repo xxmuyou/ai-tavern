@@ -104,8 +104,11 @@ const raw = fs.readFileSync(configPath, "utf8");
 const config = JSON.parse(raw);
 const now = Date.now();
 
-const styles = ["realistic", "anime_jp", "anime_kr"];
+// Unified workflow wiring (spec-022, "workflow -> models"): a single JSON
+// setting keyed by workflow key. Checkpoints live on the model catalog, not
+// here. Legacy keys are removed so old admin/deploy drift is cleaned up.
 const settingKeys = [
+  "image_gen.workflows",
   "image_gen.create_workflows",
   "image_gen.wf2_workflow_id",
   "image_gen.wf2_load_image_node_id",
@@ -135,72 +138,43 @@ function upsert(key, value) {
   ].join("\n");
 }
 
-const wf1Raw = config?.wf1?.createWorkflows;
-if (!wf1Raw || typeof wf1Raw !== "object" || Array.isArray(wf1Raw)) {
-  throw new Error("wf1.createWorkflows must be an object.");
+const workflowsRaw = config?.workflows;
+if (!workflowsRaw || typeof workflowsRaw !== "object" || Array.isArray(workflowsRaw)) {
+  throw new Error("config.workflows must be an object keyed by workflow key.");
 }
 
-const createWorkflows = {};
-for (const style of Object.keys(wf1Raw)) {
-  if (!styles.includes(style)) {
-    throw new Error(`Unsupported WF1 style: ${style}.`);
-  }
-}
-
-for (const style of styles) {
-  const entry = wf1Raw[style] ?? {};
+const workflows = {};
+for (const key of Object.keys(workflowsRaw)) {
+  const entry = workflowsRaw[key] ?? {};
   if (typeof entry !== "object" || Array.isArray(entry)) {
-    throw new Error(`wf1.createWorkflows.${style} must be an object.`);
+    throw new Error(`workflows.${key} must be an object.`);
   }
 
-  const workflowId = readString(`wf1.createWorkflows.${style}.workflowId`, entry.workflowId);
-  const promptNodeId = readString(`wf1.createWorkflows.${style}.promptNodeId`, entry.promptNodeId);
-  const checkpointNodeId = readString(
-    `wf1.createWorkflows.${style}.checkpointNodeId`,
-    entry.checkpointNodeId,
-  );
-  const checkpointFieldName = readString(
-    `wf1.createWorkflows.${style}.checkpointFieldName`,
-    entry.checkpointFieldName,
-  );
-  const ckptName = readString(`wf1.createWorkflows.${style}.ckptName`, entry.ckptName);
-
-  const anySet = workflowId || promptNodeId || checkpointNodeId || checkpointFieldName || ckptName;
-  if (anySet && (!workflowId || !promptNodeId)) {
-    throw new Error(
-      `wf1.createWorkflows.${style} must include workflowId and promptNodeId when configured.`,
-    );
+  const mode = readString(`workflows.${key}.mode`, entry.mode) || "create";
+  if (mode !== "create" && mode !== "variation") {
+    throw new Error(`workflows.${key}.mode must be "create" or "variation".`);
   }
-  if ((checkpointFieldName || ckptName) && !checkpointNodeId) {
-    throw new Error(
-      `wf1.createWorkflows.${style} must include checkpointNodeId when checkpointFieldName or ckptName is configured.`,
-    );
+  const workflowId = readString(`workflows.${key}.workflowId`, entry.workflowId);
+  const promptNodeId = readString(`workflows.${key}.promptNodeId`, entry.promptNodeId);
+  const checkpointNodeId = readString(`workflows.${key}.checkpointNodeId`, entry.checkpointNodeId);
+  const loadImageNodeId = readString(`workflows.${key}.loadImageNodeId`, entry.loadImageNodeId);
+
+  const anySet = workflowId || promptNodeId || checkpointNodeId || loadImageNodeId;
+  if (!anySet) continue; // unconfigured placeholder — skip
+  if (!workflowId || !promptNodeId) {
+    throw new Error(`workflows.${key} must include workflowId and promptNodeId when configured.`);
+  }
+  if (mode === "variation" && !loadImageNodeId) {
+    throw new Error(`workflows.${key} (variation) must include loadImageNodeId when configured.`);
   }
 
-  if (workflowId && promptNodeId) {
-    createWorkflows[style] = {
-      workflowId,
-      promptNodeId,
-      ...(checkpointNodeId ? { checkpointNodeId } : {}),
-      ...(checkpointFieldName ? { checkpointFieldName } : {}),
-      ...(ckptName ? { ckptName } : {}),
-    };
-  }
-}
-
-const wf2Raw = config?.wf2 ?? {};
-if (typeof wf2Raw !== "object" || Array.isArray(wf2Raw)) {
-  throw new Error("wf2 must be an object.");
-}
-
-const wf2 = {
-  workflowId: readString("wf2.workflowId", wf2Raw.workflowId),
-  loadImageNodeId: readString("wf2.loadImageNodeId", wf2Raw.loadImageNodeId),
-  promptNodeId: readString("wf2.promptNodeId", wf2Raw.promptNodeId),
-};
-const wf2AnySet = wf2.workflowId || wf2.loadImageNodeId || wf2.promptNodeId;
-if (wf2AnySet && (!wf2.workflowId || !wf2.loadImageNodeId || !wf2.promptNodeId)) {
-  throw new Error("wf2 must include workflowId, loadImageNodeId, and promptNodeId when configured.");
+  workflows[key] = {
+    mode,
+    workflowId,
+    promptNodeId,
+    ...(checkpointNodeId ? { checkpointNodeId } : {}),
+    ...(loadImageNodeId ? { loadImageNodeId } : {}),
+  };
 }
 
 // D1 `wrangler d1 execute --remote --file` runs the file's statements as a
@@ -210,14 +184,8 @@ const statements = [
   `DELETE FROM app_settings WHERE key IN (${settingKeys.map(sqlString).join(", ")});`,
 ];
 
-if (Object.keys(createWorkflows).length > 0) {
-  statements.push(upsert("image_gen.create_workflows", JSON.stringify(createWorkflows)));
-}
-
-if (wf2.workflowId && wf2.loadImageNodeId && wf2.promptNodeId) {
-  statements.push(upsert("image_gen.wf2_workflow_id", wf2.workflowId));
-  statements.push(upsert("image_gen.wf2_load_image_node_id", wf2.loadImageNodeId));
-  statements.push(upsert("image_gen.wf2_prompt_node_id", wf2.promptNodeId));
+if (Object.keys(workflows).length > 0) {
+  statements.push(upsert("image_gen.workflows", JSON.stringify(workflows)));
 }
 
 console.log(statements.join("\n\n"));

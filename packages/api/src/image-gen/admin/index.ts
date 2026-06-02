@@ -8,13 +8,12 @@ import {
   isExpressionGender,
   listExpressionPrompts,
   listImageModelRows,
-  styleHasCheckpointNode,
   updateImageModel,
   upsertExpressionPrompt,
+  workflowHasCheckpointNode,
   type ImageModelInput,
 } from "../index";
 import { isNonNeutralEmotion } from "../expression-prompts";
-import { isArtStyle } from "../types";
 
 /**
  * Admin workspace endpoints for the WF1 model catalog and WF2 expression
@@ -41,7 +40,7 @@ type ImageGenJobSummaryRow = {
   id: string;
   status: string;
   task: string;
-  style: string | null;
+  workflow_key: string | null;
   model: string | null;
   provider: string | null;
   error_code: string | null;
@@ -66,7 +65,7 @@ async function handleImageGenJobs(request: Request, env: Env): Promise<Response>
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200) : 50;
 
   const where = status && JOB_STATUSES.has(status) ? "WHERE status = ?" : "";
-  const sql = `SELECT id, status, task, style, model, provider, error_code, error_message,
+  const sql = `SELECT id, status, task, workflow_key, model, provider, error_code, error_message,
                       provider_task_id, created_at, completed_at
                FROM image_generation_jobs
                ${where}
@@ -91,15 +90,15 @@ async function handleImageModels(
       env,
       rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
     );
-    // Flag models whose ckpt_name would be silently ignored: the create
-    // workflow for that style has no checkpoint node configured, so generation
-    // falls back to the workflow's built-in checkpoint.
-    const { createWorkflows } = await resolveImageGenConfig(env);
+    // Flag models whose ckpt_name would be silently ignored: their workflow has
+    // no checkpoint node configured, so generation falls back to the workflow's
+    // built-in checkpoint.
+    const { workflows } = await resolveImageGenConfig(env);
     const models = rows.map((r) => ({
       ...r,
       is_active: r.is_active === 1,
       updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
-      checkpoint_applies: styleHasCheckpointNode(createWorkflows, r.style_tag),
+      checkpoint_applies: workflowHasCheckpointNode(workflows, r.workflow_key),
     }));
     return jsonResponse({ models });
   }
@@ -186,15 +185,24 @@ function parseModelInput(body: unknown): ParseResult {
   const raw = (body ?? {}) as Record<string, unknown>;
   const label = typeof raw.label === "string" ? raw.label.trim() : "";
   const ckptName = typeof raw.ckpt_name === "string" ? raw.ckpt_name.trim() : "";
-  if (!label || !ckptName || !isArtStyle(raw.style_tag)) {
+  if (!label || !ckptName) {
     return { ok: false, error: "invalid_model" };
   }
+  const tag = typeof raw.tag === "string" ? raw.tag.trim() : "";
+  const checkpointFieldName =
+    typeof raw.checkpoint_field_name === "string" ? raw.checkpoint_field_name.trim() : "";
+  const workflowKey =
+    typeof raw.workflow_key === "string" && raw.workflow_key.trim()
+      ? raw.workflow_key.trim()
+      : "wf1";
   return {
     ok: true,
     value: {
       label,
-      style_tag: raw.style_tag,
+      tag,
       ckpt_name: ckptName,
+      checkpoint_field_name: checkpointFieldName || null,
+      workflow_key: workflowKey,
       is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),
       sort_order: Number.isFinite(raw.sort_order) ? Number(raw.sort_order) : 0,
     },
