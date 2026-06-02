@@ -100,7 +100,7 @@ export default function WebSceneDetailScreen() {
           <View className="gap-5 p-7">
             <View>
               <Text className="text-overline text-rose-deep">A place to be</Text>
-              <Text className="mt-2 font-serif text-title text-app-ink">"{scene.mood}"</Text>
+              <Text className="mt-2 font-serif text-title text-app-ink">{`"${scene.mood}"`}</Text>
             </View>
             <Text className="text-body-sm leading-7 text-app-ink-soft">
               Step into the room and see who is already here. The conversation will start where it wants to start — your move is to show up.

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -69,6 +70,9 @@ export default function WebChatScreen() {
   const [signalToken, setSignalToken] = useState(0);
   const [lastUnlocks, setLastUnlocks] = useState<ChatUnlock[] | null>(null);
   const [unlockToken, setUnlockToken] = useState(0);
+  const threadScrollRef = useRef<ScrollView>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const didInitialScrollRef = useRef(false);
 
   useEffect(() => {
     void refreshActivity();
@@ -108,6 +112,45 @@ export default function WebChatScreen() {
     if (rateLimitedUntil && now >= rateLimitedUntil) setRateLimitedUntil(null);
   }, [now, rateLimitedUntil]);
 
+  const scrollThreadToEnd = useCallback((animated = false) => {
+    globalThis.setTimeout(() => {
+      threadScrollRef.current?.scrollToEnd({ animated });
+    }, 0);
+  }, []);
+
+  const handleThreadContentSizeChange = useCallback(() => {
+    if (shouldAutoScrollRef.current) {
+      scrollThreadToEnd(false);
+    }
+  }, [scrollThreadToEnd]);
+
+  const handleLoadMore = useCallback(async () => {
+    shouldAutoScrollRef.current = false;
+    await history.loadMore();
+  }, [history]);
+
+  useEffect(() => {
+    didInitialScrollRef.current = false;
+    shouldAutoScrollRef.current = true;
+  }, [companionId]);
+
+  useEffect(() => {
+    if (history.isLoadingInitial || didInitialScrollRef.current) {
+      return;
+    }
+    didInitialScrollRef.current = true;
+    shouldAutoScrollRef.current = true;
+    scrollThreadToEnd(false);
+  }, [history.isLoadingInitial, scrollThreadToEnd]);
+
+  useEffect(() => {
+    if (!stream.isStreaming) {
+      return;
+    }
+    shouldAutoScrollRef.current = true;
+    scrollThreadToEnd(false);
+  }, [scrollThreadToEnd, stream.isStreaming, stream.streamingText]);
+
   const items = useMemo<ChatListItem[]>(() => {
     if (!stream.isStreaming) return history.messages;
     return [...history.messages, { __streaming: true, id: STREAMING_ID, text: stream.streamingText }];
@@ -122,6 +165,7 @@ export default function WebChatScreen() {
     const text = draft.trim();
     if (!text || stream.isStreaming || remainingSeconds > 0) return;
 
+    shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
       content: text,
@@ -158,6 +202,9 @@ export default function WebChatScreen() {
         role: 'companion',
         scene_id: sceneId ?? null,
       });
+      shouldAutoScrollRef.current = true;
+      await history.refresh({ silent: true });
+      scrollThreadToEnd(false);
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
     } catch (error) {
@@ -173,7 +220,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activityId, companionId, draft, history, pushError, relationship, remainingSeconds, sceneId, stream]);
+  }, [activityId, companionId, draft, history, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -325,12 +372,17 @@ export default function WebChatScreen() {
           <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
 
           {/* Messages scroll area */}
-          <View style={twilightStyles.thread}>
+          <ScrollView
+            ref={threadScrollRef}
+            contentContainerStyle={twilightStyles.threadContent}
+            onContentSizeChange={handleThreadContentSizeChange}
+            style={twilightStyles.thread}
+          >
             {history.hasMore ? (
               <View className="items-center pb-4 pt-2">
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => void history.loadMore()}
+                  onPress={() => void handleLoadMore()}
                   className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
                 >
                   <Text className="text-caption font-semibold text-app-rose-deep">
@@ -356,7 +408,7 @@ export default function WebChatScreen() {
                 );
               })}
             </View>
-          </View>
+          </ScrollView>
 
           {/* Composer */}
           <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
@@ -441,5 +493,8 @@ const twilightStyles = StyleSheet.create({
     flexGrow: 1,
     maxHeight: 620,
     minHeight: 420,
+  },
+  threadContent: {
+    paddingTop: 8,
   },
 });
