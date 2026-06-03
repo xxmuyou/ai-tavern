@@ -25,8 +25,22 @@ const BASE_CONSTRAINTS = [
   "Keep the same identity, face structure, hairstyle, body type, outfit style, color palette, and camera framing.",
   "Use a half-body (waist-up) composition with the hands and arms visible.",
   "Change the facial expression, upper-body posture, and hand/arm gestures to express the requested emotion, while preserving identity.",
+  // Anti-deformity guardrail: the emotion intents below ask for new arm/hand
+  // poses. On img2img this can leave the source arms in place AND add the new
+  // ones, producing extra limbs. Frame the gesture as repositioning the
+  // existing limbs, and pin the body-part count.
+  "The character has exactly one head, two arms, and two hands. Reposition the existing arms and hands into the new gesture — never add extra limbs, extra hands, or duplicate body parts. Anatomically correct.",
   "Transparent or clean simple background. No text. No extra characters. No age change. No style change.",
 ].join(" ");
+
+/**
+ * Global negative-prompt guardrail injected into the WF2 RunningHub workflow's
+ * negative text node (when the workflow declares one). Suppresses the duplicate
+ * limbs / multiple heads that img2img can hallucinate when the prompt asks for a
+ * new arm/hand gesture. RunningHub-only — OpenAI image edit has no negative input.
+ */
+export const ANATOMY_NEGATIVE =
+  "extra limbs, extra arms, extra hands, extra fingers, duplicate limbs, multiple heads, two heads, deformed hands, malformed, mutated, fused body, disfigured, bad anatomy";
 
 export function buildEmotionPrompt(
   emotion: NonNeutralEmotion,

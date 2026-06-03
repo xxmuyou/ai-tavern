@@ -44,6 +44,8 @@
       "loadImageNodeId": "",
       "promptNodeId": "",
       "promptFieldName": "prompt",
+      "negativePromptNodeId": "",
+      "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 20
     },
@@ -53,6 +55,8 @@
       "workflowId": "",
       "promptNodeId": "",
       "promptFieldName": "prompt",
+      "negativePromptNodeId": "",
+      "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 30
     }

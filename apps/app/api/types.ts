@@ -716,6 +716,8 @@ export type AdminImageWorkflow = {
   load_image_node_id: string | null;
   mode: 'create' | 'variation';
   model_ids: string[];
+  negative_prompt_node_id: string | null;
+  negative_prompt_field_name: string;
   prompt_node_id: string;
   sort_order: number;
   updated_at: number;
@@ -763,6 +765,7 @@ export type ImageWorkflowInput = {
   load_image_node_id: string | null;
   mode: 'create' | 'variation';
   model_ids: string[];
+  negative_prompt_node_id: string | null;
   prompt_node_id: string;
   sort_order: number;
   workflow_id: string;

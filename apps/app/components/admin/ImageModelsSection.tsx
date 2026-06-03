@@ -325,6 +325,9 @@ function WorkflowFields({
           <TextInput className={INPUT_CLASS} onChangeText={(load_image_node_id) => setDraft({ ...draft, load_image_node_id })} placeholder="1" placeholderTextColor="#687076" value={draft.load_image_node_id ?? ''} />
         </Field>
       )}
+      <Field label="Negative prompt node ID (anti-deformity)">
+        <TextInput className={INPUT_CLASS} onChangeText={(negative_prompt_node_id) => setDraft({ ...draft, negative_prompt_node_id })} placeholder="leave empty to disable" placeholderTextColor="#687076" value={draft.negative_prompt_node_id ?? ''} />
+      </Field>
       <View className="flex-row items-center gap-4">
         <View className="flex-1">
           <Text className="mb-1 text-xs font-semibold text-app-muted">Sort order</Text>
@@ -413,6 +416,7 @@ function emptyWorkflowDraft(): ImageWorkflowInput {
     load_image_node_id: null,
     mode: 'create',
     model_ids: [],
+    negative_prompt_node_id: null,
     prompt_node_id: '',
     sort_order: 0,
     workflow_id: '',
@@ -429,6 +433,7 @@ function toWorkflowDraft(workflow: AdminImageWorkflow): ImageWorkflowInput {
     load_image_node_id: workflow.load_image_node_id,
     mode: workflow.mode,
     model_ids: workflow.model_ids,
+    negative_prompt_node_id: workflow.negative_prompt_node_id,
     prompt_node_id: workflow.prompt_node_id,
     sort_order: workflow.sort_order,
     workflow_id: workflow.workflow_id,

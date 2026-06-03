@@ -7,6 +7,7 @@ import {
   type ImageGenResponse,
 } from "./types";
 import { getImageWorkflow } from "./models";
+import { ANATOMY_NEGATIVE } from "./prompts";
 import { getWorkflowConfig, type WorkflowConfig } from "./workflows";
 
 type NodeInfo = { nodeId: string; fieldName: string; fieldValue: string };
@@ -68,6 +69,7 @@ async function generateCreate(req: ImageGenRequest, env: Env, cfg: ImageGenConfi
         `no checkpointNodeId configured; using the workflow's built-in checkpoint.`,
     );
   }
+  appendNegativePrompt(nodeInfoList, config);
   return submitTask(cfg, config.workflowId, nodeInfoList, `companion-create-${workflowKey}`);
 }
 
@@ -107,6 +109,7 @@ async function generateVariation(
     { fieldName: "image", fieldValue: fileName, nodeId: config.loadImageNodeId },
     { fieldName: config.promptFieldName || "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
   ];
+  appendNegativePrompt(nodeInfoList, config);
   return submitTask(cfg, config.workflowId, nodeInfoList, MODEL);
 }
 
@@ -176,6 +179,22 @@ function fileNameFor(key: string, contentType: string): string {
   if (/\.[a-z0-9]+$/i.test(base)) return base;
   const ext = contentType.split("/")[1]?.split("+")[0] || "png";
   return `${base}.${ext}`;
+}
+
+/**
+ * Append the anti-deformity negative prompt — only when the workflow declares a
+ * negative text node. Without it the model keeps the source limbs and adds the
+ * prompt's new gesture limbs, producing extra arms/hands and duplicate heads
+ * ("三头六臂"). Applies to every RunningHub workflow (wf1/wf2/wf_moment) that
+ * wires a negative node.
+ */
+function appendNegativePrompt(nodeInfoList: NodeInfo[], config: WorkflowConfig): void {
+  if (!config.negativePromptNodeId) return;
+  nodeInfoList.push({
+    fieldName: config.negativePromptFieldName || "prompt",
+    fieldValue: ANATOMY_NEGATIVE,
+    nodeId: config.negativePromptNodeId,
+  });
 }
 
 async function submitTask(
@@ -254,6 +273,8 @@ async function readWorkflowConfig(env: Env, cfg: ImageGenConfig, key: string): P
         label: dbWorkflow.label,
         loadImageNodeId: dbWorkflow.load_image_node_id ?? undefined,
         mode: dbWorkflow.mode,
+        negativePromptFieldName: dbWorkflow.negative_prompt_field_name || "prompt",
+        negativePromptNodeId: dbWorkflow.negative_prompt_node_id ?? undefined,
         promptFieldName: dbWorkflow.prompt_field_name || "text",
         promptNodeId: dbWorkflow.prompt_node_id,
         workflowId: dbWorkflow.workflow_id,

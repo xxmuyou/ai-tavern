@@ -285,6 +285,14 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
     typeof raw.load_image_node_id === "string" && raw.load_image_node_id.trim()
       ? raw.load_image_node_id.trim()
       : null;
+  const negativePromptNodeId =
+    typeof raw.negative_prompt_node_id === "string" && raw.negative_prompt_node_id.trim()
+      ? raw.negative_prompt_node_id.trim()
+      : null;
+  const negativePromptFieldName =
+    typeof raw.negative_prompt_field_name === "string" && raw.negative_prompt_field_name.trim()
+      ? raw.negative_prompt_field_name.trim()
+      : "prompt";
   const modelIds = Array.isArray(raw.model_ids)
     ? raw.model_ids.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)
     : [];
@@ -299,6 +307,8 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
       load_image_node_id: loadImageNodeId,
       mode,
       model_ids: [...new Set(modelIds)],
+      negative_prompt_field_name: negativePromptFieldName,
+      negative_prompt_node_id: negativePromptNodeId,
       prompt_field_name: promptFieldName,
       prompt_node_id: promptNodeId,
       sort_order: readNumber(raw.sort_order),

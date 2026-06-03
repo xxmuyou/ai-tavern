@@ -45,6 +45,8 @@ export type ImageWorkflowRow = {
   checkpoint_node_id: string | null;
   checkpoint_field_name: string;
   load_image_node_id: string | null;
+  negative_prompt_node_id: string | null;
+  negative_prompt_field_name: string;
   is_active: number;
   sort_order: number;
   updated_at: number;
@@ -61,6 +63,8 @@ export type ImageWorkflow = {
   checkpoint_node_id: string | null;
   checkpoint_field_name: string;
   load_image_node_id: string | null;
+  negative_prompt_node_id: string | null;
+  negative_prompt_field_name: string;
   is_active: boolean;
   sort_order: number;
 };
@@ -75,6 +79,8 @@ export type ImageWorkflowInput = {
   checkpoint_node_id: string | null;
   checkpoint_field_name: string | null;
   load_image_node_id: string | null;
+  negative_prompt_node_id: string | null;
+  negative_prompt_field_name: string | null;
   model_ids: string[];
   is_active: boolean;
   sort_order: number;
@@ -106,7 +112,7 @@ export type ImageModelSelection = {
 const COLUMNS =
   "id, label, tag, ckpt_name, is_active, sort_order, updated_at, updated_by";
 const WORKFLOW_COLUMNS =
-  "key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by";
+  "key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, negative_prompt_node_id, negative_prompt_field_name, is_active, sort_order, updated_at, updated_by";
 
 function toImageModel(row: ImageModelRow): ImageModel {
   return {
@@ -126,6 +132,8 @@ function toImageWorkflow(row: ImageWorkflowRow): ImageWorkflow {
     label: row.label,
     load_image_node_id: row.load_image_node_id,
     mode: row.mode,
+    negative_prompt_field_name: row.negative_prompt_field_name || "prompt",
+    negative_prompt_node_id: row.negative_prompt_node_id,
     prompt_field_name: row.prompt_field_name || "text",
     prompt_node_id: row.prompt_node_id,
     sort_order: row.sort_order,
@@ -368,12 +376,14 @@ export async function upsertImageWorkflow(
   const now = Date.now();
   const checkpointFieldName = input.checkpoint_field_name?.trim() || "ckpt_name";
   const promptFieldName = input.prompt_field_name?.trim() || "text";
+  const negativePromptFieldName = input.negative_prompt_field_name?.trim() || "prompt";
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO image_workflows
          (key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id,
-          checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          checkpoint_field_name, load_image_node_id, negative_prompt_node_id, negative_prompt_field_name,
+          is_active, sort_order, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET
          label = excluded.label,
          mode = excluded.mode,
@@ -383,6 +393,8 @@ export async function upsertImageWorkflow(
          checkpoint_node_id = excluded.checkpoint_node_id,
          checkpoint_field_name = excluded.checkpoint_field_name,
          load_image_node_id = excluded.load_image_node_id,
+         negative_prompt_node_id = excluded.negative_prompt_node_id,
+         negative_prompt_field_name = excluded.negative_prompt_field_name,
          is_active = excluded.is_active,
          sort_order = excluded.sort_order,
          updated_at = excluded.updated_at,
@@ -397,6 +409,8 @@ export async function upsertImageWorkflow(
       input.checkpoint_node_id,
       checkpointFieldName,
       input.load_image_node_id,
+      input.negative_prompt_node_id,
+      negativePromptFieldName,
       input.is_active ? 1 : 0,
       input.sort_order,
       now,

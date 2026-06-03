@@ -44,6 +44,8 @@
       "loadImageNodeId": "1",
       "promptNodeId": "13",
       "promptFieldName": "prompt",
+      "negativePromptNodeId": "14",
+      "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 20
     },
@@ -54,6 +56,8 @@
       "promptNodeId": "13",
       "promptFieldName": "prompt",
       "loadImageNodeId": "1",
+      "negativePromptNodeId": "14",
+      "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 30
     }

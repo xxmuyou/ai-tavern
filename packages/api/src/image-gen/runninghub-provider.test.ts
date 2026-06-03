@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getImageGenProvider, workflowHasCheckpointNode } from ".";
+import { ANATOMY_NEGATIVE } from "./prompts";
 import { ImageGenError, type ImageGenRequest } from "./types";
 
 describe("runningHubImageGenProvider", () => {
@@ -62,6 +63,48 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
+  it("injects the anti-deformity negative prompt when the workflow declares a negative node", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).endsWith("/task/openapi/upload")) {
+        return new Response(
+          JSON.stringify({ code: 0, data: { fileName: "api/abc123.webp" } }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-task-neg", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          wf2: {
+            mode: "variation",
+            workflowId: "workflow-1",
+            promptNodeId: "prompt-node",
+            promptFieldName: "prompt",
+            loadImageNodeId: "load-image-node",
+            negativePromptNodeId: "neg-node",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "variation")).generate(createRequest(), env);
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[1]![1].body));
+    expect(body.nodeInfoList).toEqual([
+      { fieldName: "image", fieldValue: "api/abc123.webp", nodeId: "load-image-node" },
+      { fieldName: "prompt", fieldValue: "make a warm portrait", nodeId: "prompt-node" },
+      { fieldName: "prompt", fieldValue: ANATOMY_NEGATIVE, nodeId: "neg-node" },
+    ]);
+  });
+
   it("creates a WF-1 create task overriding only the prompt node", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
@@ -97,6 +140,43 @@ describe("runningHubImageGenProvider", () => {
     expect(body.workflowId).toBe("kr-workflow");
     expect(body.nodeInfoList).toEqual([
       { fieldName: "text", fieldValue: "a calm girl in a sweater", nodeId: "6" },
+    ]);
+  });
+
+  it("injects the negative prompt on the create path (wf_moment) when configured", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-moment-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          wf_moment: {
+            mode: "create",
+            promptNodeId: "13",
+            promptFieldName: "prompt",
+            workflowId: "moment-workflow",
+            negativePromptNodeId: "14",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "create")).generate(
+      { mode: "create", prompt: "a quiet cafe", workflow_key: "wf_moment" },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.nodeInfoList).toEqual([
+      { fieldName: "prompt", fieldValue: "a quiet cafe", nodeId: "13" },
+      { fieldName: "prompt", fieldValue: ANATOMY_NEGATIVE, nodeId: "14" },
     ]);
   });
 

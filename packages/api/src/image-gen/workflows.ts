@@ -29,6 +29,10 @@ export type WorkflowConfig = {
   checkpointFieldName?: string;
   /** variation mode: node that loads the source image. */
   loadImageNodeId?: string;
+  /** variation mode: optional negative-prompt text node (anti-deformity). */
+  negativePromptNodeId?: string;
+  /** Field name on the negative-prompt node. Defaults to "prompt". */
+  negativePromptFieldName?: string;
   /** Checkpoint ids enabled for this workflow by config seed. */
   modelIds?: string[];
 };
@@ -66,6 +70,8 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
       checkpointNodeId: str(entry.checkpointNodeId) || undefined,
       checkpointFieldName: str(entry.checkpointFieldName) || "ckpt_name",
       loadImageNodeId: str(entry.loadImageNodeId) || undefined,
+      negativePromptNodeId: str(entry.negativePromptNodeId) || undefined,
+      negativePromptFieldName: str(entry.negativePromptFieldName) || "prompt",
       modelIds: Array.isArray(entry.modelIds)
         ? entry.modelIds.map((id) => str(id)).filter(Boolean)
         : undefined,
