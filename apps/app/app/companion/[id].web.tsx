@@ -2,13 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, WebTabs, WebTag } from '@/components/web/ui';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
+import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
@@ -24,6 +25,7 @@ type Tab = { id: string; label: string };
 
 const TABS: Tab[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'story', label: 'Story' },
   { id: 'gallery', label: 'Gallery' },
   { id: 'today', label: 'Today' },
   { id: 'unlocks', label: 'Unlocks' },
@@ -75,10 +77,10 @@ export default function WebCompanionDetailScreen() {
   const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
   const traits = (companion.personality ?? '').split(/[.,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4);
 
-  async function handleTogglePublish() {
+  async function handleTogglePublish(shareStoryArcs = false) {
     setIsPublishing(true);
     try {
-      await setCompanionPublic(companion.id, !isPublic);
+      await setCompanionPublic(companion.id, !isPublic, { shareStoryArcs });
       await refetch();
     } catch (nextError) {
       pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.');
@@ -110,12 +112,22 @@ export default function WebCompanionDetailScreen() {
             iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
           />
           {canPublish ? (
-            <WebButton
-              label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
-              onPress={() => void handleTogglePublish()}
-              variant="outline"
-              iconLeft={<Ionicons color="#9A2F4F" name={isPublic ? 'earth' : 'earth-outline'} size={16} />}
-            />
+            <>
+              <WebButton
+                label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
+                onPress={() => void handleTogglePublish(false)}
+                variant="outline"
+                iconLeft={<Ionicons color="#9A2F4F" name={isPublic ? 'earth' : 'earth-outline'} size={16} />}
+              />
+              {!isPublic ? (
+                <WebButton
+                  label="Publish + story"
+                  onPress={() => void handleTogglePublish(true)}
+                  variant="ghost"
+                  iconLeft={<Ionicons color="#9A2F4F" name="git-branch-outline" size={16} />}
+                />
+              ) : null}
+            </>
           ) : null}
           {canEdit ? (
             <>
@@ -213,6 +225,11 @@ export default function WebCompanionDetailScreen() {
               />
               <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
               <RelationshipGoalPanel goal={relationshipGoal} />
+              <CompanionStoryPanel
+                canEdit={canEdit}
+                companionId={companion.id}
+                onChanged={refetch}
+              />
               <WebPanel>
                 <Text className="mb-2 text-overline text-rose-deep">Current stage</Text>
                 <Text className="font-serif text-title text-app-ink">{companion.relationship.stage ?? '—'}</Text>
@@ -221,6 +238,14 @@ export default function WebCompanionDetailScreen() {
                 </Text>
               </WebPanel>
             </View>
+          ) : null}
+
+          {tab === 'story' ? (
+            <CompanionStoryPanel
+              canEdit={canEdit}
+              companionId={companion.id}
+              onChanged={refetch}
+            />
           ) : null}
 
           {tab === 'gallery' ? (

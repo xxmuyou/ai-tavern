@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native';
 
 import type { RelationshipGoal } from '@/api/types';
-import { activityLabel } from '@/components/ActivityButtons';
+import { activityLabel } from '@/utils/guided-action';
 
 export function RelationshipGoalPanel({ goal }: { goal?: RelationshipGoal | null }) {
   if (!goal) return null;

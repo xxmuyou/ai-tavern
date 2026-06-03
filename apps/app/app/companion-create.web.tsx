@@ -22,7 +22,7 @@ export default function WebCompanionCreateScreen() {
     setIsSubmitting(true);
     try {
       const companion = await createCompanion(input);
-      router.replace(`/companion/${encodeURIComponent(companion.id)}` as Href);
+      router.replace(`/companion/${encodeURIComponent(companion.id)}/story-setup` as Href);
     } catch (error) {
       pushError(error instanceof Error ? error.message : 'Companion could not be created.');
     } finally {

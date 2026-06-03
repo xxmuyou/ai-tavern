@@ -19,6 +19,7 @@ import { handleBaseArtRequest } from "./base-art-routes";
 import { handleCompanionEmotionArtRequest } from "./emotion-art-routes";
 import type { Gender } from "./gender-weight";
 import { handleCompanionArtUpload } from "./upload-art";
+import { handleCompanionStoryRequest } from "../story-beats";
 
 const MAX_FREE_USER_COMPANIONS = QUOTA_LIMITS.FREE_CUSTOM_COMPANIONS;
 const NAME_MAX = 80;
@@ -191,6 +192,17 @@ export async function handleCompanionsRequest(
     const url = new URL(request.url);
     const includeFlavor = url.searchParams.get("include_flavor") === "1";
     return getDailyState(env, user, companionId, includeFlavor);
+  }
+
+  const storyMatch = pathname.match(/^\/companions\/([^/]+)(\/story-(?:arcs|beats).*)$/);
+  if (storyMatch) {
+    const companionId = decodeURIComponent(storyMatch[1] ?? "");
+    const suffix = storyMatch[2] ?? "";
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    const user = await requireAuthUser(env, request);
+    return handleCompanionStoryRequest(request, env, user, companionId, suffix);
   }
 
   const idMatch = pathname.match(/^\/companions\/([^/]+)$/);
@@ -401,6 +413,7 @@ async function setCompanionPublic(
     return jsonResponse({ error: "is_public_required" }, { status: 400 });
   }
   const makePublic = raw.is_public;
+  const shareStoryArcs = raw.share_story_arcs === true;
 
   const row = await loadCompanion(env, companionId);
   if (!row) return notFound();
@@ -420,7 +433,19 @@ async function setCompanionPublic(
     .bind(makePublic ? 1 : 0, Date.now(), companionId)
     .run();
 
-  return jsonResponse({ id: companionId, is_public: makePublic });
+  await env.DB.prepare(
+    `UPDATE companion_story_arcs
+     SET shared_with_public = ?, updated_at = ?
+     WHERE companion_id = ? AND owner_user_id = ? AND source_type <> 'official_seed'`,
+  )
+    .bind(makePublic && shareStoryArcs ? 1 : 0, Date.now(), companionId, user.id)
+    .run();
+
+  return jsonResponse({
+    id: companionId,
+    is_public: makePublic,
+    shared_story_arcs: makePublic && shareStoryArcs,
+  });
 }
 
 async function getCompanion(env: Env, user: UserRecord, companionId: string): Promise<Response> {

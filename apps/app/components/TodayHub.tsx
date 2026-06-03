@@ -4,12 +4,12 @@ import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
 import type { TodayRecommendation } from '@/api/types';
-import { ActivityButtons, activityLabel } from '@/components/ActivityButtons';
+import { ActivityButtons } from '@/components/ActivityButtons';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
-import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useToday } from '@/hooks/use-today';
+import { deriveGuidedAction } from '@/utils/guided-action';
 
 export function TodayHub({ web = false }: { web?: boolean }) {
   const router = useRouter();
@@ -78,6 +78,13 @@ function TodayCard({
   const portrait = mediaSource(recommendation.companion.art_url);
   const scene = mediaSource(recommendation.scene.art_url);
   const isBusy = recommendation.availability !== 'available';
+  const guided = deriveGuidedAction({
+    activityHint: recommendation.activity_hint,
+    availability: recommendation.availability,
+    goal: recommendation.next_goal,
+    recommended: recommendation.suggested_activity,
+  });
+  const progress = Math.max(0, Math.min(1, recommendation.next_goal.stage_progress));
 
   return (
     <View className="overflow-hidden rounded-lg border border-app-line bg-app-card">
@@ -103,17 +110,28 @@ function TodayCard({
           </View>
         </View>
 
-        <Text className="text-sm leading-5 text-app-muted">{recommendation.activity_hint}</Text>
-        <RelationshipGoalPanel goal={recommendation.next_goal} />
-        <View className="rounded-md bg-app-bg p-3">
-          <Text className="text-sm font-semibold text-app-text">Suggested: {activityLabel(recommendation.suggested_activity)}</Text>
+        <View className="rounded-lg border border-app-line bg-app-bg p-3">
+          <View className="flex-row flex-wrap items-center gap-2">
+            <View className="rounded-full bg-app-primarySoft px-2.5 py-1">
+              <Text className="text-xs font-semibold text-app-primary">{guided.statusLabel}</Text>
+            </View>
+            <Text className="text-sm font-semibold text-app-text">{guided.title}</Text>
+          </View>
+          <Text className="mt-1 text-sm leading-5 text-app-muted">{guided.body}</Text>
+          <View className="mt-3 h-2 overflow-hidden rounded-full bg-app-line">
+            <View className="h-full rounded-full bg-app-primary" style={{ width: `${Math.round(progress * 100)}%` }} />
+          </View>
         </View>
         <ActivityButtons
+          activityHint={recommendation.activity_hint}
           availability={recommendation.availability}
           companionId={recommendation.companion.id}
+          goal={recommendation.next_goal}
+          onUnavailablePress={onOpenCompanion}
           recommended={recommendation.suggested_activity}
           sceneArt={recommendation.scene.art_url}
           sceneId={recommendation.scene.id}
+          showGuidance={false}
         />
       </View>
     </View>

@@ -36,6 +36,7 @@ export function CompanionTodayPanel({ companionId, recommended }: CompanionToday
       <Text className="text-lg font-semibold text-app-text">Today</Text>
       <DailyStateSummary dailyState={data} />
       <ActivityButtons
+        activityHint={data.activity_hint}
         availability={data.availability as Availability}
         companionId={companionId}
         recommended={recommended ?? 'hang_out'}

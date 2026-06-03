@@ -413,17 +413,95 @@ export type SceneEntered = {
 };
 
 export type StoryBeatStatus = 'active' | 'waiting_stage' | 'completed';
+export type StoryArcSourceType = 'official_seed' | 'template' | 'user_written' | 'ai_assisted';
+export type StoryBeatCompletionMode = 'manual' | 'auto';
 
 export type StoryBeat = {
+  arc_id?: string | null;
   beat_order: number;
+  completion_mode?: StoryBeatCompletionMode;
   id: string;
+  is_user_editable?: boolean;
   objective: string;
   opener: string;
   reward_unlock_key: string | null;
   scene_id: string | null;
+  source_type?: StoryArcSourceType;
   stage_gate: string;
   status: StoryBeatStatus;
   title: string;
+};
+
+export type StoryBeatDraft = {
+  objective: string;
+  opener: string;
+  scene_hint?: string | null;
+  scene_id?: string | null;
+  stage_gate: string;
+  title: string;
+};
+
+export type StoryArc = {
+  beats: StoryBeat[];
+  companion_id: string;
+  created_at: number;
+  id: string;
+  is_active: boolean;
+  outline: string | null;
+  owner_user_id: string | null;
+  shared_with_public: boolean;
+  source_type: StoryArcSourceType;
+  template_id: string | null;
+  title: string;
+  updated_at: number;
+};
+
+export type StoryArcTemplate = {
+  beats: StoryBeatDraft[];
+  description: string;
+  id: string;
+  relationship_role: string | null;
+  title: string;
+};
+
+export type StoryArcTemplatesResponse = {
+  templates: StoryArcTemplate[];
+};
+
+export type StoryArcsResponse = {
+  arcs: StoryArc[];
+};
+
+export type StoryArcCreateInput = {
+  beats: StoryBeatDraft[];
+  outline?: string;
+  source_type?: 'user_written' | 'ai_assisted';
+  template_id?: string;
+  title: string;
+};
+
+export type StoryArcAssistInput = {
+  beat_count?: number;
+  outline?: string;
+  template_id?: string;
+};
+
+export type StoryArcAssistResponse = {
+  draft: {
+    arc_title: string;
+    beats: StoryBeatDraft[];
+    outline: string | null;
+    source_type: 'ai_assisted';
+    template_id: string | null;
+  };
+};
+
+export type StoryBeatUpdateInput = Partial<Pick<StoryBeatDraft, 'objective' | 'opener' | 'scene_id' | 'stage_gate' | 'title'>> & {
+  beat_order?: number;
+};
+
+export type StoryBeatResponse = {
+  beat: StoryBeat;
 };
 
 export type SceneCompanionPresent = {

@@ -26,6 +26,7 @@ import { handleAdminSettingsRequest } from "./settings/admin";
 import { handleRelationshipsRequest } from "./relationships";
 import { handlePersonasRequest } from "./personas";
 import { handleScenesRequest } from "./scenes";
+import { handleStoryTemplatesRequest } from "./story-beats";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
 export { GameRoom } from "./room";
 
@@ -111,6 +112,11 @@ export default {
       const companionsResponse = await handleCompanionsRequest(request, env, pathname);
       if (companionsResponse) {
         return await withCors(request, env, companionsResponse);
+      }
+
+      const storyTemplatesResponse = await handleStoryTemplatesRequest(request, env, pathname);
+      if (storyTemplatesResponse) {
+        return await withCors(request, env, storyTemplatesResponse);
       }
 
       const relationshipsResponse = await handleRelationshipsRequest(request, env, pathname);

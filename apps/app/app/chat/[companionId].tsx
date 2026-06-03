@@ -29,6 +29,7 @@ import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { AuthGuard } from '@/components/AuthGuard';
 import { Button } from '@/components/Button';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
+import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
@@ -482,6 +483,15 @@ function ChatScreenInner() {
       <SignalFeedback signals={lastSignals} token={signalToken} />
 
       <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
+
+      <View className="border-b border-app-line bg-app-bg px-3 py-3">
+        <CompanionStoryPanel
+          companionId={companionId}
+          compact
+          onChanged={relationship.refresh}
+          showEditor={false}
+        />
+      </View>
 
       <ActivityContextBanner
         activity={activity}

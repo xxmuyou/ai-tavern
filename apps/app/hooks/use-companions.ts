@@ -1,10 +1,19 @@
-import { getCompanion, getCompanionUnlocks, getRelationship, listCompanions } from '@/api/companion-client';
+import {
+  getCompanion,
+  getCompanionUnlocks,
+  getRelationship,
+  listCompanions,
+  listCompanionStoryArcs,
+  listStoryArcTemplates,
+} from '@/api/companion-client';
 import type {
   CompanionDetailResponse,
   CompanionsListResponse,
   CompanionSource,
   RelationshipResponse,
   RelationshipUnlocksResponse,
+  StoryArcsResponse,
+  StoryArcTemplatesResponse,
 } from '@/api/types';
 
 import { useApi } from './use-api';
@@ -32,4 +41,12 @@ export function useRelationship(companionId: string) {
 
 export function useCompanionUnlocks(companionId: string) {
   return useApi<RelationshipUnlocksResponse>(() => getCompanionUnlocks(companionId), [companionId]);
+}
+
+export function useStoryArcTemplates() {
+  return useApi<StoryArcTemplatesResponse>(listStoryArcTemplates, []);
+}
+
+export function useCompanionStoryArcs(companionId: string) {
+  return useApi<StoryArcsResponse>(() => listCompanionStoryArcs(companionId), [companionId]);
 }

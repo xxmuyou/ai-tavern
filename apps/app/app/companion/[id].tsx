@@ -7,6 +7,7 @@ import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companio
 import { Button } from '@/components/Button';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
+import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
@@ -59,22 +60,51 @@ export default function CompanionDetailScreen() {
 
   function togglePublish() {
     const next = !isPublic;
+    if (!next) {
+      Alert.alert(
+        `Unpublish ${companion.name}?`,
+        `${companion.name} will be removed from the public area.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            onPress: () => {
+              void setCompanionPublic(companion.id, false)
+                .then(() => refetch())
+                .catch((nextError) =>
+                  pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.'),
+                );
+            },
+            text: 'Unpublish',
+          },
+        ],
+      );
+      return;
+    }
+
     Alert.alert(
-      next ? `Publish ${companion.name}?` : `Unpublish ${companion.name}?`,
-      next
-        ? `${companion.name} (and its portraits) will appear in the public area for all players.`
-        : `${companion.name} will be removed from the public area.`,
+      `Publish ${companion.name}?`,
+      `${companion.name} and its portraits will appear in the public area. Story arcs stay private unless you share them.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           onPress: () => {
-            void setCompanionPublic(companion.id, next)
+            void setCompanionPublic(companion.id, true)
               .then(() => refetch())
               .catch((nextError) =>
                 pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.'),
               );
           },
-          text: next ? 'Publish' : 'Unpublish',
+          text: 'Publish only',
+        },
+        {
+          onPress: () => {
+            void setCompanionPublic(companion.id, true, { shareStoryArcs: true })
+              .then(() => refetch())
+              .catch((nextError) =>
+                pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.'),
+              );
+          },
+          text: 'Publish + story',
         },
       ],
     );
@@ -171,6 +201,11 @@ export default function CompanionDetailScreen() {
 
           <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
           <RelationshipGoalPanel goal={relationshipGoal} />
+          <CompanionStoryPanel
+            canEdit={canEdit}
+            companionId={companion.id}
+            onChanged={refetch}
+          />
           <CompanionUnlocksPanel companionId={companion.id} />
           <CompanionGalleryPanel
             artEmotions={companion.art_emotions}

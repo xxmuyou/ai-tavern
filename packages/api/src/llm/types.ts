@@ -4,6 +4,7 @@ export const LLM_TASKS = [
   "summary",
   "character-assist",
   "image_prompt_assist",
+  "story_beat_assist",
   // Life-sim v1 (worktree A: feat/life-core). Both are system-initiated and
   // never consume the user's daily message quota.
   "daily_state_flavor",

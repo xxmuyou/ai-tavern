@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { completeCurrentStoryBeat, loadStoryBeatForScene } from ".";
+import {
+  completeCurrentStoryBeat,
+  loadStoryBeatForScene,
+  markStoryBeatComplete,
+  reopenStoryBeat,
+} from ".";
 
 type BeatFixture = {
   id: string;
@@ -13,6 +18,11 @@ type BeatFixture = {
   objective: string;
   reward_unlock_key: string | null;
   is_active?: number;
+  arc_id?: string | null;
+  completion_mode?: string | null;
+  created_by_user_id?: string | null;
+  is_user_editable?: number | null;
+  source_type?: string | null;
 };
 
 type RelationshipFixture = {
@@ -82,18 +92,63 @@ describe("story beats", () => {
     expect(completed).toMatchObject({ id: "b1", status: "completed" });
     expect(next).toMatchObject({ id: "b2", status: "active" });
   });
+
+  it("does not auto-complete a manual beat after chat", async () => {
+    const env = createEnv({
+      beats: [
+        beat({
+          completion_mode: "manual",
+          id: "b1",
+          scene_id: "cafe",
+          stage_gate: "first_contact",
+        }),
+      ],
+      relationships: [{ companion_id: "maya", user_id: "u1" }],
+    });
+
+    const completed = await completeCurrentStoryBeat(env, "u1", "maya", "cafe", 1000);
+    const current = await loadStoryBeatForScene(env, "u1", "maya", "cafe");
+
+    expect(completed).toBeNull();
+    expect(current).toMatchObject({ id: "b1", status: "active" });
+  });
+
+  it("explicitly completes and reopens a manual beat", async () => {
+    const env = createEnv({
+      beats: [
+        beat({
+          completion_mode: "manual",
+          id: "b1",
+          scene_id: "cafe",
+          stage_gate: "first_contact",
+        }),
+      ],
+      relationships: [{ companion_id: "maya", user_id: "u1" }],
+    });
+
+    const completed = await markStoryBeatComplete(env, "u1", "maya", "b1", 1000);
+    const reopened = await reopenStoryBeat(env, "u1", "maya", "b1", 2000);
+
+    expect(completed).toMatchObject({ id: "b1", status: "completed" });
+    expect(reopened).toMatchObject({ id: "b1", status: "active" });
+  });
 });
 
 function beat(partial: Partial<BeatFixture>): BeatFixture {
   return {
     beat_order: 1,
+    arc_id: null,
     companion_id: "maya",
+    completion_mode: "auto",
+    created_by_user_id: null,
     id: "b1",
     is_active: 1,
+    is_user_editable: 0,
     objective: "objective",
     opener: "hook",
     reward_unlock_key: null,
     scene_id: "cafe",
+    source_type: "official_seed",
     stage_gate: "first_contact",
     title: "Beat",
     ...partial,
@@ -122,6 +177,15 @@ function createEnv(input: {
             return { results: [] as T[] };
           },
           async first<T>() {
+            if (sql.includes("FROM companion_story_beats")) {
+              const [beatId, companionId] = values;
+              return (input.beats.find(
+                (item) =>
+                  item.id === beatId &&
+                  item.companion_id === companionId &&
+                  (item.is_active ?? 1) === 1,
+              ) ?? null) as T | null;
+            }
             if (sql.includes("FROM relationships")) {
               const [userId, companionId] = values;
               const rel = input.relationships.find(

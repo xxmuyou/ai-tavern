@@ -25,6 +25,7 @@ import type {
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
+import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
@@ -367,6 +368,13 @@ export default function WebChatScreen() {
             <View className="overflow-hidden rounded-2xl border border-app-line-soft bg-app-sunken/40">
               <PersonaSelector personas={personas} selectedId={activePersonaId} onSelect={setSelectedPersonaId} />
             </View>
+
+            <CompanionStoryPanel
+              companionId={companionId}
+              compact
+              onChanged={relationship.refresh}
+              showEditor={false}
+            />
 
             <WebButton
               label="View profile"

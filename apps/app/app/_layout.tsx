@@ -30,6 +30,7 @@ export default function RootLayout() {
             <Stack.Screen name="companion-import" />
             <Stack.Screen name="companion/[id]" />
             <Stack.Screen name="companion/[id]/edit" />
+            <Stack.Screen name="companion/[id]/story-setup" />
             <Stack.Screen name="memories" />
             <Stack.Screen name="personas" />
             <Stack.Screen name="scene/[id]" />

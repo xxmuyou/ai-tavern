@@ -20,6 +20,8 @@
 
 - [`spec-027: Chat Moment Images`](./spec-027-chat-moment-images.md) 是本框架的后续视觉奖励层：story beat 负责“当前 companion 正在推进什么剧情目标”，Chat Moment Image 负责把某一轮有场景上下文的聊天捕捉成图片记忆。
 - spec-026 不直接实现生图按钮、prompt snapshot 或图片 job；只保证 scene/chat 能提供足够稳定的 companion、scene、activity、stage、story beat 上下文，供 spec-027 后续复用。
+- [`spec-028: 剧情引导与行动按钮重构`](./spec-028-guided-story-actions-ui.md) 消费本 spec 的 active beat，把“下一步做什么”呈现在 Today / Scene / Chat。
+- [`spec-029: User-created Story Arcs`](./spec-029-user-created-story-arcs.md) 承接自建角色剧情包、用户轻量编辑、AI 辅助草稿和手动完成。它修正本 spec 早期切片里“自创角色可无 beat”的产品假设。
 
 ## 目标 / 非目标
 
@@ -35,8 +37,10 @@
 - ❌ 复杂分支剧情 / 失败线 / 多结局。
 - ❌ 动态改写 companion 长期记忆。
 - ❌ 新建独立剧情编辑后台。
-- ❌ 把自创 companion 强行生成完整 arc；自创角色可无 beat，走现有 sandbox。
+- ❌ 在 spec-026 当期交付里，把自创 companion 强行生成完整 arc。
 - ❌ 聊天瞬间图生成；该功能单独放入 spec-027，避免把剧情拍框架和 image-gen 管线耦合。
+
+> **历史边界说明（2026-06-03）：** spec-026 只交付 story beat 基础设施和官方 seed 示例。当前产品路线已更新：自建角色需要剧情包 / 用户自写 / AI 辅助 arc，详见 `spec-029`。同理，本 spec 的自动完成规则属于早期基础框架；UI-managed / user-owned arcs 以后以用户手动完成为默认。
 
 ## 数据模型
 
@@ -94,9 +98,10 @@ CREATE TABLE user_story_progress (
   - 按 `beat_order` 找第一个未完成、`stage_gate` 已满足、且 scene 匹配或 scene 为空的 beat。
   - 如果最早未完成 beat 的 stage 未满足，返回 `waiting_stage` 提示。
   - 如果全部完成，返回 `completed` 或 null，前端回退普通 opener。
-- 自动完成：
+- 自动完成（legacy baseline）：
   - 当 user/companion 当前 stage 达到该 beat 的 `stage_gate` 且发生一次 chat turn、event resolve 或 activity completion 时，可标记该 beat 完成。
   - 本期只实现 chat 与 event resolve 两条路径；activity completion 后续接入。
+  - `spec-029` 开始，UI-managed / user-owned arc 默认改为手动完成。
 - 完成后：
   - 写入 `user_story_progress.completed_beat_ids`。
   - 若有 `reward_unlock_key`，写入 `relationship_unlocks` 作为 story reward。

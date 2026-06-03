@@ -51,8 +51,10 @@
 | 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 🟡 in-progress（积分端点 + 单测落地；工作台已扩展 Settings/图像模型/表情/LLM，见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)） |
 | 024 | [聊天内关系可见化 + 每轮反馈（沉浸感阶段 0）](./spec-024-in-chat-relationship-feedback.md) | 前端接线 | 006, 005, 012 | 2-3 天 | 🟡 in-progress（两端接线+HUD+每轮反馈已落地，typecheck/lint 通过，待运行端到端验证） |
 | 025 | [角色深度 + 解锁系统（沉浸感阶段 1）](./spec-025-character-depth-and-unlocks.md) | 后端+前端 | 004, 006, 005, 013, 019, 024 | 6-9 天 | 🟡 in-progress（persona 字段+prompt 强化+解锁系统全链路已落地，API 366 单测通过、两端 typecheck/lint 通过，待运行端到端验证；表情/场景的 Pro 门禁见实现记录待确认） |
-| 026 | [Companion Story Beats（角色剧情拍框架）](./spec-026-companion-story-beats.md) | 后端+前端+内容 | 005, 006, 007, 008, 024, 025 | 4-6 天 | 🟡 in-progress（修复 first_contact 100% 断点；新增通用 story beat 框架，让 scene 承载 companion 当前剧情目标） |
-| 027 | [Chat Moment Images（场景聊天瞬间图）](./spec-027-chat-moment-images.md) | 后端+前端+image-gen | 006, 007, 020, 022, 024, 026 | 3-5 天 | 📝 draft（最新 companion 回复旁小相机按钮；根据聊天/行为/场景/时间/人物/状态生成完整场景图） |
+| 026 | [Companion Story Beats（角色剧情拍框架）](./spec-026-companion-story-beats.md) | 后端+前端+内容 | 005, 006, 007, 008, 024, 025 | 4-6 天 | 🟢 done（基础 story beat 框架、scene active beat、chat prompt 注入、官方示例 seed 已完成；自建角色剧情见 029） |
+| 027 | [Chat Moment Images（场景聊天瞬间图）](./spec-027-chat-moment-images.md) | 后端+前端+image-gen | 006, 007, 020, 022, 024, 026 | 3-5 天 | 🟡 in-progress（最新 companion 回复旁小相机按钮；根据聊天/行为/场景/时间/人物/状态生成完整场景图） |
+| 028 | [剧情引导与行动按钮重构（Web 优先）](./spec-028-guided-story-actions-ui.md) | 前端体验/UI | 024, 025, 026 | 2-3 天 | 🟡 in-progress（统一剧情拍/关系目标/日常状态的下一步引导，重排 Today/Scene/Chat 行动按钮） |
+| 029 | [User-created Story Arcs（自建角色剧情线与剧情包）](./spec-029-user-created-story-arcs.md) | 后端+前端+LLM+内容 | 002, 010, 019, 021, 026, 028 | 5-8 天 | 🟡 in-progress（自建角色剧情包、轻量编辑、Pro-only AI draft、手动完成节点、公开角色可选共享已接线；待端到端 QA） |
 
 **估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
 
@@ -72,6 +74,7 @@
 - **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
 - **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，3 个 workflow create/variation/edit + 3 风格 checkpoint 参数）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
 - **I 路径（管理员后端）：** 011（LLM 端点，已 done）+ 023（积分查看/调整），管理员后端能力统一沿用 `requireAdminUser` 与 `admin/` 分派模式，UI 归 spec-018
+- **J 路径（自建角色剧情）：** 019 → 026 → 028 → 029。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 让自建角色拥有剧情包、用户自写 arc、AI 辅助草稿与手动完成机制。自建角色不再按“纯 sandbox + 数值”作为长期路线。
 
 ---
 
@@ -82,6 +85,7 @@
 - 001 ~ 016 全部完成
 - E2E 测试通过（至少：登录 → 进场景 → 与官方角色对话 → 触发事件 → 数值变化 → 订阅）
 - 内容 seed（10 场景 + 10 角色 + 美术资源）就位
+- 若以“AI 聊天向养成游戏”作为 v1.x 体验验收口径，spec-028 与 spec-029 需要进入 RC 前检查项：用户必须知道下一步做什么，自建角色必须能拥有可推进剧情线。
 - v1 上线 checklist（[`ops/secrets.md §5`](../ops/secrets.md#5-待获取--待配置v1-上线前-checklist)）全部清零
 - 不允许任何 spec 以"临时 hard-code / console fallback / 后续再接表"作为 done 状态
 
@@ -105,6 +109,7 @@
 - 🟡 **in-progress** — 正在做
 - 🔴 **blocked** — 等其他 spec / 决策
 - ⚪ **todo** — 待开始
+- 📝 **draft** — 已展开但未开始实施
 - 📝 **stub** — 仅占位，未展开
 
 ---

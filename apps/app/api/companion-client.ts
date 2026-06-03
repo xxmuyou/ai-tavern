@@ -59,6 +59,13 @@ import type {
   ScenesListResponse,
   SelectVariantResponse,
   SseEvent,
+  StoryArcAssistInput,
+  StoryArcAssistResponse,
+  StoryArcCreateInput,
+  StoryArcsResponse,
+  StoryArcTemplatesResponse,
+  StoryBeatResponse,
+  StoryBeatUpdateInput,
   TodayResponse,
   UserImageAsset,
   UserImageAssetCreateInput,
@@ -487,11 +494,12 @@ export async function favoriteCompanion(
 export async function setCompanionPublic(
   id: string,
   isPublic: boolean,
-): Promise<{ id: string; is_public: boolean }> {
-  return requestJson<{ id: string; is_public: boolean }>(
+  options?: { shareStoryArcs?: boolean },
+): Promise<{ id: string; is_public: boolean; shared_story_arcs?: boolean }> {
+  return requestJson<{ id: string; is_public: boolean; shared_story_arcs?: boolean }>(
     `/companions/${encodeURIComponent(id)}/publish`,
     {
-      body: JSON.stringify({ is_public: isPublic }),
+      body: JSON.stringify({ is_public: isPublic, share_story_arcs: options?.shareStoryArcs === true }),
       headers: { 'content-type': 'application/json' },
       method: 'PUT',
     },
@@ -551,6 +559,74 @@ export async function deletePersona(id: string): Promise<{ ok: true }> {
   return requestJson<{ ok: true }>(`/personas/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+// --- Story arcs (explicit companion progression) ---
+
+export async function listStoryArcTemplates(): Promise<StoryArcTemplatesResponse> {
+  return requestJson<StoryArcTemplatesResponse>('/story-arc-templates');
+}
+
+export async function listCompanionStoryArcs(companionId: string): Promise<StoryArcsResponse> {
+  return requestJson<StoryArcsResponse>(`/companions/${encodeURIComponent(companionId)}/story-arcs`);
+}
+
+export async function createStoryArc(companionId: string, input: StoryArcCreateInput): Promise<{ arc: StoryArcsResponse['arcs'][number] }> {
+  return requestJson<{ arc: StoryArcsResponse['arcs'][number] }>(
+    `/companions/${encodeURIComponent(companionId)}/story-arcs`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function createStoryArcFromTemplate(companionId: string, templateId: string): Promise<{ arc: StoryArcsResponse['arcs'][number] }> {
+  return requestJson<{ arc: StoryArcsResponse['arcs'][number] }>(
+    `/companions/${encodeURIComponent(companionId)}/story-arcs/from-template`,
+    {
+      body: JSON.stringify({ template_id: templateId }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function assistStoryArc(companionId: string, input: StoryArcAssistInput): Promise<StoryArcAssistResponse> {
+  return requestJson<StoryArcAssistResponse>(
+    `/companions/${encodeURIComponent(companionId)}/story-arcs/assist`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function updateStoryBeat(companionId: string, beatId: string, input: StoryBeatUpdateInput): Promise<StoryBeatResponse> {
+  return requestJson<StoryBeatResponse>(
+    `/companions/${encodeURIComponent(companionId)}/story-beats/${encodeURIComponent(beatId)}`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'PUT',
+    },
+  );
+}
+
+export async function completeStoryBeat(companionId: string, beatId: string): Promise<StoryBeatResponse> {
+  return requestJson<StoryBeatResponse>(
+    `/companions/${encodeURIComponent(companionId)}/story-beats/${encodeURIComponent(beatId)}/complete`,
+    { method: 'POST' },
+  );
+}
+
+export async function reopenStoryBeat(companionId: string, beatId: string): Promise<StoryBeatResponse> {
+  return requestJson<StoryBeatResponse>(
+    `/companions/${encodeURIComponent(companionId)}/story-beats/${encodeURIComponent(beatId)}/reopen`,
+    { method: 'POST' },
+  );
 }
 
 export type CompanionArtUpload = Blob | File | { name: string; type: string; uri: string };

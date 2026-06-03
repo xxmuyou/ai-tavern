@@ -1,8 +1,8 @@
 import { Pressable, Text, View } from 'react-native';
 
 import type { ActivityContext } from '@/api/types';
-import { activityLabel } from '@/components/ActivityButtons';
 import { DailyStateSummary } from '@/components/DailyStateSummary';
+import { activityLabel } from '@/utils/guided-action';
 
 type ActivityContextBannerProps = {
   activity: ActivityContext | null;
@@ -23,15 +23,22 @@ export function ActivityContextBanner({
   return (
     <View className="gap-3 border-b border-app-line bg-app-card px-4 py-3">
       <View className="flex-row flex-wrap items-center justify-between gap-3">
-        <View className="min-w-0 flex-1">
-          <Text className="text-sm font-semibold text-app-text">
+        <View className="min-w-0 flex-1 gap-1">
+          <View className="self-start rounded-full bg-app-primarySoft px-2.5 py-1">
+            <Text className="text-xs font-semibold uppercase tracking-normal text-app-primary">
+              {activity.status}
+            </Text>
+          </View>
+          <Text className="text-base font-semibold text-app-text">
             {activityLabel(activity.type)} at {activity.scene.name}
           </Text>
-          <Text className="mt-1 text-xs uppercase tracking-normal text-app-muted">{activity.status}</Text>
+          <Text className="text-sm leading-5 text-app-muted">
+            {activity.daily_state.activity_hint}
+          </Text>
         </View>
         {active ? (
           <View className="flex-row gap-2">
-            <ActionButton disabled={isMutating} label="Complete" onPress={onComplete} primary />
+            <ActionButton disabled={isMutating} label="Complete activity" onPress={onComplete} primary />
             <ActionButton disabled={isMutating} label="Cancel" onPress={onCancel} />
           </View>
         ) : null}

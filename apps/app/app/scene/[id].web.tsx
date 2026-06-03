@@ -1,22 +1,24 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
+import type { SceneCompanionPresent } from '@/api/types';
 import { WebAppShell } from '@/components/web/WebAppShell';
-import { SceneDailyCompanion } from '@/components/SceneDailyCompanion';
+import { ActivityButtons } from '@/components/ActivityButtons';
+import { DailyStateSummary } from '@/components/DailyStateSummary';
 import {
-  WebButton,
   WebCard,
   WebEmptyState,
   WebLoading,
   WebTag,
 } from '@/components/web/ui';
 import { SCENES_ROUTE } from '@/constants/routes';
+import { useDailyState } from '@/hooks/use-daily-state';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSceneEntry } from '@/hooks/use-scenes';
+import { deriveGuidedAction } from '@/utils/guided-action';
 
 export default function WebSceneDetailScreen() {
   const router = useRouter();
@@ -58,12 +60,6 @@ export default function WebSceneDetailScreen() {
   const imageSource = mediaSource(scene.art_url);
   const companions = data.companions_present;
 
-  function openChat(companionId: string) {
-    const params = new URLSearchParams({ sceneId: scene.id });
-    if (scene.art_url) params.set('sceneArt', scene.art_url);
-    router.push(`/chat/${encodeURIComponent(companionId)}?${params.toString()}` as Href);
-  }
-
   return (
     <WebAppShell
       title={scene.name}
@@ -102,82 +98,39 @@ export default function WebSceneDetailScreen() {
               <Text className="text-overline text-rose-deep">A place to be</Text>
               <Text className="mt-2 font-serif text-title text-app-ink">{`"${scene.mood}"`}</Text>
             </View>
-            <Text className="text-body-sm leading-7 text-app-ink-soft">
-              Step into the room and see who is already here. The conversation will start where it wants to start — your move is to show up.
-            </Text>
           </View>
         </WebCard>
 
-        {/* Companions present */}
         <WebCard padding="lg" className="gap-5">
           <View>
-            <Text className="text-overline text-rose-deep">In the room</Text>
-            <Text className="mt-1 font-serif text-title text-app-ink">Companions present</Text>
+            <Text className="text-overline text-rose-deep">At a glance</Text>
+            <Text className="mt-1 font-serif text-title text-app-ink">Scene state</Text>
           </View>
-          {companions.length === 0 ? (
-            <Text className="text-body-sm text-app-muted">No companions are present in this scene yet.</Text>
-          ) : (
-            <View className="gap-3">
-              {companions.map((companion) => {
-                const portrait = mediaSource(companion.art_url);
-                return (
-                  <Pressable
-                    key={companion.id}
-                    accessibilityRole="link"
-                    onPress={() => openChat(companion.id)}
-                    className="group flex-row items-center gap-4 rounded-2xl border border-app-line bg-app-surface p-3 transition-colors hover:border-rose/40"
-                  >
-                    <View className="h-16 w-16 items-center justify-end overflow-hidden rounded-xl bg-rose-soft">
-                      {portrait ? (
-                        <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" />
-                      ) : (
-                        <Text className="font-serif text-title text-rose-deep">
-                          {companion.name.slice(0, 1).toUpperCase()}
-                        </Text>
-                      )}
-                    </View>
-                    <View className="min-w-0 flex-1">
-                      <Text className="font-serif text-body font-semibold text-app-ink" numberOfLines={1}>
-                        {companion.name}
-                      </Text>
-                      {companion.active_story_beat ? (
-                        <View className="mt-1 flex-row items-center gap-1">
-                          <Ionicons color="#9A2F4F" name="bookmark" size={11} />
-                          <Text numberOfLines={1} className="text-caption font-semibold text-rose-deep">
-                            {companion.active_story_beat.status === 'waiting_stage'
-                              ? `Reach ${prettyStage(companion.active_story_beat.stage_gate)}`
-                              : companion.active_story_beat.title}
-                          </Text>
-                        </View>
-                      ) : null}
-                      <Text numberOfLines={2} className="mt-1 text-caption text-app-muted">
-                        {companion.opener}
-                      </Text>
-                    </View>
-                    <View className="h-9 w-9 items-center justify-center rounded-full bg-rose-soft">
-                      <Ionicons color="#9A2F4F" name="arrow-forward" size={14} />
-                    </View>
-                  </Pressable>
-                );
-              })}
+          <View className="gap-3">
+            <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
+              <Text className="text-caption text-app-muted">Companions here</Text>
+              <Text className="mt-1 font-serif text-display-sm text-app-ink">{companions.length}</Text>
             </View>
-          )}
+            <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
+              <Text className="text-caption text-app-muted">Mood</Text>
+              <Text className="mt-1 text-body-sm leading-6 text-app-ink-soft">{scene.mood}</Text>
+            </View>
+          </View>
         </WebCard>
       </View>
 
-      {/* Daily companion cards */}
       {companions.length > 0 ? (
         <View className="mt-10">
           <View className="mb-5 flex-row items-end justify-between">
             <View>
-              <Text className="text-overline text-rose-deep">Today, with them</Text>
-              <Text className="mt-1 font-serif text-title text-app-ink">What is on offer</Text>
+              <Text className="text-overline text-rose-deep">Guided actions</Text>
+              <Text className="mt-1 font-serif text-title text-app-ink">Choose the next step</Text>
             </View>
-            <Text className="text-caption text-app-muted">{companions.length} cards</Text>
+            <Text className="text-caption text-app-muted">{companions.length} available</Text>
           </View>
           <View className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {companions.map((companion) => (
-              <SceneDailyCompanion
+              <SceneActionCard
                 key={companion.id}
                 companion={companion}
                 sceneArt={scene.art_url}
@@ -186,15 +139,93 @@ export default function WebSceneDetailScreen() {
             ))}
           </View>
         </View>
-      ) : null}
+      ) : (
+        <WebCard padding="lg" className="mt-10 gap-2">
+          <Text className="text-overline text-rose-deep">Guided actions</Text>
+          <Text className="font-serif text-title text-app-ink">No one is here right now</Text>
+          <Text className="text-body-sm leading-6 text-app-ink-soft">
+            Browse another scene or come back later when a companion is available.
+          </Text>
+        </WebCard>
+      )}
     </WebAppShell>
   );
 }
 
-function prettyStage(stage: string): string {
-  return stage
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+function SceneActionCard({
+  companion,
+  sceneArt,
+  sceneId,
+}: {
+  companion: SceneCompanionPresent;
+  sceneArt?: string | null;
+  sceneId: string;
+}) {
+  const router = useRouter();
+  const daily = useDailyState(companion.id);
+  const portrait = mediaSource(companion.art_url);
+  const guided = deriveGuidedAction({
+    activityHint: daily.data?.activity_hint ?? companion.opener,
+    availability: daily.data?.availability ?? 'available',
+    storyBeat: companion.active_story_beat,
+  });
+
+  function openChat() {
+    const params = new URLSearchParams({ sceneId });
+    if (sceneArt) params.set('sceneArt', sceneArt);
+    router.push(`/chat/${encodeURIComponent(companion.id)}?${params.toString()}` as Href);
+  }
+
+  return (
+    <WebCard padding="lg" className="gap-5">
+      <View className="flex-row gap-4">
+        <View className="h-24 w-20 items-center justify-end overflow-hidden rounded-2xl bg-rose-soft">
+          {portrait ? (
+            <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" />
+          ) : (
+            <Text className="font-serif text-title text-rose-deep">
+              {companion.name.slice(0, 1).toUpperCase()}
+            </Text>
+          )}
+        </View>
+        <View className="min-w-0 flex-1 gap-2">
+          <View className="flex-row flex-wrap items-center gap-2">
+            <Text className="font-serif text-title-sm text-app-ink">{companion.name}</Text>
+            <WebTag size="sm" variant={guided.source === 'story' ? 'rose' : 'neutral'}>
+              {guided.statusLabel}
+            </WebTag>
+          </View>
+          <Text className="text-body-sm leading-6 text-app-ink-soft">{companion.opener}</Text>
+        </View>
+      </View>
+
+      <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
+        <Text className="text-caption font-semibold uppercase tracking-normal text-rose-deep">
+          {guided.source === 'story' ? 'Story objective' : 'Recommended next step'}
+        </Text>
+        <Text className="mt-1 font-serif text-title-sm text-app-ink">{guided.title}</Text>
+        <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">{guided.body}</Text>
+      </View>
+
+      {daily.isLoading ? (
+        <Text className="text-body-sm text-app-muted">Loading today state...</Text>
+      ) : daily.error || !daily.data ? (
+        <Text className="text-body-sm text-app-muted">Today state is unavailable.</Text>
+      ) : (
+        <DailyStateSummary dailyState={daily.data} />
+      )}
+
+      <ActivityButtons
+        activityHint={daily.data?.activity_hint ?? companion.opener}
+        availability={daily.data?.availability ?? 'available'}
+        companionId={companion.id}
+        onContinueStory={openChat}
+        onUnavailablePress={() => router.push(`/companion/${encodeURIComponent(companion.id)}` as Href)}
+        sceneArt={sceneArt}
+        sceneId={sceneId}
+        showGuidance={false}
+        storyBeat={companion.active_story_beat}
+      />
+    </WebCard>
+  );
 }

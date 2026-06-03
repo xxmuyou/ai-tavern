@@ -106,7 +106,7 @@
 #### A.2 WF-2 变体 + 抠图（角色一致性 + 透明背景）
 
 - **角色一致性（必需）**：以确认的基础图为参考，保证 5 张变体与基础图是**同一 companion**。这里的一致性是“同一张基础角色图的表情变体一致”，不是“贴合用户上传真人”。可用 Reference Only / IPAdapter / ControlNet 等参考方案，但不要求 FaceID / InstantID 级别的真人身份保真。
-- **抠图**：workflow **尾部接去背节点**（rembg / RMBG / SAM 等），输出**透明背景** webp 或 png（带 alpha）。这里的“背景”指角色立绘背景去除，不包含场景背景生成。
+- **抠图**：workflow **尾部接去背节点**（rembg / RMBG / SAM 等），输出**透明背景** webp 或 png（带 alpha）。这里的“背景”指角色立绘背景去除，不包含场景背景生成，也不适用于 Chat Moment Image 这类完整场景图。
 - **调用方式**：后端按 5 个非 neutral emotion **调用 5 次**，每次只换 prompt（emotion 变体），不在 workflow 内部循环。
 
 #### A.3 WF-3 编辑（换装 / 换姿势，后续）
