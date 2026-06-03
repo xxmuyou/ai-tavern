@@ -1,6 +1,7 @@
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 
 import { updateCompanion, uploadCompanionArt } from '@/api/companion-client';
 import type { CompanionCreateInput } from '@/api/types';
@@ -11,6 +12,7 @@ import { WebAppShell } from '@/components/web/WebAppShell';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useScenes } from '@/hooks/use-scenes';
+import { shareCompanionCard } from '@/utils/share-card';
 
 export default function WebCompanionEditScreen() {
   const router = useRouter();
@@ -47,6 +49,19 @@ export default function WebCompanionEditScreen() {
 
   return (
     <WebAppShell title={`Edit ${companion.data.name}`} subtitle="Update the private character card and portrait.">
+      <View className="mb-4 flex-row justify-end">
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void shareCompanionCard(companionId, companion.data?.name ?? 'character').catch((err) =>
+              pushError(err instanceof Error ? err.message : 'Could not export this card.'),
+            );
+          }}
+          className="rounded-lg border border-app-line bg-white px-3 py-2"
+        >
+          <Text className="text-sm font-semibold text-app-primary">Export card</Text>
+        </Pressable>
+      </View>
       <CompanionForm
         initial={companion.data}
         isSubmitting={isSubmitting}

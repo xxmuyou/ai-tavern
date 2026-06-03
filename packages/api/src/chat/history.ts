@@ -1,6 +1,7 @@
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
-import { canChatWithCompanion, loadCompanionForChat, loadThread } from "./loaders";
+import { canChatWithCompanion, ensureThread, loadCompanionForChat, loadThread } from "./loaders";
+import { parseVariants } from "./variants";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -12,6 +13,8 @@ type HistoryRow = {
   scene_id: string | null;
   signals: string | null;
   emotion: string | null;
+  variants: string | null;
+  selected_variant: number | null;
   created_at: number;
 };
 
@@ -35,6 +38,31 @@ export async function handleGetHistory(
 
   const thread = await loadThread(env, user.id, companionId);
   if (!thread) {
+    // First time opening this chat: if the character has an opening line, seed it
+    // as the first companion message so the thread is never a blank screen and the
+    // greeting becomes part of the conversation context.
+    const greeting = companion.greeting?.trim();
+    if (greeting) {
+      const seeded = await seedGreeting(env, user.id, companionId, greeting);
+      return jsonResponse({
+        messages: [
+          {
+            content: greeting,
+            created_at: seeded.created_at,
+            emotion: null,
+            id: seeded.message_id,
+            moment_image: null,
+            role: "companion",
+            scene_id: null,
+            selected_variant: null,
+            signals: null,
+            variants: null,
+          },
+        ],
+        next_cursor: null,
+        thread: { message_count: 1, summary: null },
+      });
+    }
     return jsonResponse({
       messages: [],
       next_cursor: null,
@@ -59,7 +87,7 @@ export async function handleGetHistory(
 
   const params: unknown[] = [thread.id];
   let sql =
-    `SELECT id, role, content, scene_id, signals, emotion, created_at
+    `SELECT id, role, content, scene_id, signals, emotion, variants, selected_variant, created_at
      FROM messages
      WHERE thread_id = ?`;
   if (cursorTs !== null) {
@@ -84,16 +112,22 @@ export async function handleGetHistory(
   const messages = page
     .slice()
     .reverse()
-    .map((row) => ({
-      content: row.content,
-      created_at: row.created_at,
-      emotion: row.emotion,
-      id: row.id,
-      moment_image: row.role === "companion" ? moments.get(row.id) ?? null : null,
-      role: row.role,
-      scene_id: row.scene_id ?? null,
-      signals: row.role === "companion" ? parseSignals(row.signals) : null,
-    }));
+    .map((row) => {
+      const variants = row.role === "companion" ? parseVariants(row.variants, row.content) : null;
+      return {
+        content: row.content,
+        created_at: row.created_at,
+        emotion: row.emotion,
+        id: row.id,
+        moment_image: row.role === "companion" ? moments.get(row.id) ?? null : null,
+        role: row.role,
+        scene_id: row.scene_id ?? null,
+        // Only expose variant state when there is more than one wording to swipe.
+        selected_variant: variants && variants.length > 1 ? row.selected_variant ?? variants.length - 1 : null,
+        signals: row.role === "companion" ? parseSignals(row.signals) : null,
+        variants: variants && variants.length > 1 ? variants : null,
+      };
+    });
 
   return jsonResponse({
     messages,
@@ -127,6 +161,29 @@ export async function handleDeleteHistory(
     .run();
 
   return new Response(null, { status: 204 });
+}
+
+async function seedGreeting(
+  env: Env,
+  userId: string,
+  companionId: string,
+  greeting: string,
+): Promise<{ message_id: string; created_at: number }> {
+  const now = Date.now();
+  const thread = await ensureThread(env, userId, companionId, now);
+  const messageId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO messages
+       (id, thread_id, role, content, scene_id, activity_id, signals, emotion,
+        llm_provider, llm_model, token_input, token_output, created_at)
+     VALUES (?, ?, 'companion', ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?)`,
+  )
+    .bind(messageId, thread.id, greeting, now)
+    .run();
+  await env.DB.prepare(`UPDATE threads SET message_count = 1, updated_at = ? WHERE id = ?`)
+    .bind(now, thread.id)
+    .run();
+  return { created_at: now, message_id: messageId };
 }
 
 type MomentImagePublic = { job_id: string; status: string; output_key: string | null };

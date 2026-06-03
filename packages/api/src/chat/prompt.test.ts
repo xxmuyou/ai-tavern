@@ -123,6 +123,61 @@ describe("buildChatPrompt", () => {
     expect(revealed[0]?.content).toContain("her last show was cancelled and it gutted her");
   });
 
+  it("injects the user persona when one is provided", () => {
+    const base = {
+      companion,
+      narrative: "Friend.",
+      recentMessages: [],
+      scene: null,
+      secretToReveal: null,
+      stage: "trusted" as const,
+      threadSummary: null,
+      userText: "hi",
+    };
+
+    const without = buildChatPrompt(base);
+    expect(without[0]?.content).not.toContain("# Who you are talking to");
+
+    const withPersona = buildChatPrompt({
+      ...base,
+      userPersona: {
+        description: "a night-shift ER nurse who hides exhaustion behind jokes",
+        gender: "female",
+        name: "Dr. Wen",
+      },
+    });
+    const system = withPersona[0]?.content ?? "";
+    expect(system).toContain("# Who you are talking to");
+    expect(system).toContain("Dr. Wen");
+    expect(system).toContain("night-shift ER nurse");
+    expect(system).toContain("female");
+  });
+
+  it("injects example dialogue lines as voice anchors when provided", () => {
+    const base = {
+      companion,
+      narrative: "Friend.",
+      recentMessages: [],
+      scene: null,
+      secretToReveal: null,
+      stage: "trusted" as const,
+      threadSummary: null,
+      userText: "hi",
+    };
+
+    const without = buildChatPrompt(base);
+    expect(without[0]?.content).not.toContain("# How you speak");
+
+    const withExamples = buildChatPrompt({
+      ...base,
+      exampleDialogues: ["Oh, it's you again. Sit. I'll pretend I'm not glad.", "Don't make it weird."],
+    });
+    const system = withExamples[0]?.content ?? "";
+    expect(system).toContain("# How you speak (examples of your voice)");
+    expect(system).toContain("pretend I'm not glad");
+    expect(system).toContain("Don't make it weird");
+  });
+
   it("varies how the character is told to address the user by stage", () => {
     const early = buildChatPrompt({
       companion,

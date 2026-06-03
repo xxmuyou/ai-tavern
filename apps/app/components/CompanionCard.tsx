@@ -11,9 +11,22 @@ type CompanionCardProps = {
   onPress?: () => void;
   opener?: string;
   role?: string | null;
+  tags?: string[];
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 };
 
-export function CompanionCard({ artUrl, level, name, onPress, opener, role }: CompanionCardProps) {
+export function CompanionCard({
+  artUrl,
+  level,
+  name,
+  onPress,
+  opener,
+  role,
+  tags,
+  isFavorite,
+  onToggleFavorite,
+}: CompanionCardProps) {
   const imageSource = mediaSource(artUrl);
   const content = (
     <>
@@ -45,18 +58,45 @@ export function CompanionCard({ artUrl, level, name, onPress, opener, role }: Co
           </View>
         </View>
         {role ? <Text className="text-xs uppercase tracking-normal text-app-muted">{role}</Text> : null}
+        {tags && tags.length > 0 ? (
+          <View className="mt-1 flex-row flex-wrap gap-1">
+            {tags.slice(0, 3).map((tag) => (
+              <View key={tag} className="rounded-full bg-app-primarySoft px-2 py-0.5">
+                <Text className="text-[10px] font-semibold text-app-primary">{tag}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
         {opener ? <Text className="mt-2 text-sm leading-5 text-app-muted">{opener}</Text> : null}
       </View>
     </>
   );
 
+  const favoriteButton = onToggleFavorite ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      onPress={onToggleFavorite}
+      hitSlop={8}
+      className="absolute right-2 top-2 h-8 w-8 items-center justify-center rounded-full bg-app-card/90"
+    >
+      <Ionicons color={isFavorite ? '#E0245E' : '#687076'} name={isFavorite ? 'heart' : 'heart-outline'} size={18} />
+    </Pressable>
+  ) : null;
+
   if (!onPress) {
-    return <View className="rounded-lg border border-app-line bg-app-card p-3">{content}</View>;
+    return (
+      <View className="rounded-lg border border-app-line bg-app-card p-3">
+        {content}
+        {favoriteButton}
+      </View>
+    );
   }
 
   return (
     <Pressable accessibilityRole="button" onPress={onPress} className="rounded-lg border border-app-line bg-app-card p-3">
       {content}
+      {favoriteButton}
       <View className="absolute bottom-3 right-3 h-8 w-8 items-center justify-center rounded-full bg-app-primary">
         <Ionicons color="#FFFFFF" name="chevron-forward" size={16} />
       </View>

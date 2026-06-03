@@ -20,11 +20,13 @@ import {
   ensureThread,
   loadCompanionForChat,
   loadSceneForChat,
+  parseExampleDialogues,
   parseSceneTags,
   type ChatThreadRow,
 } from "./loaders";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPrompt } from "./prompt";
+import { resolveThreadPersona } from "../personas";
 import { applyHostilityOverride, assessHostileInput } from "./hostility";
 import {
   checkQuota,
@@ -39,7 +41,7 @@ import { formatDateUtc, recordUsage } from "./usage";
 
 const RECENT_MESSAGES_LIMIT = 50;
 
-type PostBody = { text?: unknown; scene_id?: unknown; activity_id?: unknown };
+type PostBody = { text?: unknown; scene_id?: unknown; activity_id?: unknown; persona_id?: unknown };
 
 type HistoryRow = { role: "user" | "companion"; content: string };
 
@@ -122,6 +124,18 @@ export async function handlePostMessage(
   const thread = await ensureThread(env, user.id, companionId, now);
   const recentMessages = await loadRecentMessages(env, thread.id, RECENT_MESSAGES_LIMIT);
 
+  // Bind the thread to an explicitly chosen persona, then resolve which persona
+  // the user is speaking as (chosen → thread's existing → user's default).
+  const requestedPersonaId =
+    typeof body.persona_id === "string" && body.persona_id.length > 0 ? body.persona_id : null;
+  if (requestedPersonaId && requestedPersonaId !== thread.persona_id) {
+    await env.DB.prepare(`UPDATE threads SET persona_id = ? WHERE id = ?`)
+      .bind(requestedPersonaId, thread.id)
+      .run();
+    thread.persona_id = requestedPersonaId;
+  }
+  const persona = await resolveThreadPersona(env, user.id, thread.persona_id);
+
   // spec-025: gate the secret on unlock state, and feed the current stage so
   // the prompt can pick how intimately the character addresses the user.
   const stage = deriveStage(relationship?.dimensions ?? { ...ZERO_DIMENSIONS }).stage;
@@ -138,6 +152,10 @@ export async function handlePostMessage(
     secretToReveal,
     stage,
     storyBeat,
+    userPersona: persona
+      ? { description: persona.description, gender: persona.gender, name: persona.name }
+      : null,
+    exampleDialogues: parseExampleDialogues(companion.example_dialogues),
     scene: scene
       ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
       : null,

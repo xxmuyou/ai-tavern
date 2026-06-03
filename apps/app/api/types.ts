@@ -169,9 +169,12 @@ export type CompanionListItem = {
   gender: Gender | null;
   id: string;
   is_public: boolean;
+  is_favorite: boolean;
   last_interaction_at: number | null;
   name: string;
+  play_count: number;
   preferred_scenes: string[];
+  tags: string[];
   relationship_role: string | null;
   source: CompanionSource;
 };
@@ -201,11 +204,17 @@ export type CompanionDetail = {
   relationship_role: string | null;
   source: CompanionSource;
   speech_style: string | null;
+  // The character's opening line; shown as the first message of a fresh chat.
+  greeting?: string | null;
   // spec-025 persona fields. Only present for the owner of a user-created
   // companion (the backend hides them otherwise).
   want?: string | null;
   secret?: string | null;
   boundary?: string | null;
+  // Sample lines in the character's voice (few-shot). Owner-only.
+  example_dialogues?: string[];
+  tags?: string[];
+  play_count?: number;
 };
 
 export type CompanionCreateInput = {
@@ -218,6 +227,9 @@ export type CompanionCreateInput = {
   preferred_scenes?: string[];
   relationship_role?: string;
   speech_style?: string;
+  greeting?: string;
+  example_dialogues?: string[];
+  tags?: string[];
   // spec-025 persona depth
   want?: string;
   secret?: string;
@@ -451,6 +463,26 @@ export type ChatMessage = {
   moment_image?: ChatMomentImage | null;
   role: 'user' | 'companion' | 'assistant';
   scene_id?: string | null;
+  // Alternative wordings the user can swipe between (regenerate). Null/absent =
+  // a single-version message. selected_variant indexes into variants.
+  variants?: string[] | null;
+  selected_variant?: number | null;
+};
+
+export type SelectVariantResponse = {
+  id: string;
+  content: string;
+  selected_variant: number;
+  variants: string[];
+};
+
+export type EditMessageResponse = {
+  edited_message_id: string;
+  message_id: string;
+  reply: string;
+  emotion: string;
+  signals: Record<string, number>;
+  unlocks: unknown[];
 };
 
 export type MomentImageJobResponse = {
@@ -470,7 +502,35 @@ export type ChatHistoryResponse = {
 export type ChatMessageInput = {
   activity_id?: string;
   scene_id?: string;
+  persona_id?: string;
   text: string;
+};
+
+// A user-authored "who I am" identity injected into the chat prompt so the
+// companion knows who it is talking to.
+export type Persona = {
+  id: string;
+  name: string;
+  description: string | null;
+  gender: string | null;
+  is_default: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
+export type PersonasResponse = {
+  personas: Persona[];
+};
+
+export type PersonaResponse = {
+  persona: Persona | null;
+};
+
+export type PersonaInput = {
+  name: string;
+  description?: string | null;
+  gender?: string | null;
+  is_default?: boolean;
 };
 
 export type SseEvent = {

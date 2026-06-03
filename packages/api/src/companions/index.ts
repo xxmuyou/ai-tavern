@@ -10,6 +10,11 @@ import {
   neutralOnlyArtEmotions,
   parseArtEmotions,
 } from "./emotion-art";
+import {
+  companionToCard,
+  extractCardData,
+  mapCardToCompanionInput,
+} from "./card";
 import { handleBaseArtRequest } from "./base-art-routes";
 import { handleCompanionEmotionArtRequest } from "./emotion-art-routes";
 import type { Gender } from "./gender-weight";
@@ -43,6 +48,10 @@ type CompanionRow = {
   want: string | null;
   secret: string | null;
   boundary: string | null;
+  greeting: string | null;
+  example_dialogues: string | null;
+  tags: string | null;
+  play_count: number;
   preferred_scenes: string | null;
   art_url: string | null;
   art_emotions: string | null;
@@ -74,6 +83,9 @@ type CompanionListItem = {
   relationship_role: string | null;
   art_url: string | null;
   preferred_scenes: string[];
+  tags: string[];
+  play_count: number;
+  is_favorite: boolean;
   current_level: string | null;
   last_interaction_at: number | null;
 };
@@ -88,8 +100,11 @@ export async function handleCompanionsRequest(
 
     if (request.method === "GET") {
       const url = new URL(request.url);
-      const source = url.searchParams.get("source") ?? "all";
-      return listCompanions(env, user, source);
+      return listCompanions(env, user, {
+        q: url.searchParams.get("q"),
+        sort: url.searchParams.get("sort"),
+        source: url.searchParams.get("source") ?? "all",
+      });
     }
 
     if (request.method === "POST") {
@@ -102,6 +117,28 @@ export async function handleCompanionsRequest(
 
   if (pathname === "/companions/upload-art") {
     return handleCompanionArtUpload(request, env);
+  }
+
+  if (pathname === "/companions/import") {
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    const body = await readJson<unknown>(request);
+    return importCard(env, user, body);
+  }
+
+  const exportMatch = pathname.match(/^\/companions\/([^/]+)\/export$/);
+  if (exportMatch) {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const companionId = decodeURIComponent(exportMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    const user = await requireAuthUser(env, request);
+    return exportCard(env, user, companionId);
   }
 
   const baseArtResponse = await handleBaseArtRequest(request, env, pathname);
@@ -126,6 +163,19 @@ export async function handleCompanionsRequest(
     const user = await requireAuthUser(env, request);
     const body = await readJson<unknown>(request);
     return setCompanionPublic(env, user, companionId, body);
+  }
+
+  const favoriteMatch = pathname.match(/^\/companions\/([^/]+)\/favorite$/);
+  if (favoriteMatch) {
+    const companionId = decodeURIComponent(favoriteMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    if (request.method !== "POST" && request.method !== "DELETE") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    return setFavorite(env, user, companionId, request.method === "POST");
   }
 
   const dailyStateMatch = pathname.match(/^\/companions\/([^/]+)\/daily-state$/);
@@ -176,57 +226,122 @@ export async function handleCompanionsRequest(
 // Handlers
 // -----------------------------------------------------------------------------
 
-async function listCompanions(env: Env, user: UserRecord, source: string): Promise<Response> {
-  let whereClause: string;
-  let binds: unknown[] = [];
+type ListOptions = { source: string; q: string | null; sort: string | null };
 
-  switch (source) {
+async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Promise<Response> {
+  const conditions: string[] = ["c.is_active = 1"];
+  const whereBinds: unknown[] = [];
+
+  switch (opts.source) {
     case "official":
-      whereClause = "c.source = 'official' AND c.is_active = 1";
+      conditions.push("c.source = 'official'");
       break;
     case "user":
-      whereClause = "c.source = 'user' AND c.created_by = ? AND c.is_active = 1";
-      binds = [user.id];
+      conditions.push("c.source = 'user'", "c.created_by = ?");
+      whereBinds.push(user.id);
       break;
     case "public":
       // The shared public area: every companion an admin has published.
-      whereClause = "c.is_public = 1 AND c.is_active = 1";
+      conditions.push("c.is_public = 1");
+      break;
+    case "favorites":
+      // Companions this user has saved (the favorites join is non-null).
+      conditions.push("f.user_id IS NOT NULL");
       break;
     case "all":
     default:
-      whereClause = "c.is_active = 1 AND (c.source = 'official' OR c.created_by = ?)";
-      binds = [user.id];
+      conditions.push("(c.source = 'official' OR c.created_by = ?)");
+      whereBinds.push(user.id);
+  }
+
+  const query = opts.q?.trim();
+  if (query) {
+    const like = `%${query}%`;
+    conditions.push("(c.name LIKE ? OR c.tags LIKE ?)");
+    whereBinds.push(like, like);
+  }
+
+  let orderBy: string;
+  switch (opts.sort) {
+    case "popular":
+      orderBy = "c.play_count DESC, c.created_at ASC";
+      break;
+    case "recent":
+      orderBy = "c.created_at DESC";
+      break;
+    default:
+      orderBy = "c.created_at ASC";
   }
 
   const { results } = await env.DB.prepare(
     `SELECT c.id, c.source, c.created_by, c.is_active, c.is_public, c.name,
             c.appearance, c.personality, c.background, c.speech_style,
-            c.relationship_role, c.preferred_scenes, c.art_url, c.gender,
-            c.initial_dims, c.created_at, c.updated_at,
+            c.relationship_role, c.tags, c.play_count, c.preferred_scenes,
+            c.art_url, c.gender, c.initial_dims, c.created_at, c.updated_at,
             r.level_label         AS level_label,
-            r.last_interaction_at AS last_interaction_at
+            r.last_interaction_at AS last_interaction_at,
+            f.user_id             AS fav_user
      FROM companions c
      LEFT JOIN relationships r ON r.companion_id = c.id AND r.user_id = ?
-     WHERE ${whereClause}
-     ORDER BY c.created_at ASC`,
+     LEFT JOIN companion_favorites f ON f.companion_id = c.id AND f.user_id = ?
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY ${orderBy}`,
   )
-    .bind(user.id, ...binds)
-    .all<CompanionRow & { level_label: string | null; last_interaction_at: number | null }>();
+    .bind(user.id, user.id, ...whereBinds)
+    .all<
+      CompanionRow & {
+        level_label: string | null;
+        last_interaction_at: number | null;
+        fav_user: string | null;
+      }
+    >();
 
   const items: CompanionListItem[] = (results ?? []).map((row) => ({
     art_url: row.art_url,
     current_level: row.level_label,
     gender: normalizeGender(row.gender),
     id: row.id,
+    is_favorite: row.fav_user !== null,
     is_public: row.is_public === 1,
     last_interaction_at: row.last_interaction_at,
     name: row.name,
+    play_count: row.play_count,
     preferred_scenes: parseStringArray(row.preferred_scenes),
     relationship_role: row.relationship_role,
     source: row.source,
+    tags: parseStringArray(row.tags),
   }));
 
   return jsonResponse({ items });
+}
+
+async function setFavorite(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+  favorite: boolean,
+): Promise<Response> {
+  const row = await loadCompanion(env, companionId);
+  if (!row || !canRead(row, user)) {
+    return notFound();
+  }
+
+  if (favorite) {
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO companion_favorites (user_id, companion_id, created_at)
+       VALUES (?, ?, ?)`,
+    )
+      .bind(user.id, companionId, Date.now())
+      .run();
+  } else {
+    await env.DB.prepare(
+      `DELETE FROM companion_favorites WHERE user_id = ? AND companion_id = ?`,
+    )
+      .bind(user.id, companionId)
+      .run();
+  }
+
+  return jsonResponse({ id: companionId, is_favorite: favorite });
 }
 
 async function getDailyState(
@@ -337,11 +452,14 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     art_url: row.art_url,
     background: row.background,
     gender: normalizeGender(row.gender),
+    greeting: row.greeting,
     id: row.id,
     is_public: row.is_public === 1,
     name: row.name,
     personality: row.personality,
+    play_count: row.play_count,
     preferred_scenes: parseStringArray(row.preferred_scenes),
+    tags: parseStringArray(row.tags),
     relationship: {
       dimensions,
       first_met_at: relationship?.first_met_at ?? null,
@@ -361,9 +479,49 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     body.want = row.want;
     body.secret = row.secret;
     body.boundary = row.boundary;
+    body.example_dialogues = parseStringArray(row.example_dialogues);
   }
 
   return jsonResponse(body);
+}
+
+async function importCard(env: Env, user: UserRecord, body: unknown): Promise<Response> {
+  const wrapper = isObject(body) ? body : {};
+  // Accept either { card: <V2 card> } or the card object passed directly.
+  const card = "card" in wrapper ? wrapper.card : body;
+  const data = extractCardData(card);
+  if (!data) {
+    return jsonResponse({ error: "invalid_card" }, { status: 400 });
+  }
+
+  // Cards carry no gender; honour an explicit choice, otherwise default (the
+  // user can flip it after import — it only drives emotion art).
+  const gender = readGender(wrapper) ?? "female";
+  const mapped = mapCardToCompanionInput(data, gender);
+  if (!mapped) {
+    return jsonResponse({ error: "invalid_card", field: "name" }, { status: 400 });
+  }
+
+  // Reuse the create path so quota, validation, and persistence stay identical.
+  return createCompanion(env, user, mapped);
+}
+
+async function exportCard(env: Env, user: UserRecord, companionId: string): Promise<Response> {
+  const row = await loadCompanion(env, companionId);
+  if (!row || !canRead(row, user)) {
+    return notFound();
+  }
+
+  return jsonResponse(
+    companionToCard({
+      background: row.background,
+      example_dialogues: parseStringArray(row.example_dialogues),
+      greeting: row.greeting,
+      name: row.name,
+      personality: row.personality,
+      tags: parseStringArray(row.tags),
+    }),
+  );
 }
 
 async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promise<Response> {
@@ -387,9 +545,10 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
     `INSERT INTO companions
       (id, source, created_by, is_active, name, appearance, personality,
        background, speech_style, relationship_role, want, secret, boundary,
+       greeting, example_dialogues, tags,
        preferred_scenes, art_url, art_emotions, gender, initial_dims,
        created_at, updated_at)
-     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   )
     .bind(
       id,
@@ -403,6 +562,9 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
       input.value.want ?? null,
       input.value.secret ?? null,
       input.value.boundary ?? null,
+      input.value.greeting ?? null,
+      input.value.example_dialogues ? JSON.stringify(input.value.example_dialogues) : null,
+      input.value.tags ? JSON.stringify(input.value.tags) : null,
       input.value.preferred_scenes ? JSON.stringify(input.value.preferred_scenes) : null,
       input.value.art_url ?? null,
       input.value.art_url
@@ -451,7 +613,12 @@ async function updateCompanion(
     art_url: patch.value.art_url ?? existing.art_url,
     background: patch.value.background ?? existing.background,
     boundary: patch.value.boundary ?? existing.boundary,
+    example_dialogues:
+      patch.value.example_dialogues !== undefined
+        ? JSON.stringify(patch.value.example_dialogues)
+        : existing.example_dialogues,
     gender: patch.value.gender ?? existing.gender,
+    greeting: patch.value.greeting ?? existing.greeting,
     name: patch.value.name ?? existing.name,
     personality: patch.value.personality ?? existing.personality,
     preferred_scenes:
@@ -461,6 +628,8 @@ async function updateCompanion(
     relationship_role: patch.value.relationship_role ?? existing.relationship_role,
     secret: patch.value.secret ?? existing.secret,
     speech_style: patch.value.speech_style ?? existing.speech_style,
+    tags:
+      patch.value.tags !== undefined ? JSON.stringify(patch.value.tags) : existing.tags,
     want: patch.value.want ?? existing.want,
   };
   // spec-020: when the neutral art_url changes, drop all non-neutral
@@ -481,7 +650,8 @@ async function updateCompanion(
     `UPDATE companions
      SET name = ?, appearance = ?, personality = ?, background = ?,
          speech_style = ?, relationship_role = ?, want = ?, secret = ?,
-         boundary = ?, preferred_scenes = ?, art_url = ?, art_emotions = ?,
+         boundary = ?, greeting = ?, example_dialogues = ?, tags = ?,
+         preferred_scenes = ?, art_url = ?, art_emotions = ?,
          gender = ?, updated_at = ?
      WHERE id = ?`,
   )
@@ -495,6 +665,9 @@ async function updateCompanion(
       merged.want,
       merged.secret,
       merged.boundary,
+      merged.greeting,
+      merged.example_dialogues,
+      merged.tags,
       merged.preferred_scenes,
       merged.art_url,
       artEmotions,
@@ -561,7 +734,8 @@ async function loadCompanion(env: Env, companionId: string): Promise<CompanionRo
   return env.DB.prepare(
     `SELECT id, source, created_by, is_active, is_public, name, appearance,
             personality, background, speech_style, relationship_role, want,
-            secret, boundary, preferred_scenes, art_url, art_emotions, gender,
+            secret, boundary, greeting, example_dialogues, tags, play_count,
+            preferred_scenes, art_url, art_emotions, gender,
             initial_dims, created_at, updated_at
      FROM companions
      WHERE id = ?`,
@@ -601,17 +775,21 @@ function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
     art_url: row.art_url,
     background: row.background,
     created_at: row.created_at,
+    example_dialogues: parseStringArray(row.example_dialogues),
     gender: normalizeGender(row.gender),
     boundary: row.boundary,
+    greeting: row.greeting,
     id: row.id,
     is_public: row.is_public === 1,
     name: row.name,
     personality: row.personality,
+    play_count: row.play_count,
     preferred_scenes: parseStringArray(row.preferred_scenes),
     relationship_role: row.relationship_role,
     secret: row.secret,
     source: row.source,
     speech_style: row.speech_style,
+    tags: parseStringArray(row.tags),
     updated_at: row.updated_at,
     want: row.want,
   };
@@ -635,6 +813,9 @@ type CreateValue = {
   want?: string;
   secret?: string;
   boundary?: string;
+  greeting?: string;
+  example_dialogues?: string[];
+  tags?: string[];
   preferred_scenes?: string[];
   art_url?: string;
 };
@@ -659,10 +840,13 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
       appearance: readOptionalText(raw, "appearance"),
       art_url: readOptionalText(raw, "art_url", 2048),
       background: readOptionalText(raw, "background"),
+      example_dialogues: readOptionalStringArray(raw, "example_dialogues"),
       gender,
+      greeting: readOptionalText(raw, "greeting"),
       name,
       personality: readOptionalText(raw, "personality"),
       preferred_scenes: readOptionalStringArray(raw, "preferred_scenes"),
+      tags: readOptionalStringArray(raw, "tags"),
       relationship_role: readOptionalEnum(raw, "relationship_role", KNOWN_RELATIONSHIP_ROLES),
       secret: readOptionalText(raw, "secret"),
       speech_style: readOptionalText(raw, "speech_style"),
@@ -696,12 +880,19 @@ function parseUpdateInput(raw: unknown): ParsedInput<UpdateValue> {
   if ("want" in raw) value.want = readOptionalText(raw, "want");
   if ("secret" in raw) value.secret = readOptionalText(raw, "secret");
   if ("boundary" in raw) value.boundary = readOptionalText(raw, "boundary");
+  if ("greeting" in raw) value.greeting = readOptionalText(raw, "greeting");
+  if ("example_dialogues" in raw) {
+    value.example_dialogues = readOptionalStringArray(raw, "example_dialogues") ?? [];
+  }
   if ("art_url" in raw) value.art_url = readOptionalText(raw, "art_url", 2048);
   if ("relationship_role" in raw) {
     value.relationship_role = readOptionalEnum(raw, "relationship_role", KNOWN_RELATIONSHIP_ROLES);
   }
   if ("preferred_scenes" in raw) {
     value.preferred_scenes = readOptionalStringArray(raw, "preferred_scenes") ?? [];
+  }
+  if ("tags" in raw) {
+    value.tags = readOptionalStringArray(raw, "tags") ?? [];
   }
   if ("gender" in raw) {
     const gender = readGender(raw);

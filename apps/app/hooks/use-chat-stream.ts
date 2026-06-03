@@ -34,6 +34,7 @@ export type ChatStreamCallbacks = {
 export type SendOptions = ChatStreamCallbacks & {
   activityId?: string;
   sceneId?: string;
+  personaId?: string;
 };
 
 function asEmotion(value: unknown): ChatEmotion | null {
@@ -102,7 +103,12 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       let emotion: ChatEmotion | null = null;
 
       try {
-        const stream = sendChatMessage(companionId, { activity_id: options.activityId, scene_id: options.sceneId, text });
+        const stream = sendChatMessage(companionId, {
+          activity_id: options.activityId,
+          persona_id: options.personaId,
+          scene_id: options.sceneId,
+          text,
+        });
         for await (const event of stream) {
           if (event.type === 'chunk') {
             const data = event.data as { text?: string } | undefined;

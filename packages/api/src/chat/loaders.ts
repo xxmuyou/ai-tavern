@@ -15,6 +15,8 @@ export type ChatCompanionRow = {
   want: string | null;
   secret: string | null;
   boundary: string | null;
+  greeting: string | null;
+  example_dialogues: string | null;
 };
 
 export type ChatSceneRow = {
@@ -28,6 +30,7 @@ export type ChatThreadRow = {
   id: string;
   summary: string | null;
   message_count: number;
+  persona_id: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -39,7 +42,7 @@ export async function loadCompanionForChat(
   return env.DB.prepare(
     `SELECT id, source, created_by, is_active,
             name, gender, appearance, personality, background, speech_style, relationship_role,
-            want, secret, boundary
+            want, secret, boundary, greeting, example_dialogues
      FROM companions
      WHERE id = ?`,
   )
@@ -67,7 +70,7 @@ export async function loadThread(
   companionId: string,
 ): Promise<ChatThreadRow | null> {
   return env.DB.prepare(
-    `SELECT id, summary, message_count, created_at, updated_at
+    `SELECT id, summary, message_count, persona_id, created_at, updated_at
      FROM threads
      WHERE user_id = ? AND companion_id = ?`,
   )
@@ -87,16 +90,23 @@ export async function ensureThread(
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO threads (id, user_id, companion_id, scene_context, summary,
-                          summary_until_message_id, message_count, created_at, updated_at)
-     VALUES (?, ?, ?, NULL, NULL, NULL, 0, ?, ?)`,
+                          summary_until_message_id, message_count, persona_id, created_at, updated_at)
+     VALUES (?, ?, ?, NULL, NULL, NULL, 0, NULL, ?, ?)`,
   )
     .bind(id, userId, companionId, now, now)
+    .run();
+
+  // A brand-new thread means this user just started chatting with the companion
+  // for the first time — bump its play count for the "popular" discovery sort.
+  await env.DB.prepare(`UPDATE companions SET play_count = play_count + 1 WHERE id = ?`)
+    .bind(companionId)
     .run();
 
   return {
     created_at: now,
     id,
     message_count: 0,
+    persona_id: null,
     summary: null,
     updated_at: now,
   };
@@ -107,6 +117,19 @@ export function parseSceneTags(raw: string | null): string[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Parse the companion's example-dialogue JSON (array of voice sample lines). */
+export function parseExampleDialogues(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      : [];
   } catch {
     return [];
   }

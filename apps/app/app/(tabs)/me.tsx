@@ -9,7 +9,7 @@ import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types'
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
-import { ADMIN_ROUTE, BILLING_ROUTE } from '@/constants/routes';
+import { ADMIN_ROUTE, BILLING_ROUTE, PERSONAS_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePush } from '@/hooks/use-push';
@@ -160,6 +160,13 @@ export default function MeScreen() {
             {isPro && billing?.usage.subscriber_soft_threshold_exceeded ? (
               <Text className="text-sm text-app-warning">High usage detected today.</Text>
             ) : null}
+          </Section>
+
+          <Section title="Personas">
+            <Text className="text-sm leading-5 text-app-muted">
+              Who you play as in chat. Characters use your persona to know who they are talking to.
+            </Text>
+            <Button label="Manage personas" onPress={() => router.push(PERSONAS_ROUTE)} variant="secondary" />
           </Section>
 
           <Section title="My image assets">

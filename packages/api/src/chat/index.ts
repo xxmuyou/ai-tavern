@@ -2,6 +2,10 @@ import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import { handleDeleteHistory, handleGetHistory } from "./history";
 import { handlePostMessage } from "./messages";
+import { handleEditMessage } from "./edit";
+import { handleRegenerateMessage } from "./regenerate";
+import { handleSelectVariant } from "./select-variant";
+import { handleMessageVoice } from "./voice";
 
 export async function handleChatRequest(
   request: Request,
@@ -9,6 +13,62 @@ export async function handleChatRequest(
   ctx: ExecutionContext,
   pathname: string,
 ): Promise<Response | null> {
+  const regenerateMatch = pathname.match(/^\/chat\/([^/]+)\/messages\/([^/]+)\/regenerate$/);
+  if (regenerateMatch) {
+    const companionId = decodeURIComponent(regenerateMatch[1] ?? "");
+    const messageId = decodeURIComponent(regenerateMatch[2] ?? "");
+    if (!companionId || !messageId) {
+      return jsonResponse({ error: "invalid_request" }, { status: 400 });
+    }
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    return handleRegenerateMessage(request, env, ctx, user, companionId, messageId);
+  }
+
+  const editMatch = pathname.match(/^\/chat\/([^/]+)\/messages\/([^/]+)\/edit$/);
+  if (editMatch) {
+    const companionId = decodeURIComponent(editMatch[1] ?? "");
+    const messageId = decodeURIComponent(editMatch[2] ?? "");
+    if (!companionId || !messageId) {
+      return jsonResponse({ error: "invalid_request" }, { status: 400 });
+    }
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    return handleEditMessage(request, env, user, companionId, messageId);
+  }
+
+  const voiceMatch = pathname.match(/^\/chat\/([^/]+)\/messages\/([^/]+)\/voice$/);
+  if (voiceMatch) {
+    const companionId = decodeURIComponent(voiceMatch[1] ?? "");
+    const messageId = decodeURIComponent(voiceMatch[2] ?? "");
+    if (!companionId || !messageId) {
+      return jsonResponse({ error: "invalid_request" }, { status: 400 });
+    }
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    return handleMessageVoice(request, env, user, companionId, messageId);
+  }
+
+  const variantMatch = pathname.match(/^\/chat\/([^/]+)\/messages\/([^/]+)\/variant$/);
+  if (variantMatch) {
+    const companionId = decodeURIComponent(variantMatch[1] ?? "");
+    const messageId = decodeURIComponent(variantMatch[2] ?? "");
+    if (!companionId || !messageId) {
+      return jsonResponse({ error: "invalid_request" }, { status: 400 });
+    }
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    return handleSelectVariant(request, env, user, companionId, messageId);
+  }
+
   const messagesMatch = pathname.match(/^\/chat\/([^/]+)\/messages$/);
   if (messagesMatch) {
     const companionId = decodeURIComponent(messagesMatch[1] ?? "");

@@ -9,10 +9,17 @@ import type {
 
 import { useApi } from './use-api';
 
-export type CompanionSourceFilter = CompanionSource | 'all' | 'public';
+export type CompanionSourceFilter = CompanionSource | 'all' | 'public' | 'favorites';
+export type CompanionSort = 'recent' | 'popular';
 
-export function useCompanions(source: CompanionSourceFilter) {
-  return useApi<CompanionsListResponse>(() => listCompanions(source), [source]);
+export function useCompanions(
+  source: CompanionSourceFilter,
+  opts: { q?: string; sort?: CompanionSort } = {},
+) {
+  return useApi<CompanionsListResponse>(
+    () => listCompanions(source, { q: opts.q, sort: opts.sort }),
+    [source, opts.q, opts.sort],
+  );
 }
 
 export function useCompanion(companionId: string) {

@@ -1,8 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { updateCompanion, uploadCompanionArt } from '@/api/companion-client';
 import type { CompanionCreateInput } from '@/api/types';
@@ -13,6 +14,7 @@ import { TopBar } from '@/components/TopBar';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useScenes } from '@/hooks/use-scenes';
+import { shareCompanionCard } from '@/utils/share-card';
 
 export default function CompanionEditScreen() {
   const router = useRouter();
@@ -50,7 +52,24 @@ export default function CompanionEditScreen() {
 
   return (
     <View className="flex-1 bg-app-bg">
-      <TopBar showBack title={`Edit ${companion.data.name}`} />
+      <TopBar
+        showBack
+        title={`Edit ${companion.data.name}`}
+        right={(
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Export character card"
+            onPress={() => {
+              void shareCompanionCard(companionId, companion.data?.name ?? 'character').catch((err) =>
+                pushError(err instanceof Error ? err.message : 'Could not export this card.'),
+              );
+            }}
+            className="h-10 w-10 items-center justify-center rounded-lg border border-app-line bg-app-card"
+          >
+            <Ionicons color="#687076" name="share-outline" size={18} />
+          </Pressable>
+        )}
+      />
       <CompanionForm
         initial={companion.data}
         isSubmitting={isSubmitting}

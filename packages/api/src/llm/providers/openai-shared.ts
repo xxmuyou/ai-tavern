@@ -39,7 +39,7 @@ export async function openAICall(
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
-  const text = json.choices?.[0]?.message?.content ?? "";
+  const text = stripThinkBlocks(json.choices?.[0]?.message?.content ?? "");
   const usage: LLMUsage = {
     input_tokens: json.usage?.prompt_tokens ?? 0,
     output_tokens: json.usage?.completion_tokens ?? 0,
@@ -73,6 +73,10 @@ export async function* openAIStream(
 
   let usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
   let accumulated = "";
+  // Reasoning models (MiniMax-M3, deepseek-reasoner, …) prepend a
+  // <think>…</think> chain-of-thought to the content stream. Strip it across
+  // chunk boundaries so the thinking never reaches the UI or the saved message.
+  const stripper = createThinkStripper();
 
   type StreamEvent = {
     choices?: Array<{ delta?: { content?: string } }>;
@@ -85,8 +89,11 @@ export async function* openAIStream(
     if (!parsed) continue;
     const delta = parsed.choices?.[0]?.delta?.content;
     if (typeof delta === "string" && delta.length > 0) {
-      accumulated += delta;
-      yield { text: delta, type: "text" };
+      const clean = stripper.push(delta);
+      if (clean.length > 0) {
+        accumulated += clean;
+        yield { text: clean, type: "text" };
+      }
     }
     if (parsed.usage) {
       usage = {
@@ -94,6 +101,12 @@ export async function* openAIStream(
         output_tokens: parsed.usage.completion_tokens ?? 0,
       };
     }
+  }
+
+  const tail = stripper.flush();
+  if (tail.length > 0) {
+    accumulated += tail;
+    yield { text: tail, type: "text" };
   }
 
   const structured = request.json_schema ? safeParseJSON(accumulated) : undefined;
@@ -251,4 +264,87 @@ function safeParseJSON<T = unknown>(text: string): T | null {
   } catch {
     return null;
   }
+}
+
+const THINK_OPEN = "<think>";
+const THINK_CLOSE = "</think>";
+
+/**
+ * Remove the chain-of-thought block reasoning models (MiniMax-M3,
+ * deepseek-reasoner) inline as <think>…</think> before the real reply. Used on
+ * the non-streaming path; the streaming path uses createThinkStripper().
+ */
+function stripThinkBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^\s+/, "");
+}
+
+/**
+ * Stateful <think>…</think> filter for the streaming path. Tags can be split
+ * across SSE deltas, so it buffers a partial tag tail and withholds everything
+ * between the tags. Leading whitespace before the first real token is trimmed.
+ */
+function createThinkStripper(): { push(chunk: string): string; flush(): string } {
+  let buffer = "";
+  let inThink = false;
+  let emittedReal = false;
+
+  // Longest k in (0, tag.length) such that s ends with tag.slice(0, k).
+  const partialTail = (s: string, tag: string): number => {
+    const max = Math.min(s.length, tag.length - 1);
+    for (let k = max; k > 0; k -= 1) {
+      if (s.endsWith(tag.slice(0, k))) return k;
+    }
+    return 0;
+  };
+
+  const emit = (out: string): string => {
+    if (out.length === 0) return out;
+    if (!emittedReal) {
+      const trimmed = out.replace(/^\s+/, "");
+      if (trimmed.length === 0) return "";
+      emittedReal = true;
+      return trimmed;
+    }
+    return out;
+  };
+
+  return {
+    push(chunk: string): string {
+      buffer += chunk;
+      let out = "";
+      while (buffer.length > 0) {
+        if (!inThink) {
+          const open = buffer.indexOf(THINK_OPEN);
+          if (open >= 0) {
+            out += buffer.slice(0, open);
+            buffer = buffer.slice(open + THINK_OPEN.length);
+            inThink = true;
+            continue;
+          }
+          const keep = partialTail(buffer, THINK_OPEN);
+          out += buffer.slice(0, buffer.length - keep);
+          buffer = buffer.slice(buffer.length - keep);
+          break;
+        }
+        const close = buffer.indexOf(THINK_CLOSE);
+        if (close >= 0) {
+          buffer = buffer.slice(close + THINK_CLOSE.length);
+          inThink = false;
+          continue;
+        }
+        // Still inside think: discard all but a possible partial closing tag.
+        const keep = partialTail(buffer, THINK_CLOSE);
+        buffer = buffer.slice(buffer.length - keep);
+        break;
+      }
+      return emit(out);
+    },
+    flush(): string {
+      // A leftover buffer outside think was a partial <think> prefix that never
+      // completed — it is real content, so emit it. Inside think: drop it.
+      const out = inThink ? "" : buffer;
+      buffer = "";
+      return emit(out);
+    },
+  };
 }

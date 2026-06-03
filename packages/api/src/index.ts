@@ -24,6 +24,7 @@ import { handleAdminLlmRequest } from "./llm";
 import { handleAdminImageGenRequest } from "./image-gen/admin";
 import { handleAdminSettingsRequest } from "./settings/admin";
 import { handleRelationshipsRequest } from "./relationships";
+import { handlePersonasRequest } from "./personas";
 import { handleScenesRequest } from "./scenes";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
 export { GameRoom } from "./room";
@@ -115,6 +116,11 @@ export default {
       const relationshipsResponse = await handleRelationshipsRequest(request, env, pathname);
       if (relationshipsResponse) {
         return await withCors(request, env, relationshipsResponse);
+      }
+
+      const personasResponse = await handlePersonasRequest(request, env, pathname);
+      if (personasResponse) {
+        return await withCors(request, env, personasResponse);
       }
 
       const chatResponse = await handleChatRequest(request, env, ctx, pathname);

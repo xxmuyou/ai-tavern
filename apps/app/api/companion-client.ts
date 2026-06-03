@@ -37,6 +37,9 @@ import type {
   ImageModelsResponse,
   ImageWorkflowInput,
   MomentImageJobResponse,
+  PersonaInput,
+  PersonaResponse,
+  PersonasResponse,
   LlmConfigItem,
   LlmConfigResponse,
   LlmConfigUpdateInput,
@@ -51,8 +54,10 @@ import type {
   RelationshipResponse,
   RelationshipUnlocksResponse,
   RomancePreference,
+  EditMessageResponse,
   SceneEnterResponse,
   ScenesListResponse,
+  SelectVariantResponse,
   SseEvent,
   TodayResponse,
   UserImageAsset,
@@ -456,10 +461,23 @@ export async function enterScene(sceneId: string): Promise<SceneEnterResponse> {
 }
 
 export async function listCompanions(
-  source: 'official' | 'user' | 'public' | 'all' = 'all',
+  source: 'official' | 'user' | 'public' | 'all' | 'favorites' = 'all',
+  opts: { q?: string; sort?: 'recent' | 'popular' } = {},
 ): Promise<CompanionsListResponse> {
   const params = new URLSearchParams({ source });
+  if (opts.q) params.set('q', opts.q);
+  if (opts.sort) params.set('sort', opts.sort);
   return requestJson<CompanionsListResponse>(`/companions?${params.toString()}`);
+}
+
+export async function favoriteCompanion(
+  id: string,
+  favorite: boolean,
+): Promise<{ id: string; is_favorite: boolean }> {
+  return requestJson<{ id: string; is_favorite: boolean }>(
+    `/companions/${encodeURIComponent(id)}/favorite`,
+    { method: favorite ? 'POST' : 'DELETE' },
+  );
 }
 
 /**
@@ -489,6 +507,49 @@ export async function createCompanion(input: CompanionCreateInput): Promise<Comp
     body: JSON.stringify(input),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
+  });
+}
+
+export async function importCompanionCard(
+  card: unknown,
+  gender: 'male' | 'female',
+): Promise<CompanionDetailResponse> {
+  return requestJson<CompanionDetailResponse>('/companions/import', {
+    body: JSON.stringify({ card, gender }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function exportCompanionCard(id: string): Promise<Record<string, unknown>> {
+  return requestJson<Record<string, unknown>>(`/companions/${encodeURIComponent(id)}/export`);
+}
+
+// --- Personas (who the user is roleplaying as) ---
+
+export async function listPersonas(): Promise<PersonasResponse> {
+  return requestJson<PersonasResponse>('/personas');
+}
+
+export async function createPersona(input: PersonaInput): Promise<PersonaResponse> {
+  return requestJson<PersonaResponse>('/personas', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function updatePersona(id: string, input: PersonaInput): Promise<PersonaResponse> {
+  return requestJson<PersonaResponse>(`/personas/${encodeURIComponent(id)}`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PATCH',
+  });
+}
+
+export async function deletePersona(id: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/personas/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }
 
@@ -914,18 +975,75 @@ export async function clearChatHistory(companionId: string): Promise<{ ok: true 
   return { ok: true };
 }
 
+export async function editChatMessage(
+  companionId: string,
+  messageId: string,
+  text: string,
+): Promise<EditMessageResponse> {
+  return requestJson<EditMessageResponse>(
+    `/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/edit`,
+    {
+      body: JSON.stringify({ text }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function getMessageVoice(
+  companionId: string,
+  messageId: string,
+): Promise<{ url: string }> {
+  return requestJson<{ url: string }>(
+    `/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/voice`,
+    { method: 'POST' },
+  );
+}
+
+export async function selectMessageVariant(
+  companionId: string,
+  messageId: string,
+  index: number,
+): Promise<SelectVariantResponse> {
+  return requestJson<SelectVariantResponse>(
+    `/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/variant`,
+    {
+      body: JSON.stringify({ index }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function* regenerateChatMessage(
+  companionId: string,
+  messageId: string,
+): AsyncIterable<SseEvent> {
+  yield* streamChatSse(
+    `${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/regenerate`,
+    undefined,
+  );
+}
+
 export async function* sendChatMessage(
   companionId: string,
   input: ChatMessageInput,
 ): AsyncIterable<SseEvent> {
-  const headers = new Headers({ 'content-type': 'application/json' });
+  yield* streamChatSse(`${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages`, input);
+}
+
+async function* streamChatSse(url: string, body: ChatMessageInput | undefined): AsyncIterable<SseEvent> {
+  const headers = new Headers();
   const token = readStoredAuthToken();
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
+  if (body !== undefined) {
+    headers.set('content-type', 'application/json');
+  }
 
-  const response = await fetch(`${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages`, {
-    body: JSON.stringify(input),
+  const response = await fetch(url, {
+    body: body === undefined ? undefined : JSON.stringify(body),
     headers,
     method: 'POST',
   });

@@ -46,6 +46,12 @@ import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useOnDemandEmotionArt } from '@/hooks/use-emotion-art';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { usePersonas } from '@/hooks/use-personas';
+import { PersonaSelector } from '@/components/PersonaSelector';
+import { useMessageActions } from '@/hooks/use-message-actions';
+import { MessageActions } from '@/components/MessageActions';
+import { useEditMessage } from '@/hooks/use-edit-message';
+import { UserMessageEditor } from '@/components/UserMessageEditor';
 
 const BILLING_ROUTE = '/billing' as Href;
 const STREAMING_ID = '__streaming__';
@@ -110,6 +116,19 @@ function ChatScreenInner() {
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
   const relationship = useChatRelationship(companionId);
+  const personasState = usePersonas();
+  const personas = personasState.data?.personas ?? [];
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
+  const activePersonaId =
+    selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
+  const messageActions = useMessageActions(companionId, history, pushError);
+  const editMessage = useEditMessage(companionId, history, {
+    onError: pushError,
+    onSaved: () => {
+      shouldScrollOnNextRef.current = true;
+      void relationship.refresh();
+    },
+  });
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
   const { activity, refresh: refreshActivity, setActivity } = activityState;
@@ -223,6 +242,7 @@ function ChatScreenInner() {
     try {
       const result = await stream.send(text, {
         activityId,
+        personaId: activePersonaId ?? undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -266,7 +286,7 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activityId, companionId, draft, history, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activePersonaId, activityId, companionId, draft, history, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -344,11 +364,48 @@ function ChatScreenInner() {
       return <StreamingBubble text={item.text} />;
     }
     const role = item.role === 'assistant' ? 'companion' : item.role;
-    const showCapture = role === 'companion' && !item.id.startsWith('local-');
+    const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
+    const isServerUser = role === 'user' && !item.id.startsWith('local-');
+
+    if (isServerUser && editMessage.editingId === item.id) {
+      return (
+        <UserMessageEditor
+          text={editMessage.editingText}
+          isSaving={editMessage.isSaving}
+          onChangeText={editMessage.setEditingText}
+          onSave={editMessage.saveEdit}
+          onCancel={editMessage.cancelEdit}
+        />
+      );
+    }
+
     return (
       <View>
         <MessageBubble content={item.content} role={role} />
-        {showCapture ? (
+        {isServerUser ? (
+          <View className="w-full flex-row justify-end px-5 pb-1">
+            <Pressable
+              accessibilityRole="button"
+              disabled={editMessage.isSaving}
+              onPress={() => editMessage.beginEdit(item.id, item.content)}
+            >
+              <Text className="text-xs font-semibold text-app-muted">Edit</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {isServerCompanion ? (
+          <MessageActions
+            variants={item.variants}
+            selectedVariant={item.selected_variant}
+            isRegenerating={messageActions.regeneratingId === item.id}
+            isSpeaking={messageActions.speakingId === item.id}
+            disabled={messageActions.regeneratingId !== null && messageActions.regeneratingId !== item.id}
+            onRegenerate={() => messageActions.regenerate(item.id)}
+            onSelectVariant={(index) => messageActions.selectVariant(item.id, index)}
+            onSpeak={() => messageActions.speak(item.id)}
+          />
+        ) : null}
+        {isServerCompanion ? (
           <MomentImageCapture
             messageId={item.id}
             initialMoment={item.moment_image ?? null}
@@ -357,7 +414,7 @@ function ChatScreenInner() {
         ) : null}
       </View>
     );
-  }, [handleMomentReady]);
+  }, [editMessage, handleMomentReady, messageActions]);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
 
@@ -419,6 +476,8 @@ function ChatScreenInner() {
       />
 
       <ChatRelationshipHud goal={relationship.goal} />
+
+      <PersonaSelector personas={personas} selectedId={activePersonaId} onSelect={setSelectedPersonaId} />
 
       <SignalFeedback signals={lastSignals} token={signalToken} />
 

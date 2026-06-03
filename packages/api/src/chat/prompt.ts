@@ -31,10 +31,21 @@ export type ActivityForPrompt = {
   activity_hint: string;
 } | null;
 
+// Who the user is roleplaying as. Injected so the character knows who it is
+// actually talking to, instead of addressing a faceless "user".
+export type UserPersonaForPrompt = {
+  name: string;
+  description: string | null;
+  gender: string | null;
+} | null;
+
 export type ChatPromptInput = {
   companion: CompanionForPrompt;
   scene: SceneForPrompt;
   activity?: ActivityForPrompt;
+  userPersona?: UserPersonaForPrompt;
+  // Sample lines in the character's voice, injected as few-shot voice anchors.
+  exampleDialogues?: string[];
   narrative: string;
   threadSummary: string | null;
   recentMessages: HistoryMessage[];
@@ -119,7 +130,7 @@ export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
 }
 
 function buildSystemPrompt(input: ChatPromptInput): string {
-  const { companion, scene, activity, narrative, threadSummary, secretToReveal, stage, storyBeat } = input;
+  const { companion, scene, activity, userPersona, exampleDialogues, narrative, threadSummary, secretToReveal, stage, storyBeat } = input;
 
   const lines: string[] = [];
   const role = companion.relationship_role ?? "companion";
@@ -141,6 +152,15 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     lines.push(
       `Something private you usually keep to yourself: ${secretToReveal}. You may choose to share this when the moment genuinely feels earned — do not blurt it out unprompted.`,
     );
+  }
+
+  if (exampleDialogues && exampleDialogues.length > 0) {
+    lines.push("");
+    lines.push("# How you speak (examples of your voice)");
+    lines.push("Match the tone, rhythm, and attitude of these lines — do not quote them verbatim:");
+    for (const line of exampleDialogues) {
+      lines.push(`- ${line}`);
+    }
   }
 
   if (scene) {
@@ -173,6 +193,17 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     lines.push(`Current objective: ${storyBeat.objective}`);
     lines.push(
       "Let this beat color the scene. You may bring it up, dodge around it, or invite the user into it, but do not force the user's choice or narrate their actions.",
+    );
+  }
+
+  if (userPersona && userPersona.name) {
+    lines.push("");
+    lines.push("# Who you are talking to");
+    lines.push(`The user is roleplaying as ${userPersona.name}.`);
+    if (userPersona.gender) lines.push(`Their gender: ${userPersona.gender}.`);
+    if (userPersona.description) lines.push(`About them: ${userPersona.description}`);
+    lines.push(
+      "Treat them as this person: use their name when it fits, and let who they are shape how you speak to them. Never narrate or decide their actions, thoughts, or words for them.",
     );
   }
 

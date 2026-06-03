@@ -18,6 +18,10 @@ type CompanionRow = {
   want: string | null;
   secret: string | null;
   boundary: string | null;
+  greeting: string | null;
+  example_dialogues: string | null;
+  tags: string | null;
+  play_count: number;
   preferred_scenes: string | null;
   art_url: string | null;
   art_emotions: string | null;
@@ -120,6 +124,83 @@ describe("companions module", () => {
     const body = (await response?.json()) as { items: Array<{ id: string; source: string }> };
     expect(body.items).toHaveLength(1);
     expect(body.items[0]?.id).toBe("maya");
+  });
+
+  it("?sort=popular and ?q are accepted and return visible companions", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya"), officialCompanion("ryan")],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions?sort=popular&q=may", token),
+      env,
+      "/companions",
+    );
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { items: Array<{ id: string; is_favorite: boolean }> };
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items[0]?.is_favorite).toBe(false);
+  });
+
+  it("POST /companions/:id/favorite marks it favorited", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya")],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/favorite", token, "POST"),
+      env,
+      "/companions/maya/favorite",
+    );
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { id: string; is_favorite: boolean };
+    expect(body).toEqual({ id: "maya", is_favorite: true });
+  });
+
+  it("POST /companions/import creates a companion from a V2 card", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/import", token, "POST", {
+        gender: "female",
+        card: {
+          spec: "chara_card_v2",
+          data: {
+            name: "Imported",
+            personality: "wry",
+            first_mes: "You again.",
+            mes_example: "{{char}}: Sit down.",
+            tags: ["test"],
+          },
+        },
+      }),
+      env,
+      "/companions/import",
+    );
+    expect(response?.status).toBe(201);
+    const body = (await response?.json()) as { name: string; greeting: string; tags: string[] };
+    expect(body.name).toBe("Imported");
+    expect(body.greeting).toBe("You again.");
+    expect(body.tags).toEqual(["test"]);
+  });
+
+  it("GET /companions/:id/export returns a V2 card", async () => {
+    const env = createEnv({
+      companions: [userCompanion("alex", "user-1")],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/alex/export", token),
+      env,
+      "/companions/alex/export",
+    );
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { spec: string; data: { name: string } };
+    expect(body.spec).toBe("chara_card_v2");
+    expect(body.data.name).toBe("Alex");
   });
 
   it("get detail returns zero dimensions when no relationship row exists", async () => {
@@ -619,6 +700,10 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
     art_url: null,
     background: null,
     boundary: null,
+    example_dialogues: null,
+    greeting: null,
+    play_count: 0,
+    tags: null,
     created_at: 1747000000000,
     created_by: null,
     gender,
@@ -650,6 +735,10 @@ function userCompanion(
     art_url: null,
     background: null,
     boundary: null,
+    example_dialogues: null,
+    greeting: null,
+    play_count: 0,
+    tags: null,
     created_at: 1747000000000,
     created_by: ownerId,
     gender,
@@ -770,23 +859,23 @@ function queryAll<T>(
   relationships: RelationshipFixture[],
 ): T[] {
   if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN relationships r")) {
-    // Variants:
-    //   official only: bind(userId)
-    //   user only:     bind(userId, ownerId)   (companions WHERE created_by=?)
-    //   all:           bind(userId, userId)    (companions WHERE source='official' OR created_by=?)
+    // The two LEFT JOINs each bind user.id, so positional binds are:
+    //   values[0] = user.id (relationships join)
+    //   values[1] = user.id (favorites join)
+    //   values[2] = ownerId (only for the user/all source variants)
     const userId = values[0] as string;
     let rows = [...companions.values()].filter((c) => c.is_active === 1);
 
-    if (sql.includes("c.is_public = 1 AND c.is_active = 1")) {
+    if (sql.includes("c.is_public = 1")) {
       rows = rows.filter((c) => c.is_public === 1);
-    } else if (sql.includes("c.source = 'official' AND c.is_active = 1")) {
-      rows = rows.filter((c) => c.source === "official");
-    } else if (sql.includes("c.source = 'user' AND c.created_by = ?")) {
-      const ownerId = values[1] as string;
-      rows = rows.filter((c) => c.source === "user" && c.created_by === ownerId);
     } else if (sql.includes("(c.source = 'official' OR c.created_by = ?)")) {
-      const ownerId = values[1] as string;
+      const ownerId = values[2] as string;
       rows = rows.filter((c) => c.source === "official" || c.created_by === ownerId);
+    } else if (sql.includes("c.source = 'user'")) {
+      const ownerId = values[2] as string;
+      rows = rows.filter((c) => c.source === "user" && c.created_by === ownerId);
+    } else if (sql.includes("c.source = 'official'")) {
+      rows = rows.filter((c) => c.source === "official");
     }
 
     rows.sort((a, b) => a.created_at - b.created_at);
@@ -795,6 +884,7 @@ function queryAll<T>(
       const rel = relationships.find((r) => r.companion_id === c.id && r.user_id === userId);
       return {
         ...c,
+        fav_user: null,
         last_interaction_at: rel?.last_interaction_at ?? null,
         level_label: rel?.level_label ?? null,
       };
@@ -905,6 +995,9 @@ function mutate(
       want,
       secret,
       boundary,
+      greeting,
+      example_dialogues,
+      tags,
       preferred_scenes,
       art_url,
       art_emotions,
@@ -915,6 +1008,9 @@ function mutate(
       string,
       string,
       string,
+      string | null,
+      string | null,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -938,18 +1034,22 @@ function mutate(
       boundary,
       created_at: createdAt,
       created_by: ownerId,
+      example_dialogues,
       gender,
+      greeting,
       id,
       initial_dims: null,
       is_active: 1,
       is_public: 0,
       name,
       personality,
+      play_count: 0,
       preferred_scenes,
       relationship_role,
       secret,
       source: "user",
       speech_style,
+      tags,
       updated_at: updatedAt,
       want,
     });
@@ -968,6 +1068,9 @@ function mutate(
       want,
       secret,
       boundary,
+      greeting,
+      example_dialogues,
+      tags,
       preferred_scenes,
       art_url,
       art_emotions,
@@ -976,6 +1079,9 @@ function mutate(
       id,
     ] = values as [
       string,
+      string | null,
+      string | null,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -1000,13 +1106,16 @@ function mutate(
         art_url,
         background,
         boundary,
+        example_dialogues,
         gender,
+        greeting,
         name,
         personality,
         preferred_scenes,
         relationship_role,
         secret,
         speech_style,
+        tags,
         updated_at: updatedAt,
         want,
       });

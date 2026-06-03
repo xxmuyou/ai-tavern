@@ -143,6 +143,28 @@ describe("openAICall (non-streaming)", () => {
       ),
     ).rejects.toBeInstanceOf(LLMError);
   });
+
+  it("strips a reasoning <think> block from the reply", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            { message: { content: "<think>I should stay in character.</think>\n\nYou came back." } },
+          ],
+          usage: { completion_tokens: 5, prompt_tokens: 12 },
+        }),
+        { headers: { "content-type": "application/json" }, status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await openAICall(
+      { apiKey: "k", baseURL: "https://api.minimaxi.com/v1", model: "MiniMax-M3", provider: "minimax" },
+      { messages: [{ content: "hi", role: "user" }], task: "chat" },
+    );
+
+    expect(response.text).toBe("You came back.");
+  });
 });
 
 describe("openAIStream", () => {
@@ -183,5 +205,37 @@ describe("openAIStream", () => {
       { text: " there", type: "text" },
       { type: "done", usage: { input_tokens: 5, output_tokens: 2 }, structured: undefined },
     ]);
+  });
+
+  it("strips a <think> block split across streamed chunks", async () => {
+    // The open/close tags are deliberately split mid-tag across deltas to
+    // exercise the cross-chunk state machine.
+    const deltas = ["<thi", "nk>secret rea", "soning</thi", "nk>\n\nHel", "lo there"];
+    const sse =
+      deltas
+        .map((d) => `data: ${JSON.stringify({ choices: [{ delta: { content: d } }] })}\n`)
+        .join("\n") +
+      `\ndata: ${JSON.stringify({ choices: [{ finish_reason: "stop" }], usage: { prompt_tokens: 5, completion_tokens: 2 } })}\n\ndata: [DONE]\n\n`;
+
+    const stream = new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new TextEncoder().encode(sse));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(stream, { status: 200 })),
+    );
+
+    const texts: string[] = [];
+    for await (const chunk of openAIStream(
+      { apiKey: "k", baseURL: "https://api.minimaxi.com/v1", model: "MiniMax-M3", provider: "minimax" },
+      { messages: [{ content: "hi", role: "user" }], task: "chat" },
+    )) {
+      if (chunk.type === "text" && chunk.text) texts.push(chunk.text);
+    }
+
+    expect(texts.join("")).toBe("Hello there");
   });
 });

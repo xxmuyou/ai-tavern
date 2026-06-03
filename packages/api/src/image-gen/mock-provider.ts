@@ -20,12 +20,7 @@ export const mockImageGenProvider: ImageGenProvider = {
     // create (txt2img) has no source image — return a placeholder so the
     // full pipeline (queue → R2 write → DB update) still exercises locally.
     if (req.mode === "create" && !req.source_art_url) {
-      return {
-        content_type: "image/png",
-        image_bytes: PLACEHOLDER_PNG,
-        model: "placeholder-create",
-        provider: "mock",
-      };
+      return placeholderResponse();
     }
 
     const key = normalizeKey(req.source_art_url ?? "");
@@ -35,10 +30,10 @@ export const mockImageGenProvider: ImageGenProvider = {
 
     const object = await env.ASSETS.get(key);
     if (!object) {
-      throw new ImageGenError(
-        "source_art_not_found",
-        `Source neutral art not found in R2: ${key}`,
-      );
+      // The source 立绘 usually lives only in the remote (dev/prod) R2, so locally
+      // it's missing. Fall back to the placeholder instead of failing the job, so
+      // moment-image capture still completes end-to-end on localhost.
+      return placeholderResponse();
     }
 
     const buffer = await object.arrayBuffer();
@@ -53,14 +48,22 @@ export const mockImageGenProvider: ImageGenProvider = {
   },
 };
 
-// 1x1 transparent PNG — minimal valid image bytes for the create placeholder.
-const PLACEHOLDER_PNG = Uint8Array.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
-  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
-  0x42, 0x60, 0x82,
-]);
+const PLACEHOLDER_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAlgAAAGQCAIAAAD9V4nPAAAE30lEQVR42u3VMQ0AIAwAwdqsCWw2YUQJEhDB0qSXnIJfPlYWAIwVEgBghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghABghAAYoQoAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEAGCEARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARggARgiAEaoAgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECgBECQJsRnn0BYCwjBMAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAcAIAeBjhCsLAMYyQgCMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEACMEAAjVAEAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwQAIwTACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAHACAEwQgkAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIAMEIA6OUBg4M30EpVpggAAAAASUVORK5CYII=";
+
+function placeholderResponse(): ImageGenResponse {
+  return {
+    content_type: "image/png",
+    image_bytes: PLACEHOLDER_PNG,
+    model: "placeholder-create",
+    provider: "mock",
+  };
+}
+
+// A visible 600x400 brand-purple placeholder PNG (base64). Unlike a 1x1
+// transparent pixel, this actually shows up in the chat bubble so the moment
+// capture flow can be verified by eye on localhost.
+const PLACEHOLDER_PNG = Uint8Array.from(atob(PLACEHOLDER_PNG_BASE64), (c) => c.charCodeAt(0));
 
 /**
  * Strip a leading URL prefix or origin if the value looks like a URL.

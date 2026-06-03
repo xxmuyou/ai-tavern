@@ -17,7 +17,7 @@ import {
   WebSection,
   WebTag,
 } from '@/components/web/ui';
-import { ADMIN_ROUTE, BILLING_ROUTE } from '@/constants/routes';
+import { ADMIN_ROUTE, BILLING_ROUTE, PERSONAS_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePush } from '@/hooks/use-push';
@@ -220,6 +220,19 @@ export default function WebMeScreen() {
                 )}
               </View>
             </WebCard>
+          </WebSection>
+
+          <WebSection
+            eyebrow="Identity"
+            title="Personas"
+            description="Who you play as in chat. Characters use your persona to know who they are talking to."
+          >
+            <WebButton
+              label="Manage personas"
+              onPress={() => router.push(PERSONAS_ROUTE)}
+              variant="outline"
+              iconLeft={<Ionicons color="#2A1F1A" name="person-outline" size={16} />}
+            />
           </WebSection>
 
           <WebSection eyebrow="Atelier" title="My image assets" description="Generations you've saved into your workspace.">

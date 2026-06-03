@@ -58,7 +58,11 @@ function pushMixed(out: NarrationSegment[], raw: string) {
 }
 
 function pushDialogue(out: NarrationSegment[], raw: string) {
-  const trimmed = raw.replace(/^[ \t]+|[ \t]+$/g, '');
+  // Trim *all* leading/trailing whitespace, newlines included. Models often put
+  // blank lines between sentences and around <narration> tags; if those stay in
+  // the dialogue segment the bubble renders taller than its visible text.
+  // Internal newlines (a genuinely multi-line line) are preserved.
+  const trimmed = raw.replace(/^\s+|\s+$/g, '');
   if (trimmed.length === 0) return;
   out.push({ text: trimmed, type: 'dialogue' });
 }

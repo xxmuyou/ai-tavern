@@ -16,13 +16,16 @@ type CompanionFormValues = {
   art_url: string;
   background: string;
   boundary: string;
+  example_dialogues: string;
   gender: Gender;
+  greeting: string;
   name: string;
   personality: string;
   preferred_scenes: string[];
   relationship_role: string;
   secret: string;
   speech_style: string;
+  tags: string;
   want: string;
 };
 
@@ -73,13 +76,16 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
       art_url: values.art_url,
       background: cleanText(values.background),
       boundary: cleanText(values.boundary),
+      example_dialogues: parseLines(values.example_dialogues),
       gender: values.gender,
+      greeting: cleanText(values.greeting),
       name,
       personality: cleanText(values.personality),
       preferred_scenes: values.preferred_scenes,
       relationship_role: cleanText(values.relationship_role),
       secret: cleanText(values.secret),
       speech_style: cleanText(values.speech_style),
+      tags: parseTags(values.tags),
       want: cleanText(values.want),
     });
   }
@@ -185,6 +191,32 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
             />
           </FormPanel>
 
+          <FormPanel title="Opening & voice">
+            <Field
+              hint="The first thing they say when a new chat begins."
+              label="Greeting"
+              multiline
+              onChangeText={(greeting) => setValues((current) => ({ ...current, greeting }))}
+              placeholder="Oh — you're here. I wasn't sure you'd come."
+              value={values.greeting}
+            />
+            <Field
+              hint="One example line per row. Anchors their voice — they won't be quoted verbatim."
+              label="Example lines"
+              multiline
+              onChangeText={(example_dialogues) => setValues((current) => ({ ...current, example_dialogues }))}
+              placeholder={'Don\'t make it weird.\nI saved you the window seat. Obviously.'}
+              value={values.example_dialogues}
+            />
+            <Field
+              hint="Comma-separated. Used for search and discovery."
+              label="Tags"
+              onChangeText={(tags) => setValues((current) => ({ ...current, tags }))}
+              placeholder="tsundere, childhood friend, sci-fi"
+              value={values.tags}
+            />
+          </FormPanel>
+
           <FormPanel title="Inner life">
             <PresetField
               hint="What they're after right now — colours how they engage."
@@ -263,13 +295,16 @@ function initialValues(initial?: CompanionDetail | null, initialArtUrl?: string)
     art_url: initial?.art_url ?? initialArtUrl ?? '',
     background: initial?.background ?? '',
     boundary: initial?.boundary ?? '',
+    example_dialogues: (initial?.example_dialogues ?? []).join('\n'),
     gender: initial?.gender ?? 'female',
+    greeting: initial?.greeting ?? '',
     name: initial?.name ?? '',
     personality: initial?.personality ?? '',
     preferred_scenes: initial?.preferred_scenes ?? [],
     relationship_role: initial?.relationship_role ?? 'friend',
     secret: initial?.secret ?? '',
     speech_style: initial?.speech_style ?? '',
+    tags: (initial?.tags ?? []).join(', '),
     want: initial?.want ?? '',
   };
 }
@@ -277,6 +312,22 @@ function initialValues(initial?: CompanionDetail | null, initialArtUrl?: string)
 function cleanText(value: string): string | undefined {
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function parseLines(value: string): string[] {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 32);
+}
+
+function parseTags(value: string): string[] {
+  return value
+    .split(/[,\n]/)
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0)
+    .slice(0, 16);
 }
 
 function FormPanel({ children, title }: { children: ReactNode; title: string }) {

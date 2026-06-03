@@ -56,7 +56,7 @@ function createEnv(opts: {
             return null;
           },
           async all<T>(): Promise<{ results: T[] }> {
-            if (sql.startsWith("SELECT id, role, content, scene_id, signals, emotion, created_at")) {
+            if (sql.startsWith("SELECT id, role, content, scene_id, signals, emotion")) {
               const threadId = values[0] as string;
               let cursor: number | null = null;
               let limit: number;
