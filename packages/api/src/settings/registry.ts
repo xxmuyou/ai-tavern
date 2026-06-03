@@ -343,6 +343,15 @@ export const SETTINGS: readonly SettingDef[] = [
     adminMode: "status_only",
     envKey: "ARK_API_KEY",
   },
+  {
+    key: "llm.minimax_api_key",
+    group: "llm",
+    label: "MiniMax API key",
+    type: "secret",
+    adminMode: "status_only",
+    envKey: "MINIMAX_API_KEY",
+    description: "Used by the MiniMax provider for MiniMax-M3 chat via https://api.minimaxi.com/v1.",
+  },
 
   // --- limits ---
   {

@@ -16,6 +16,7 @@
 |------|------|------|----------|-------------------|
 | `DEEPSEEK_API_KEY` | DeepSeek LLM 调用 | platform.deepseek.com | Wrangler secret | 独立 |
 | `OPENAI_API_KEY` | OpenAI LLM（fallback / 备选） | platform.openai.com | Wrangler secret | 独立 |
+| `MINIMAX_API_KEY` | MiniMax M3 LLM 调用（chat 候选默认） | platform.minimaxi.com | Wrangler secret | 独立 |
 | `ANTHROPIC_API_KEY` | Anthropic Claude（备选） | console.anthropic.com | Wrangler secret | 独立 |
 | `DOUBAO_API_KEY` | 豆包 / 火山引擎（备选 / 未来中文版） | volcengine.com | Wrangler secret | 独立 |
 | `CLOUDFLARE_AI_TOKEN` | Workers AI（摘要任务） | Cloudflare Dashboard | Wrangler secret | 独立（或同账户共享） |
@@ -60,8 +61,7 @@
 
 | Key | 缺失后果 | 备注 |
 |---|---|---|
-| `DEEPSEEK_API_KEY`（或任一 LLM key） | LLM 调用返回 500 | 至少配一个 provider；`LLM_DEFAULT_ROUTE` 决定走哪条 |
-| `LLM_DEFAULT_ROUTE` | 路由不确定 | `.env.example` 默认 `cheap-dialogue` |
+| `MINIMAX_API_KEY`（或当前 chat provider 对应 key） | LLM 调用返回 500 | 默认 chat 路由走 MiniMax M3；若 admin 切回 DeepSeek，则填 `DEEPSEEK_API_KEY` |
 | `OPENAI_MODEL` | OpenAI 路径失败 | 仅当 OPENAI_API_KEY 配了才用得到 |
 | `EXPO_PUBLIC_API_URL` | Expo 客户端不知道连哪儿 | dev 默认 `http://127.0.0.1:8787` |
 
@@ -103,7 +103,7 @@ admin 身份由两层控制：
 ```bash
 # 主仓库
 cp .env.example .env.dev      # 首次
-vim .env.dev                  # 只填 DEEPSEEK_API_KEY / EXPO_PUBLIC_API_URL / LLM_DEFAULT_ROUTE / OPENAI_MODEL
+vim .env.dev                  # 只填 MINIMAX_API_KEY / EXPO_PUBLIC_API_URL；若切 DeepSeek 再填 DEEPSEEK_API_KEY
 pnpm install                  # 装 husky + dev deps
 pnpm dev                      # 自动准备本地 env，再起 worker (8787) + Expo (8081)
 
@@ -212,7 +212,7 @@ pnpm run:local             # 自动准备本地 env，再启动 worker + Expo
 
 ## 3. Secret 轮换流程
 
-### 3.1 LLM API key（DeepSeek / OpenAI / 其他）
+### 3.1 LLM API key（MiniMax / DeepSeek / OpenAI / 其他）
 
 LLM API key 只能通过 Wrangler secret 轮换；Admin UI 只显示 configured / missing 状态，不能查看或替换 key。
 
@@ -220,6 +220,7 @@ LLM API key 只能通过 Wrangler secret 轮换；Admin UI 只显示 configured 
 # 1. 在 provider 后台创建新 key
 # 2. 注入新 key（不删旧 key）
 pnpm wrangler secret put DEEPSEEK_API_KEY --env prod   # 输入新值
+pnpm wrangler secret put MINIMAX_API_KEY --env prod    # MiniMax-M3 chat provider
 
 # 3. 部署一次
 pnpm deploy:api:prod

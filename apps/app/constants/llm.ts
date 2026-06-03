@@ -9,4 +9,5 @@ export const LLM_PROVIDERS: readonly LlmProvider[] = [
   'anthropic',
   'doubao',
   'cloudflare',
+  'minimax',
 ];

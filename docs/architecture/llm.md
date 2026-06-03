@@ -20,7 +20,8 @@ v1 集成的供应商列表（admin 可在后台启用 / 禁用 / 切换）：
 
 | 供应商 | 价格水平 | 优势 | 劣势 | 推荐角色 |
 |--------|---------|------|------|---------|
-| **DeepSeek** | 极低 | API 兼容 OpenAI 协议、英文角色扮演稳定、JSON output 支持 | 国内供应商，海外用户网络偶有抖动（用 Workers 作为代理可缓解） | **v1 主力（对话生成、信号提取）** |
+| **DeepSeek** | 极低 | API 兼容 OpenAI 协议、英文角色扮演稳定、JSON output 支持 | 国内供应商，海外用户网络偶有抖动（用 Workers 作为代理可缓解） | fallback / 信号提取默认 |
+| **MiniMax M3** | 低 | OpenAI 兼容接口、长上下文、价格仍明显低于高端 GPT | 需要实测角色扮演稳定性；API 域名必须用 `.com` 的 `api.minimaxi.com` | 低成本 chat 主力候选 |
 | **Doubao（豆包）** | 极低（lite 版） | 字节稳定供应、价格在国内最低之一 | 中文优化为主，英文表现略弱于 DeepSeek | 候选 / 未来中文版本主力 |
 | **OpenAI** | 中等 | 生态成熟、JSON mode 稳定、moderation API 一并提供 | 价格高于 DeepSeek 约 2-3× | 高质量备选 / fallback |
 | **Anthropic Claude** | 较高 | 长文本表现强、角色扮演品质上限高 | 价格最高、structured output 不如 OpenAI 严格 | 高质量备选 |
@@ -32,12 +33,18 @@ v1 集成的供应商列表（admin 可在后台启用 / 禁用 / 切换）：
 
 | 任务 | 默认模型 | 备选 |
 |------|---------|------|
-| **对话生成**（主要支出） | **DeepSeek `deepseek-chat`** | OpenAI `gpt-4o-mini` / Anthropic `claude-haiku-4-5` / Doubao `doubao-1.5-pro-32k` |
+| **对话生成**（主要支出） | **MiniMax `MiniMax-M3`** | DeepSeek `deepseek-chat` / Doubao `doubao-1.5-lite-32k` / OpenAI `gpt-4o-mini` |
 | **信号提取**（解析关系变化） | DeepSeek `deepseek-chat`（同次调用，JSON output） | OpenAI `gpt-4o-mini` |
 | **对话历史摘要**（异步） | Cloudflare Workers AI `@cf/meta/llama-3.1-8b-instruct` | DeepSeek `deepseek-chat` |
 | **角色卡生成辅助**（用户自创角色时 AI 帮补全） | DeepSeek `deepseek-chat` | OpenAI `gpt-4o-mini` |
 
-**为什么 DeepSeek 作为 v1 主力：**
+**为什么把 MiniMax M3 作为 chat 候选默认：**
+- 成本低于高端 GPT，且更适合先实测沉浸式角色对话。
+- 官方提供 OpenAI-compatible Chat Completions 路径，接入成本低。
+- 当前实现使用 `https://api.minimaxi.com/v1`，不要改成 `.io` 域名。
+- `max_tokens` 对 MiniMax 路径已改用 `max_completion_tokens`，避免使用废弃字段。
+
+**为什么保留 DeepSeek 作为 fallback / 信号提取默认：**
 - 价格约 input $0.14 / 1M、output $0.28 / 1M（cache miss）；cache hit input 约 $0.014 / 1M
 - 英文表现足以承担 RPG 对话场景
 - API 协议兼容 OpenAI（接入简单，迁移成本低）
@@ -47,7 +54,7 @@ v1 集成的供应商列表（admin 可在后台启用 / 禁用 / 切换）：
 - 英文输出表现不如 DeepSeek（v1 海外英文为主）
 - 集成抽象层中保留，admin 可切换；为未来中文版本预留路径
 
-**注意：** 当前代码里的 `gpt-5-mini` 是错的型号，重写时按 admin 配置 + DeepSeek 默认。
+**注意：** 当前代码里的 `gpt-5-mini` 是错的型号，重写时按 admin 配置；chat 默认候选为 MiniMax M3，DeepSeek 作为低成本 fallback / 信号提取默认。
 
 ## 3. 抽象层设计
 
@@ -90,6 +97,7 @@ packages/api/src/llm/
 │   ├── openai.ts       ← OpenAI
 │   ├── anthropic.ts    ← Anthropic
 │   ├── doubao.ts       ← 豆包（火山引擎）
+│   ├── minimax.ts      ← MiniMax M3（OpenAI 协议兼容，api.minimaxi.com）
 │   └── cloudflare.ts   ← CF Workers AI
 ├── prompts/            ← prompt 模板
 │   ├── chat.ts
@@ -99,7 +107,7 @@ packages/api/src/llm/
 └── fallback.ts         ← 错误降级逻辑
 ```
 
-**DeepSeek 因为协议兼容 OpenAI，provider 实现可继承自 openai.ts，仅改 baseURL + API key。**
+**DeepSeek / MiniMax 因为协议兼容 OpenAI，provider 实现可继承自 openai.ts，仅改 baseURL + API key。**
 
 ### 3.3 调用示例
 
@@ -129,7 +137,7 @@ D1 表 `llm_config`（继承现有 spec-005 设计）：
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `task` | string | `chat` / `signal` / `summary` / ... |
-| `provider` | string | `openai` / `anthropic` / `cloudflare` |
+| `provider` | string | `deepseek` / `openai` / `doubao` / `minimax` / `anthropic` / `cloudflare` |
 | `model` | string | 具体模型名 |
 | `is_active` | boolean | 当前是否启用 |
 | `updated_at` | timestamp | 最后更新时间 |
@@ -256,35 +264,37 @@ Respond in character. Output JSON:
 
 | 模型 | 单次成本 |
 |------|---------|
-| **DeepSeek `deepseek-chat`**（v1 默认） | `2000 × 0.14/1M + 300 × 0.28/1M` ≈ **$0.00036** |
+| DeepSeek `deepseek-chat`（fallback / signal 默认） | `2000 × 0.14/1M + 300 × 0.28/1M` ≈ **$0.00036** |
 | DeepSeek 配 cache hit（系统 prompt 缓存） | ≈ **$0.000084** |
+| MiniMax `MiniMax-M3` | `2000 × 0.30/1M + 300 × 1.20/1M` ≈ **$0.00096** |
 | OpenAI `gpt-4o-mini`（备选） | ≈ **$0.0006** |
 | Anthropic `claude-haiku-4-5`（备选） | ≈ **$0.0017** |
 | Doubao `doubao-1.5-lite-32k` | ≈ **$0.00015**（最低） |
 
-### 7.2 单用户单日成本（用 DeepSeek 默认）
+### 7.2 单用户单日成本（用 MiniMax M3 chat 默认）
 
-- 免费用户（30 条/日上限）：$0.00036 × 30 ≈ **$0.011 / 日**
-- 订阅用户（重度，假设 200 条/日）：$0.00036 × 200 ≈ **$0.072 / 日**
+- 免费用户（30 条/日上限）：$0.00096 × 30 ≈ **$0.029 / 日**
+- 订阅用户（重度，假设 200 条/日）：$0.00096 × 200 ≈ **$0.192 / 日**
 
 ### 7.3 v1 财务可持续性
 
 - 订阅价 $9.99/月 ≈ $0.33/日
-- 重度订阅用户 LLM 成本 $0.072/日 → **LLM 毛利约 78%**
-- 免费用户每月 LLM 成本 ≈ $0.33
+- 重度订阅用户 LLM 成本 $0.192/日 → **LLM 毛利约 42%**
+- 免费用户每月 LLM 成本 ≈ $0.87
 
 **转化率盈亏平衡（仅看 LLM 成本，不含 CF/运营/团队）：**
-- 100 免费 × $0.33 = $33 LLM 成本
-- 需要约 4% 免费转付费即可覆盖
+- 100 免费 × $0.87 = $87 LLM 成本
+- 需要约 9% 免费转付费即可覆盖
 - 大幅低于行业平均（5-10%）
 
 **进一步压缩成本的手段：**
-- 启用 DeepSeek context cache（系统 prompt 重复，input 成本可降 90%）
+- 如 MiniMax M3 实测成本/质量不理想，将 chat 切回 DeepSeek 或 Doubao-lite
+- 启用供应商 context cache（系统 prompt 重复，input 成本可降）
 - 历史摘要交给 Cloudflare Workers AI（几乎免费）
 - 短对话场景用 Doubao-lite（成本再降一半）
 - prompt 紧凑化（去掉冗余 system message）
 
-**结论：** v1 财务大幅可控。LLM 不是产品成本瓶颈。
+**结论：** v1 财务仍可控，但 MiniMax M3 比 DeepSeek 路径更贵；需要用 admin usage 持续观察真实每轮输出长度。
 
 ## 8. 与现有代码的关系
 
@@ -292,8 +302,8 @@ Respond in character. Output JSON:
 |---------|------|
 | `packages/api/src/llm/index.ts`（当前 OpenAI 单一） | **重写为多供应商抽象层** |
 | `packages/api/src/llm/admin.ts`（当前有 admin stub） | **保留并完善**（成为 §4 的实现） |
-| 硬编码 `gpt-5-mini` | **删除**，替换为 admin 配置 + 默认 DeepSeek `deepseek-chat` |
-| `wrangler.jsonc` 中 LLM 相关环境变量 | **扩展**：`DEEPSEEK_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`DOUBAO_API_KEY`、`CLOUDFLARE_AI_TOKEN` |
+| 硬编码 `gpt-5-mini` | **删除**，替换为 admin 配置 + chat 默认 MiniMax `MiniMax-M3` |
+| `wrangler.jsonc` 中 LLM 相关环境变量 | **扩展**：`DEEPSEEK_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`DOUBAO_API_KEY`、`MINIMAX_API_KEY`、`CLOUDFLARE_AI_TOKEN` |
 
 具体改造见 `specs/`。
 

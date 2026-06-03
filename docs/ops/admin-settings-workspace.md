@@ -50,7 +50,7 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 | Admin 模块 | 内容 | 对应配置 |
 |------|------|------|
 | `Users` | admin 名单、用户查询、积分调整、ledger | `admin_user_allowlist`、credits endpoints |
-| `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、DeepSeek/OpenAI key 配置状态 | `llm_config`、`llm.*` |
+| `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、MiniMax/DeepSeek/OpenAI key 配置状态 | `llm_config`、`llm.*` |
 | `Portrait generation` | 生图 provider、RunningHub/OpenAI/R2 key 配置状态、checkpoint catalog、workflow catalog、workflow-model 绑定 | `image_gen.*`、`image_models`、`image_workflows`、`image_workflow_models` |
 | `Prompts` | expression 立绘系统提示词；后续其他 prompt 也放这里 | `expression_prompts` |
 | `Settings` | auth、billing、email、limits 等通用运营项 | `auth.*`、`billing.*`、`email.*`、`limits.*` |

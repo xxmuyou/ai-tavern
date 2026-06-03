@@ -619,7 +619,7 @@ export type AdminCreditAdjustmentResult = {
   user_id: string;
 };
 
-export type LlmProvider = 'anthropic' | 'cloudflare' | 'deepseek' | 'doubao' | 'openai';
+export type LlmProvider = 'anthropic' | 'cloudflare' | 'deepseek' | 'doubao' | 'minimax' | 'openai';
 
 export type LlmConfigItem = {
   fallback_model: string | null;

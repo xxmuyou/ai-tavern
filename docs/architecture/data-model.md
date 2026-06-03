@@ -345,7 +345,7 @@ CREATE TABLE llm_logs (
   id             TEXT PRIMARY KEY,
   user_id        TEXT REFERENCES users(id),
   task           TEXT NOT NULL,                 -- chat / signal / summary / character-assist
-  provider       TEXT NOT NULL,                 -- deepseek / openai / anthropic / doubao / cloudflare
+  provider       TEXT NOT NULL,                 -- deepseek / openai / anthropic / doubao / minimax / cloudflare
   model          TEXT NOT NULL,
   status         TEXT NOT NULL,                 -- success / fallback / error
   latency_ms     INTEGER,
@@ -384,7 +384,7 @@ CREATE TABLE llm_config (
 
 ```sql
 INSERT INTO llm_config VALUES
-  ('chat',             'deepseek',   'deepseek-chat',                'openai',     'gpt-4o-mini', ...),
+  ('chat',             'minimax',    'MiniMax-M3',                   'deepseek',   'deepseek-chat', ...),
   ('signal',           'deepseek',   'deepseek-chat',                NULL,         NULL,          ...),
   ('summary',          'cloudflare', '@cf/meta/llama-3.1-8b-instruct', 'deepseek', 'deepseek-chat', ...),
   ('character-assist', 'deepseek',   'deepseek-chat',                NULL,         NULL,          ...);

@@ -20,6 +20,7 @@ export const PRICING: Record<string, Price> = {
   "cloudflare:@cf/meta/llama-3.1-8b-instruct": PER_TOKEN({ input: 0.05, output: 0.05 }),
   "deepseek:deepseek-chat": PER_TOKEN({ input: 0.14, output: 0.28 }),
   "doubao:doubao-1.5-lite-32k": PER_TOKEN({ input: 0.04, output: 0.08 }),
+  "minimax:MiniMax-M3": PER_TOKEN({ input: 0.3, output: 1.2 }),
   "openai:gpt-4o-mini": PER_TOKEN({ input: 0.15, output: 0.6 }),
 };
 

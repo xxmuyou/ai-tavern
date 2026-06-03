@@ -588,7 +588,7 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 // Response 200
 {
   "configs": [
-    { "task": "chat", "provider": "deepseek", "model": "deepseek-chat", "fallback_provider": "openai", "fallback_model": "gpt-4o-mini" },
+    { "task": "chat", "provider": "minimax", "model": "MiniMax-M3", "fallback_provider": "deepseek", "fallback_model": "deepseek-chat" },
     ...
   ]
 }
@@ -598,7 +598,7 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 
 ```json
 // Request
-{ "task": "chat", "provider": "openai", "model": "gpt-4o-mini" }
+{ "task": "chat", "provider": "minimax", "model": "MiniMax-M3" }
 
 // Response 200
 { "ok": true }
@@ -608,7 +608,7 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 
 ```json
 // Request
-{ "provider": "deepseek", "model": "deepseek-chat", "prompt": "Hello, who are you?" }
+{ "provider": "minimax", "model": "MiniMax-M3", "prompt": "Hello, who are you?" }
 
 // Response 200
 { "response": "...", "latency_ms": 1230, "cost_usd": 0.0001 }

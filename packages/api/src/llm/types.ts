@@ -11,7 +11,7 @@ export const LLM_TASKS = [
 ] as const;
 export type LLMTask = (typeof LLM_TASKS)[number];
 
-export const LLM_PROVIDERS = ["deepseek", "openai", "anthropic", "doubao", "cloudflare"] as const;
+export const LLM_PROVIDERS = ["deepseek", "openai", "anthropic", "doubao", "cloudflare", "minimax"] as const;
 export type LLMProvider = (typeof LLM_PROVIDERS)[number];
 
 export type LLMRole = "system" | "user" | "assistant";

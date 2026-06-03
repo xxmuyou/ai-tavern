@@ -125,7 +125,13 @@ function buildBody(config: ProviderConfig, request: LLMRequest, stream: boolean)
     stream,
   };
 
-  if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
+  if (request.max_tokens !== undefined) {
+    if (config.provider === "minimax") {
+      body.max_completion_tokens = request.max_tokens;
+    } else {
+      body.max_tokens = request.max_tokens;
+    }
+  }
   if (request.temperature !== undefined) body.temperature = request.temperature;
 
   if (stream) {
