@@ -127,6 +127,9 @@ function buildBody(config: ProviderConfig, request: LLMRequest, stream: boolean)
 
   if (request.max_tokens !== undefined) body.max_tokens = request.max_tokens;
   if (request.temperature !== undefined) body.temperature = request.temperature;
+  if (request.top_p !== undefined) body.top_p = request.top_p;
+  if (request.frequency_penalty !== undefined) body.frequency_penalty = request.frequency_penalty;
+  if (request.presence_penalty !== undefined) body.presence_penalty = request.presence_penalty;
 
   if (stream) {
     body.stream_options = { include_usage: true };

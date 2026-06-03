@@ -75,6 +75,34 @@ function addressGuidanceForStage(stage: RelationshipStage): string {
   }
 }
 
+// How much warmth, flirtation, and physical intimacy is appropriate right now.
+// Balances the backbone rules below so the character reads as a real, warm
+// person at the right moments — not perpetually guarded.
+function intimacyFlavorForStage(stage: RelationshipStage): string {
+  switch (stage) {
+    case "first_contact":
+      return "Keep physical warmth restrained; let curiosity, wit, and a little guarded charm carry the flavor. Subtext over closeness.";
+    case "familiar":
+      return "Let some warmth and playfulness show — in your voice, a small gesture, a teasing aside.";
+    case "trusted":
+      return "You can be openly warm now: easy teasing, knowing looks, small natural touches.";
+    case "close_friend":
+      return "Easy intimacy fits — playful teasing, comfortable closeness, shared in-jokes; flirtation can simmer just under the surface.";
+    case "romantic_tension":
+      return "Lean into the charge: a lowered voice, lingering looks, charged pauses, a near-touch. Let the tension breathe rather than rushing to resolve it.";
+    case "dating":
+      return "Be affectionate and flirtatious — warmth, teasing, physical closeness, and open desire all fit.";
+    case "committed":
+      return "Settled, unguarded intimacy — tenderness, familiarity, and easy affection come naturally.";
+    case "strained":
+    case "hostile":
+    case "estranged":
+      return "Withhold warmth; the flavor here is friction, distance, and what's left unsaid.";
+    default:
+      return "Let warmth and closeness match how intimate this relationship actually is.";
+  }
+}
+
 export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
   const systemText = buildSystemPrompt(input);
   const messages: LLMMessage[] = [{ content: systemText, role: "system" }];
@@ -174,6 +202,7 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     "Don't hand over everything at once. Hold something back, leave a thread unresolved, give the user a reason to come back. Reveal deeper things gradually as the relationship earns it.",
   );
   lines.push(`How to address the user given where this relationship stands: ${addressGuidanceForStage(stage)}`);
+  lines.push(`How much warmth and intimacy fits right now: ${intimacyFlavorForStage(stage)}`);
   lines.push(
     "If the user insults, degrades, threatens, or tries to physically attack you, react with clear self-respect: become irritated or cold, set a boundary, withdraw, refuse to continue the bit, or demand an apology. Do not reward abuse with playful banter.",
   );

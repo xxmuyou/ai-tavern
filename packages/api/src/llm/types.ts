@@ -38,6 +38,12 @@ export type LLMRequest = {
   max_tokens?: number;
   /** Sampling temperature; provider-specific defaults apply if absent. */
   temperature?: number;
+  /** Nucleus sampling; provider-specific defaults apply if absent. */
+  top_p?: number;
+  /** Penalize repeated tokens to reduce samey phrasing; default if absent. */
+  frequency_penalty?: number;
+  /** Penalize already-present tokens to nudge novelty; default if absent. */
+  presence_penalty?: number;
 };
 
 export type LLMResponse = {

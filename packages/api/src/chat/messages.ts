@@ -157,7 +157,17 @@ export async function handlePostMessage(
   // "all providers failed" as a clean 503 JSON instead of an empty event stream.
   const iterator = llmStream(
     env,
-    { max_tokens: 400, messages: promptMessages, task: "chat", temperature: 0.85 },
+    {
+      // Roomier + livelier sampling so replies read as a person with flavor,
+      // not a clipped assistant. frequency/presence penalties cut samey phrasing.
+      frequency_penalty: 0.4,
+      max_tokens: 700,
+      messages: promptMessages,
+      presence_penalty: 0.3,
+      task: "chat",
+      temperature: 0.95,
+      top_p: 0.95,
+    },
     { user_id: user.id },
   )[Symbol.asyncIterator]();
   let firstResult: IteratorResult<LLMStreamChunk>;
