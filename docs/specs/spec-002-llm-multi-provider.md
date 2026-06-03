@@ -8,13 +8,13 @@
 
 当前 `packages/api/src/llm/` 锁死 OpenAI 单家，且硬编码 `gpt-5-mini`（错误型号）。新方向（[`architecture/llm.md`](../architecture/llm.md)）：
 
-- 多供应商抽象层（DeepSeek 默认，OpenAI / Anthropic / Doubao / Cloudflare AI 备选）
+- 多供应商抽象层（MiniMax M3 作为 chat 候选默认，DeepSeek / OpenAI / Anthropic / Doubao / Cloudflare AI 备选）
 - admin 在后台切换 task ↔ provider/model
-- 不同 task 用不同模型（对话用 DeepSeek，摘要用 CF Workers AI）
+- 不同 task 用不同模型（对话可用 MiniMax M3，信号提取用 DeepSeek，摘要用 CF Workers AI）
 - 错误降级（主供应商失败自动 fallback）
 - 成本可观测（每次调用记录 token + cost）
 
-本 spec 在 `spec-003` 的 D1 schema reset 完成后执行，必须完整接入 `llm_config` 与 `llm_logs`。不接受先用 console log、hard-coded config 或"后续再接表"作为完成状态。其他供应商（Anthropic / Doubao / Cloudflare AI）接入可在 spec-002.x 子 spec 增量加。
+本 spec 在 `spec-003` 的 D1 schema reset 完成后执行，必须完整接入 `llm_config` 与 `llm_logs`。不接受先用 console log、hard-coded config 或"后续再接表"作为完成状态。其他供应商（MiniMax / Anthropic / Doubao / Cloudflare AI）接入可在 spec-002.x 子 spec 增量加。
 
 ---
 
@@ -138,7 +138,10 @@ export function estimateCost(provider, model, usage) { ... }
 `wrangler.jsonc` env 加 secrets：
 - `DEEPSEEK_API_KEY`
 - `OPENAI_API_KEY`
+- `MINIMAX_API_KEY`
 - （其他 provider 留 binding，未来填）
+
+MiniMax M3 作为后续 chat 默认候选接入时复用 OpenAI-compatible provider；base URL 固定使用 `https://api.minimaxi.com/v1`，不要使用 `.io` 域名。
 
 ---
 

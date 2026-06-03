@@ -111,6 +111,50 @@ describe("llmCall router", () => {
     expect(env.logs[0]).toMatchObject({ provider: "doubao", status: "success" });
   });
 
+  it("routes minimax through the .com OpenAI-compatible endpoint", async () => {
+    const env = createEnv({
+      config: [
+        {
+          fallback_model: null,
+          fallback_provider: null,
+          model: "MiniMax-M3",
+          provider: "minimax",
+          task: "chat",
+        },
+      ],
+    });
+
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const target = String(url);
+      if (target === "https://api.minimaxi.com/v1/chat/completions") {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        expect(body.model).toBe("MiniMax-M3");
+        expect(body.max_completion_tokens).toBe(80);
+        expect(body.max_tokens).toBeUndefined();
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "minimax response" } }],
+            usage: { completion_tokens: 4, prompt_tokens: 10 },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        );
+      }
+      throw new Error(`unexpected fetch to ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await llmCall(env.env, {
+      max_tokens: 80,
+      messages: [{ content: "Hi", role: "user" }],
+      task: "chat",
+    });
+
+    expect(response.text).toBe("minimax response");
+    expect(response.provider).toBe("minimax");
+    expect(response.model).toBe("MiniMax-M3");
+    expect(env.logs[0]).toMatchObject({ provider: "minimax", status: "success" });
+  });
+
   it("throws final error when both providers fail and logs both attempts", async () => {
     const env = createEnv({
       config: [
@@ -222,6 +266,7 @@ function createEnv({ config }: { config: LLMConfigFixture[] }): CreatedEnv {
     DEEPSEEK_API_KEY: "ds-test",
     OPENAI_API_KEY: "oai-test",
     ARK_API_KEY: "ark-test",
+    MINIMAX_API_KEY: "mm-test",
     DB: {
       prepare(sql: string) {
         return buildStatement(sql, configByTask, logs, logUserIds);

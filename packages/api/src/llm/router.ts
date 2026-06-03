@@ -2,6 +2,7 @@ import { estimateCost } from "./cost";
 import { writeLLMLog } from "./logs";
 import { deepseekProvider, DEEPSEEK_BASE_URL } from "./providers/deepseek";
 import { doubaoProvider, DOUBAO_BASE_URL } from "./providers/doubao";
+import { minimaxProvider, MINIMAX_BASE_URL } from "./providers/minimax";
 import { openaiProvider } from "./providers/openai";
 import { getSetting } from "../settings/store";
 import {
@@ -36,6 +37,7 @@ type RouteResolution = {
 const PROVIDERS: Record<string, ProviderImpl> = {
   deepseek: deepseekProvider,
   doubao: doubaoProvider,
+  minimax: minimaxProvider,
   openai: openaiProvider,
 };
 
@@ -317,16 +319,24 @@ async function buildProviderConfig(
         model,
         provider,
       };
+    case "minimax":
+      return {
+        apiKey: await readApiKey(env, "MINIMAX_API_KEY"),
+        baseURL: MINIMAX_BASE_URL,
+        model,
+        provider,
+      };
     default:
       throw new LLMError("config_error", `provider '${provider}' is not wired up in v1 (spec-002)`);
   }
 }
 
-type ProviderApiKeyEnv = "DEEPSEEK_API_KEY" | "OPENAI_API_KEY" | "ARK_API_KEY";
+type ProviderApiKeyEnv = "DEEPSEEK_API_KEY" | "OPENAI_API_KEY" | "ARK_API_KEY" | "MINIMAX_API_KEY";
 
 const API_KEY_SETTING: Record<ProviderApiKeyEnv, string> = {
   ARK_API_KEY: "llm.doubao_api_key",
   DEEPSEEK_API_KEY: "llm.deepseek_api_key",
+  MINIMAX_API_KEY: "llm.minimax_api_key",
   OPENAI_API_KEY: "llm.openai_api_key",
 };
 

@@ -28,6 +28,7 @@ const LLM_SECRET_KEYS: Partial<Record<LlmProvider, string>> = {
   deepseek: 'llm.deepseek_api_key',
   openai: 'llm.openai_api_key',
   doubao: 'llm.doubao_api_key',
+  minimax: 'llm.minimax_api_key',
 };
 
 // Providers we actually have a registered API key for (the "integrated" set).
@@ -37,6 +38,7 @@ const DEFAULT_MODELS: Partial<Record<LlmProvider, string[]>> = {
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
   openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-5-mini'],
   doubao: ['doubao-1.5-lite-32k'],
+  minimax: ['MiniMax-M3'],
 };
 
 export function LlmSection() {
