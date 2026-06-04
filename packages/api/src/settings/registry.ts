@@ -238,6 +238,15 @@ export const SETTINGS: readonly SettingDef[] = [
       "Global style/quality preamble prepended to every WF1 create prompt, across all styles.",
   },
   {
+    key: "image_gen.wf_moment_base_prompt",
+    group: "image_gen",
+    label: "WF_MOMENT base prompt (global)",
+    type: "text",
+    envKey: "IMAGE_GEN_WF_MOMENT_BASE_PROMPT",
+    description:
+      "Global preamble prepended to every WF_MOMENT chat scene moment prompt.",
+  },
+  {
     key: "image_gen.openai_api_key",
     group: "image_gen",
     label: "OpenAI image API key",

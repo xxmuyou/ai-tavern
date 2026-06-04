@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import type { AdminImageGenJob } from '@/api/types';
-import { WebButton, WebCard, WebLoading, WebTabs, WebTag } from '@/components/web/ui';
+import { WebButton, WebLoading, WebTabs, WebTag } from '@/components/web/ui';
 import { useAdminImageGenJobs } from '@/hooks/use-admin-image-gen-jobs';
+
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 
 const FILTERS: { id: 'failed' | 'all'; label: string }[] = [
   { id: 'failed', label: 'Failed' },
@@ -20,15 +22,13 @@ export function ImageGenJobsSection() {
   const { jobs, isLoading, error, reload } = useAdminImageGenJobs(filter === 'all' ? null : filter, 50);
 
   return (
-    <WebCard padding="md">
-      <Text className="font-serif text-title text-app-ink">Recent generation jobs</Text>
-      <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-        The real provider failure reason for each job. Use this to debug RunningHub errors
-        (e.g. NODE_INFO_MISMATCH means a node id / field name in the WF1 config does not match
-        the workflow).
-      </Text>
+    <AdminPanel>
+      <AdminPanelHeader
+        subtitle="The real provider failure reason for each job. Use this to debug RunningHub errors (e.g. NODE_INFO_MISMATCH means a node id / field name in the config does not match the workflow)."
+        title="Recent generation jobs"
+      />
 
-      <View className="mt-3 flex-row items-center gap-2">
+      <View className="flex-row items-center gap-2">
         <WebTabs
           active={filter}
           className="max-w-xs flex-1"
@@ -42,12 +42,12 @@ export function ImageGenJobsSection() {
         </View>
       </View>
 
-      {error ? <Text className="mt-3 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
+      {error ? <Text className="text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
 
       {isLoading ? (
         <WebLoading fullscreen={false} label="Loading jobs..." />
       ) : (
-        <View className="mt-4 gap-3">
+        <View className="gap-2">
           {jobs.map((job) => (
             <JobRow key={job.id} job={job} />
           ))}
@@ -56,7 +56,7 @@ export function ImageGenJobsSection() {
           ) : null}
         </View>
       )}
-    </WebCard>
+    </AdminPanel>
   );
 }
 

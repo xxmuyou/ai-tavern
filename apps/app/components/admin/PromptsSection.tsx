@@ -2,13 +2,16 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
-import { WebCard, WebLoading, WebTabs } from '@/components/web/ui';
+import { WebLoading } from '@/components/web/ui';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
+import { AdminDropdown } from './AdminDropdown';
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 import { ExpressionPromptsSection } from './ExpressionPromptsSection';
 import { SettingRow } from './SettingsSection';
 
 const WF1_BASE_PROMPT_KEY = 'image_gen.wf1_base_prompt';
+const WF_MOMENT_BASE_PROMPT_KEY = 'image_gen.wf_moment_base_prompt';
 
 const PROMPT_MODULES = [
   {
@@ -23,6 +26,12 @@ const PROMPT_MODULES = [
     id: 'expression-portraits',
     label: 'WF2 — expression prompts',
   },
+  {
+    description:
+      'WF_MOMENT (chat scene moment / create): a global preamble prepended to every chat moment image prompt.',
+    id: 'wf-moment',
+    label: 'WF_MOMENT — moment prompt',
+  },
 ] as const;
 
 type PromptModuleId = (typeof PROMPT_MODULES)[number]['id'];
@@ -32,52 +41,69 @@ export function PromptsSection() {
   const active = PROMPT_MODULES.find((module) => module.id === moduleId) ?? PROMPT_MODULES[0];
 
   return (
-    <View className="gap-4">
-      <WebCard padding="md">
-        <Text className="font-serif text-title text-app-ink">Prompts</Text>
-        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-          System prompts are grouped by module so future prompt surfaces can live here without mixing contexts.
-        </Text>
-        <View className="mt-4 gap-3">
-          <WebTabs
-            active={moduleId}
-            onChange={(id) => setModuleId(id as PromptModuleId)}
-            tabs={PROMPT_MODULES.map((module) => ({ id: module.id, label: module.label }))}
-            variant="underline"
-          />
-          <Text className="text-body-sm text-app-muted">{active.description}</Text>
-        </View>
-      </WebCard>
+    <View className="gap-3">
+      <AdminPanel>
+        <AdminPanelHeader
+          subtitle="System prompts are grouped by module so future prompt surfaces can live here without mixing contexts."
+          title="Prompts"
+        />
+        <AdminDropdown
+          labelForValue={(value) => PROMPT_MODULES.find((m) => m.id === value)?.label ?? PROMPT_MODULES[0].label}
+          onChange={(value) => setModuleId((value as PromptModuleId) ?? moduleId)}
+          options={PROMPT_MODULES.map((module) => ({ label: module.label, value: module.id as string }))}
+          value={moduleId}
+        />
+        <Text className="text-xs leading-5 text-app-muted">{active.description}</Text>
+      </AdminPanel>
 
-      {moduleId === 'wf1-base' ? <Wf1BasePromptSection /> : null}
+      {moduleId === 'wf1-base' ? (
+        <BasePromptSection
+          description="A single style/quality preamble prepended to every WF1 create prompt, regardless of art style."
+          missingLabel="WF1 base prompt setting is not registered."
+          settingKey={WF1_BASE_PROMPT_KEY}
+          title="WF1 base prompt (global)"
+        />
+      ) : null}
       {moduleId === 'expression-portraits' ? <ExpressionPromptsSection /> : null}
+      {moduleId === 'wf-moment' ? (
+        <BasePromptSection
+          description="A global preamble prepended to every WF_MOMENT chat scene moment prompt."
+          missingLabel="WF_MOMENT base prompt setting is not registered."
+          settingKey={WF_MOMENT_BASE_PROMPT_KEY}
+          title="WF_MOMENT base prompt (global)"
+        />
+      ) : null}
     </View>
   );
 }
 
-function Wf1BasePromptSection() {
+function BasePromptSection({
+  description,
+  missingLabel,
+  settingKey,
+  title,
+}: {
+  description: string;
+  missingLabel: string;
+  settingKey: string;
+  title: string;
+}) {
   const { settings, isLoading, error, reveal, save } = useAdminSettings();
 
   if (isLoading) {
-    return <WebLoading fullscreen={false} label="Loading WF1 prompt..." />;
+    return <WebLoading fullscreen={false} label="Loading prompt..." />;
   }
 
-  const item = settings.find((row) => row.key === WF1_BASE_PROMPT_KEY) as AdminSettingItem | undefined;
+  const item = settings.find((row) => row.key === settingKey) as AdminSettingItem | undefined;
 
   return (
-    <WebCard padding="md">
-      <Text className="font-serif text-title-sm text-app-ink">WF1 base prompt (global)</Text>
-      <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-        A single style/quality preamble prepended to every WF1 create prompt, regardless of art style.
-      </Text>
-      {error ? <Text className="mt-2 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
-      <View className="mt-4">
-        {item ? (
-          <SettingRow item={item} onReveal={reveal} onSave={save} />
-        ) : (
-          <Text className="text-body-sm text-app-muted">WF1 base prompt setting is not registered.</Text>
-        )}
-      </View>
-    </WebCard>
+    <AdminPanel>
+      <AdminPanelHeader error={error} subtitle={description} title={title} />
+      {item ? (
+        <SettingRow item={item} onReveal={reveal} onSave={save} />
+      ) : (
+        <Text className="text-body-sm text-app-muted">{missingLabel}</Text>
+      )}
+    </AdminPanel>
   );
 }

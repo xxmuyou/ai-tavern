@@ -19,9 +19,14 @@ export const PRICING: Record<string, Price> = {
   "anthropic:claude-haiku-4-5": PER_TOKEN({ input: 1.0, output: 5.0 }),
   "cloudflare:@cf/meta/llama-3.1-8b-instruct": PER_TOKEN({ input: 0.05, output: 0.05 }),
   "deepseek:deepseek-chat": PER_TOKEN({ input: 0.14, output: 0.28 }),
+  "deepseek:deepseek-reasoner": PER_TOKEN({ input: 0.55, output: 2.19 }),
   "doubao:doubao-1.5-lite-32k": PER_TOKEN({ input: 0.04, output: 0.08 }),
   "minimax:MiniMax-M3": PER_TOKEN({ input: 0.3, output: 1.2 }),
   "openai:gpt-4o-mini": PER_TOKEN({ input: 0.15, output: 0.6 }),
+  "openai:gpt-4o": PER_TOKEN({ input: 2.5, output: 10.0 }),
+  // Other doubao / minimax / gpt-5-mini variants intentionally omitted: prices
+  // unverified, so estimateCost returns 0 rather than a wrong figure. Add here
+  // once confirmed.
 };
 
 export function estimateCost(provider: LLMProvider, model: string, usage: LLMUsage): number {

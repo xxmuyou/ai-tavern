@@ -13,15 +13,16 @@ import type {
   LlmUsageWindow,
 } from '@/api/types';
 import { WebButton, WebLoading } from '@/components/web/ui';
-import { LLM_PROVIDERS } from '@/constants/llm';
+import { DEFAULT_LLM_MODELS, LLM_PROVIDERS } from '@/constants/llm';
 import { useAdminLlm } from '@/hooks/use-admin-llm';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 import { SettingRow } from './SettingsSection';
 
 const INPUT_CLASS =
-  'min-h-12 rounded-lg border border-app-line bg-app-surface px-4 text-base text-app-ink';
+  'min-h-9 rounded-lg border border-app-line bg-app-surface px-3 text-sm text-app-ink';
 
 const USAGE_WINDOWS: LlmUsageWindow[] = ['today', '7d', '30d'];
 const LLM_SECRET_KEYS: Partial<Record<LlmProvider, string>> = {
@@ -33,13 +34,6 @@ const LLM_SECRET_KEYS: Partial<Record<LlmProvider, string>> = {
 
 // Providers we actually have a registered API key for (the "integrated" set).
 const INTEGRATED_LLM_PROVIDERS = Object.keys(LLM_SECRET_KEYS) as LlmProvider[];
-
-const DEFAULT_MODELS: Partial<Record<LlmProvider, string[]>> = {
-  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-  openai: ['gpt-4o-mini', 'gpt-4o', 'gpt-5-mini'],
-  doubao: ['doubao-1.5-lite-32k'],
-  minimax: ['MiniMax-M3'],
-};
 
 export function LlmSection() {
   const {
@@ -72,14 +66,14 @@ export function LlmSection() {
   }
 
   return (
-    <View className="gap-4">
-      <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
-        <Text className="text-lg font-semibold text-app-ink">Companion chat models</Text>
-        <Text className="mt-1 text-sm leading-6 text-app-muted">
-          Manage model routing used by companion conversations and related LLM tasks. Provider keys are managed in environment secrets.
-        </Text>
-        {settingsError ? <Text className="mt-2 text-sm font-semibold text-rose-deep">{settingsError}</Text> : null}
-      </View>
+    <View className="gap-3">
+      <AdminPanel>
+        <AdminPanelHeader
+          error={settingsError}
+          subtitle="Model routing for companion conversations and related LLM tasks. Provider keys live in environment secrets."
+          title="Companion chat models"
+        />
+      </AdminPanel>
       <ProviderPanel
         onReveal={reveal}
         onSave={save}
@@ -142,25 +136,23 @@ function ProviderPanel({
   const providerTasks = tasks.filter((task) => task.provider === selected);
 
   return (
-    <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
-      <Text className="text-lg font-semibold text-app-ink">Provider</Text>
-      <Text className="mt-1 text-sm leading-6 text-app-muted">
-        Pick a provider to check its key status, see its integrated models, and route tasks to it.
-      </Text>
+    <AdminPanel>
+      <AdminPanelHeader
+        subtitle="Pick a provider to check its key status, see its integrated models, and route tasks to it."
+        title="Provider"
+      />
 
-      <View className="mt-4">
-        <AdminDropdown
-          labelForValue={(value) => value ?? 'Select provider'}
-          onChange={(value) => {
-            setSelected(value ?? selected);
-            setEditingTask(null);
-          }}
-          options={providers.map((provider) => ({ label: provider, value: provider }))}
-          value={selected}
-        />
-      </View>
+      <AdminDropdown
+        labelForValue={(value) => value ?? 'Select provider'}
+        onChange={(value) => {
+          setSelected(value ?? selected);
+          setEditingTask(null);
+        }}
+        options={providers.map((provider) => ({ label: provider, value: provider }))}
+        value={selected}
+      />
 
-      <View className="mt-4 gap-4">
+      <View className="gap-4">
         <View className="gap-1.5">
           <Text className="text-xs font-semibold uppercase text-app-muted">API key status</Text>
           {secretItem ? (
@@ -214,17 +206,17 @@ function ProviderPanel({
           )}
         </View>
       </View>
-    </View>
+    </AdminPanel>
   );
 }
 
 function ConfigRow({ onEdit, row }: { onEdit: () => void; row: LlmConfigItem }) {
   return (
-    <View className="rounded-xl border border-app-line bg-app-sunken/60 p-4">
+    <View className="rounded-lg border border-app-line bg-app-sunken/60 p-3">
       <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
-          <Text className="text-base font-semibold text-app-ink">{row.task}</Text>
-          <Text className="mt-1 text-sm text-app-muted">
+          <Text className="text-sm font-semibold text-app-ink">{row.task}</Text>
+          <Text className="mt-0.5 text-xs text-app-muted">
             {row.provider} · {row.model}
           </Text>
           {row.fallback_provider ? (
@@ -236,8 +228,8 @@ function ConfigRow({ onEdit, row }: { onEdit: () => void; row: LlmConfigItem }) 
             <Text className="mt-0.5 text-xs text-app-muted">updated by {row.updated_by}</Text>
           ) : null}
         </View>
-        <View className="w-24">
-          <WebButton label="Edit" onPress={onEdit} variant="secondary" />
+        <View className="w-20">
+          <WebButton label="Edit" onPress={onEdit} size="sm" variant="secondary" />
         </View>
       </View>
     </View>
@@ -273,8 +265,8 @@ function ConfigEditor({
   }
 
   return (
-    <View className="rounded-xl border border-rose bg-rose-soft p-4">
-      <Text className="text-base font-semibold text-app-ink">{row.task}</Text>
+    <View className="rounded-lg border border-rose bg-rose-soft p-3">
+      <Text className="text-sm font-semibold text-app-ink">{row.task}</Text>
       <View className="mt-3 gap-3">
         <Field label="Provider">
           <ProviderPicker onChange={(p) => setProvider(p ?? provider)} value={provider} />
@@ -296,10 +288,10 @@ function ConfigEditor({
         ) : null}
         <View className="flex-row gap-3">
           <View className="flex-1">
-            <WebButton label="Cancel" onPress={onCancel} variant="secondary" />
+            <WebButton label="Cancel" onPress={onCancel} size="sm" variant="secondary" />
           </View>
           <View className="flex-1">
-            <WebButton isLoading={isSaving} label="Save" onPress={handleSave} />
+            <WebButton isLoading={isSaving} label="Save" onPress={handleSave} size="sm" />
           </View>
         </View>
       </View>
@@ -342,23 +334,19 @@ function TestPanel({
   }
 
   return (
-    <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
-      <Text className="text-lg font-semibold text-app-ink">Test call</Text>
-      <Text className="mt-1 text-sm leading-6 text-app-muted">
-        Sends a one-off prompt. Leave the override as Default to use the task&apos;s configured provider.
-      </Text>
-      <View className="mt-4 gap-3">
+    <AdminPanel>
+      <AdminPanelHeader
+        subtitle="Sends a one-off prompt. Leave the override as Default to use the task's configured provider."
+        title="Test call"
+      />
+      <View className="gap-3">
         <Field label="Task">
-          <View className="flex-row flex-wrap gap-2">
-            {tasks.map((row) => (
-              <Chip
-                key={row.task}
-                active={activeTask === row.task}
-                label={row.task}
-                onPress={() => setTask(row.task)}
-              />
-            ))}
-          </View>
+          <AdminDropdown
+            labelForValue={(value) => value ?? 'Select task'}
+            onChange={(value) => setTask(value)}
+            options={tasks.map((row) => ({ label: row.task, value: row.task }))}
+            value={activeTask}
+          />
         </Field>
         <Field label="Prompt">
           <TextInput
@@ -367,7 +355,7 @@ function TestPanel({
             placeholder="Say hello"
             placeholderTextColor="#8B949E"
             value={prompt}
-            className="min-h-24 rounded-lg border border-app-line bg-app-surface px-4 py-3 text-base text-app-ink"
+            className="min-h-20 rounded-lg border border-app-line bg-app-surface px-3 py-2 text-sm text-app-ink"
           />
         </Field>
         <Field label="Override provider (optional)">
@@ -382,11 +370,11 @@ function TestPanel({
             />
           </Field>
         ) : null}
-        <WebButton disabled={!activeTask} isLoading={isTesting} label="Run test" onPress={handleRun} />
+        <WebButton disabled={!activeTask} isLoading={isTesting} label="Run test" onPress={handleRun} size="sm" />
       </View>
 
       {result ? <TestResult result={result} /> : null}
-    </View>
+    </AdminPanel>
   );
 }
 
@@ -430,9 +418,9 @@ function UsagePanel({
   usageWindow: LlmUsageWindow;
 }) {
   return (
-    <View className="rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
-      <Text className="text-lg font-semibold text-app-ink">Usage</Text>
-      <View className="mt-3 flex-row gap-2">
+    <AdminPanel>
+      <AdminPanelHeader title="Usage" />
+      <View className="flex-row gap-2">
         {USAGE_WINDOWS.map((window) => (
           <Chip
             key={window}
@@ -444,9 +432,9 @@ function UsagePanel({
       </View>
 
       {isLoading || !usage ? (
-        <Text className="mt-4 text-sm text-app-muted">Loading usage...</Text>
+        <Text className="text-sm text-app-muted">Loading usage...</Text>
       ) : (
-        <View className="mt-4 gap-4">
+        <View className="gap-4">
           <TotalsRow totals={usage.totals} />
           <View className="gap-2">
             <Text className="text-sm font-semibold text-app-ink">By task · provider</Text>
@@ -458,7 +446,7 @@ function UsagePanel({
           </View>
         </View>
       )}
-    </View>
+    </AdminPanel>
   );
 }
 
@@ -595,7 +583,7 @@ function ModelPicker({
 }
 
 function buildProviderModels(tasks: LlmConfigItem[]): Record<LlmProvider, string[]> {
-  const out = Object.fromEntries(LLM_PROVIDERS.map((provider) => [provider, [...(DEFAULT_MODELS[provider] ?? [])]])) as Record<
+  const out = Object.fromEntries(LLM_PROVIDERS.map((provider) => [provider, [...(DEFAULT_LLM_MODELS[provider] ?? [])]])) as Record<
     LlmProvider,
     string[]
   >;

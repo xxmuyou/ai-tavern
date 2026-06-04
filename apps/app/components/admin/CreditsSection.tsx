@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { WebButton, WebCard, WebInput, WebLoading, WebStat, WebTag, WebTimeline, type WebTimelineEntry } from '@/components/web/ui';
+import { WebButton, WebInput, WebLoading, WebStat, WebTag, WebTimeline, type WebTimelineEntry } from '@/components/web/ui';
 import { useAdminCredits } from '@/hooks/use-admin-credits';
+
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 
 export function CreditsSection() {
   const {
@@ -30,13 +32,10 @@ export function CreditsSection() {
   }
 
   return (
-    <View className="gap-4">
-      <WebCard padding="md">
-        <Text className="font-serif text-title text-app-ink">Find a user</Text>
-        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-          Search by email (exact or prefix match).
-        </Text>
-        <View className="mt-4 flex-row gap-3">
+    <View className="gap-3">
+      <AdminPanel>
+        <AdminPanelHeader subtitle="Search by email (exact or prefix match)." title="Find a user" />
+        <View className="flex-row gap-3">
           <View className="flex-1">
             <WebInput
               autoCapitalize="none"
@@ -50,16 +49,16 @@ export function CreditsSection() {
             />
           </View>
           <View className="justify-end">
-            <WebButton isLoading={isSearching} label="Search" onPress={() => void search(query)} />
+            <WebButton isLoading={isSearching} label="Search" onPress={() => void search(query)} size="sm" />
           </View>
         </View>
 
         {hasSearched && results.length === 0 ? (
-          <Text className="mt-4 text-body-sm text-app-muted">No users matched.</Text>
+          <Text className="text-body-sm text-app-muted">No users matched.</Text>
         ) : null}
 
         {results.length > 0 ? (
-          <View className="mt-4 gap-2">
+          <View className="gap-2">
             {results.map((user) => {
               const isSelected = selectedUser?.user_id === user.user_id;
               return (
@@ -82,18 +81,16 @@ export function CreditsSection() {
             })}
           </View>
         ) : null}
-      </WebCard>
+      </AdminPanel>
 
       {selectedUser ? (
-        <WebCard padding="md">
-          <Text numberOfLines={1} className="font-serif text-title text-app-ink">
-            {selectedUser.email}
-          </Text>
+        <AdminPanel>
+          <AdminPanelHeader title={selectedUser.email} />
 
           {isLoadingDetail || !detail ? (
             <WebLoading fullscreen={false} label="Loading credits..." />
           ) : (
-            <View className="mt-4 gap-5">
+            <View className="gap-5">
               <View className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <WebStat eyebrow="Available" value={String(detail.available_credits)} />
                 <WebStat eyebrow="Reserved" value={String(detail.reserved_credits)} />
@@ -116,7 +113,7 @@ export function CreditsSection() {
                   value={reason}
                 />
                 <View className="self-start">
-                  <WebButton isLoading={isAdjusting} label="Add credits" onPress={handleAdjust} />
+                  <WebButton isLoading={isAdjusting} label="Add credits" onPress={handleAdjust} size="sm" />
                 </View>
               </View>
 
@@ -134,7 +131,7 @@ export function CreditsSection() {
               </View>
             </View>
           )}
-        </WebCard>
+        </AdminPanel>
       ) : null}
     </View>
   );

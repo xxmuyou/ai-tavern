@@ -12,6 +12,7 @@ import {
   type ImageGenJobRow,
   type ImageGenJobStatus,
 } from "./base-art";
+import { resolveImageGenConfig } from "../settings/store";
 
 /**
  * Chat moment image pipeline (spec-027).
@@ -322,9 +323,10 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
     // fall back to txt2img (the provider routes create+source_art_url to img2img).
     const moment = await loadMomentByJob(env, job.id);
     const sourceArtUrl = moment ? await loadCompanionArtUrl(env, moment.companion_id) : null;
+    const basePrompt = (await resolveImageGenConfig(env)).wfMomentBasePrompt?.trim();
     const request: ImageGenRequest = {
       mode: "create",
-      prompt: job.prompt,
+      prompt: basePrompt ? `${basePrompt}\n\n${job.prompt}` : job.prompt,
       workflow_key: job.workflow_key ?? MOMENT_WORKFLOW_KEY,
       ...(sourceArtUrl ? { source_art_url: sourceArtUrl } : {}),
     };

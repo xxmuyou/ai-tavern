@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
-import { WebButton, WebCard, WebLoading } from '@/components/web/ui';
+import { WebButton, WebLoading } from '@/components/web/ui';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 import { ImageGenJobsSection } from './ImageGenJobsSection';
 import { ImageModelsSection } from './ImageModelsSection';
 import { SettingRow, SourceTag } from './SettingsSection';
@@ -56,24 +57,20 @@ export function PortraitGenerationSection() {
   const workflow = WORKFLOWS.find((w) => w.id === workflowId) ?? WORKFLOWS[0];
 
   return (
-    <View className="gap-4">
-      <WebCard padding="md">
-        <Text className="font-serif text-title text-app-ink">Portrait generation</Text>
-        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-          Pick a workflow to edit. WF1 (create), WF2 (variation), and WF_MOMENT (chat scene moment)
-          each choose their own engine and switch independently. Checkpoints are managed per workflow
-          in its model catalog.
-        </Text>
-        {error ? <Text className="mt-2 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
-        <View className="mt-4">
-          <AdminDropdown
-            labelForValue={(value) => WORKFLOWS.find((w) => w.id === value)?.label ?? WORKFLOWS[0].label}
-            onChange={(value) => setWorkflowId((value as WorkflowId) ?? workflowId)}
-            options={WORKFLOWS.map((w) => ({ label: w.label, value: w.id as string }))}
-            value={workflowId}
-          />
-        </View>
-      </WebCard>
+    <View className="gap-3">
+      <AdminPanel>
+        <AdminPanelHeader
+          error={error}
+          subtitle="Pick a workflow to edit. WF1 (create), WF2 (variation), and WF_MOMENT (chat scene moment) each choose their own engine independently. Checkpoints are managed per workflow."
+          title="Portrait generation"
+        />
+        <AdminDropdown
+          labelForValue={(value) => WORKFLOWS.find((w) => w.id === value)?.label ?? WORKFLOWS[0].label}
+          onChange={(value) => setWorkflowId((value as WorkflowId) ?? workflowId)}
+          options={WORKFLOWS.map((w) => ({ label: w.label, value: w.id as string }))}
+          value={workflowId}
+        />
+      </AdminPanel>
 
       <WorkflowPanel
         byKey={byKey}
@@ -123,13 +120,11 @@ function WorkflowPanel({
       .map((item) => <SettingRow key={item.key} item={item} onReveal={onReveal} onSave={onSave} />);
 
   return (
-    <WebCard className="gap-4" padding="md">
-      <View>
-        <Text className="font-serif text-title-sm text-app-ink">{workflow.label}</Text>
-        <Text className="mt-1 text-caption text-app-muted">
-          Empty falls back to the default provider ({defaultProvider}).
-        </Text>
-      </View>
+    <AdminPanel className="gap-4">
+      <AdminPanelHeader
+        subtitle={`Empty falls back to the default provider (${defaultProvider}).`}
+        title={workflow.label}
+      />
 
       {providerSetting ? (
         <View className="gap-3">
@@ -173,6 +168,6 @@ function WorkflowPanel({
           Mock provider returns placeholder/passthrough images — no extra configuration needed.
         </Text>
       )}
-    </WebCard>
+    </AdminPanel>
   );
 }
