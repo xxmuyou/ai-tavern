@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { consumePendingAuthRedirect } from '@/components/web/WebAuthControls';
 import { AUTH_LOGIN_ROUTE, SCENES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
@@ -32,7 +33,7 @@ export default function AuthSuccessScreen() {
     if (hash.includes('token=')) {
       const session = acceptSessionFragment(hash);
       if (session) {
-        router.replace(SCENES_ROUTE);
+        router.replace(consumePendingAuthRedirect() ?? SCENES_ROUTE);
         return;
       }
       setError('The sign-in information is invalid. Please sign in again.');

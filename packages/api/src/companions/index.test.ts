@@ -55,7 +55,7 @@ type Fixtures = {
 };
 
 describe("companions module", () => {
-  it("requires authentication for every endpoint", async () => {
+  it("requires authentication for private companion endpoints", async () => {
     const env = createEnv({ companions: [], relationships: [] });
     await expect(
       handleCompanionsRequest(new Request("http://localhost/companions"), env, "/companions"),
@@ -63,6 +63,59 @@ describe("companions module", () => {
     await expect(
       handleCompanionsRequest(new Request("http://localhost/companions/x"), env, "/companions/x"),
     ).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("lists public discovery companions without authentication", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", { tags: JSON.stringify(["style:anime"]) }),
+        userCompanion("published", "user-2", "male", { is_public: 1, tags: JSON.stringify(["style:realistic"]) }),
+        userCompanion("private-to-other", "user-2", "female", { tags: JSON.stringify(["style:anime"]) }),
+      ],
+      relationships: [],
+      users: [
+        { email: "player@example.com", id: "user-1" },
+        { email: "other@example.com", id: "user-2" },
+      ],
+    });
+
+    const response = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public"),
+      env,
+      "/companions/public",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { items: Array<{ id: string }> };
+    expect(body.items.map((item) => item.id).sort()).toEqual(["maya", "published"]);
+  });
+
+  it("filters public discovery by gender and style bucket", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", { tags: JSON.stringify(["anime_jp"]) }),
+        officialCompanion("lila", "female", { tags: JSON.stringify(["anime,kr"]) }),
+        officialCompanion("iris", "female", { tags: JSON.stringify(["style:realistic"]) }),
+        officialCompanion("ryan", "male", { tags: JSON.stringify(["style:anime"]) }),
+      ],
+      relationships: [],
+    });
+
+    const anime = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public?gender=female&art_style=anime"),
+      env,
+      "/companions/public",
+    );
+    const animeBody = (await anime?.json()) as { items: Array<{ id: string }> };
+    expect(animeBody.items.map((item) => item.id)).toEqual(["maya", "lila"]);
+
+    const realistic = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public?gender=female&art_style=realistic"),
+      env,
+      "/companions/public",
+    );
+    const realisticBody = (await realistic?.json()) as { items: Array<{ id: string }> };
+    expect(realisticBody.items.map((item) => item.id)).toEqual(["iris"]);
   });
 
   it("lists official + own, hides other users' creations", async () => {
@@ -694,7 +747,11 @@ describe("companions module", () => {
 // Fixtures
 // -----------------------------------------------------------------------------
 
-function officialCompanion(id: string, gender: "male" | "female" = "female"): CompanionRow {
+function officialCompanion(
+  id: string,
+  gender: "male" | "female" = "female",
+  overrides: Partial<CompanionRow> = {},
+): CompanionRow {
   return {
     appearance: null,
     art_emotions: null,
@@ -721,6 +778,7 @@ function officialCompanion(id: string, gender: "male" | "female" = "female"): Co
     speech_style: null,
     updated_at: 1747000000000,
     want: null,
+    ...overrides,
   };
 }
 
@@ -859,6 +917,32 @@ function queryAll<T>(
   companions: Map<string, CompanionRow>,
   relationships: RelationshipFixture[],
 ): T[] {
+  if (sql.includes("FROM companions c") && !sql.includes("LEFT JOIN relationships r")) {
+    let valueIndex = 0;
+    let rows = [...companions.values()].filter((c) => (
+      c.is_active === 1 && (c.source === "official" || c.is_public === 1)
+    ));
+
+    if (sql.includes("c.gender = ?")) {
+      const gender = values[valueIndex++] as string;
+      rows = rows.filter((c) => c.gender === gender);
+    }
+    if (sql.includes("(c.name LIKE ? OR c.tags LIKE ?)")) {
+      const query = String(values[valueIndex++] ?? "").replace(/%/g, "").toLowerCase();
+      valueIndex += 1;
+      rows = rows.filter((c) => c.name.toLowerCase().includes(query) || (c.tags ?? "").toLowerCase().includes(query));
+    }
+    if (sql.includes("c.play_count DESC")) {
+      rows.sort((a, b) => b.play_count - a.play_count || a.created_at - b.created_at);
+    } else if (sql.includes("c.created_at DESC")) {
+      rows.sort((a, b) => b.created_at - a.created_at);
+    } else {
+      rows.sort((a, b) => a.created_at - b.created_at);
+    }
+
+    return rows as unknown as T[];
+  }
+
   if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN relationships r")) {
     // The two LEFT JOINs each bind user.id, so positional binds are:
     //   values[0] = user.id (relationships join)

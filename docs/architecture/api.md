@@ -240,6 +240,37 @@ Query: ?token=...
 }
 ```
 
+### `GET /companions/public`
+
+公开 companion discovery 列表，不要求登录。只返回 active official companions 与 active published public companions；不返回 relationship state 或 owner-only persona 字段。
+
+```json
+// Query:
+//   ?gender=male|female
+//   &art_style=anime|realistic
+//   &q=<name-or-tag>
+//   &sort=popular|recent
+// Response 200
+{
+  "items": [
+    {
+      "id": "...",
+      "source": "official",
+      "is_public": false,
+      "name": "Maya",
+      "gender": "female",
+      "relationship_role": "crush",
+      "art_url": "portraits/maya/neutral.webp",
+      "preferred_scenes": ["pier_coffee_shop"],
+      "tags": ["style:anime"],
+      "play_count": 0
+    }
+  ]
+}
+```
+
+`art_style=anime` 是用户侧 bucket，匹配 `style:anime`、`anime`、`anime_jp`、`anime_kr`、`anime,jp`、`anime,kr`。`art_style=realistic` 匹配 `style:realistic`、`realistic`。Admin/model catalog 可继续保留 `Anime JP` / `Anime KR` 名称区分。
+
 ### `GET /companions/{id}`
 
 ```json
