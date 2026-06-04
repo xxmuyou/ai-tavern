@@ -37,6 +37,9 @@ import type {
   ImageModelsResponse,
   ImageWorkflowInput,
   MomentImageJobResponse,
+  OutfitImageGenerateInput,
+  OutfitImageJobResponse,
+  OutfitRecommendationsResponse,
   PersonaInput,
   PersonaResponse,
   PersonasResponse,
@@ -683,6 +686,32 @@ export async function generateMomentImage(messageId: string): Promise<MomentImag
 export async function getMomentImageJob(jobId: string): Promise<MomentImageJobResponse> {
   return requestJson<MomentImageJobResponse>(
     `/moment-images/jobs/${encodeURIComponent(jobId)}`,
+  );
+}
+
+export async function getOutfitRecommendations(messageId: string): Promise<OutfitRecommendationsResponse> {
+  return requestJson<OutfitRecommendationsResponse>(
+    `/chat/messages/${encodeURIComponent(messageId)}/outfit-image/recommendations`,
+  );
+}
+
+export async function generateOutfitImage(
+  messageId: string,
+  input: OutfitImageGenerateInput,
+): Promise<OutfitImageJobResponse> {
+  return requestJson<OutfitImageJobResponse>(
+    `/chat/messages/${encodeURIComponent(messageId)}/outfit-image/generate`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function getOutfitImageJob(jobId: string): Promise<OutfitImageJobResponse> {
+  return requestJson<OutfitImageJobResponse>(
+    `/outfit-images/jobs/${encodeURIComponent(jobId)}`,
   );
 }
 

@@ -25,6 +25,13 @@ type MomentImageRow = {
   output_key: string | null;
 };
 
+type OutfitImageRow = {
+  message_id: string;
+  job_id: string;
+  status: string;
+  output_key: string | null;
+};
+
 export async function handleGetHistory(
   env: Env,
   user: UserRecord,
@@ -52,6 +59,7 @@ export async function handleGetHistory(
             emotion: null,
             id: seeded.message_id,
             moment_image: null,
+            outfit_image: null,
             role: "companion",
             scene_id: null,
             selected_variant: null,
@@ -108,6 +116,11 @@ export async function handleGetHistory(
     user.id,
     page.filter((r) => r.role === "companion").map((r) => r.id),
   );
+  const outfits = await loadOutfitImages(
+    env,
+    user.id,
+    page.filter((r) => r.role === "companion").map((r) => r.id),
+  );
 
   const messages = page
     .slice()
@@ -120,6 +133,7 @@ export async function handleGetHistory(
         emotion: row.emotion,
         id: row.id,
         moment_image: row.role === "companion" ? moments.get(row.id) ?? null : null,
+        outfit_image: row.role === "companion" ? outfits.get(row.id) ?? null : null,
         role: row.role,
         scene_id: row.scene_id ?? null,
         // Only expose variant state when there is more than one wording to swipe.
@@ -149,6 +163,20 @@ export async function handleDeleteHistory(
   const thread = await loadThread(env, user.id, companionId);
   if (!thread) {
     return new Response(null, { status: 204 });
+  }
+
+  const { results } = await env.DB.prepare(`SELECT id FROM messages WHERE thread_id = ?`)
+    .bind(thread.id)
+    .all<{ id: string }>();
+  const ids = (results ?? []).map((row) => row.id);
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => "?").join(", ");
+    await env.DB.prepare(`DELETE FROM story_moment_images WHERE message_id IN (${placeholders})`)
+      .bind(...ids)
+      .run();
+    await env.DB.prepare(`DELETE FROM chat_outfit_images WHERE message_id IN (${placeholders})`)
+      .bind(...ids)
+      .run();
   }
 
   await env.DB.prepare(`DELETE FROM messages WHERE thread_id = ?`).bind(thread.id).run();
@@ -187,6 +215,7 @@ async function seedGreeting(
 }
 
 type MomentImagePublic = { job_id: string; status: string; output_key: string | null };
+type OutfitImagePublic = { job_id: string; status: string; output_key: string | null };
 
 async function loadMomentImages(
   env: Env,
@@ -204,6 +233,33 @@ async function loadMomentImages(
   )
     .bind(userId, ...messageIds)
     .all<MomentImageRow>();
+
+  for (const row of results ?? []) {
+    map.set(row.message_id, {
+      job_id: row.job_id,
+      output_key: row.output_key ?? null,
+      status: row.status,
+    });
+  }
+  return map;
+}
+
+async function loadOutfitImages(
+  env: Env,
+  userId: string,
+  messageIds: string[],
+): Promise<Map<string, OutfitImagePublic>> {
+  const map = new Map<string, OutfitImagePublic>();
+  if (messageIds.length === 0) return map;
+
+  const placeholders = messageIds.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(
+    `SELECT message_id, job_id, status, output_key
+     FROM chat_outfit_images
+     WHERE user_id = ? AND message_id IN (${placeholders})`,
+  )
+    .bind(userId, ...messageIds)
+    .all<OutfitImageRow>();
 
   for (const row of results ?? []) {
     map.set(row.message_id, {

@@ -4,6 +4,7 @@ import type { SummaryJobPayload } from "./chat/summary-queue";
 import { isArtJobPayload, processArtJob } from "./companions/art-consumer";
 import { isBaseArtJobPayload, loadBaseArtJob, processBaseArtJob } from "./image-gen/base-art";
 import { TASK_MOMENT_IMAGE, processMomentImageJob } from "./image-gen/moment-image";
+import { TASK_OUTFIT_IMAGE, processOutfitImageJob } from "./image-gen/outfit-image";
 
 function isSummaryPayload(value: unknown): value is SummaryJobPayload {
   if (!value || typeof value !== "object") return false;
@@ -78,6 +79,8 @@ export async function dispatchQueueBatch(
         const job = await loadBaseArtJob(env, body.job_id);
         if (job?.task === TASK_MOMENT_IMAGE) {
           await processMomentImageJob(env, body.job_id);
+        } else if (job?.task === TASK_OUTFIT_IMAGE) {
+          await processOutfitImageJob(env, body.job_id);
         } else {
           await processBaseArtJob(env, body.job_id);
         }

@@ -284,6 +284,9 @@ async function truncateAfter(
   await env.DB.prepare(`DELETE FROM story_moment_images WHERE message_id IN (${placeholders})`)
     .bind(...ids)
     .run();
+  await env.DB.prepare(`DELETE FROM chat_outfit_images WHERE message_id IN (${placeholders})`)
+    .bind(...ids)
+    .run();
   await env.DB.prepare(`DELETE FROM messages WHERE thread_id = ? AND created_at > ?`)
     .bind(threadId, afterTs)
     .run();

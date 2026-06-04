@@ -59,6 +59,18 @@
       "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 30
+    },
+    "wf_outfit": {
+      "label": "WF_OUTFIT - chat outfit image (variation)",
+      "mode": "variation",
+      "workflowId": "",
+      "loadImageNodeId": "",
+      "promptNodeId": "",
+      "promptFieldName": "prompt",
+      "negativePromptNodeId": "",
+      "negativePromptFieldName": "prompt",
+      "isActive": true,
+      "sortOrder": 40
     }
   }
 }

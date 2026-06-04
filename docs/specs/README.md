@@ -55,6 +55,7 @@
 | 027 | [Chat Moment Images（场景聊天瞬间图）](./spec-027-chat-moment-images.md) | 后端+前端+image-gen | 006, 007, 020, 022, 024, 026 | 3-5 天 | 🟡 in-progress（最新 companion 回复旁小相机按钮；根据聊天/行为/场景/时间/人物/状态生成完整场景图） |
 | 028 | [剧情引导与行动按钮重构（Web 优先）](./spec-028-guided-story-actions-ui.md) | 前端体验/UI | 024, 025, 026 | 2-3 天 | 🟡 in-progress（统一剧情拍/关系目标/日常状态的下一步引导，重排 Today/Scene/Chat 行动按钮） |
 | 029 | [User-created Story Arcs（自建角色剧情线与剧情包）](./spec-029-user-created-story-arcs.md) | 后端+前端+LLM+内容 | 002, 010, 019, 021, 026, 028 | 5-8 天 | 🟡 in-progress（自建角色剧情包、轻量编辑、Pro-only AI draft、手动完成节点、公开角色可选共享已接线；待端到端 QA） |
+| 030 | [Chat Outfit Images（聊天换衣服图）](./spec-030-chat-outfit-images.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 2-4 天 | 📝 draft（companion 消息下换衣服；推荐穿搭/自定义 prompt；一次性聊天图片，不改角色长期图片） |
 
 **估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
 
@@ -75,6 +76,7 @@
 - **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，3 个 workflow create/variation/edit + 3 风格 checkpoint 参数）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
 - **I 路径（管理员后端）：** 011（LLM 端点，已 done）+ 023（积分查看/调整），管理员后端能力统一沿用 `requireAdminUser` 与 `admin/` 分派模式，UI 归 spec-018
 - **J 路径（自建角色剧情）：** 019 → 026 → 028 → 029。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 让自建角色拥有剧情包、用户自写 arc、AI 辅助草稿与手动完成机制。自建角色不再按“纯 sandbox + 数值”作为长期路线。
+- **K 路径（聊天内图片动作）：** 027 → 030。spec-027 先跑通聊天内异步图片生成、job 轮询与回看模式；spec-030 在同一模式上增加换衣服图，复用 generic image jobs 与 RunningHub workflow 配置。
 
 ---
 

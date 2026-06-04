@@ -190,6 +190,10 @@ for (const key of Object.keys(workflowsRaw)) {
   const checkpointFieldName =
     readString(`workflows.${key}.checkpointFieldName`, entry.checkpointFieldName) || "ckpt_name";
   const loadImageNodeId = readString(`workflows.${key}.loadImageNodeId`, entry.loadImageNodeId);
+  const negativePromptNodeId =
+    readString(`workflows.${key}.negativePromptNodeId`, entry.negativePromptNodeId);
+  const negativePromptFieldName =
+    readString(`workflows.${key}.negativePromptFieldName`, entry.negativePromptFieldName) || "prompt";
   const label = readString(`workflows.${key}.label`, entry.label) || key;
   const modelIds = Array.isArray(entry.modelIds)
     ? entry.modelIds.map((id) => readString(`workflows.${key}.modelIds[]`, id)).filter(Boolean)
@@ -214,6 +218,8 @@ for (const key of Object.keys(workflowsRaw)) {
     ...(checkpointNodeId ? { checkpointNodeId } : {}),
     ...(checkpointFieldName ? { checkpointFieldName } : {}),
     ...(loadImageNodeId ? { loadImageNodeId } : {}),
+    ...(negativePromptNodeId ? { negativePromptNodeId } : {}),
+    ...(negativePromptFieldName ? { negativePromptFieldName } : {}),
     ...(modelIds.length ? { modelIds } : {}),
   };
   workflowRows.push({
@@ -224,6 +230,8 @@ for (const key of Object.keys(workflowsRaw)) {
     label,
     loadImageNodeId,
     mode,
+    negativePromptFieldName,
+    negativePromptNodeId,
     promptFieldName,
     promptNodeId,
     sortOrder: Number.isFinite(entry.sortOrder) ? Number(entry.sortOrder) : workflowRows.length + 1,
@@ -263,8 +271,8 @@ for (const checkpoint of checkpoints) {
 for (const workflow of workflowRows) {
   statements.push([
     "INSERT INTO image_workflows",
-    "  (key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, is_active, sort_order, updated_at, updated_by)",
-    `VALUES (${sqlString(workflow.key)}, ${sqlString(workflow.label)}, ${sqlString(workflow.mode)}, ${sqlString(workflow.workflowId)}, ${sqlString(workflow.promptNodeId)}, ${sqlString(workflow.promptFieldName)}, ${workflow.checkpointNodeId ? sqlString(workflow.checkpointNodeId) : "NULL"}, ${sqlString(workflow.checkpointFieldName)}, ${workflow.loadImageNodeId ? sqlString(workflow.loadImageNodeId) : "NULL"}, ${workflow.isActive ? 1 : 0}, ${workflow.sortOrder}, ${now}, NULL)`,
+    "  (key, label, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, negative_prompt_node_id, negative_prompt_field_name, is_active, sort_order, updated_at, updated_by)",
+    `VALUES (${sqlString(workflow.key)}, ${sqlString(workflow.label)}, ${sqlString(workflow.mode)}, ${sqlString(workflow.workflowId)}, ${sqlString(workflow.promptNodeId)}, ${sqlString(workflow.promptFieldName)}, ${workflow.checkpointNodeId ? sqlString(workflow.checkpointNodeId) : "NULL"}, ${sqlString(workflow.checkpointFieldName)}, ${workflow.loadImageNodeId ? sqlString(workflow.loadImageNodeId) : "NULL"}, ${workflow.negativePromptNodeId ? sqlString(workflow.negativePromptNodeId) : "NULL"}, ${sqlString(workflow.negativePromptFieldName)}, ${workflow.isActive ? 1 : 0}, ${workflow.sortOrder}, ${now}, NULL)`,
     "ON CONFLICT(key) DO UPDATE SET",
     "  label = excluded.label,",
     "  mode = excluded.mode,",
@@ -274,6 +282,8 @@ for (const workflow of workflowRows) {
     "  checkpoint_node_id = excluded.checkpoint_node_id,",
     "  checkpoint_field_name = excluded.checkpoint_field_name,",
     "  load_image_node_id = excluded.load_image_node_id,",
+    "  negative_prompt_node_id = excluded.negative_prompt_node_id,",
+    "  negative_prompt_field_name = excluded.negative_prompt_field_name,",
     "  is_active = excluded.is_active,",
     "  sort_order = excluded.sort_order,",
     "  updated_at = excluded.updated_at,",

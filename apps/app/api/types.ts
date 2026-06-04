@@ -532,6 +532,12 @@ export type ChatMomentImage = {
   output_key: string | null;
 };
 
+export type ChatOutfitImage = {
+  job_id: string;
+  status: MomentImageStatus;
+  output_key: string | null;
+};
+
 export type ChatMessage = {
   companion_id?: string;
   content: string;
@@ -539,6 +545,7 @@ export type ChatMessage = {
   emotion?: string | null;
   id: string;
   moment_image?: ChatMomentImage | null;
+  outfit_image?: ChatOutfitImage | null;
   role: 'user' | 'companion' | 'assistant';
   scene_id?: string | null;
   // Alternative wordings the user can swipe between (regenerate). Null/absent =
@@ -566,6 +573,29 @@ export type EditMessageResponse = {
 export type MomentImageJobResponse = {
   job_id: string;
   moment_id?: string;
+  status: MomentImageStatus;
+  output_key?: string;
+  error_code?: string;
+  error_message?: string;
+};
+
+export type OutfitRecommendation = {
+  id: string;
+  prompt: string;
+  title: string;
+};
+
+export type OutfitRecommendationsResponse = {
+  recommendations: OutfitRecommendation[];
+};
+
+export type OutfitImageGenerateInput =
+  | { source: 'recommended'; recommendation_id: string }
+  | { source: 'custom'; prompt: string };
+
+export type OutfitImageJobResponse = {
+  job_id: string;
+  outfit_id?: string;
   status: MomentImageStatus;
   output_key?: string;
   error_code?: string;
