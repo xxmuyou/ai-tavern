@@ -3,6 +3,7 @@ import {
   getCompanionUnlocks,
   getRelationship,
   listCompanions,
+  listPublicCompanions,
   listCompanionStoryArcs,
   listStoryArcTemplates,
 } from '@/api/companion-client';
@@ -20,6 +21,7 @@ import { useApi } from './use-api';
 
 export type CompanionSourceFilter = CompanionSource | 'all' | 'public' | 'favorites';
 export type CompanionSort = 'recent' | 'popular';
+export type CompanionDiscoveryStyle = 'anime' | 'realistic';
 
 export function useCompanions(
   source: CompanionSourceFilter,
@@ -28,6 +30,15 @@ export function useCompanions(
   return useApi<CompanionsListResponse>(
     () => listCompanions(source, { q: opts.q, sort: opts.sort }),
     [source, opts.q, opts.sort],
+  );
+}
+
+export function usePublicCompanions(
+  opts: { artStyle?: CompanionDiscoveryStyle; gender?: 'male' | 'female'; q?: string; sort?: CompanionSort } = {},
+) {
+  return useApi<CompanionsListResponse>(
+    () => listPublicCompanions(opts),
+    [opts.artStyle, opts.gender, opts.q, opts.sort],
   );
 }
 

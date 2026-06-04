@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -7,6 +8,8 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
 
 import { WebButton, WebDialog, WebInput } from './ui';
+
+const AUTH_REDIRECT_STORAGE_KEY = 'xtbit.auth.redirect';
 
 function signInErrorMessage(error: unknown): string {
   if (isApiRequestError(error) && error.code === 'api_unreachable') {
@@ -17,6 +20,7 @@ function signInErrorMessage(error: unknown): string {
 
 export function WebAuthControls() {
   const { sendMagicLink, session, signInGoogle, signOut } = useSession();
+  const params = useLocalSearchParams<{ redirect?: string }>();
   const { pushError } = useErrorBanner();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -32,8 +36,10 @@ export function WebAuthControls() {
     setIsSendingLink(true);
     setNotice(null);
     try {
+      storePendingRedirect(params.redirect);
       const response = await sendMagicLink(trimmed);
       if (response.token) {
+        clearPendingRedirect();
         setDialogOpen(false);
         return;
       }
@@ -89,7 +95,10 @@ export function WebAuthControls() {
           <WebButton
             iconLeft={<Ionicons color="#3B6EA5" name="logo-google" size={18} />}
             label="Continue with Google"
-            onPress={signInGoogle}
+            onPress={() => {
+              storePendingRedirect(params.redirect);
+              signInGoogle();
+            }}
             size="lg"
             variant="google"
           />
@@ -122,4 +131,27 @@ export function WebAuthControls() {
       </WebDialog>
     </>
   );
+}
+
+function storePendingRedirect(value: string | undefined) {
+  if (typeof window === 'undefined' || !value?.startsWith('/')) {
+    return;
+  }
+  window.localStorage.setItem(AUTH_REDIRECT_STORAGE_KEY, value);
+}
+
+function clearPendingRedirect() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.removeItem(AUTH_REDIRECT_STORAGE_KEY);
+}
+
+export function consumePendingAuthRedirect(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const value = window.localStorage.getItem(AUTH_REDIRECT_STORAGE_KEY);
+  window.localStorage.removeItem(AUTH_REDIRECT_STORAGE_KEY);
+  return value?.startsWith('/') ? value : null;
 }

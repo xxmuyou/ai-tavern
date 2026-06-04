@@ -96,6 +96,19 @@ export async function handleCompanionsRequest(
   env: Env,
   pathname: string,
 ): Promise<Response | null> {
+  if (pathname === "/companions/public") {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const url = new URL(request.url);
+    return listPublicCompanions(env, {
+      artStyle: url.searchParams.get("art_style"),
+      gender: url.searchParams.get("gender"),
+      q: url.searchParams.get("q"),
+      sort: url.searchParams.get("sort"),
+    });
+  }
+
   if (pathname === "/companions") {
     const user = await requireAuthUser(env, request);
 
@@ -252,6 +265,56 @@ export async function handleCompanionsRequest(
 // -----------------------------------------------------------------------------
 
 type ListOptions = { source: string; q: string | null; sort: string | null };
+type PublicListOptions = { artStyle: string | null; gender: string | null; q: string | null; sort: string | null };
+
+async function listPublicCompanions(env: Env, opts: PublicListOptions): Promise<Response> {
+  const conditions: string[] = ["c.is_active = 1", "(c.source = 'official' OR c.is_public = 1)"];
+  const whereBinds: unknown[] = [];
+
+  const gender = normalizeGender(opts.gender);
+  if (gender) {
+    conditions.push("c.gender = ?");
+    whereBinds.push(gender);
+  }
+
+  const query = opts.q?.trim();
+  if (query) {
+    const like = `%${query}%`;
+    conditions.push("(c.name LIKE ? OR c.tags LIKE ?)");
+    whereBinds.push(like, like);
+  }
+
+  let orderBy: string;
+  switch (opts.sort) {
+    case "popular":
+      orderBy = "c.play_count DESC, c.created_at ASC";
+      break;
+    case "recent":
+      orderBy = "c.created_at DESC";
+      break;
+    default:
+      orderBy = "c.created_at ASC";
+  }
+
+  const { results } = await env.DB.prepare(
+    `SELECT c.id, c.source, c.created_by, c.is_active, c.is_public, c.name,
+            c.appearance, c.personality, c.background, c.speech_style,
+            c.relationship_role, c.tags, c.play_count, c.preferred_scenes,
+            c.art_url, c.gender, c.initial_dims, c.created_at, c.updated_at
+     FROM companions c
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY ${orderBy}`,
+  )
+    .bind(...whereBinds)
+    .all<CompanionRow>();
+
+  const styleBucket = normalizeDiscoveryStyle(opts.artStyle);
+  const items: CompanionListItem[] = (results ?? [])
+    .map((row) => publicCompanionListItem(row))
+    .filter((item) => !styleBucket || companionMatchesDiscoveryStyle(item.tags, styleBucket));
+
+  return jsonResponse({ items });
+}
 
 async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Promise<Response> {
   const conditions: string[] = ["c.is_active = 1"];
@@ -338,6 +401,24 @@ async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Pr
   }));
 
   return jsonResponse({ items });
+}
+
+function publicCompanionListItem(row: CompanionRow): CompanionListItem {
+  return {
+    art_url: row.art_url,
+    current_level: null,
+    gender: normalizeGender(row.gender),
+    id: row.id,
+    is_favorite: false,
+    is_public: row.is_public === 1,
+    last_interaction_at: null,
+    name: row.name,
+    play_count: row.play_count,
+    preferred_scenes: parseStringArray(row.preferred_scenes),
+    relationship_role: row.relationship_role,
+    source: row.source,
+    tags: parseStringArray(row.tags),
+  };
 }
 
 async function listCompanionMomentImages(
@@ -871,6 +952,28 @@ function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
 function normalizeGender(raw: string | null | undefined): Gender | null {
   if (raw === "male" || raw === "female") return raw;
   return null;
+}
+
+type DiscoveryStyle = "anime" | "realistic";
+
+function normalizeDiscoveryStyle(raw: string | null | undefined): DiscoveryStyle | null {
+  if (raw === "anime" || raw === "realistic") return raw;
+  return null;
+}
+
+function companionMatchesDiscoveryStyle(tags: string[], style: DiscoveryStyle): boolean {
+  const normalized = new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+  if (style === "realistic") {
+    return normalized.has("style:realistic") || normalized.has("realistic");
+  }
+  return (
+    normalized.has("style:anime") ||
+    normalized.has("anime") ||
+    normalized.has("anime_jp") ||
+    normalized.has("anime_kr") ||
+    normalized.has("anime,jp") ||
+    normalized.has("anime,kr")
+  );
 }
 
 type ParsedInput<T> = { value: T } | { error: true; response: Response };

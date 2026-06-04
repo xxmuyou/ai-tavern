@@ -458,6 +458,18 @@ export async function listCompanions(
   return requestJson<CompanionsListResponse>(`/companions?${params.toString()}`);
 }
 
+export async function listPublicCompanions(
+  opts: { artStyle?: 'anime' | 'realistic'; gender?: 'male' | 'female'; q?: string; sort?: 'recent' | 'popular' } = {},
+): Promise<CompanionsListResponse> {
+  const params = new URLSearchParams();
+  if (opts.artStyle) params.set('art_style', opts.artStyle);
+  if (opts.gender) params.set('gender', opts.gender);
+  if (opts.q) params.set('q', opts.q);
+  if (opts.sort) params.set('sort', opts.sort);
+  const query = params.toString();
+  return requestJson<CompanionsListResponse>(`/companions/public${query ? `?${query}` : ''}`, undefined, { skipAuth: true });
+}
+
 export async function favoriteCompanion(
   id: string,
   favorite: boolean,

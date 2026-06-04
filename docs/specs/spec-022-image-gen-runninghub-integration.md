@@ -58,7 +58,7 @@
 
 - 在 spec-020 的 `ImageGenProvider` 抽象下实现首个真实 provider `RunningHubImageGenProvider`
 - 规划支持 **3 个 workflow（create / variation / edit）**；MVP 先支持 create + variation，edit 接口可先返回 `501 edit_not_ready`
-- 支持 **3 种风格（realistic / anime_jp / anime_kr）**；目标形态按 `style` 覆盖 checkpoint 节点的 configured fieldName（默认 `ckpt_name`），当前 create 切片也允许一风格一 workflow 的配置 map
+- checkpoint catalog 可用 `realistic`、`anime,jp`、`anime,kr` 等运营标签；用户侧 discovery bucket 只归一为 `realistic` / `anime`。后端按用户选择的 workflow-model option 覆盖 checkpoint 节点的 configured fieldName（默认 `ckpt_name`），不使用代码级三风格枚举。
 - 通过环境变量 `IMAGE_GEN_PROVIDER` 在 mock / runninghub 之间切换；本地 / CI 默认 mock，staging / production 显式配 `runninghub`
 - 通过 R2 签名 URL 把源图安全分发给 runninghub，无需公开 bucket
 - 通过 webhook 异步接收任务结果，写回 R2 和 DB；不依赖长轮询

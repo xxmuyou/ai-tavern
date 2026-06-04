@@ -152,7 +152,7 @@ if (input.art_url && !input.art_emotions) {
 
 - `art_emotions.neutral` 等于 `art_url`；`warm/playful/guarded/tense/annoyed` 留空，等异步变体生成或回退 neutral。
 - 文生图创建可自动触发后续变体生成（见 spec-020 §A / §F）；上传本地图片直接作为 neutral，不强制接 RunningHub 重画。
-- `PUT /companions/{id}`（编辑）：若更新 `art_url` 或 `art_style`，清空或标记 stale 旧的非 neutral 变体，避免新基础图 / 新风格与旧变体串味。
+- `PUT /companions/{id}`（编辑）：若更新 `art_url` 或所选 workflow-model option，清空或标记 stale 旧的非 neutral 变体，避免新基础图 / 新模型与旧变体串味。旧 `companions.art_style` 方案已废弃；用户侧 discovery 风格走 `tags`（见 spec-032），生图模型走 admin checkpoint catalog。
 
 ---
 

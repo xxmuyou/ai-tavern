@@ -105,6 +105,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 Admin 的 Portrait generation 页面分为 `Checkpoint catalog` 和 `RunningHub workflows`。先添加 checkpoint，再新增或编辑 workflow，并在 workflow 上多选可用 checkpoint。
 
+用户侧 discovery 的风格 bucket 只有 `Anime` / `Realistic`。Admin 里仍可用 `Anime JP`、`Anime KR` 作为 checkpoint label，或用 `anime,jp` / `anime,kr` 作为 checkpoint tag；这些细分只服务模型管理，都会归入用户侧 `Anime` bucket。
+
 > **关键边界：** checkpoint 文件名只在 model 上；checkpoint node fieldName 只在 workflow 上。不要把分类标签或 style 名填进 fieldName。
 
 生成时后端 [`runninghub-provider.ts`](../../packages/api/src/image-gen/runninghub-provider.ts) 会下发：
