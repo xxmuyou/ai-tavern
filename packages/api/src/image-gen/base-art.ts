@@ -296,12 +296,16 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
   try {
     const sourceArtUrl = parseFirstInputKey(job.input_keys);
     const cfg = await resolveImageGenConfig(env);
-    const basePrompt = cfg.wf1BasePrompt?.trim();
+    const workflowKey = job.workflow_key ?? "wf1";
+    // The global WF1 base prompt is a portrait style/quality preamble; only
+    // prepend it for wf1 so other workflows (e.g. wf_scene backgrounds) aren't
+    // polluted with portrait-specific styling.
+    const basePrompt = workflowKey === "wf1" ? cfg.wf1BasePrompt?.trim() : undefined;
     const request: ImageGenRequest = {
       mode: "create",
       prompt: basePrompt ? `${basePrompt}\n\n${job.prompt}` : job.prompt,
       source_art_url: sourceArtUrl ?? undefined,
-      workflow_key: job.workflow_key ?? "wf1",
+      workflow_key: workflowKey,
       ckpt_name: job.ckpt_name ?? undefined,
       checkpoint_field_name: job.checkpoint_field_name ?? undefined,
     };

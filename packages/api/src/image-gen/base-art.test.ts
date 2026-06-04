@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBaseArtJob, loadBaseArtJob, processBaseArtJob, type ImageGenJobRow } from "./base-art";
+import { mockImageGenProvider } from "./mock-provider";
 
 type Row = Record<string, unknown>;
 
@@ -179,6 +180,41 @@ describe("base-art job pipeline", () => {
     expect(job.status).toBe("succeeded");
     expect(job.output_key).toMatch(/^user-art\/usr_1\/companion-base-art\/.+\.png$/);
     expect(assets.has(job.output_key!)).toBe(true);
+  });
+
+  it("prepends the global WF1 base prompt only for wf1, not other workflows", async () => {
+    const captured: string[] = [];
+    vi.spyOn(mockImageGenProvider, "generate").mockImplementation(async (req) => {
+      captured.push(req.prompt);
+      return {
+        content_type: "image/png",
+        image_bytes: new Uint8Array([1, 2, 3]),
+        model: "spy",
+        provider: "mock",
+      };
+    });
+
+    const { env, settings } = createEnv();
+    settings.set("image_gen.wf1_base_prompt", "STYLE_PREAMBLE");
+
+    const wf1Job = await createBaseArtJob(env, {
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "wf1",
+      userId: "usr_1",
+    });
+    await processBaseArtJob(env, wf1Job);
+
+    const sceneJob = await createBaseArtJob(env, {
+      prompt: "empty seaside cafe, no people",
+      source: "text",
+      workflowKey: "wf_scene",
+      userId: "usr_1",
+    });
+    await processBaseArtJob(env, sceneJob);
+
+    expect(captured[0]).toBe("STYLE_PREAMBLE\n\na calm girl");
+    expect(captured[1]).toBe("empty seaside cafe, no people");
   });
 
   it("processBaseArtJob with runninghub stays processing with provider_task_id", async () => {
