@@ -238,6 +238,24 @@ export const SETTINGS: readonly SettingDef[] = [
       'Engine for standalone scene background images: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
   },
   {
+    key: "image_gen.wf_cutout_provider",
+    group: "image_gen",
+    label: "WF_CUTOUT (matting) provider",
+    type: "text",
+    envKey: "IMAGE_GEN_WF_CUTOUT_PROVIDER",
+    description:
+      'Engine for companion cutout/matting: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
+  },
+  {
+    key: "image_gen.wf_outfit_provider",
+    group: "image_gen",
+    label: "WF_OUTFIT (chat outfit) provider",
+    type: "text",
+    envKey: "IMAGE_GEN_WF_OUTFIT_PROVIDER",
+    description:
+      'Engine for chat outfit images: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
+  },
+  {
     key: "image_gen.wf1_base_prompt",
     group: "image_gen",
     label: "WF1 base prompt (global)",

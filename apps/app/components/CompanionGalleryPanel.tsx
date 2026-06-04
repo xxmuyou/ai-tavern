@@ -1,22 +1,12 @@
-import { useRouter, type Href } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Text, View } from 'react-native';
 
-import {
-  generateCompanionEmotionArt,
-  listCompanionEmotionArtJobs,
-  mediaSource,
-} from '@/api/companion-client';
-import type { ChatEmotionKey } from '@/api/types';
-import { PortraitViewerModal, type ViewerEmotion } from '@/components/PortraitViewerModal';
-import { useBilling } from '@/hooks/use-billing';
-import { EMOTION_LABEL, EMOTION_ORDER, PORTRAIT_ASPECT, type ArtEmotions } from '@/utils/portrait';
+import { listCompanionMomentImages, mediaSource } from '@/api/companion-client';
+import type { CompanionMomentImage } from '@/api/types';
+import { PORTRAIT_ASPECT, type ArtEmotions } from '@/utils/portrait';
 
-const CELL_WIDTH = 120;
-const CELL_HEIGHT = Math.round(CELL_WIDTH / PORTRAIT_ASPECT);
-const BILLING_ROUTE = '/billing' as Href;
-const POLL_INTERVAL_MS = 5000;
-const MAX_POLLS = 60;
+const MAIN_WIDTH = 132;
+const MAIN_HEIGHT = Math.round(MAIN_WIDTH / PORTRAIT_ASPECT);
 
 type CompanionGalleryPanelProps = {
   companionId: string;
@@ -25,256 +15,127 @@ type CompanionGalleryPanelProps = {
   artUrl: string | null;
 };
 
-/**
- * Portrait gallery on the companion profile. Each of the six emotion portraits
- * is a cell: unlocked ones (art already generated) show a tappable thumbnail
- * (full screen on tap); locked ones show the blurred neutral portrait under a
- * lock. Generating a locked expression is subscription-gated and manual — Pro
- * users tap to unlock+generate, free users are sent to subscribe. See the
- * backend gate in packages/api/src/companions/emotion-art-routes.ts.
- */
-export function CompanionGalleryPanel({ companionId, name, artEmotions, artUrl }: CompanionGalleryPanelProps) {
-  const router = useRouter();
-  const { data: billing } = useBilling();
-  const isPro = billing?.subscription.tier === 'pro';
+export function CompanionGalleryPanel({
+  companionId,
+  name,
+  artUrl,
+}: CompanionGalleryPanelProps) {
+  const [moments, setMoments] = useState<CompanionMomentImage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [viewerEmotion, setViewerEmotion] = useState<ChatEmotionKey | null>(null);
-  // Locally merged art so a freshly generated expression shows without a reload.
-  const [generated, setGenerated] = useState<Partial<Record<ChatEmotionKey, string>>>({});
-  const [busyEmotion, setBusyEmotion] = useState<ChatEmotionKey | null>(null);
-  const [errorEmotion, setErrorEmotion] = useState<ChatEmotionKey | null>(null);
-  // Poll window ran out while the job was still generating (not a real failure).
-  // Shown as a soft "still generating" hint rather than "Failed", since the
-  // backend webhook/cron will finish it and the portrait appears on next load.
-  const [pendingEmotion, setPendingEmotion] = useState<ChatEmotionKey | null>(null);
+  useEffect(() => {
+    if (!companionId) return;
+    let cancelled = false;
 
-  const blurredNeutral = useMemo(() => mediaSource(artEmotions?.neutral ?? artUrl), [artEmotions, artUrl]);
-
-  const cells = useMemo(
-    () =>
-      EMOTION_ORDER.map((emotion) => {
-        const raw = generated[emotion] ?? artEmotions?.[emotion] ?? (emotion === 'neutral' ? artUrl : null);
-        return { emotion, source: mediaSource(raw), unlocked: Boolean(raw) };
-      }),
-    [artEmotions, artUrl, generated],
-  );
-
-  const viewerEmotions: ViewerEmotion[] = useMemo(
-    () =>
-      cells
-        .filter((cell) => cell.unlocked && cell.source)
-        .map((cell) => ({ key: cell.emotion, source: cell.source! })),
-    [cells],
-  );
-
-  const unlock = useCallback(
-    async (emotion: ChatEmotionKey, opts?: { force?: boolean }) => {
-      if (emotion === 'neutral') return;
-      if (!isPro) {
-        router.push(BILLING_ROUTE);
-        return;
-      }
-      setBusyEmotion(emotion);
-      setErrorEmotion(null);
-      setPendingEmotion(null);
+    async function loadMoments() {
+      setIsLoading(true);
+      setError(null);
       try {
-        const res = await generateCompanionEmotionArt(companionId, emotion, { force: opts?.force });
-        if (res.status === 'cached') {
-          setGenerated((prev) => ({ ...prev, [emotion]: res.key }));
-          return;
+        const payload = await listCompanionMomentImages(companionId);
+        if (!cancelled) {
+          setMoments(payload.moment_images ?? []);
         }
-        const jobId = res.job_id;
-        for (let i = 0; i < MAX_POLLS; i += 1) {
-          await delay(POLL_INTERVAL_MS);
-          const payload = await listCompanionEmotionArtJobs(companionId);
-          const job = payload.jobs.find((item) => item.id === jobId);
-          if (job?.status === 'succeeded' && job.output_key) {
-            setGenerated((prev) => ({ ...prev, [emotion]: job.output_key! }));
-            return;
-          }
-          if (job?.status === 'failed' || job?.status === 'cancelled') {
-            setErrorEmotion(emotion);
-            return;
-          }
-        }
-        // Still pending/processing when we stopped polling — not a failure.
-        // The backend finishes it asynchronously; surface a soft hint.
-        setPendingEmotion(emotion);
       } catch {
-        // Most likely subscription_required (race) or a transient error.
-        setErrorEmotion(emotion);
+        if (!cancelled) {
+          setError('Moment gallery could not be loaded.');
+        }
       } finally {
-        setBusyEmotion(null);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
-    },
-    [companionId, isPro, router],
-  );
+    }
+
+    void loadMoments();
+    return () => {
+      cancelled = true;
+    };
+  }, [companionId]);
+
+  const mainSource = mediaSource(artUrl);
 
   return (
     <View className="gap-5 rounded-3xl border border-app-rose/20 bg-app-rose-soft/70 p-5 shadow-card">
-      <View className="gap-2">
-        <View className="flex-row items-center justify-between gap-3">
-          <View>
-            <Text className="font-serif text-title text-app-ink">Portraits</Text>
-            <Text className="mt-1 text-overline text-app-rose-deep">Emotion unlock gallery</Text>
-          </View>
-          <View className="rounded-full border border-app-rose/25 bg-app-canvas px-3 py-1">
-            <Text className="text-caption font-semibold text-app-rose-deep">
-              {viewerEmotions.length}/{EMOTION_ORDER.length} unlocked
-            </Text>
-          </View>
-        </View>
-        <Text className="text-body-sm leading-6 text-app-ink-soft">
-          {isPro
-            ? 'Tap a locked portrait to unlock and generate it. Tap an unlocked one to view it full screen.'
-            : 'Subscribe to unlock more expressions. Tap an unlocked portrait to view it full screen.'}
-        </Text>
+      <View className="gap-1">
+        <Text className="font-serif text-title text-app-ink">Gallery</Text>
+        <Text className="text-overline text-app-rose-deep">Main portrait + captured moments</Text>
       </View>
 
       <View className="flex-row flex-wrap gap-3">
-        {cells.map((cell) => (
-          <PortraitCell
-            key={cell.emotion}
-            blurredNeutral={blurredNeutral}
-            busy={busyEmotion === cell.emotion}
-            emotion={cell.emotion}
-            errored={errorEmotion === cell.emotion}
-            pending={pendingEmotion === cell.emotion}
-            isPro={isPro}
-            name={name}
-            source={cell.unlocked ? cell.source : null}
-            unlocked={cell.unlocked}
-            onPress={
-              cell.unlocked && cell.source
-                ? () => setViewerEmotion(cell.emotion)
-                : cell.emotion === 'neutral'
-                  ? undefined
-                  : () => void unlock(cell.emotion)
-            }
-          />
+        <View style={{ width: MAIN_WIDTH }}>
+          <View
+            className="overflow-hidden rounded-2xl border border-app-rose/20 bg-app-canvas shadow-sm"
+            style={{ height: MAIN_HEIGHT, alignItems: 'center', justifyContent: 'flex-end' }}
+          >
+            {mainSource ? (
+              <Image
+                accessibilityLabel={`${name}, main portrait`}
+                resizeMode="contain"
+                source={mainSource}
+                style={{ height: '100%', aspectRatio: PORTRAIT_ASPECT }}
+              />
+            ) : (
+              <View className="flex-1 items-center justify-center px-3">
+                <Text className="text-center text-sm font-semibold text-app-muted">No portrait yet</Text>
+              </View>
+            )}
+          </View>
+          <Text className="mt-2 text-center text-caption font-semibold text-app-ink">Main portrait</Text>
+        </View>
+
+        {moments.map((moment) => (
+          <MomentCell key={moment.id} moment={moment} name={name} />
         ))}
       </View>
 
-      <PortraitViewerModal
-        busyEmotion={busyEmotion}
-        canRegenerate={isPro}
-        emotion={viewerEmotion}
-        emotions={viewerEmotions}
-        name={name}
-        onChangeEmotion={setViewerEmotion}
-        onClose={() => setViewerEmotion(null)}
-        onRegenerate={(emotion) => void unlock(emotion, { force: true })}
-        visible={viewerEmotion != null}
-      />
-    </View>
-  );
-}
+      {isLoading ? (
+        <View className="flex-row items-center gap-2">
+          <ActivityIndicator color="#9A2F4F" />
+          <Text className="text-sm text-app-muted">Loading moments...</Text>
+        </View>
+      ) : null}
 
-type PortraitCellProps = {
-  blurredNeutral: ReturnType<typeof mediaSource>;
-  busy: boolean;
-  emotion: ChatEmotionKey;
-  errored: boolean;
-  pending: boolean;
-  isPro: boolean;
-  name: string;
-  source: ReturnType<typeof mediaSource>;
-  unlocked: boolean;
-  onPress?: () => void;
-};
-
-function PortraitCell({
-  blurredNeutral,
-  busy,
-  emotion,
-  errored,
-  pending,
-  isPro,
-  name,
-  source,
-  unlocked,
-  onPress,
-}: PortraitCellProps) {
-  const label = EMOTION_LABEL[emotion];
-
-  return (
-    <View style={{ width: CELL_WIDTH }}>
-      <Pressable
-        accessibilityLabel={unlocked ? `${name}, ${label}` : `${label}, locked`}
-        accessibilityRole={onPress ? 'button' : 'image'}
-        disabled={!onPress || busy}
-        onPress={onPress}
-        className={`overflow-hidden rounded-2xl border shadow-sm ${
-          unlocked ? 'border-app-rose/20 bg-app-canvas' : 'border-app-ember/25 bg-app-ember-soft'
-        }`}
-        style={{ height: CELL_HEIGHT, alignItems: 'center', justifyContent: 'flex-end' }}
-      >
-        {unlocked && source ? (
-          <Image
-            accessibilityLabel={`${name}, ${label}`}
-            resizeMode="contain"
-            source={source}
-            style={{ height: '100%', aspectRatio: PORTRAIT_ASPECT }}
-          />
-        ) : (
-          <LockedCell blurredNeutral={blurredNeutral} busy={busy} />
-        )}
-      </Pressable>
-
-      <View className="mt-2 flex-row items-center justify-center gap-1">
-        {!unlocked ? <Text className="text-xs text-app-rose-deep">Locked</Text> : null}
-        <Text className={`text-caption font-semibold ${unlocked ? 'text-app-ink' : 'text-app-rose-deep'}`}>{label}</Text>
-      </View>
-      {!unlocked ? (
-        <Text className="mt-1 text-center text-[11px] font-semibold leading-4 text-app-ink-soft">
-          {errored
-            ? 'Failed - tap to retry'
-            : pending
-              ? 'Still generating - check back soon'
-              : isPro
-                ? 'Tap to unlock'
-                : 'Subscribe to unlock'}
+      {!isLoading && moments.length === 0 ? (
+        <Text className="text-body-sm leading-6 text-app-ink-soft">
+          Captured chat moments will appear here after you use the camera button on a companion reply.
         </Text>
       ) : null}
-    </View>
-  );
-}
 
-function LockedCell({
-  blurredNeutral,
-  busy,
-}: {
-  blurredNeutral: ReturnType<typeof mediaSource>;
-  busy: boolean;
-}) {
-  return (
-    <View className="h-full w-full items-center justify-center">
-      {blurredNeutral ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          blurRadius={14}
-          resizeMode="contain"
-          source={blurredNeutral}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.6 }}
-        />
+      {error ? (
+        <Text className="text-sm font-semibold text-app-rose-deep">{error}</Text>
       ) : null}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(42,31,26,0.26)',
-        }}
-      />
-      <View className="rounded-full border border-app-canvas/70 bg-app-canvas/90 px-3 py-2">
-        {busy ? <ActivityIndicator color="#9A2F4F" /> : <Text className="text-caption font-bold text-app-rose-deep">LOCKED</Text>}
-      </View>
     </View>
   );
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function MomentCell({ moment, name }: { moment: CompanionMomentImage; name: string }) {
+  const source = mediaSource(moment.output_key);
+  const isReady = moment.status === 'succeeded' && source;
+
+  return (
+    <View style={{ width: MAIN_WIDTH }}>
+      <View
+        className="overflow-hidden rounded-2xl border border-app-rose/20 bg-app-canvas shadow-sm"
+        style={{ height: MAIN_HEIGHT, alignItems: 'center', justifyContent: 'center' }}
+      >
+        {isReady ? (
+          <Image
+            accessibilityLabel={`${name}, captured moment`}
+            resizeMode="cover"
+            source={source}
+            style={{ height: '100%', width: '100%' }}
+          />
+        ) : (
+          <View className="items-center gap-2 px-3">
+            <ActivityIndicator color="#9A2F4F" />
+            <Text className="text-center text-xs font-semibold text-app-muted">Generating</Text>
+          </View>
+        )}
+      </View>
+      <Text className="mt-2 text-center text-caption font-semibold text-app-ink">
+        {moment.status === 'succeeded' ? 'Moment' : 'Processing'}
+      </Text>
+    </View>
+  );
 }

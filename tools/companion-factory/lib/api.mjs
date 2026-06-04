@@ -3,7 +3,6 @@
  * workflows. The tool never adds endpoints — it drives what's already there:
  *   POST /companions/base-art/generate         (run a workflow by model id)
  *   GET  /companions/base-art/jobs/{jobId}      (poll until done)
- *   POST /admin/companions/{id}/emotion-art/prewarm  (batch WF2 expressions)
  * Auth: an admin's bearer JWT from config.adminToken.
  */
 
@@ -65,9 +64,4 @@ export async function waitForArt(cfg, jobId, { timeoutMs = 180000, intervalMs = 
     if (Date.now() > deadline) throw new Error(`job ${jobId} timed out after ${timeoutMs}ms (status=${job.status})`);
     await sleep(intervalMs);
   }
-}
-
-/** Enqueue WF2 expression variants for an existing companion (admin-only). */
-export async function prewarmEmotions(cfg, companionId, force = false) {
-  return request(cfg, 'POST', `/admin/companions/${encodeURIComponent(companionId)}/emotion-art/prewarm`, { force });
 }

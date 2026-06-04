@@ -205,6 +205,19 @@ export async function handleCompanionsRequest(
     return handleCompanionStoryRequest(request, env, user, companionId, suffix);
   }
 
+  const momentImagesMatch = pathname.match(/^\/companions\/([^/]+)\/moment-images$/);
+  if (momentImagesMatch) {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const companionId = decodeURIComponent(momentImagesMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    const user = await requireAuthUser(env, request);
+    return listCompanionMomentImages(env, user, companionId);
+  }
+
   const idMatch = pathname.match(/^\/companions\/([^/]+)$/);
   if (idMatch) {
     const companionId = decodeURIComponent(idMatch[1] ?? "");
@@ -325,6 +338,39 @@ async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Pr
   }));
 
   return jsonResponse({ items });
+}
+
+async function listCompanionMomentImages(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+): Promise<Response> {
+  const companion = await loadCompanion(env, companionId);
+  if (!companion || !canRead(companion, user)) {
+    return notFound();
+  }
+
+  const { results } = await env.DB.prepare(
+    `SELECT id, job_id, message_id, status, output_key, created_at, updated_at
+     FROM story_moment_images
+     WHERE user_id = ?
+       AND companion_id = ?
+       AND status IN ('processing', 'succeeded')
+     ORDER BY created_at DESC
+     LIMIT 100`,
+  )
+    .bind(user.id, companionId)
+    .all<{
+      id: string;
+      job_id: string;
+      message_id: string;
+      status: string;
+      output_key: string | null;
+      created_at: number;
+      updated_at: number;
+    }>();
+
+  return jsonResponse({ moment_images: results ?? [] });
 }
 
 async function setFavorite(
@@ -677,6 +723,7 @@ async function updateCompanion(
          speech_style = ?, relationship_role = ?, want = ?, secret = ?,
          boundary = ?, greeting = ?, example_dialogues = ?, tags = ?,
          preferred_scenes = ?, art_url = ?, art_emotions = ?,
+         art_cutout_key = CASE WHEN ? THEN NULL ELSE art_cutout_key END,
          gender = ?, updated_at = ?
      WHERE id = ?`,
   )
@@ -696,6 +743,7 @@ async function updateCompanion(
       merged.preferred_scenes,
       merged.art_url,
       artEmotions,
+      artUrlChanged ? 1 : 0,
       merged.gender,
       Date.now(),
       companionId,

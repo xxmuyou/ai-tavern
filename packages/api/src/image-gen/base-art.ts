@@ -60,6 +60,8 @@ export type BaseArtQueuePayload = {
 
 const TASK_BASE_ART = "companion_base_art";
 const OUTPUT_PREFIX = "companion-base-art";
+const WF1_CLEAN_BACKGROUND_PROMPT =
+  "Soft studio portrait, clean gradient or gentle bokeh background, centered subject, uncluttered composition, no props, no complex scenery.";
 
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -300,7 +302,9 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
     // The global WF1 base prompt is a portrait style/quality preamble; only
     // prepend it for wf1 so other workflows (e.g. wf_scene backgrounds) aren't
     // polluted with portrait-specific styling.
-    const basePrompt = workflowKey === "wf1" ? cfg.wf1BasePrompt?.trim() : undefined;
+    const basePrompt = workflowKey === "wf1"
+      ? [cfg.wf1BasePrompt?.trim(), WF1_CLEAN_BACKGROUND_PROMPT].filter(Boolean).join("\n")
+      : undefined;
     const request: ImageGenRequest = {
       mode: "create",
       prompt: basePrompt ? `${basePrompt}\n\n${job.prompt}` : job.prompt,

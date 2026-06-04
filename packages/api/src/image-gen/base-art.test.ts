@@ -185,7 +185,7 @@ describe("base-art job pipeline", () => {
   it("prepends the global WF1 base prompt only for wf1, not other workflows", async () => {
     const captured: string[] = [];
     vi.spyOn(mockImageGenProvider, "generate").mockImplementation(async (req) => {
-      captured.push(req.prompt);
+      captured.push(req.prompt ?? "");
       return {
         content_type: "image/png",
         image_bytes: new Uint8Array([1, 2, 3]),
@@ -213,7 +213,9 @@ describe("base-art job pipeline", () => {
     });
     await processBaseArtJob(env, sceneJob);
 
-    expect(captured[0]).toBe("STYLE_PREAMBLE\n\na calm girl");
+    expect(captured[0]).toContain("STYLE_PREAMBLE");
+    expect(captured[0]).toContain("Soft studio portrait");
+    expect(captured[0]).toContain("a calm girl");
     expect(captured[1]).toBe("empty seaside cafe, no people");
   });
 

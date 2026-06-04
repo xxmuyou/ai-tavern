@@ -14,12 +14,13 @@ import type { RevealSettingFn, SaveSettingFn } from './SettingsSection';
 
 const DEFAULT_PROVIDER_KEY = 'image_gen.provider';
 const WF1_PROVIDER_KEY = 'image_gen.wf1_provider';
-const WF2_PROVIDER_KEY = 'image_gen.wf2_provider';
 const WF_MOMENT_PROVIDER_KEY = 'image_gen.wf_moment_provider';
+const WF_CUTOUT_PROVIDER_KEY = 'image_gen.wf_cutout_provider';
+const WF_OUTFIT_PROVIDER_KEY = 'image_gen.wf_outfit_provider';
 // Engines the backend can actually route to (see image-gen/index.ts).
 const IMAGE_PROVIDERS = ['mock', 'runninghub', 'openai'] as const;
 
-// RunningHub infra shared by WF1, WF2, and WF_MOMENT when any workflow runs on runninghub.
+// RunningHub infra shared by image workflows when any workflow runs on runninghub.
 const RUNNINGHUB_SHARED_KEYS = [
   'image_gen.runninghub_base_url',
   'image_gen.api_key',
@@ -36,8 +37,9 @@ const OPENAI_KEYS = [
 
 const WORKFLOWS = [
   { id: 'wf1', mode: 'create', label: 'WF1 - base portrait (create)', providerKey: WF1_PROVIDER_KEY },
-  { id: 'wf2', mode: 'variation', label: 'WF2 - expression variants (variation)', providerKey: WF2_PROVIDER_KEY },
   { id: 'wf_moment', mode: 'create', label: 'WF_MOMENT - chat scene moment (create)', providerKey: WF_MOMENT_PROVIDER_KEY },
+  { id: 'wf_cutout', mode: 'cutout', label: 'WF_CUTOUT - companion matting (cutout)', providerKey: WF_CUTOUT_PROVIDER_KEY },
+  { id: 'wf_outfit', mode: 'variation', label: 'WF_OUTFIT - chat outfit image (variation)', providerKey: WF_OUTFIT_PROVIDER_KEY },
 ] as const;
 
 type Workflow = (typeof WORKFLOWS)[number];
@@ -61,7 +63,7 @@ export function PortraitGenerationSection() {
       <AdminPanel>
         <AdminPanelHeader
           error={error}
-          subtitle="Pick a workflow to edit. WF1 (create), WF2 (variation), and WF_MOMENT (chat scene moment) each choose their own engine independently. Checkpoints are managed per workflow."
+          subtitle="Pick a workflow to edit. Each workflow can choose its own engine independently. Checkpoints are managed per workflow."
           title="Portrait generation"
         />
         <AdminDropdown

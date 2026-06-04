@@ -10,8 +10,9 @@ import type { ImageGenMode } from "./types";
  *
  * Shape:
  *   {
- *     "wf1": { "mode": "create",    "workflowId", "promptNodeId", "checkpointNodeId" },
- *     "wf2": { "mode": "variation", "workflowId", "promptNodeId", "loadImageNodeId" }
+ *     "wf1":       { "mode": "create",    "workflowId", "promptNodeId", "checkpointNodeId" },
+ *     "wf_outfit": { "mode": "variation", "workflowId", "promptNodeId", "loadImageNodeId" },
+ *     "wf_cutout": { "mode": "cutout",    "workflowId", "loadImageNodeId" }
  *   }
  */
 export type WorkflowConfig = {
@@ -41,6 +42,10 @@ function str(value: unknown): string {
   return value == null ? "" : String(value).trim();
 }
 
+export function isImageGenMode(value: unknown): value is ImageGenMode {
+  return value === "create" || value === "variation" || value === "cutout";
+}
+
 /** Parse the raw `image_gen.workflows` JSON. Never throws (returns {} on bad input). */
 export function parseWorkflows(raw: string | null | undefined): Record<string, WorkflowConfig> {
   if (!raw) return {};
@@ -58,8 +63,8 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
     const entry = value as Record<string, unknown>;
     const workflowId = str(entry.workflowId);
     const promptNodeId = str(entry.promptNodeId);
-    if (!workflowId || !promptNodeId) continue;
-    const mode: ImageGenMode = entry.mode === "variation" ? "variation" : "create";
+    const mode: ImageGenMode = isImageGenMode(entry.mode) ? entry.mode : "create";
+    if (!workflowId || (mode !== "cutout" && !promptNodeId)) continue;
     out[key] = {
       key,
       label: str(entry.label) || undefined,

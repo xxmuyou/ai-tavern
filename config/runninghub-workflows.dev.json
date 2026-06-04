@@ -37,18 +37,6 @@
       "isActive": true,
       "sortOrder": 10
     },
-    "wf2": {
-      "label": "WF2 - expression variants (variation)",
-      "mode": "variation",
-      "workflowId": "2060982275310964738",
-      "loadImageNodeId": "1",
-      "promptNodeId": "13",
-      "promptFieldName": "prompt",
-      "negativePromptNodeId": "14",
-      "negativePromptFieldName": "prompt",
-      "isActive": true,
-      "sortOrder": 20
-    },
     "wf_moment": {
       "label": "WF_MOMENT - chat scene moment (create)",
       "mode": "create",
@@ -60,6 +48,16 @@
       "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 30
+    },
+    "wf_cutout": {
+      "label": "WF_CUTOUT - companion matting (cutout)",
+      "mode": "cutout",
+      "workflowId": "",
+      "loadImageNodeId": "",
+      "promptNodeId": "",
+      "promptFieldName": "text",
+      "isActive": true,
+      "sortOrder": 35
     },
     "wf_outfit": {
       "label": "WF_OUTFIT - chat outfit image (variation)",

@@ -179,8 +179,8 @@ for (const key of Object.keys(workflowsRaw)) {
   }
 
   const mode = readString(`workflows.${key}.mode`, entry.mode) || "create";
-  if (mode !== "create" && mode !== "variation") {
-    throw new Error(`workflows.${key}.mode must be "create" or "variation".`);
+  if (mode !== "create" && mode !== "variation" && mode !== "cutout") {
+    throw new Error(`workflows.${key}.mode must be "create", "variation", or "cutout".`);
   }
   const workflowId = readString(`workflows.${key}.workflowId`, entry.workflowId);
   const promptNodeId = readString(`workflows.${key}.promptNodeId`, entry.promptNodeId);
@@ -201,11 +201,15 @@ for (const key of Object.keys(workflowsRaw)) {
 
   const anySet = workflowId || promptNodeId || checkpointNodeId || loadImageNodeId;
   if (anySet) {
-    if (!workflowId || !promptNodeId) {
-      throw new Error(`workflows.${key} must include workflowId and promptNodeId when configured.`);
+    if (!workflowId || (mode !== "cutout" && !promptNodeId)) {
+      throw new Error(
+        mode === "cutout"
+          ? `workflows.${key} must include workflowId when configured.`
+          : `workflows.${key} must include workflowId and promptNodeId when configured.`,
+      );
     }
-    if (mode === "variation" && !loadImageNodeId) {
-      throw new Error(`workflows.${key} (variation) must include loadImageNodeId when configured.`);
+    if ((mode === "variation" || mode === "cutout") && !loadImageNodeId) {
+      throw new Error(`workflows.${key} (${mode}) must include loadImageNodeId when configured.`);
     }
   }
 

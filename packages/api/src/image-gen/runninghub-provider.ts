@@ -38,6 +38,9 @@ export const runningHubImageGenProvider: ImageGenProvider = {
 
   async generate(req: ImageGenRequest, env: Env): Promise<ImageGenResponse> {
     const cfg = await resolveImageGenConfig(env);
+    if (req.mode === "cutout") {
+      return generateCutout(req, env, cfg);
+    }
     if (req.mode === "create" && !req.source_art_url) {
       return generateCreate(req, env, cfg);
     }
@@ -50,7 +53,7 @@ async function generateCreate(req: ImageGenRequest, env: Env, cfg: ImageGenConfi
   const workflowKey = req.workflow_key?.trim() || "wf1";
   const config = await readWorkflowConfig(env, cfg, workflowKey);
   const nodeInfoList: NodeInfo[] = [
-    { fieldName: config.promptFieldName || "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
+    { fieldName: config.promptFieldName || "text", fieldValue: req.prompt ?? "", nodeId: config.promptNodeId },
   ];
   // Checkpoint file comes from the selected model; the node field belongs to the workflow.
   const ckptName = req.ckpt_name?.trim();
@@ -107,10 +110,52 @@ async function generateVariation(
   const fileName = await uploadSourceImage(cfg, env, req.source_art_url);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: "image", fieldValue: fileName, nodeId: config.loadImageNodeId },
-    { fieldName: config.promptFieldName || "text", fieldValue: req.prompt, nodeId: config.promptNodeId },
+    { fieldName: config.promptFieldName || "text", fieldValue: req.prompt ?? "", nodeId: config.promptNodeId },
   ];
   appendNegativePrompt(nodeInfoList, config);
   return submitTask(cfg, config.workflowId, nodeInfoList, MODEL);
+}
+
+/** WF_CUTOUT matting: load-image only, prompt node optional. */
+async function generateCutout(
+  req: ImageGenRequest,
+  env: Env,
+  cfg: ImageGenConfig,
+): Promise<ImageGenResponse> {
+  const workflowKey = req.workflow_key?.trim() || "wf_cutout";
+  const config = await readWorkflowConfig(env, cfg, workflowKey, { promptRequired: false });
+  if (!config.loadImageNodeId) {
+    throw new ImageGenError(
+      "provider_not_configured",
+      `RunningHub workflow "${workflowKey}" missing config: load-image node id`,
+      { retryable: false },
+    );
+  }
+  if (!cfg.webhookUrl) {
+    throw new ImageGenError(
+      "provider_not_configured",
+      "RunningHub image provider missing config: webhook url",
+      { retryable: false },
+    );
+  }
+  if (!req.source_art_url) {
+    throw new ImageGenError("invalid_source_art_url", "source_art_url is required for cutout", {
+      retryable: false,
+    });
+  }
+
+  const fileName = await uploadSourceImage(cfg, env, req.source_art_url);
+  const nodeInfoList: NodeInfo[] = [
+    { fieldName: "image", fieldValue: fileName, nodeId: config.loadImageNodeId },
+  ];
+  if (config.promptNodeId) {
+    nodeInfoList.push({
+      fieldName: config.promptFieldName || "text",
+      fieldValue: req.prompt ?? "",
+      nodeId: config.promptNodeId,
+    });
+  }
+  return submitTask(cfg, config.workflowId, nodeInfoList, `companion-cutout-${workflowKey}`);
 }
 
 /**
@@ -262,7 +307,12 @@ function requireApiKey(cfg: ImageGenConfig): string {
   return cfg.apiKey;
 }
 
-async function readWorkflowConfig(env: Env, cfg: ImageGenConfig, key: string): Promise<WorkflowConfig> {
+async function readWorkflowConfig(
+  env: Env,
+  cfg: ImageGenConfig,
+  key: string,
+  options?: { promptRequired?: boolean },
+): Promise<WorkflowConfig> {
   requireApiKey(cfg);
   const dbWorkflow = await getImageWorkflow(env, key).catch(() => null);
   const config = dbWorkflow
@@ -287,10 +337,13 @@ async function readWorkflowConfig(env: Env, cfg: ImageGenConfig, key: string): P
       { retryable: false },
     );
   }
-  if (!config.workflowId || !config.promptNodeId) {
+  const promptRequired = options?.promptRequired ?? true;
+  if (!config.workflowId || (promptRequired && !config.promptNodeId)) {
     throw new ImageGenError(
       "provider_not_configured",
-      `RunningHub workflow "${key}" missing workflow id or prompt node id`,
+      promptRequired
+        ? `RunningHub workflow "${key}" missing workflow id or prompt node id`
+        : `RunningHub workflow "${key}" missing workflow id`,
       { retryable: false },
     );
   }

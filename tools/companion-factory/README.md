@@ -6,7 +6,7 @@
 1. 用你自己的 LLM key **批量起草** companion 人设 / 场景 → 落本地 JSON（`drafts/`）。
 2. 你**手动编辑** `drafts/personas.json`、`drafts/scenes.json`：改名、删（把 `status` 设成 `"rejected"`）、调字段。
 3. **发布**：驱动产品**现有**接口跑图，再把官方角色 / 场景行写进 D1。
-   - 角色：`POST /companions/base-art/generate`(WF1 底图) → 轮询 → 写 `companions` 行 → `POST /admin/companions/{id}/emotion-art/prewarm`(WF2 表情)。
+   - 角色：`POST /companions/base-art/generate`(WF1 底图) → 轮询 → 写 `companions` 行。
    - 场景：同一个 base-art 接口选 `wf_scene` 跑背景 → 写 `scenes` 行（解锁条件按 tier 推导）。
 
 > 真正出图的是产品里配置的 RunningHub/OpenAI 工作流；本工具只负责"堆 prompt + 编排"。出图引擎、`wf_scene` 工作流属于产品永久基建，不在本文件夹内。
@@ -36,7 +36,7 @@ node tools/companion-factory/factory.mjs publish-scenes
 发布是**断点续跑**的：每条处理完即写回 JSON，失败的标 `status:"failed"` 并记 `error`，重跑只处理未完成的。
 
 ## 注意
-- 表情（WF2）在 worker 里**异步**完成，`publish-personas` 只负责入队。
+- 表情立绘（WF2）已退役；聊天情绪只驱动 UI，瞬间图按需走 cutout/moment 管线。
 - 场景非 `public` 档需要 `default_companions[0]` 作为解锁锚点；缺锚点则该场景留作不锁并告警。
 - 默认写 **dev** 库（`remote:false`）。要写线上把 `wrangler.remote` 设 `true` 并确认 `dbName`。
 

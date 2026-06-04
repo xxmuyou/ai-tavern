@@ -9,6 +9,7 @@ import {
   type StoryMomentImageRow,
 } from "./moment-image";
 import { loadBaseArtJob, type ImageGenJobRow } from "./base-art";
+import { processCutoutJob } from "./cutout";
 
 type Row = Record<string, unknown>;
 
@@ -17,12 +18,14 @@ function createEnv(): {
   jobs: Map<string, Row>;
   moments: Map<string, Row>;
   companions: Map<string, Row>;
+  cutouts: Map<string, Row>;
   assets: Map<string, Uint8Array>;
   queue: unknown[];
 } {
   const jobs = new Map<string, Row>();
   const moments = new Map<string, Row>();
   const companions = new Map<string, Row>();
+  const cutouts = new Map<string, Row>();
   const assets = new Map<string, Uint8Array>();
   const queue: unknown[] = [];
 
@@ -32,8 +35,13 @@ function createEnv(): {
     }
 
     if (sql.startsWith("INSERT INTO image_generation_jobs")) {
-      const [id, user_id, task, mode_, workflow_key, prompt, output_prefix, created_at, updated_at] =
-        values as [string, string, string, string, string, string, string, number, number];
+      const [id, user_id, task, mode_, workflow_key] =
+        values as [string, string, string, string, string];
+      const prompt = sql.includes("input_keys") ? "" : (values[5] as string);
+      const input_keys = sql.includes("input_keys") ? (values[5] as string) : null;
+      const output_prefix = values[6] as string;
+      const created_at = values[7] as number;
+      const updated_at = values[8] as number;
       jobs.set(id, {
         completed_at: null,
         created_at,
@@ -46,6 +54,7 @@ function createEnv(): {
         output_key: null,
         output_prefix,
         prompt,
+        input_keys,
         provider: null,
         provider_task_id: null,
         status: "pending",
@@ -53,6 +62,26 @@ function createEnv(): {
         updated_at,
         user_id,
         workflow_key,
+      });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("INSERT INTO companion_cutout_jobs")) {
+      const [id, companion_id, user_id, source_art_url, image_job_id, created_at, updated_at] =
+        values as [string, string, string | null, string, string, number, number];
+      cutouts.set(id, {
+        companion_id,
+        completed_at: null,
+        created_at,
+        error_code: null,
+        error_message: null,
+        id,
+        image_job_id,
+        output_key: null,
+        source_art_url,
+        status: "pending",
+        updated_at,
+        user_id,
       });
       return { meta: { changes: 1 } };
     }
@@ -119,9 +148,28 @@ function createEnv(): {
       return [...moments.values()].find((m) => m.job_id === jobId) ?? null;
     }
 
-    if (sql.includes("SELECT art_url FROM companions WHERE id = ?")) {
+    if (sql.includes("SELECT art_url, art_cutout_key FROM companions WHERE id = ?")) {
       const [id] = values as [string];
       return companions.get(id) ?? null;
+    }
+
+    if (sql.includes("FROM companion_cutout_jobs WHERE companion_id = ? AND source_art_url = ?")) {
+      const [companionId, sourceArtUrl] = values as [string, string];
+      return (
+        [...cutouts.values()].find(
+          (row) => row.companion_id === companionId && row.source_art_url === sourceArtUrl,
+        ) ?? null
+      );
+    }
+
+    if (sql.includes("FROM companion_cutout_jobs WHERE image_job_id = ?")) {
+      const [imageJobId] = values as [string];
+      return [...cutouts.values()].find((row) => row.image_job_id === imageJobId) ?? null;
+    }
+
+    if (sql.includes("FROM companion_cutout_jobs WHERE id = ?")) {
+      const [id] = values as [string];
+      return cutouts.get(id) ?? null;
     }
 
     if (sql.includes("FROM image_generation_jobs WHERE id = ?")) {
@@ -135,6 +183,26 @@ function createEnv(): {
       const id = values[values.length - 1] as string;
       const row = jobs.get(id);
       if (row) cols.forEach((col, i) => (row[col] = values[i]));
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE companion_cutout_jobs")) {
+      const setClause = sql.slice(sql.indexOf("SET ") + 4, sql.indexOf(" WHERE id = ?"));
+      const cols = setClause.split(", ").map((c) => c.split(" = ")[0]!.trim());
+      const id = values[values.length - 1] as string;
+      const row = cutouts.get(id);
+      if (row) cols.forEach((col, i) => (row[col] = values[i]));
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE companions") && sql.includes("art_cutout_key")) {
+      const [artCutoutKey, updatedAt, companionId, sourceArtUrl] =
+        values as [string, number, string, string];
+      const row = companions.get(companionId);
+      if (row && row.art_url === sourceArtUrl) {
+        row.art_cutout_key = artCutoutKey;
+        row.updated_at = updatedAt;
+      }
       return { meta: { changes: 1 } };
     }
 
@@ -169,7 +237,7 @@ function createEnv(): {
     JOB_QUEUE: { send: async (msg: unknown) => void queue.push(msg) },
   } as unknown as Env;
 
-  return { assets, companions, env, jobs, moments, queue };
+  return { assets, companions, cutouts, env, jobs, moments, queue };
 }
 
 function sampleContext(): MomentPromptContext {
@@ -336,10 +404,10 @@ describe("moment image job pipeline", () => {
     expect(assets.has(job.output_key!)).toBe(true);
   });
 
-  it("processMomentImageJob succeeds when the companion has a base 立绘 art_url", async () => {
-    const { env, assets, companions } = createEnv(); // no provider configured -> mock
+  it("processMomentImageJob waits and creates a cutout job when base art has no cutout cache", async () => {
+    const { env, assets, companions, cutouts, queue } = createEnv(); // no provider configured -> mock
     const artKey = "companions/official/maya/neutral.webp";
-    companions.set("maya", { art_url: artKey });
+    companions.set("maya", { art_cutout_key: null, art_url: artKey });
     assets.set(artKey, Uint8Array.from([1, 2, 3, 4])); // mock provider reads source from R2
 
     const { jobId } = await createMomentImageJob(env, {
@@ -347,6 +415,68 @@ describe("moment image job pipeline", () => {
       companionId: "maya",
       emotion: "warm",
       messageId: "msg_3",
+      promptSnapshot: "a cinematic moment",
+      sceneId: "scene_1",
+      storyBeatId: null,
+      threadId: "thr_1",
+      userId: "usr_1",
+    });
+
+    await processMomentImageJob(env, jobId);
+
+    const job = (await loadBaseArtJob(env, jobId)) as ImageGenJobRow;
+    expect(job.status).toBe("processing");
+    expect(job.output_key).toBeNull();
+    expect([...cutouts.values()]).toEqual([
+      expect.objectContaining({
+        companion_id: "maya",
+        source_art_url: artKey,
+        status: "pending",
+      }),
+    ]);
+    expect(queue).toContainEqual(expect.objectContaining({ type: "image.generate" }));
+  });
+
+  it("processCutoutJob writes the companion cutout cache", async () => {
+    const { env, assets, companions, cutouts } = createEnv(); // no provider configured -> mock
+    const artKey = "companions/official/maya/neutral.webp";
+    companions.set("maya", { art_cutout_key: null, art_url: artKey });
+    assets.set(artKey, Uint8Array.from([1, 2, 3, 4]));
+
+    const { jobId } = await createMomentImageJob(env, {
+      activityId: null,
+      companionId: "maya",
+      emotion: "warm",
+      messageId: "msg_cutout",
+      promptSnapshot: "a cinematic moment",
+      sceneId: "scene_1",
+      storyBeatId: null,
+      threadId: "thr_1",
+      userId: "usr_1",
+    });
+
+    await processMomentImageJob(env, jobId);
+    const cutout = [...cutouts.values()][0]!;
+    const result = await processCutoutJob(env, cutout.image_job_id as string);
+
+    expect(result).toEqual({ companionId: "maya" });
+    expect(companions.get("maya")?.art_cutout_key).toMatch(
+      /^user-art\/usr_1\/companion-cutout\/.+\.png$/,
+    );
+  });
+
+  it("processMomentImageJob succeeds when the companion has a cached cutout", async () => {
+    const { env, assets, companions } = createEnv(); // no provider configured -> mock
+    const artKey = "companions/official/maya/neutral.webp";
+    const cutoutKey = "user-art/usr_1/companion-cutout/cutout.png";
+    companions.set("maya", { art_cutout_key: cutoutKey, art_url: artKey });
+    assets.set(cutoutKey, Uint8Array.from([1, 2, 3, 4]));
+
+    const { jobId } = await createMomentImageJob(env, {
+      activityId: null,
+      companionId: "maya",
+      emotion: "warm",
+      messageId: "msg_4",
       promptSnapshot: "a cinematic moment",
       sceneId: "scene_1",
       storyBeatId: null,

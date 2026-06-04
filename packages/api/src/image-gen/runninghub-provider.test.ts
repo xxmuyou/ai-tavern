@@ -105,6 +105,58 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
+  it("creates a cutout task with only the uploaded source image when prompt node is absent", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).endsWith("/task/openapi/upload")) {
+        return new Response(
+          JSON.stringify({ code: 0, data: { fileName: "api/cutout-source.webp" } }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-cutout-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          wf_cutout: {
+            mode: "cutout",
+            workflowId: "cutout-workflow",
+            loadImageNodeId: "load-image-node",
+          },
+        }),
+      },
+    );
+
+    const result = await (await getImageGenProvider(env, "cutout", "wf_cutout")).generate(
+      {
+        mode: "cutout",
+        source_art_url: "companions/user/u1/neutral.webp",
+        workflow_key: "wf_cutout",
+      },
+      env,
+    );
+
+    expect(result).toEqual({
+      external_task_id: "rh-cutout-1",
+      model: "companion-cutout-wf_cutout",
+      provider: "runninghub",
+      type: "pending",
+    });
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[1]![1].body));
+    expect(body.workflowId).toBe("cutout-workflow");
+    expect(body.nodeInfoList).toEqual([
+      { fieldName: "image", fieldValue: "api/cutout-source.webp", nodeId: "load-image-node" },
+    ]);
+  });
+
   it("creates a WF-1 create task overriding only the prompt node", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

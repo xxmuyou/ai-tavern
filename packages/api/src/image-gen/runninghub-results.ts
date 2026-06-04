@@ -1,5 +1,3 @@
-import { getJobByExternalTaskId, listStaleExternalJobs, type ArtJobRow } from "../companions/emotion-art";
-import { completeArtJobWithImage, markArtJobFailed } from "../companions/art-consumer";
 import {
   completeImageJobWithImage,
   failImageJob,
@@ -9,6 +7,8 @@ import {
   reenqueueImageJob,
   type ImageGenJobRow,
 } from "./base-art";
+import { syncCutoutFromImageJob } from "./cutout";
+import { reenqueueMomentJobsForCompanion } from "./moment-image";
 import { jsonResponse } from "../http";
 import { getSetting } from "../settings/store";
 
@@ -60,56 +60,21 @@ export async function handleRunningHubWebhookRequest(
     return jsonResponse({ error: "task_id_required" }, { status: 400 });
   }
 
-  const job = await getJobByExternalTaskId(env, taskId);
-  if (!job) {
-    // Not a companion emotion-art job — maybe a generic image_generation_jobs
-    // task (e.g. companion base-art draft, spec-022 WF-1 create).
-    const imageJob = await getImageJobByProviderTaskId(env, taskId);
-    if (!imageJob) {
-      return jsonResponse({ error: "unknown_task_id" }, { status: 404 });
-    }
-    const directResult = parseTaskResult(payload);
-    const result = directResult.status === "pending"
-      ? await fetchRunningHubTaskResult(env, taskId)
-      : directResult;
-    await applyRunningHubImageJobResult(env, imageJob, result);
-    return jsonResponse({ ok: true });
+  const imageJob = await getImageJobByProviderTaskId(env, taskId);
+  if (!imageJob) {
+    return jsonResponse({ error: "unknown_task_id" }, { status: 404 });
   }
-
   const directResult = parseTaskResult(payload);
   const result = directResult.status === "pending"
     ? await fetchRunningHubTaskResult(env, taskId)
     : directResult;
-  await applyRunningHubTaskResult(env, job, result);
+  await applyRunningHubImageJobResult(env, imageJob, result);
 
   return jsonResponse({ ok: true });
 }
 
 export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
   const now = Date.now();
-  const staleJobs = await listStaleExternalJobs(env, now - STALE_AFTER_MS);
-
-  for (const job of staleJobs) {
-    if (!job.external_task_id) continue;
-    if (now - job.updated_at > HARD_TIMEOUT_MS) {
-      await markArtJobFailed(env, job, "timeout", "RunningHub task exceeded 15 minutes");
-      continue;
-    }
-
-    try {
-      const result = await fetchRunningHubTaskResult(env, job.external_task_id);
-      await applyRunningHubTaskResult(env, job, result);
-    } catch (err) {
-      console.warn(
-        JSON.stringify({
-          error: err instanceof Error ? err.message : String(err),
-          external_task_id: job.external_task_id,
-          job_id: job.id,
-          message: "RunningHub poll failed; will retry on next cron",
-        }),
-      );
-    }
-  }
 
   // Generic image_generation_jobs (base-art drafts, etc.) — same fallback so a
   // missed webhook doesn't strand a job in `processing`.
@@ -170,40 +135,35 @@ async function applyRunningHubImageJobResult(
   if (result.status === "pending") return;
   if (result.status === "failed") {
     await failImageJob(env, job, result.errorCode, result.errorMessage);
+    const synced = await syncCutoutFromImageJob(env, {
+      ...job,
+      completed_at: Date.now(),
+      error_code: result.errorCode,
+      error_message: result.errorMessage,
+      status: "failed",
+    });
+    if (synced) {
+      await reenqueueMomentJobsForCompanion(env, synced.companion_id);
+    }
     return;
   }
 
   const downloaded = await downloadResultImage(result.output);
-  await completeImageJobWithImage(env, job, {
+  const outputKey = await completeImageJobWithImage(env, job, {
     bytes: downloaded.bytes,
     contentType: downloaded.contentType,
     model: job.model ?? "companion-create-v1",
     provider: job.provider ?? "runninghub",
   });
-}
-
-async function applyRunningHubTaskResult(
-  env: Env,
-  job: ArtJobRow,
-  result: RunningHubTaskResult,
-): Promise<void> {
-  if (job.status === "succeeded" || job.status === "failed" || job.status === "cancelled") {
-    return;
-  }
-  if (result.status === "pending") return;
-  if (result.status === "failed") {
-    await markArtJobFailed(env, job, result.errorCode, result.errorMessage);
-    return;
-  }
-
-  const downloaded = await downloadResultImage(result.output);
-  await completeArtJobWithImage(env, job, {
-    contentType: downloaded.contentType,
-    emotion: job.emotion,
-    imageBytes: downloaded.bytes,
-    model: job.model ?? "companion-expression-pack-v1",
-    provider: job.provider ?? "runninghub",
+  const synced = await syncCutoutFromImageJob(env, {
+    ...job,
+    completed_at: Date.now(),
+    output_key: outputKey,
+    status: "succeeded",
   });
+  if (synced?.status === "succeeded") {
+    await reenqueueMomentJobsForCompanion(env, synced.companion_id);
+  }
 }
 
 async function fetchRunningHubTaskResult(

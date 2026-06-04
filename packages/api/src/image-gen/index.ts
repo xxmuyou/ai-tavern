@@ -19,6 +19,7 @@ export {
 export {
   type WorkflowConfig,
   getWorkflowConfig,
+  isImageGenMode,
   parseWorkflows,
   workflowHasCheckpointNode,
 } from "./workflows";
@@ -77,9 +78,15 @@ export async function getImageGenProvider(
       ? cfg.wfMomentProvider
       : workflowKey === "wf_scene"
         ? cfg.wfSceneProvider
-        : mode === "create"
-          ? cfg.wf1Provider
-          : cfg.wf2Provider;
+        : workflowKey === "wf_cutout"
+          ? cfg.wfCutoutProvider
+          : workflowKey === "wf_outfit"
+            ? cfg.wfOutfitProvider
+            : mode === "create"
+              ? cfg.wf1Provider
+              : mode === "cutout"
+                ? cfg.wfCutoutProvider
+                : cfg.wf2Provider;
   const provider = (perMode?.trim() || cfg.provider || "mock").toLowerCase();
   switch (provider) {
     case "runninghub":

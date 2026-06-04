@@ -5,17 +5,14 @@ import {
   createImageModel,
   deleteImageWorkflow,
   deleteImageModel,
-  isExpressionGender,
-  listExpressionPrompts,
+  isImageGenMode,
   listImageModelRows,
   listImageWorkflowRows,
   updateImageModel,
   upsertImageWorkflow,
-  upsertExpressionPrompt,
   type ImageModelInput,
   type ImageWorkflowInput,
 } from "../index";
-import { isNonNeutralEmotion } from "../expression-prompts";
 
 /**
  * Admin workspace endpoints for the WF1 model catalog and WF2 expression
@@ -33,7 +30,8 @@ export async function handleAdminImageGenRequest(
     return handleImageWorkflows(request, env, pathname);
   }
   if (pathname.startsWith("/admin/expression-prompts")) {
-    return handleExpressionPrompts(request, env, pathname);
+    await requireAdminUser(env, request);
+    return jsonResponse({ error: "feature_retired" }, { status: 410 });
   }
   if (pathname === "/admin/image-gen-jobs") {
     return handleImageGenJobs(request, env);
@@ -192,45 +190,6 @@ async function handleImageWorkflows(
   return null;
 }
 
-async function handleExpressionPrompts(
-  request: Request,
-  env: Env,
-  pathname: string,
-): Promise<Response | null> {
-  if (pathname === "/admin/expression-prompts" && request.method === "GET") {
-    await requireAdminUser(env, request);
-    const rows = await listExpressionPrompts(env);
-    const emails = await loadUpdatedByEmails(
-      env,
-      rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
-    );
-    const prompts = rows.map((r) => ({
-      ...r,
-      updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
-    }));
-    return jsonResponse({ prompts });
-  }
-
-  const match = pathname.match(/^\/admin\/expression-prompts\/([^/]+)\/([^/]+)$/);
-  if (match && request.method === "PUT") {
-    const admin = await requireAdminUser(env, request);
-    const gender = decodeURIComponent(match[1] ?? "");
-    const emotion = decodeURIComponent(match[2] ?? "");
-    if (!isExpressionGender(gender) || !isNonNeutralEmotion(emotion)) {
-      return jsonResponse({ error: "invalid_key" }, { status: 400 });
-    }
-    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-    const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
-    if (!prompt) {
-      return jsonResponse({ error: "prompt_required" }, { status: 400 });
-    }
-    await upsertExpressionPrompt(env, gender, emotion, prompt, admin.id);
-    return jsonResponse({ ok: true });
-  }
-
-  return null;
-}
-
 type ParseResult =
   | { ok: true; value: ImageModelInput }
   | { ok: false; error: string };
@@ -263,7 +222,7 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
   const raw = (body ?? {}) as Record<string, unknown>;
   const key = typeof raw.key === "string" ? raw.key.trim() : "";
   const label = typeof raw.label === "string" ? raw.label.trim() : "";
-  const mode = raw.mode === "variation" ? "variation" : raw.mode === "create" ? "create" : null;
+  const mode = isImageGenMode(raw.mode) ? raw.mode : null;
   if (!key || !label || !mode) {
     return { ok: false, error: "invalid_workflow" };
   }
@@ -285,6 +244,9 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
     typeof raw.load_image_node_id === "string" && raw.load_image_node_id.trim()
       ? raw.load_image_node_id.trim()
       : null;
+  if (mode === "cutout" && !loadImageNodeId) {
+    return { ok: false, error: "cutout_load_image_node_required" };
+  }
   const negativePromptNodeId =
     typeof raw.negative_prompt_node_id === "string" && raw.negative_prompt_node_id.trim()
       ? raw.negative_prompt_node_id.trim()

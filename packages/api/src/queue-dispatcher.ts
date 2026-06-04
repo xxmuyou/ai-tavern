@@ -1,9 +1,9 @@
 import { LLMError } from "./llm";
 import { processSummary } from "./chat/summary-consumer";
 import type { SummaryJobPayload } from "./chat/summary-queue";
-import { isArtJobPayload, processArtJob } from "./companions/art-consumer";
 import { isBaseArtJobPayload, loadBaseArtJob, processBaseArtJob } from "./image-gen/base-art";
-import { TASK_MOMENT_IMAGE, processMomentImageJob } from "./image-gen/moment-image";
+import { TASK_CUTOUT, processCutoutJob } from "./image-gen/cutout";
+import { TASK_MOMENT_IMAGE, processMomentImageJob, reenqueueMomentJobsForCompanion } from "./image-gen/moment-image";
 import { TASK_OUTFIT_IMAGE, processOutfitImageJob } from "./image-gen/outfit-image";
 
 function isSummaryPayload(value: unknown): value is SummaryJobPayload {
@@ -55,23 +55,6 @@ export async function dispatchQueueBatch(
       continue;
     }
 
-    if (isArtJobPayload(body)) {
-      try {
-        await processArtJob(env, body);
-        message.ack();
-      } catch (err) {
-        console.error(
-          JSON.stringify({
-            error: err instanceof Error ? err.message : String(err),
-            job_id: body.job_id,
-            message: "Companion art job failed, will retry",
-          }),
-        );
-        message.retry();
-      }
-      continue;
-    }
-
     if (isBaseArtJobPayload(body)) {
       try {
         // The image.generate payload is shared across image_generation_jobs
@@ -79,6 +62,11 @@ export async function dispatchQueueBatch(
         const job = await loadBaseArtJob(env, body.job_id);
         if (job?.task === TASK_MOMENT_IMAGE) {
           await processMomentImageJob(env, body.job_id);
+        } else if (job?.task === TASK_CUTOUT) {
+          const result = await processCutoutJob(env, body.job_id);
+          if (result) {
+            await reenqueueMomentJobsForCompanion(env, result.companionId);
+          }
         } else if (job?.task === TASK_OUTFIT_IMAGE) {
           await processOutfitImageJob(env, body.job_id);
         } else {

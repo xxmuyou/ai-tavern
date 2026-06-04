@@ -19,6 +19,7 @@ import type {
   ChatMessageInput,
   CompanionCreateInput,
   CompanionDetailResponse,
+  CompanionMomentImagesResponse,
   CompanionsListResponse,
   CreditBalanceResponse,
   CreditLedgerResponse,
@@ -28,10 +29,6 @@ import type {
   AdminSettingsResponse,
   CreditPackageId,
   DailyState,
-  EmotionArtGenerateResponse,
-  EmotionArtJobsResponse,
-  ExpressionGender,
-  ExpressionPromptsResponse,
   ImageModelInput,
   ImageModelOption,
   ImageModelsResponse,
@@ -391,25 +388,6 @@ export async function revealAdminSettingSecret(key: string): Promise<AdminSecret
   );
 }
 
-export async function listAdminExpressionPrompts(): Promise<ExpressionPromptsResponse> {
-  return requestJson<ExpressionPromptsResponse>('/admin/expression-prompts');
-}
-
-export async function updateAdminExpressionPrompt(
-  gender: ExpressionGender,
-  emotion: string,
-  prompt: string,
-): Promise<{ ok: true }> {
-  return requestJson<{ ok: true }>(
-    `/admin/expression-prompts/${encodeURIComponent(gender)}/${encodeURIComponent(emotion)}`,
-    {
-      body: JSON.stringify({ prompt }),
-      headers: { 'content-type': 'application/json' },
-      method: 'PUT',
-    },
-  );
-}
-
 export async function updateRomancePreference(
   preference: RomancePreference,
 ): Promise<{ romance_preference: RomancePreference }> {
@@ -689,6 +667,14 @@ export async function getMomentImageJob(jobId: string): Promise<MomentImageJobRe
   );
 }
 
+export async function listCompanionMomentImages(
+  companionId: string,
+): Promise<CompanionMomentImagesResponse> {
+  return requestJson<CompanionMomentImagesResponse>(
+    `/companions/${encodeURIComponent(companionId)}/moment-images`,
+  );
+}
+
 export async function getOutfitRecommendations(messageId: string): Promise<OutfitRecommendationsResponse> {
   return requestJson<OutfitRecommendationsResponse>(
     `/chat/messages/${encodeURIComponent(messageId)}/outfit-image/recommendations`,
@@ -742,26 +728,6 @@ export async function deleteImageAsset(id: string): Promise<{ ok: boolean }> {
   return requestJson<{ ok: boolean }>(`/me/image-assets/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
-}
-
-export async function generateCompanionEmotionArt(
-  companionId: string,
-  emotion: string,
-  options?: { force?: boolean },
-): Promise<EmotionArtGenerateResponse> {
-  const query = options?.force ? '?force=1' : '';
-  return requestJson<EmotionArtGenerateResponse>(
-    `/companions/${encodeURIComponent(companionId)}/emotion-art/${encodeURIComponent(emotion)}/generate${query}`,
-    { method: 'POST' },
-  );
-}
-
-export async function listCompanionEmotionArtJobs(
-  companionId: string,
-): Promise<EmotionArtJobsResponse> {
-  return requestJson<EmotionArtJobsResponse>(
-    `/companions/${encodeURIComponent(companionId)}/emotion-art/jobs`,
-  );
 }
 
 export type { ImageModelOption } from './types';

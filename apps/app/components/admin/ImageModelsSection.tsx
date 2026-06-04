@@ -287,7 +287,7 @@ function WorkflowFields({
         </Field>
       </View>
       <View className="flex-row flex-wrap gap-2">
-        {(['create', 'variation'] as const).map((mode) => (
+        {(['create', 'variation', 'cutout'] as const).map((mode) => (
           <Pressable
             key={mode}
             accessibilityRole="button"

@@ -17,7 +17,7 @@
  *   models                          List image-model option ids (pick wf1Model / wfSceneModel)
  *   gen-personas  --count N --brief "..."   Draft N personas → drafts/personas.json
  *   gen-scenes    --count N --brief "..."   Draft N scenes   → drafts/scenes.json
- *   publish-personas [--force]      Publish reviewed personas (WF1 + WF2 + D1 insert)
+ *   publish-personas                Publish reviewed personas (WF1 + D1 insert)
  *   publish-scenes                  Publish reviewed scenes  (wf_scene + D1 insert)
  *   status                          Show draft counts by status
  */
@@ -25,7 +25,7 @@
 import { loadConfig, requireConfig } from './lib/config.mjs';
 import { appendDrafts, loadDrafts, publishable, saveDrafts } from './lib/drafts.mjs';
 import { generatePersonas, generateScenes } from './lib/llm.mjs';
-import { listImageModels, prewarmEmotions, startBaseArt, waitForArt } from './lib/api.mjs';
+import { listImageModels, startBaseArt, waitForArt } from './lib/api.mjs';
 import { insertCompanion, insertScene, tierToUnlockCondition } from './lib/d1.mjs';
 
 function parseArgs(argv) {
@@ -77,7 +77,7 @@ async function cmdGenScenes(cfg, flags) {
   log(`Drafted ${added} scenes (file now has ${total}). Review/edit: ${file}`);
 }
 
-async function cmdPublishPersonas(cfg, flags) {
+async function cmdPublishPersonas(cfg) {
   requireConfig(cfg, ['apiBaseUrl', 'adminToken', 'wf1Model']);
   const all = loadDrafts('personas');
   const todo = publishable(all);
@@ -92,14 +92,13 @@ async function cmdPublishPersonas(cfg, flags) {
       const jobId = await startBaseArt(cfg, { model: cfg.wf1Model, prompt: draft.image_prompt });
       const artKey = await waitForArt(cfg, jobId);
       const companionId = insertCompanion(cfg, draft, artKey);
-      log(`    inserted companion ${companionId}; queueing WF2 expressions…`);
-      const pre = await prewarmEmotions(cfg, companionId, flags.force === true || flags.force === 'true');
+      log(`    inserted companion ${companionId}`);
       draft.status = 'published';
       draft.companion_id = companionId;
       draft.art_key = artKey;
-      draft.emotion_jobs = (pre.jobs ?? []).length;
+      delete draft.emotion_jobs;
       delete draft.error;
-      log(`    ✓ published (${draft.emotion_jobs} expression jobs queued)`);
+      log('    ✓ published');
     } catch (err) {
       draft.status = 'failed';
       draft.error = String(err.message ?? err);
@@ -107,7 +106,7 @@ async function cmdPublishPersonas(cfg, flags) {
     }
     saveDrafts('personas', all);
   }
-  log('Done. Expression variants finish asynchronously in the worker.');
+  log('Done.');
 }
 
 async function cmdPublishScenes(cfg) {
@@ -170,7 +169,7 @@ async function main() {
     case 'models': return cmdModels(cfg);
     case 'gen-personas': return cmdGenPersonas(cfg, flags);
     case 'gen-scenes': return cmdGenScenes(cfg, flags);
-    case 'publish-personas': return cmdPublishPersonas(cfg, flags);
+    case 'publish-personas': return cmdPublishPersonas(cfg);
     case 'publish-scenes': return cmdPublishScenes(cfg);
     case 'status': return cmdStatus();
     default:

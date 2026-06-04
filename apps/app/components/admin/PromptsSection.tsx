@@ -7,7 +7,6 @@ import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
 import { AdminPanel, AdminPanelHeader } from './AdminPanel';
-import { ExpressionPromptsSection } from './ExpressionPromptsSection';
 import { SettingRow } from './SettingsSection';
 
 const WF1_BASE_PROMPT_KEY = 'image_gen.wf1_base_prompt';
@@ -19,12 +18,6 @@ const PROMPT_MODULES = [
       'WF1 (base portrait / create): one global prompt prepended to every create generation, across all art styles.',
     id: 'wf1-base',
     label: 'WF1 — base portrait prompt',
-  },
-  {
-    description:
-      'WF2 (expression variants / variation): pose & expression prompt per gender × emotion, used to generate portrait variants.',
-    id: 'expression-portraits',
-    label: 'WF2 — expression prompts',
   },
   {
     description:
@@ -64,7 +57,6 @@ export function PromptsSection() {
           title="WF1 base prompt (global)"
         />
       ) : null}
-      {moduleId === 'expression-portraits' ? <ExpressionPromptsSection /> : null}
       {moduleId === 'wf-moment' ? (
         <BasePromptSection
           description="A global preamble prepended to every WF_MOMENT chat scene moment prompt."

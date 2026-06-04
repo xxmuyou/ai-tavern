@@ -25,6 +25,7 @@ type CompanionRow = {
   preferred_scenes: string | null;
   art_url: string | null;
   art_emotions: string | null;
+  art_cutout_key?: string | null;
   gender: string | null;
   initial_dims: string | null;
   created_at: number;
@@ -1074,6 +1075,7 @@ function mutate(
       preferred_scenes,
       art_url,
       art_emotions,
+      clearCutout,
       gender,
       updatedAt,
       id,
@@ -1093,6 +1095,7 @@ function mutate(
       string | null,
       string | null,
       string | null,
+      number,
       string | null,
       number,
       string,
@@ -1103,6 +1106,7 @@ function mutate(
         ...existing,
         appearance,
         art_emotions,
+        art_cutout_key: clearCutout ? null : existing.art_cutout_key ?? null,
         art_url,
         background,
         boundary,

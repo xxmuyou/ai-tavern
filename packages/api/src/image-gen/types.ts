@@ -33,20 +33,22 @@ export type CompanionPromptContext = {
  * Product-level generation mode (spec-022 §C.0).
  *
  * - `create`: base portrait (txt2img, or img2img when a source upload exists)
- * - `variation`: emotion variant from a confirmed base portrait (img2img)
+ * - `variation`: image variant from a confirmed base portrait (img2img)
+ * - `cutout`: transparent companion matting from a confirmed base portrait
  */
-export type ImageGenMode = "create" | "variation";
+export type ImageGenMode = "create" | "variation" | "cutout";
 
 export type ImageGenRequest = {
   /**
    * Product mode. Defaults to `variation` for backward compatibility with the
-   * existing companion emotion-art pipeline (which never sets it).
+   * older companion emotion-art pipeline (which never set it).
    */
   mode?: ImageGenMode;
   /**
    * Workflow to run, keyed into the unified `image_gen.workflows` config.
    * Resolved from the chosen model for `create` (defaults to `wf1`); `wf2` for
-   * `variation`. See image-gen/workflows.ts.
+   * legacy `variation`; `wf_cutout` for transparent matting. See
+   * image-gen/workflows.ts.
    */
   workflow_key?: string;
   /**
@@ -61,8 +63,8 @@ export type ImageGenRequest = {
    * `variation`; for `create` only set when re-painting an uploaded image.
    */
   source_art_url?: string;
-  /** Full prompt text already composed with companion fields. */
-  prompt: string;
+  /** Full prompt text already composed with companion fields. Optional for cutout. */
+  prompt?: string;
   /** Target emotion (only meaningful for `variation`). */
   emotion?: NonNeutralEmotion;
   /** Companion fields included for providers that accept structured context. */

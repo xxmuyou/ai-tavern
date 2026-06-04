@@ -13,6 +13,10 @@ import {
   type ImageGenJobStatus,
 } from "./base-art";
 import { resolveImageGenConfig } from "../settings/store";
+import {
+  createOrReuseCutoutJob,
+  loadCompanionCutoutSource,
+} from "./cutout";
 
 /**
  * Chat moment image pipeline (spec-027).
@@ -180,19 +184,6 @@ export async function loadMomentByJob(
     .first<StoryMomentImageRow>();
 }
 
-/**
- * Base portrait (R2 object key) for a companion. Fed as the wf_moment
- * load-image reference so the scene's character matches the companion's
- * 立绘. Returns null when the companion has no base art (graceful txt2img
- * fallback in processMomentImageJob).
- */
-async function loadCompanionArtUrl(env: Env, companionId: string): Promise<string | null> {
-  const row = await env.DB.prepare(`SELECT art_url FROM companions WHERE id = ?`)
-    .bind(companionId)
-    .first<{ art_url: string | null }>();
-  return row?.art_url ?? null;
-}
-
 export type CreateMomentImageInput = {
   userId: string;
   companionId: string;
@@ -322,7 +313,10 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
     // scene character stays consistent. When it's missing, omit source_art_url and
     // fall back to txt2img (the provider routes create+source_art_url to img2img).
     const moment = await loadMomentByJob(env, job.id);
-    const sourceArtUrl = moment ? await loadCompanionArtUrl(env, moment.companion_id) : null;
+    const sourceArtUrl = moment ? await resolveMomentSourceArt(env, job, moment) : null;
+    if (sourceArtUrl === "waiting_for_cutout") {
+      return;
+    }
     const basePrompt = (await resolveImageGenConfig(env)).wfMomentBasePrompt?.trim();
     const request: ImageGenRequest = {
       mode: "create",
@@ -358,6 +352,64 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
     const message = err instanceof Error ? err.message : String(err);
     await failImageJob(env, job, code, message);
     throw err;
+  }
+}
+
+async function resolveMomentSourceArt(
+  env: Env,
+  job: ImageGenJobRow,
+  moment: StoryMomentImageRow,
+): Promise<string | null | "waiting_for_cutout"> {
+  const source = await loadCompanionCutoutSource(env, moment.companion_id);
+  if (!source?.art_url) return null;
+  if (source.art_cutout_key) return source.art_cutout_key;
+
+  const cutout = await createOrReuseCutoutJob(env, {
+    companionId: moment.companion_id,
+    sourceArtUrl: source.art_url,
+    userId: job.user_id ?? moment.user_id,
+  });
+  if (cutout.status === "succeeded" && cutout.output_key) return cutout.output_key;
+  if (cutout.status === "failed" || cutout.status === "cancelled") {
+    throw new ImageGenError(
+      "cutout_failed",
+      cutout.error_message ?? "Companion cutout failed before moment image generation",
+      { retryable: false },
+    );
+  }
+
+  await updateImageJob(env, job.id, {
+    provider_task_id: null,
+    status: "processing",
+  });
+  return "waiting_for_cutout";
+}
+
+export async function reenqueueMomentJobsForCompanion(
+  env: Env,
+  companionId: string,
+): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT j.id
+     FROM image_generation_jobs j
+     JOIN story_moment_images m ON m.job_id = j.id
+     WHERE m.companion_id = ?
+       AND j.task = ?
+       AND j.status IN ('pending', 'processing')
+       AND j.provider_task_id IS NULL
+       AND j.output_key IS NULL
+     ORDER BY j.created_at ASC
+     LIMIT 20`,
+  )
+    .bind(companionId, TASK_MOMENT_IMAGE)
+    .all<{ id: string }>();
+
+  for (const row of results ?? []) {
+    await env.JOB_QUEUE.send({
+      created_at: new Date().toISOString(),
+      job_id: row.id,
+      type: "image.generate",
+    });
   }
 }
 

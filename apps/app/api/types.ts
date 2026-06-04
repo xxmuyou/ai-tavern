@@ -532,6 +532,20 @@ export type ChatMomentImage = {
   output_key: string | null;
 };
 
+export type CompanionMomentImage = {
+  id: string;
+  job_id: string;
+  message_id: string;
+  status: MomentImageStatus;
+  output_key: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export type CompanionMomentImagesResponse = {
+  moment_images: CompanionMomentImage[];
+};
+
 export type ChatOutfitImage = {
   job_id: string;
   status: MomentImageStatus;
@@ -882,7 +896,7 @@ export type AdminImageWorkflow = {
   key: string;
   label: string;
   load_image_node_id: string | null;
-  mode: 'create' | 'variation';
+  mode: 'create' | 'variation' | 'cutout';
   model_ids: string[];
   negative_prompt_node_id: string | null;
   negative_prompt_field_name: string;
@@ -931,7 +945,7 @@ export type ImageWorkflowInput = {
   key: string;
   label: string;
   load_image_node_id: string | null;
-  mode: 'create' | 'variation';
+  mode: 'create' | 'variation' | 'cutout';
   model_ids: string[];
   negative_prompt_node_id: string | null;
   prompt_node_id: string;

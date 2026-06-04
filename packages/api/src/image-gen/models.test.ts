@@ -19,7 +19,7 @@ type ModelRow = {
 type WorkflowRow = {
   key: string;
   label: string;
-  mode: "create" | "variation";
+  mode: "create" | "variation" | "cutout";
   workflow_id: string;
   prompt_node_id: string;
   checkpoint_node_id: string | null;

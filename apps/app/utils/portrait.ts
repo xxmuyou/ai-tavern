@@ -50,18 +50,11 @@ export const EMOTION_TINT: Record<ChatEmotionKey, string> = {
   warm: '#E89B6A',
 };
 
-/**
- * Resolve the image source for a portrait, falling back to the base neutral
- * art when the requested emotion has no dedicated art. This fallback is what
- * the in-chat PortraitBar wants (never show a blank bar); the gallery resolves
- * per-emotion art directly instead, so an ungenerated emotion reads as empty
- * rather than silently showing the neutral image.
- */
+/** Resolve the single base portrait. Emotion now drives UI tint/emoji only. */
 export function resolvePortrait(
-  artEmotions: ArtEmotions,
+  _artEmotions: ArtEmotions,
   artUrl: string | null | undefined,
-  emotion: ChatEmotionKey,
+  _emotion: ChatEmotionKey,
 ): ImageSourcePropType | null {
-  const raw = (artEmotions && artEmotions[emotion]) || artUrl || null;
-  return mediaSource(raw);
+  return mediaSource(artUrl ?? null);
 }

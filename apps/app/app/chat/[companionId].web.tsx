@@ -15,13 +15,11 @@ import {
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
 import type {
-  ChatEmotionKey,
   ChatMessage,
   ChatMomentImage,
   ChatOutfitImage,
   ChatUnlock,
   CompanionDetail,
-  NonNeutralChatEmotionKey,
   RelationshipDimensions,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
@@ -35,13 +33,11 @@ import { StreamingBubble } from '@/components/StreamingBubble';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebTag } from '@/components/web/ui';
-import { gateEmotion } from '@/utils/expression-unlock';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
-import { useOnDemandEmotionArt } from '@/hooks/use-emotion-art';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { PersonaSelector } from '@/components/PersonaSelector';
@@ -285,26 +281,7 @@ export default function WebChatScreen() {
     }
   }, [activityActions, activityId, pushError, setActivity]);
 
-  const shownEmotion = gateEmotion(currentEmotion, companion?.art_emotions);
-  const handleEmotionArtReady = useCallback((emotion: NonNeutralChatEmotionKey, key: string) => {
-    setCompanion((current) =>
-      current
-        ? {
-            ...current,
-            art_emotions: { ...(current.art_emotions ?? {}), [emotion]: key },
-          }
-        : current,
-    );
-  }, []);
-
-  useOnDemandEmotionArt({
-    artEmotions: companion?.art_emotions,
-    artUrl: companion?.art_url,
-    companionId,
-    emotion: shownEmotion,
-    onReady: handleEmotionArtReady,
-    source: companion?.source,
-  });
+  const shownEmotion = currentEmotion;
 
   const handleKeyPress = useCallback(
     (event: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
@@ -334,7 +311,7 @@ export default function WebChatScreen() {
     );
   }
 
-  const portrait = mediaSource(companion?.art_emotions?.[shownEmotion as ChatEmotionKey] ?? companion?.art_url ?? null);
+  const portrait = mediaSource(companion?.art_url ?? null);
   const canSend = !stream.isStreaming && remainingSeconds === 0 && draft.trim().length > 0;
 
   return (

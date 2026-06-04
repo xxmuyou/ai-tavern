@@ -27,6 +27,13 @@ export const openAiImageGenProvider: ImageGenProvider = {
     const cfg = await resolveImageGenConfig(env);
     const apiKey = requireApiKey(cfg);
 
+    if (req.mode === "cutout") {
+      throw new ImageGenError(
+        "provider_not_supported",
+        "OpenAI image provider does not support cutout/matting",
+        { retryable: false },
+      );
+    }
     if (req.mode === "create" && !req.source_art_url) {
       return generateCreate(req, cfg, apiKey);
     }
@@ -85,7 +92,7 @@ async function generateVariation(
 
   const form = new FormData();
   form.append("model", cfg.openai.model);
-  form.append("prompt", req.prompt);
+  form.append("prompt", req.prompt ?? "");
   form.append("size", cfg.openai.size);
   form.append("n", "1");
   form.append("image", new Blob([sourceBytes], { type: sourceType }), "source.png");

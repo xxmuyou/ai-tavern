@@ -8,10 +8,8 @@
 // Scenes are NOT handled here — they keep their existing dimension-threshold
 // gating in scenes/unlock.ts. This module covers secret / title.
 //
-// Expressions are NOT stage-gated anymore: they are subscription-gated and
-// unlocked manually from the profile portrait gallery (an expression is
-// "available" once its art has been generated, which only Pro users may do).
-// See companions/emotion-art-routes.ts and apps/app/utils/expression-unlock.ts.
+// Expressions are no longer generated or gated as separate portrait assets
+// (spec-031). Chat emotion now drives UI tint/emoji only.
 
 import type { RelationshipStage } from "../life/types";
 import type { DimensionValues } from "./level";

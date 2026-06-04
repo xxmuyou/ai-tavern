@@ -22,8 +22,6 @@ import type {
   ChatMomentImage,
   ChatOutfitImage,
   ChatUnlock,
-  CompanionSource,
-  NonNeutralChatEmotionKey,
   RelationshipDimensions,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
@@ -41,13 +39,11 @@ import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { TopBar } from '@/components/TopBar';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
-import { gateEmotion } from '@/utils/expression-unlock';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
-import { useOnDemandEmotionArt } from '@/hooks/use-emotion-art';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { PersonaSelector } from '@/components/PersonaSelector';
@@ -69,7 +65,6 @@ type CompanionPortraitState = {
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
   art_url: string | null;
   name: string;
-  source: CompanionSource | null;
 };
 
 type ChatListItem = ChatMessage | StreamingItem;
@@ -99,7 +94,6 @@ function ChatScreenInner() {
     art_emotions: null,
     art_url: null,
     name: 'Chat',
-    source: null,
   });
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
@@ -168,12 +162,11 @@ function ChatScreenInner() {
             art_emotions: detail.art_emotions ?? null,
             art_url: detail.art_url ?? null,
             name: detail.name ?? 'Chat',
-            source: detail.source,
           });
         }
       } catch {
         if (!cancelled) {
-          setCompanion({ art_emotions: null, art_url: null, name: 'Chat', source: null });
+          setCompanion({ art_emotions: null, art_url: null, name: 'Chat' });
         }
       }
     })();
@@ -339,22 +332,7 @@ function ChatScreenInner() {
     [handleSend],
   );
 
-  const shownEmotion = gateEmotion(currentEmotion, companion.art_emotions);
-  const handleEmotionArtReady = useCallback((emotion: NonNeutralChatEmotionKey, key: string) => {
-    setCompanion((current) => ({
-      ...current,
-      art_emotions: { ...(current.art_emotions ?? {}), [emotion]: key },
-    }));
-  }, []);
-
-  useOnDemandEmotionArt({
-    artEmotions: companion.art_emotions,
-    artUrl: companion.art_url,
-    companionId,
-    emotion: shownEmotion,
-    onReady: handleEmotionArtReady,
-    source: companion.source,
-  });
+  const shownEmotion = currentEmotion;
 
   const updateHistoryMessage = history.updateMessage;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
