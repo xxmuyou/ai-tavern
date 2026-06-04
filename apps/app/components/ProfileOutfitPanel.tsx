@@ -1,0 +1,261 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import {
+  clearCompanionProfileImage,
+  generateProfileOutfitImage,
+  getProfileOutfitImageJob,
+  getProfileOutfitRecommendations,
+  mediaSource,
+  setCompanionProfileImage,
+} from '@/api/companion-client';
+import type { MomentImageStatus, OutfitRecommendation } from '@/api/types';
+import { WebButton, WebCard } from '@/components/web/ui';
+
+const POLL_INTERVAL_MS = 2500;
+const MAX_POLLS = 120;
+
+type Phase = 'idle' | 'choosing' | 'generating' | 'ready' | 'applying' | 'error';
+
+type ProfileOutfitPanelProps = {
+  companionId: string;
+  hasOverride: boolean;
+  name: string;
+  onChanged: () => Promise<unknown> | void;
+  onError?: (message: string) => void;
+};
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTerminalFailure(status: MomentImageStatus): boolean {
+  return status === 'failed' || status === 'cancelled';
+}
+
+export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, onError }: ProfileOutfitPanelProps) {
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [recommendations, setRecommendations] = useState<OutfitRecommendation[]>([]);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
+  const [selectedRecommendationId, setSelectedRecommendationId] = useState<string | null>(null);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [generationId, setGenerationId] = useState<string | null>(null);
+  const [outputKey, setOutputKey] = useState<string | null>(null);
+  const activeRef = useRef(true);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  async function openChooser() {
+    setPhase('choosing');
+    if (recommendations.length > 0 || isLoadingRecommendations) return;
+    setIsLoadingRecommendations(true);
+    try {
+      const payload = await getProfileOutfitRecommendations(companionId);
+      if (!activeRef.current) return;
+      setRecommendations(payload.recommendations);
+      setSelectedRecommendationId(payload.recommendations[0]?.id ?? null);
+    } catch {
+      if (activeRef.current) onError?.('Could not load outfit suggestions.');
+    } finally {
+      if (activeRef.current) setIsLoadingRecommendations(false);
+    }
+  }
+
+  function markReady(nextJobId: string, nextGenerationId: string | null, nextOutputKey: string) {
+    setJobId(nextJobId);
+    if (nextGenerationId) setGenerationId(nextGenerationId);
+    setOutputKey(nextOutputKey);
+    setPhase('ready');
+  }
+
+  async function poll(nextJobId: string, fallbackGenerationId: string | null) {
+    for (let i = 0; i < MAX_POLLS; i += 1) {
+      if (!activeRef.current) return;
+      let payload;
+      try {
+        payload = await getProfileOutfitImageJob(nextJobId);
+      } catch {
+        if (activeRef.current) setPhase('error');
+        return;
+      }
+      if (payload.status === 'succeeded' && payload.output_key) {
+        if (activeRef.current) markReady(payload.job_id || nextJobId, payload.generation_id ?? fallbackGenerationId, payload.output_key);
+        return;
+      }
+      if (isTerminalFailure(payload.status)) {
+        if (activeRef.current) setPhase('error');
+        return;
+      }
+      await delay(POLL_INTERVAL_MS);
+    }
+    if (activeRef.current) setPhase('error');
+  }
+
+  async function generate() {
+    const trimmed = customPrompt.trim();
+    const input = trimmed
+      ? { prompt: trimmed, source: 'custom' as const }
+      : selectedRecommendationId
+        ? { recommendation_id: selectedRecommendationId, source: 'recommended' as const }
+        : null;
+    if (!input) return;
+
+    setPhase('generating');
+    setOutputKey(null);
+    setGenerationId(null);
+    try {
+      const payload = await generateProfileOutfitImage(companionId, input);
+      if (!activeRef.current) return;
+      setJobId(payload.job_id);
+      setGenerationId(payload.generation_id ?? null);
+      if (payload.status === 'succeeded' && payload.output_key) {
+        markReady(payload.job_id, payload.generation_id ?? null, payload.output_key);
+        return;
+      }
+      if (isTerminalFailure(payload.status)) {
+        setPhase('error');
+        return;
+      }
+      await poll(payload.job_id, payload.generation_id ?? null);
+    } catch {
+      if (activeRef.current) {
+        setPhase('error');
+        onError?.('Could not generate that outfit.');
+      }
+    }
+  }
+
+  async function applyGeneratedImage() {
+    if (!generationId) return;
+    setPhase('applying');
+    try {
+      await setCompanionProfileImage(companionId, generationId);
+      await onChanged();
+      if (activeRef.current) setPhase('idle');
+    } catch {
+      if (activeRef.current) {
+        setPhase('ready');
+        onError?.('Could not apply this profile image.');
+      }
+    }
+  }
+
+  async function resetProfileImage() {
+    try {
+      await clearCompanionProfileImage(companionId);
+      await onChanged();
+    } catch {
+      onError?.('Could not reset the profile image.');
+    }
+  }
+
+  const previewSource = mediaSource(outputKey);
+  const canGenerate = customPrompt.trim().length > 0 || selectedRecommendationId !== null;
+
+  return (
+    <WebCard padding="md" className="gap-3">
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="min-w-0 flex-1">
+          <Text className="text-overline text-rose-deep">Profile image</Text>
+          <Text className="mt-1 text-body-sm text-app-muted">Generate a new outfit for {name}, then keep only the one that feels right.</Text>
+        </View>
+        <WebButton
+          label={phase === 'generating' ? 'Generating…' : 'Change outfit'}
+          isLoading={phase === 'generating'}
+          onPress={() => void openChooser()}
+          variant="primary"
+          iconLeft={<Ionicons color="#9A2F4F" name="shirt-outline" size={16} />}
+        />
+      </View>
+
+      {phase === 'choosing' || phase === 'generating' || phase === 'ready' || phase === 'applying' || phase === 'error' ? (
+        <View className="gap-3 rounded-2xl border border-app-line-soft bg-app-sunken/40 p-3">
+          <View className="flex-row flex-wrap gap-2">
+            {isLoadingRecommendations ? (
+              <ActivityIndicator color="#9A2F4F" size="small" />
+            ) : recommendations.map((item) => {
+              const selected = selectedRecommendationId === item.id && customPrompt.trim().length === 0;
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  key={item.id}
+                  onPress={() => {
+                    setCustomPrompt('');
+                    setSelectedRecommendationId(item.id);
+                  }}
+                  className={`rounded-full border px-3 py-1.5 ${
+                    selected ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-canvas/70'
+                  }`}
+                >
+                  <Text className={`text-xs font-semibold ${selected ? 'text-rose-deep' : 'text-app-muted'}`}>{item.title}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <TextInput
+            accessibilityLabel="Custom profile outfit prompt"
+            onChangeText={(text) => {
+              setCustomPrompt(text);
+              if (text.trim()) setSelectedRecommendationId(null);
+            }}
+            placeholder="Custom outfit..."
+            placeholderTextColor="#8F7F76"
+            value={customPrompt}
+            className="min-h-10 rounded-xl border border-app-line bg-app-canvas px-3 py-2 text-sm text-app-ink"
+          />
+
+          {previewSource ? (
+            <View className="overflow-hidden rounded-2xl border border-app-line bg-app-surface">
+              <Image accessibilityLabel="Generated profile outfit preview" resizeMode="cover" source={previewSource} style={styles.preview} />
+            </View>
+          ) : null}
+
+          {phase === 'error' ? (
+            <Text className="text-caption font-semibold text-ember">Generation failed. Try another outfit prompt.</Text>
+          ) : null}
+
+          <View className="flex-row flex-wrap gap-2">
+            <WebButton
+              label={phase === 'generating' ? 'Generating…' : outputKey ? 'Regenerate' : 'Generate'}
+              isLoading={phase === 'generating'}
+              onPress={() => void generate()}
+              variant="outline"
+              disabled={!canGenerate || phase === 'generating' || phase === 'applying'}
+            />
+            {outputKey ? (
+              <WebButton
+                label={phase === 'applying' ? 'Applying…' : 'Use as profile image'}
+                isLoading={phase === 'applying'}
+                onPress={() => void applyGeneratedImage()}
+                variant="primary"
+                disabled={!generationId}
+              />
+            ) : null}
+            <WebButton label="Close" onPress={() => setPhase('idle')} variant="ghost" />
+          </View>
+        </View>
+      ) : null}
+
+      {hasOverride ? (
+        <Pressable accessibilityRole="button" onPress={() => void resetProfileImage()} className="self-start">
+          <Text className="text-caption font-semibold text-app-muted">Reset to original profile image</Text>
+        </Pressable>
+      ) : null}
+    </WebCard>
+  );
+}
+
+const styles = StyleSheet.create({
+  preview: {
+    aspectRatio: 4 / 5,
+    width: '100%',
+  },
+});

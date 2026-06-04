@@ -17,7 +17,6 @@ import { getCompanion, mediaSource } from '@/api/companion-client';
 import type {
   ChatMessage,
   ChatMomentImage,
-  ChatOutfitImage,
   ChatUnlock,
   CompanionDetail,
   RelationshipDimensions,
@@ -27,7 +26,6 @@ import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
-import { OutfitImageCapture } from '@/components/OutfitImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
@@ -188,12 +186,6 @@ export default function WebChatScreen() {
     shouldAutoScrollRef.current = true;
     scrollThreadToEnd(false);
   }, [scrollThreadToEnd, updateHistoryMessage]);
-  const handleOutfitReady = useCallback((messageId: string, outfit: ChatOutfitImage) => {
-    updateHistoryMessage(messageId, (message) => ({ ...message, outfit_image: outfit }));
-    shouldAutoScrollRef.current = true;
-    scrollThreadToEnd(false);
-  }, [scrollThreadToEnd, updateHistoryMessage]);
-
   const remainingSeconds = useMemo(() => {
     if (!rateLimitedUntil) return 0;
     return Math.max(0, Math.ceil((rateLimitedUntil - now) / 1000));
@@ -473,13 +465,6 @@ export default function WebChatScreen() {
                         messageId={item.id}
                         initialMoment={item.moment_image ?? null}
                         onMomentReady={(moment) => handleMomentReady(item.id, moment)}
-                      />
-                    ) : null}
-                    {isServerCompanion ? (
-                      <OutfitImageCapture
-                        messageId={item.id}
-                        initialOutfit={item.outfit_image ?? null}
-                        onOutfitReady={(outfit) => handleOutfitReady(item.id, outfit)}
                       />
                     ) : null}
                   </View>

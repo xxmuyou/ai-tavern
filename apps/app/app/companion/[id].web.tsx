@@ -13,6 +13,7 @@ import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
+import { ProfileOutfitPanel } from '@/components/ProfileOutfitPanel';
 import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
 import { COMPANIONS_ROUTE } from '@/constants/routes';
 import { useCompanion } from '@/hooks/use-companions';
@@ -209,6 +210,13 @@ export default function WebCompanionDetailScreen() {
               </View>
             </View>
           </WebCard>
+          <ProfileOutfitPanel
+            companionId={companion.id}
+            hasOverride={Boolean(companion.profile_image_override)}
+            name={companion.name}
+            onChanged={refetch}
+            onError={pushError}
+          />
         </View>
 
         {/* Tabbed content */}

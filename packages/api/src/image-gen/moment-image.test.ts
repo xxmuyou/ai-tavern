@@ -153,6 +153,11 @@ function createEnv(): {
       return companions.get(id) ?? null;
     }
 
+    if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN companion_profile_images p")) {
+      const [, id] = values as [string, string];
+      return companions.get(id) ?? null;
+    }
+
     if (sql.includes("FROM companion_cutout_jobs WHERE companion_id = ? AND source_art_url = ?")) {
       const [companionId, sourceArtUrl] = values as [string, string];
       return (

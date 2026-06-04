@@ -20,6 +20,12 @@ import { handleCompanionEmotionArtRequest } from "./emotion-art-routes";
 import type { Gender } from "./gender-weight";
 import { handleCompanionArtUpload } from "./upload-art";
 import { handleCompanionStoryRequest } from "../story-beats";
+import {
+  clearCompanionProfileImage,
+  handleProfileOutfitRequest,
+  loadEffectiveCompanionArtUrl,
+  setCompanionProfileImageFromGeneration,
+} from "../image-gen/profile-outfit";
 
 const MAX_FREE_USER_COMPANIONS = QUOTA_LIMITS.FREE_CUSTOM_COMPANIONS;
 const NAME_MAX = 80;
@@ -55,6 +61,8 @@ type CompanionRow = {
   play_count: number;
   preferred_scenes: string | null;
   art_url: string | null;
+  canonical_art_url?: string | null;
+  profile_image_override?: string | null;
   art_emotions: string | null;
   gender: string | null;
   initial_dims: string | null;
@@ -165,6 +173,11 @@ export async function handleCompanionsRequest(
     return emotionArtResponse;
   }
 
+  const profileOutfitResponse = await handleProfileOutfitRequest(request, env, pathname);
+  if (profileOutfitResponse) {
+    return profileOutfitResponse;
+  }
+
   const publishMatch = pathname.match(/^\/companions\/([^/]+)\/publish$/);
   if (publishMatch) {
     if (request.method !== "PUT") {
@@ -190,6 +203,23 @@ export async function handleCompanionsRequest(
     }
     const user = await requireAuthUser(env, request);
     return setFavorite(env, user, companionId, request.method === "POST");
+  }
+
+  const profileImageMatch = pathname.match(/^\/companions\/([^/]+)\/profile-image$/);
+  if (profileImageMatch) {
+    const companionId = decodeURIComponent(profileImageMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    if (request.method !== "PUT" && request.method !== "DELETE") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const user = await requireAuthUser(env, request);
+    if (request.method === "DELETE") {
+      return clearCompanionProfileImage(env, user, companionId);
+    }
+    const body = await readJson<unknown>(request);
+    return setCompanionProfileImageFromGeneration(env, user, companionId, body);
   }
 
   const dailyStateMatch = pathname.match(/^\/companions\/([^/]+)\/daily-state$/);
@@ -365,17 +395,21 @@ async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Pr
     `SELECT c.id, c.source, c.created_by, c.is_active, c.is_public, c.name,
             c.appearance, c.personality, c.background, c.speech_style,
             c.relationship_role, c.tags, c.play_count, c.preferred_scenes,
-            c.art_url, c.gender, c.initial_dims, c.created_at, c.updated_at,
+            COALESCE(p.art_key, c.art_url) AS art_url,
+            c.art_url AS canonical_art_url,
+            p.art_key AS profile_image_override,
+            c.gender, c.initial_dims, c.created_at, c.updated_at,
             r.level_label         AS level_label,
             r.last_interaction_at AS last_interaction_at,
             f.user_id             AS fav_user
      FROM companions c
      LEFT JOIN relationships r ON r.companion_id = c.id AND r.user_id = ?
      LEFT JOIN companion_favorites f ON f.companion_id = c.id AND f.user_id = ?
+     LEFT JOIN companion_profile_images p ON p.companion_id = c.id AND p.user_id = ?
      WHERE ${conditions.join(" AND ")}
      ORDER BY ${orderBy}`,
   )
-    .bind(user.id, user.id, ...whereBinds)
+    .bind(user.id, user.id, user.id, ...whereBinds)
     .all<
       CompanionRow & {
         level_label: string | null;
@@ -586,6 +620,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
   }
 
   const relationship = await loadRelationship(env, user.id, companionId);
+  const effectiveArt = await loadEffectiveCompanionArtUrl(env, user.id, companionId);
   const dimensions = relationship
     ? {
         closeness: relationship.closeness,
@@ -600,9 +635,12 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
 
   const body: Record<string, unknown> = {
     appearance: row.appearance,
-    art_emotions: serializeArtEmotions(row.art_emotions),
-    art_url: row.art_url,
+    art_emotions: effectiveArt.profile_image_override
+      ? neutralOnlyArtEmotions(effectiveArt.art_url ?? "")
+      : serializeArtEmotions(row.art_emotions),
+    art_url: effectiveArt.art_url,
     background: row.background,
+    canonical_art_url: effectiveArt.canonical_art_url,
     gender: normalizeGender(row.gender),
     greeting: row.greeting,
     id: row.id,
@@ -610,6 +648,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     name: row.name,
     personality: row.personality,
     play_count: row.play_count,
+    profile_image_override: effectiveArt.profile_image_override,
     preferred_scenes: parseStringArray(row.preferred_scenes),
     tags: parseStringArray(row.tags),
     relationship: {

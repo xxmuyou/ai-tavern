@@ -47,8 +47,34 @@ type RelationshipFixture = {
   last_interaction_at?: number;
 };
 
+type ProfileImageFixture = {
+  art_key: string;
+  companion_id: string;
+  source_generation_id?: string | null;
+  user_id: string;
+};
+
+type ProfileOutfitFixture = {
+  companion_id: string;
+  id: string;
+  job_id: string;
+  output_key: string | null;
+  prompt_snapshot?: string;
+  status: string;
+  user_id: string;
+};
+
+type ImageJobFixture = {
+  id: string;
+  output_key: string | null;
+  status: string;
+};
+
 type Fixtures = {
   companions: CompanionRow[];
+  imageJobs?: ImageJobFixture[];
+  profileImages?: ProfileImageFixture[];
+  profileOutfits?: ProfileOutfitFixture[];
   proUserIds?: string[];
   relationships: RelationshipFixture[];
   users?: Array<{ id: string; email: string }>;
@@ -62,6 +88,13 @@ describe("companions module", () => {
     ).rejects.toMatchObject({ status: 401 });
     await expect(
       handleCompanionsRequest(new Request("http://localhost/companions/x"), env, "/companions/x"),
+    ).rejects.toMatchObject({ status: 401 });
+    await expect(
+      handleCompanionsRequest(
+        new Request("http://localhost/companions/maya/profile-outfit/generate", { method: "POST" }),
+        env,
+        "/companions/maya/profile-outfit/generate",
+      ),
     ).rejects.toMatchObject({ status: 401 });
   });
 
@@ -319,6 +352,131 @@ describe("companions module", () => {
     expect(body.relationship.level).toBe("Friend");
     expect(body.relationship.dimensions.romance).toBe(18);
     expect(body.relationship.dimensions.closeness).toBe(42);
+  });
+
+  it("get detail uses the current user's profile image override", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      profileImages: [
+        {
+          art_key: "user-art/user-1/profile-outfits/maya-new.webp",
+          companion_id: "maya",
+          user_id: "user-1",
+        },
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya", token),
+      env,
+      "/companions/maya",
+    );
+
+    const body = (await response?.json()) as {
+      art_url: string | null;
+      canonical_art_url: string | null;
+      profile_image_override: string | null;
+    };
+    expect(body.art_url).toBe("user-art/user-1/profile-outfits/maya-new.webp");
+    expect(body.canonical_art_url).toBe("portraits/maya/neutral.webp");
+    expect(body.profile_image_override).toBe("user-art/user-1/profile-outfits/maya-new.webp");
+  });
+
+  it("public discovery keeps canonical art_url even when a user has a profile override", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      profileImages: [
+        {
+          art_key: "user-art/user-1/profile-outfits/maya-new.webp",
+          companion_id: "maya",
+          user_id: "user-1",
+        },
+      ],
+      relationships: [],
+    });
+
+    const response = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public"),
+      env,
+      "/companions/public",
+    );
+    const body = (await response?.json()) as { items: Array<{ art_url: string | null; id: string }> };
+    expect(body.items).toEqual([
+      expect.objectContaining({ art_url: "portraits/maya/neutral.webp", id: "maya" }),
+    ]);
+  });
+
+  it("applies only the user's succeeded profile outfit generation as a private profile image", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      imageJobs: [{ id: "job-1", output_key: "user-art/user-1/profile-outfits/maya-new.webp", status: "succeeded" }],
+      profileOutfits: [
+        {
+          companion_id: "maya",
+          id: "gen-1",
+          job_id: "job-1",
+          output_key: "user-art/user-1/profile-outfits/maya-new.webp",
+          prompt_snapshot: "new outfit",
+          status: "succeeded",
+          user_id: "user-1",
+        },
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/profile-image", token, "PUT", {
+        generation_id: "gen-1",
+      }),
+      env,
+      "/companions/maya/profile-image",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { profile_image_override: string };
+    expect(body.profile_image_override).toBe("user-art/user-1/profile-outfits/maya-new.webp");
+
+    const detail = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya", token),
+      env,
+      "/companions/maya",
+    );
+    const detailBody = (await detail?.json()) as { art_url: string | null };
+    expect(detailBody.art_url).toBe("user-art/user-1/profile-outfits/maya-new.webp");
+  });
+
+  it("refuses to apply another user's profile outfit generation", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      imageJobs: [{ id: "job-2", output_key: "user-art/user-2/profile-outfits/maya-new.webp", status: "succeeded" }],
+      profileOutfits: [
+        {
+          companion_id: "maya",
+          id: "gen-2",
+          job_id: "job-2",
+          output_key: "user-art/user-2/profile-outfits/maya-new.webp",
+          status: "succeeded",
+          user_id: "user-2",
+        },
+      ],
+      relationships: [],
+      users: [
+        { email: "player@example.com", id: "user-1" },
+        { email: "other@example.com", id: "user-2" },
+      ],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/profile-image", token, "PUT", {
+        generation_id: "gen-2",
+      }),
+      env,
+      "/companions/maya/profile-image",
+    );
+
+    expect(response?.status).toBe(404);
   });
 
   it("get on user's own private companion succeeds; on other user's private returns 404", async () => {
@@ -855,6 +1013,15 @@ function createEnv(fixtures: Fixtures): Env {
   const companions = new Map<string, CompanionRow>();
   for (const c of fixtures.companions) companions.set(c.id, { ...c });
 
+  const profileImages = new Map<string, ProfileImageFixture>();
+  for (const item of fixtures.profileImages ?? []) {
+    profileImages.set(`${item.user_id}:${item.companion_id}`, { ...item });
+  }
+  const profileOutfits = new Map<string, ProfileOutfitFixture>();
+  for (const item of fixtures.profileOutfits ?? []) profileOutfits.set(item.id, { ...item });
+  const imageJobs = new Map<string, ImageJobFixture>();
+  for (const item of fixtures.imageJobs ?? []) imageJobs.set(item.id, { ...item });
+  const userImageAssets = new Map<string, { art_key: string; user_id: string }>();
   const relationships = fixtures.relationships.map((r) => ({ ...r }));
   const proUserIds = new Set(fixtures.proUserIds ?? []);
   const sessionsStore = createSessionsStore();
@@ -868,37 +1035,52 @@ function createEnv(fixtures: Fixtures): Env {
     AUTH_TOKEN_SECRET: "test-auth-secret",
     DB: {
       prepare(sql: string) {
-        return buildStatement(sql, companions, relationships, users, sessionsStore, proUserIds);
+        return buildStatement(sql, {
+          companions,
+          imageJobs,
+          profileImages,
+          profileOutfits,
+          relationships,
+          sessionsStore,
+          proUserIds,
+          userImageAssets,
+          users,
+        });
       },
     },
   } as unknown as Env;
 }
 
-function buildStatement(
-  sql: string,
-  companions: Map<string, CompanionRow>,
-  relationships: RelationshipFixture[],
-  users: Map<string, { id: string; email: string }>,
-  sessionsStore: SessionsStore,
-  proUserIds: Set<string>,
-) {
+type MockState = {
+  companions: Map<string, CompanionRow>;
+  imageJobs: Map<string, ImageJobFixture>;
+  profileImages: Map<string, ProfileImageFixture>;
+  profileOutfits: Map<string, ProfileOutfitFixture>;
+  proUserIds: Set<string>;
+  relationships: RelationshipFixture[];
+  sessionsStore: SessionsStore;
+  userImageAssets: Map<string, { art_key: string; user_id: string }>;
+  users: Map<string, { id: string; email: string }>;
+};
+
+function buildStatement(sql: string, state: MockState) {
   const exec = (values: unknown[]) => ({
     async all<T>(): Promise<{ results: T[] }> {
-      return { results: queryAll<T>(sql, values, companions, relationships) };
+      return { results: queryAll<T>(sql, values, state) };
     },
     async first<T>(): Promise<T | null> {
-      const sessionResult = sessionsStore.handle(sql, values);
+      const sessionResult = state.sessionsStore.handle(sql, values);
       if (sessionResult?.kind === "first") {
         return sessionResult.result as unknown as T | null;
       }
-      return queryFirst<T>(sql, values, companions, relationships, users, proUserIds);
+      return queryFirst<T>(sql, values, state);
     },
     async run() {
-      const sessionResult = sessionsStore.handle(sql, values);
+      const sessionResult = state.sessionsStore.handle(sql, values);
       if (sessionResult?.kind === "run") {
         return sessionResult.result;
       }
-      mutate(sql, values, companions, users);
+      mutate(sql, values, state);
       return { meta: { changes: 1 } };
     },
   });
@@ -914,9 +1096,9 @@ function buildStatement(
 function queryAll<T>(
   sql: string,
   values: unknown[],
-  companions: Map<string, CompanionRow>,
-  relationships: RelationshipFixture[],
+  state: MockState,
 ): T[] {
+  const { companions, profileImages, relationships } = state;
   if (sql.includes("FROM companions c") && !sql.includes("LEFT JOIN relationships r")) {
     let valueIndex = 0;
     let rows = [...companions.values()].filter((c) => (
@@ -967,11 +1149,15 @@ function queryAll<T>(
 
     return rows.map((c) => {
       const rel = relationships.find((r) => r.companion_id === c.id && r.user_id === userId);
+      const override = profileImages.get(`${userId}:${c.id}`)?.art_key ?? null;
       return {
         ...c,
+        art_url: override ?? c.art_url,
+        canonical_art_url: c.art_url,
         fav_user: null,
         last_interaction_at: rel?.last_interaction_at ?? null,
         level_label: rel?.level_label ?? null,
+        profile_image_override: override,
       };
     }) as unknown as T[];
   }
@@ -982,11 +1168,9 @@ function queryAll<T>(
 function queryFirst<T>(
   sql: string,
   values: unknown[],
-  companions: Map<string, CompanionRow>,
-  relationships: RelationshipFixture[],
-  users: Map<string, { id: string; email: string }>,
-  proUserIds: Set<string>,
+  state: MockState,
 ): T | null {
+  const { companions, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
   if (sql.includes("FROM admin_user_allowlist")) {
     return { email: values[0] as string } as T;
   }
@@ -1002,6 +1186,81 @@ function queryFirst<T>(
 
   if (sql.includes("FROM companions") && sql.includes("WHERE id = ?") && !sql.includes("LEFT JOIN")) {
     return (companions.get(values[0] as string) ?? null) as T | null;
+  }
+
+  if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN companion_profile_images p")) {
+    const [userId, companionId] = values as [string, string];
+    const companion = companions.get(companionId);
+    if (!companion) return null;
+    const override = profileImages.get(`${userId}:${companionId}`)?.art_key ?? null;
+    return {
+      art_url: override ?? companion.art_url,
+      canonical_art_url: companion.art_url,
+      profile_image_override: override,
+    } as T;
+  }
+
+  if (sql.includes("FROM profile_outfit_images")) {
+    if (sql.includes("WHERE id = ? AND user_id = ? AND companion_id = ?")) {
+      const [id, userId, companionId] = values as [string, string, string];
+      const row = profileOutfits.get(id);
+      return row && row.user_id === userId && row.companion_id === companionId
+        ? ({
+            ...row,
+            created_at: 1747000000000,
+            outfit_prompt: "test outfit",
+            prompt_source: "custom",
+            prompt_snapshot: row.prompt_snapshot ?? "test prompt",
+            updated_at: 1747000000000,
+          } as T)
+        : null;
+    }
+    if (sql.includes("WHERE job_id = ?")) {
+      const [jobId] = values as [string];
+      const row = [...profileOutfits.values()].find((item) => item.job_id === jobId);
+      return row
+        ? ({
+            ...row,
+            created_at: 1747000000000,
+            outfit_prompt: "test outfit",
+            prompt_source: "custom",
+            prompt_snapshot: row.prompt_snapshot ?? "test prompt",
+            updated_at: 1747000000000,
+          } as T)
+        : null;
+    }
+  }
+
+  if (sql.includes("FROM image_generation_jobs WHERE id = ?")) {
+    const [id] = values as [string];
+    const row = imageJobs.get(id);
+    return row
+      ? ({
+          ...row,
+          billing_ref: null,
+          ckpt_name: null,
+          completed_at: row.status === "succeeded" ? 1747000000000 : null,
+          created_at: 1747000000000,
+          error_code: null,
+          error_message: null,
+          input_keys: null,
+          mask_key: null,
+          mode: "image_to_image",
+          model: null,
+          negative_prompt: null,
+          output_content_type: null,
+          output_prefix: "profile-outfits",
+          provider: null,
+          provider_task_id: null,
+          prompt: "test prompt",
+          retry_count: 0,
+          style: null,
+          task: "profile_outfit_image",
+          updated_at: 1747000000000,
+          user_id: "user-1",
+          workflow_key: "wf_outfit",
+        } as T)
+      : null;
   }
 
   if (sql.includes("FROM relationships") && sql.includes("WHERE user_id = ? AND companion_id = ?")) {
@@ -1053,12 +1312,8 @@ function queryFirst<T>(
   return null;
 }
 
-function mutate(
-  sql: string,
-  values: unknown[],
-  companions: Map<string, CompanionRow>,
-  users: Map<string, { id: string; email: string }>,
-): void {
+function mutate(sql: string, values: unknown[], state: MockState): void {
+  const { companions, profileImages, profileOutfits, userImageAssets, users } = state;
   if (sql.includes("INSERT OR IGNORE INTO users")) {
     const [id, email] = values as [string, string];
     if (id && email && !users.has(email)) {
@@ -1225,6 +1480,45 @@ function mutate(
     const existing = companions.get(id);
     if (existing) {
       companions.set(id, { ...existing, is_public: isPublic, updated_at: updatedAt });
+    }
+    return;
+  }
+
+  if (sql.startsWith("UPDATE profile_outfit_images")) {
+    const id = values[values.length - 1] as string;
+    const row = profileOutfits.get(id);
+    if (row) {
+      if (sql.includes("output_key = ?")) row.output_key = values[0] as string | null;
+      if (sql.includes("status = ?")) row.status = values[sql.includes("output_key = ?") ? 1 : 0] as string;
+    }
+    return;
+  }
+
+  if (sql.includes("INSERT INTO user_image_assets")) {
+    const [, userId, artKey] = values as [string, string, string];
+    userImageAssets.set(`${userId}:${artKey}`, { art_key: artKey, user_id: userId });
+    return;
+  }
+
+  if (sql.includes("INSERT INTO companion_profile_images")) {
+    const [userId, companionId, artKey, sourceGenerationId] = values as [string, string, string, string | null];
+    profileImages.set(`${userId}:${companionId}`, {
+      art_key: artKey,
+      companion_id: companionId,
+      source_generation_id: sourceGenerationId,
+      user_id: userId,
+    });
+    return;
+  }
+
+  if (sql.startsWith("DELETE FROM companion_profile_images")) {
+    const [userId, companionIdOrArtKey] = values as [string, string];
+    if (sql.includes("companion_id = ?")) {
+      profileImages.delete(`${userId}:${companionIdOrArtKey}`);
+    } else {
+      for (const [key, row] of profileImages.entries()) {
+        if (row.user_id === userId && row.art_key === companionIdOrArtKey) profileImages.delete(key);
+      }
     }
   }
 }

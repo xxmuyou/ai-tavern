@@ -20,7 +20,6 @@ import type {
   ChatEmotionKey,
   ChatMessage,
   ChatMomentImage,
-  ChatOutfitImage,
   ChatUnlock,
   RelationshipDimensions,
 } from '@/api/types';
@@ -33,7 +32,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
-import { OutfitImageCapture } from '@/components/OutfitImageCapture';
 import { PortraitBar } from '@/components/PortraitBar';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StreamingBubble } from '@/components/StreamingBubble';
@@ -339,11 +337,6 @@ function ChatScreenInner() {
     updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
     shouldScrollOnNextRef.current = true;
   }, [updateHistoryMessage]);
-  const handleOutfitReady = useCallback((messageId: string, outfit: ChatOutfitImage) => {
-    updateHistoryMessage(messageId, (message) => ({ ...message, outfit_image: outfit }));
-    shouldScrollOnNextRef.current = true;
-  }, [updateHistoryMessage]);
-
   const renderItem = useCallback(({ item }: { item: ChatListItem }) => {
     if (isStreamingItem(item)) {
       return <StreamingBubble text={item.text} />;
@@ -397,16 +390,9 @@ function ChatScreenInner() {
             onMomentReady={(moment) => handleMomentReady(item.id, moment)}
           />
         ) : null}
-        {isServerCompanion ? (
-          <OutfitImageCapture
-            messageId={item.id}
-            initialOutfit={item.outfit_image ?? null}
-            onOutfitReady={(outfit) => handleOutfitReady(item.id, outfit)}
-          />
-        ) : null}
       </View>
     );
-  }, [editMessage, handleMomentReady, handleOutfitReady, messageActions]);
+  }, [editMessage, handleMomentReady, messageActions]);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
 

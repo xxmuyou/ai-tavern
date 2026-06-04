@@ -110,7 +110,7 @@ export function WebPublicCompanionHome() {
               title="No one in this room"
             />
           ) : (
-            <View className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-5">
+            <View className="grid grid-cols-3 gap-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
               {items.map((companion, index) => (
                 <DiscoveryCard
                   key={companion.id}
@@ -210,23 +210,23 @@ function DiscoveryCard({ companion, index, onPress }: { companion: CompanionList
     <Pressable
       accessibilityRole="link"
       onPress={onPress}
-      className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.055] shadow-[0_18px_48px_rgba(0,0,0,0.32)] transition-transform hover:-translate-y-1 hover:border-rose-200/40"
+      className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.055] shadow-[0_14px_36px_rgba(0,0,0,0.28)] transition-transform hover:-translate-y-0.5 hover:border-rose-200/40"
     >
-      <View className="relative aspect-[3/4] items-center justify-end overflow-hidden bg-[#1b0d15]">
+      <View className="relative aspect-[5/6] items-center justify-end overflow-hidden bg-[#1b0d15]">
         <View pointerEvents="none" className="absolute inset-0" style={{ backgroundColor: accent }} />
-        <View pointerEvents="none" className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/70 to-transparent" />
+        <View pointerEvents="none" className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 to-transparent" />
         {imageSource ? (
           <Image accessibilityLabel={companion.name} resizeMode="contain" source={imageSource} style={cardStyles.portrait} />
         ) : null}
-        <View className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/36 px-3 py-1 backdrop-blur">
-          <Text className="text-caption font-semibold text-rose-50/82">{companion.gender === 'male' ? 'Male' : 'Female'}</Text>
+        <View className="absolute left-2 top-2 rounded-full border border-white/10 bg-black/36 px-2 py-0.5 backdrop-blur">
+          <Text className="text-[11px] font-semibold text-rose-50/82">{companion.gender === 'male' ? 'Male' : 'Female'}</Text>
         </View>
       </View>
-      <View className="gap-2 p-4">
-        <Text numberOfLines={1} className="font-serif text-title-sm text-white">{companion.name}</Text>
-        <View className="flex-row items-center gap-2">
-          <Ionicons color="#fecdd3" name="chatbubble-ellipses-outline" size={13} />
-          <Text numberOfLines={1} className="text-caption text-rose-100/62">
+      <View className="gap-1.5 p-3">
+        <Text numberOfLines={1} className="font-serif text-body font-semibold text-white">{companion.name}</Text>
+        <View className="flex-row items-center gap-1.5">
+          <Ionicons color="#fecdd3" name="chatbubble-ellipses-outline" size={12} />
+          <Text numberOfLines={1} className="text-[12px] font-medium text-rose-100/62">
             {companion.relationship_role ?? 'Companion'}
           </Text>
         </View>
@@ -237,8 +237,8 @@ function DiscoveryCard({ companion, index, onPress }: { companion: CompanionList
 
 const cardStyles = StyleSheet.create({
   portrait: {
-    height: '108%',
-    transform: [{ translateY: 10 }],
-    width: '108%',
+    height: '88%',
+    transform: [{ translateY: 6 }],
+    width: '88%',
   },
 });

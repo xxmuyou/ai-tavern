@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -33,7 +33,7 @@ export default function AuthSuccessScreen() {
     if (hash.includes('token=')) {
       const session = acceptSessionFragment(hash);
       if (session) {
-        router.replace(consumePendingAuthRedirect() ?? SCENES_ROUTE);
+        router.replace((consumePendingAuthRedirect() ?? SCENES_ROUTE) as Href);
         return;
       }
       setError('The sign-in information is invalid. Please sign in again.');

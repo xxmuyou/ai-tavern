@@ -44,11 +44,17 @@ export type CompanionCutoutSource = {
 export async function loadCompanionCutoutSource(
   env: Env,
   companionId: string,
+  userId: string | null = null,
 ): Promise<CompanionCutoutSource | null> {
   const row = await env.DB.prepare(
-    `SELECT art_url, art_cutout_key FROM companions WHERE id = ?`,
+    `SELECT COALESCE(p.art_key, c.art_url) AS art_url,
+            CASE WHEN p.art_key IS NULL THEN c.art_cutout_key ELSE NULL END AS art_cutout_key
+     FROM companions c
+     LEFT JOIN companion_profile_images p
+       ON p.companion_id = c.id AND p.user_id = ?
+     WHERE c.id = ?`,
   )
-    .bind(companionId)
+    .bind(userId ?? "", companionId)
     .first<CompanionCutoutSource>();
   return row ?? null;
 }

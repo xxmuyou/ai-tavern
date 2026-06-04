@@ -1,6 +1,8 @@
 # spec-030: Chat Outfit Images（聊天换衣服图）
 
-> **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-020/022(image-gen), spec-027(chat moment images)  |  **估时：** 2-4 天  |  **状态：** 📝 draft
+> **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-020/022(image-gen), spec-027(chat moment images)  |  **估时：** 2-4 天  |  **状态：** 📝 draft / legacy
+
+> **2026-06 修订：** 聊天内 `Change outfit` UI 已废弃。`wf_outfit`、`chat_outfit_images` 和旧 API 可保留用于历史数据/兼容，但新产品入口迁移到 [`spec-033 Profile Outfit Images and User Image Assets`](./spec-033-profile-outfit-image-assets.md)。聊天 UI 只保留 `Capture this moment`。
 
 ---
 
@@ -8,9 +10,11 @@
 
 聊天里已经有 `Capture this moment` 的图片生成链路：companion message 下方按钮触发后端 job，队列调用 image-gen provider，RunningHub 或 mock 完成后写入 R2，再由前端轮询展示。换衣服属于同一类高成本、异步、可回看的聊天内图像动作，应该复用这套 job / webhook / 轮询基础设施，而不是另起一条同步生图链路。
 
-目标体验：
+Legacy 目标体验：
 
-> 用户和 Maya 聊天时，点某条 companion 回复下方的“Change outfit”。系统给出 3 个与当前场景/时间相符的穿搭推荐，也允许用户输入自己的衣服提示词。生成成功后，该消息下方出现一张换装图。它只是这次聊天中的一次性图片，不会替换角色长期图片，也不会影响既有表情图或角色详情页展示。
+> 用户和 Maya 聊天时，点某条 companion 回复下方的“Change outfit”。系统给出 3 个与当前场景/时间相符的穿搭推荐，也允许用户输入自己的衣服提示词。生成成功后，该消息下方出现一张换装图。
+
+新行为不再使用聊天消息作为入口。换装图现在属于 profile 图片管理：用户在 companion profile 图片旁生成并确认，确认后成为当前用户私有 profile 图片覆盖，详见 spec-033。
 
 第一版使用 `art_url` 作为源图参考，通过 RunningHub 新 workflow `wf_outfit` 走现有 `variation` 图生图路径。这里不引入正式 `edit` mode，也不接 credits 扣费。
 
@@ -18,7 +22,7 @@
 
 ### 目标
 
-- 在聊天里的 companion message 下增加换衣服入口。
+- ~~在聊天里的 companion message 下增加换衣服入口。~~ 已废弃；聊天 UI 不再渲染此入口。
 - 支持系统推荐穿搭和用户自定义穿搭 prompt 两种输入。
 - 系统推荐使用规则模板，不调用 LLM；根据 scene / time slot / activity / relationship stage 做稳定选择。
 - 生成图片 job，完成后把图片挂回来源 message，作为聊天内可回看的 outfit image。
@@ -35,9 +39,9 @@
 - 不用 LLM 生成推荐穿搭，避免额外成本、延迟和安全过滤复杂度。
 - 不允许一条消息保留多个换装版本；第一版每条消息最多一个结果。
 
-## 产品体验
+## 产品体验（Legacy，仅供历史兼容）
 
-- 入口：每条 server-side companion message 下方展示一个换衣服按钮；本地 streaming 占位消息不显示。
+- 入口：每条 server-side companion message 下方展示一个换衣服按钮；本地 streaming 占位消息不显示。当前前端不再展示该入口。
 - 点击按钮后打开一个轻量面板：
   - 上方展示 3 个系统推荐穿搭。
   - 下方提供自定义输入框。
@@ -53,7 +57,7 @@
   - 若已有 pending/processing，恢复轮询。
   - 若已有 failed/cancelled，允许重试。
 - 文案建议：
-  - 入口：`Change outfit`
+  - 入口：`Change outfit`（当前不再展示）
   - 推荐按钮：展示简短标题，如 `Rainy cafe`, `Soft date`, `Street casual`
   - pending：`Changing...`
   - failed：`Try again`
@@ -215,7 +219,7 @@ type ChatMessage = {
 5. 在 `queue-dispatcher.ts` 里把 `chat_outfit_image` 路由到 outfit processor。
 6. 在 chat history 加载 companion messages 的 `outfit_image`。
 7. 更新 shared app API types 与 `companion-client`。
-8. 新增 `OutfitImageCapture` 前端组件，并接入 mobile/web chat screen。
+8. ~~新增 `OutfitImageCapture` 前端组件，并接入 mobile/web chat screen。~~ 已由 spec-033 废弃；当前前端不再保留该组件。
 9. 更新 RunningHub dev/prod config 与 sync 脚本。
 10. 补 API、job、config、前端 typecheck/lint 验证。
 
@@ -260,7 +264,7 @@ pnpm --filter @xtbit/app lint
 
 ## 回滚
 
-- 前端隐藏 `OutfitImageCapture` 即可关闭入口。
+- 当前前端已移除 `OutfitImageCapture`；如需回滚 spec-033，只隐藏 profile 换装入口即可，旧 chat outfit API 仍保留。
 - API 字段对旧客户端向后兼容；旧客户端忽略 `outfit_image`。
 - 已存在 `chat_outfit_images` 不影响聊天主流程。
 - 若 `wf_outfit` 未配置或 RunningHub 不稳定，生成端点返回 provider config/provider error，聊天仍可正常使用。

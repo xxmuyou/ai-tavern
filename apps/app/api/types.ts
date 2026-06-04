@@ -194,6 +194,7 @@ export type CompanionDetail = {
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
   art_url: string | null;
   background: string | null;
+  canonical_art_url?: string | null;
   gender: Gender | null;
   id: string;
   is_public?: boolean;
@@ -215,6 +216,7 @@ export type CompanionDetail = {
   example_dialogues?: string[];
   tags?: string[];
   play_count?: number;
+  profile_image_override?: string | null;
 };
 
 export type CompanionCreateInput = {
@@ -614,6 +616,22 @@ export type OutfitImageJobResponse = {
   output_key?: string;
   error_code?: string;
   error_message?: string;
+};
+
+export type ProfileOutfitImageJobResponse = {
+  generation_id?: string;
+  job_id: string;
+  status: MomentImageStatus;
+  output_key?: string;
+  error_code?: string;
+  error_message?: string;
+};
+
+export type ProfileImageResponse = {
+  art_url?: string | null;
+  companion_id: string;
+  generation_id?: string;
+  profile_image_override: string | null;
 };
 
 export type ChatHistoryResponse = {

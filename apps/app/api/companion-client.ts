@@ -37,6 +37,8 @@ import type {
   OutfitImageGenerateInput,
   OutfitImageJobResponse,
   OutfitRecommendationsResponse,
+  ProfileImageResponse,
+  ProfileOutfitImageJobResponse,
   PersonaInput,
   PersonaResponse,
   PersonasResponse,
@@ -711,6 +713,49 @@ export async function getOutfitImageJob(jobId: string): Promise<OutfitImageJobRe
   return requestJson<OutfitImageJobResponse>(
     `/outfit-images/jobs/${encodeURIComponent(jobId)}`,
   );
+}
+
+export async function getProfileOutfitRecommendations(companionId: string): Promise<OutfitRecommendationsResponse> {
+  return requestJson<OutfitRecommendationsResponse>(
+    `/companions/${encodeURIComponent(companionId)}/profile-outfit/recommendations`,
+  );
+}
+
+export async function generateProfileOutfitImage(
+  companionId: string,
+  input: OutfitImageGenerateInput,
+): Promise<ProfileOutfitImageJobResponse> {
+  return requestJson<ProfileOutfitImageJobResponse>(
+    `/companions/${encodeURIComponent(companionId)}/profile-outfit/generate`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function getProfileOutfitImageJob(jobId: string): Promise<ProfileOutfitImageJobResponse> {
+  return requestJson<ProfileOutfitImageJobResponse>(
+    `/profile-outfit-images/jobs/${encodeURIComponent(jobId)}`,
+  );
+}
+
+export async function setCompanionProfileImage(
+  companionId: string,
+  generationId: string,
+): Promise<ProfileImageResponse> {
+  return requestJson<ProfileImageResponse>(`/companions/${encodeURIComponent(companionId)}/profile-image`, {
+    body: JSON.stringify({ generation_id: generationId }),
+    headers: { 'content-type': 'application/json' },
+    method: 'PUT',
+  });
+}
+
+export async function clearCompanionProfileImage(companionId: string): Promise<ProfileImageResponse> {
+  return requestJson<ProfileImageResponse>(`/companions/${encodeURIComponent(companionId)}/profile-image`, {
+    method: 'DELETE',
+  });
 }
 
 export async function assistBaseArtPrompt(input: {

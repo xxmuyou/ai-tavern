@@ -1,5 +1,6 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
+import { clearProfileImagesForDeletedAsset } from "../image-gen/profile-outfit";
 
 const MAX_PROMPT_LENGTH = 4000;
 const MAX_MODEL_ID_LENGTH = 128;
@@ -41,6 +42,11 @@ export async function handleMeImageAssetsRequest(
     if (!id) {
       return jsonResponse({ error: "invalid_asset_id" }, { status: 400 });
     }
+    const row = await env.DB.prepare(
+      `SELECT art_key FROM user_image_assets WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+    )
+      .bind(id, user.id)
+      .first<{ art_key: string }>();
     await env.DB.prepare(
       `UPDATE user_image_assets
        SET deleted_at = ?
@@ -48,6 +54,9 @@ export async function handleMeImageAssetsRequest(
     )
       .bind(Date.now(), id, user.id)
       .run();
+    if (row?.art_key) {
+      await clearProfileImagesForDeletedAsset(env, user.id, row.art_key);
+    }
     return jsonResponse({ ok: true });
   }
 

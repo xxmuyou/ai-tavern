@@ -360,7 +360,7 @@ async function resolveMomentSourceArt(
   job: ImageGenJobRow,
   moment: StoryMomentImageRow,
 ): Promise<string | null | "waiting_for_cutout"> {
-  const source = await loadCompanionCutoutSource(env, moment.companion_id);
+  const source = await loadCompanionCutoutSource(env, moment.companion_id, job.user_id ?? moment.user_id);
   if (!source?.art_url) return null;
   if (source.art_cutout_key) return source.art_cutout_key;
 

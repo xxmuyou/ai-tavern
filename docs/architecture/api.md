@@ -240,6 +240,17 @@ Query: ?token=...
 }
 ```
 
+### `GET /companions/{id}`
+
+登录用户读取 companion 详情。响应中的 `art_url` 是当前用户有效 profile 图：如果用户已确认 profile outfit 覆盖，则优先返回覆盖图；否则返回 canonical `companions.art_url`。
+
+响应可包含：
+
+- `canonical_art_url`：数据库 canonical companion 图，不受用户覆盖影响。
+- `profile_image_override`：当前用户覆盖图 key；没有覆盖时为 `null`。
+
+公开 discovery（`GET /companions/public`）始终返回 canonical 图，不暴露用户私有覆盖。
+
 ### `GET /companions/public`
 
 公开 companion discovery 列表，不要求登录。只返回 active official companions 与 active published public companions；不返回 relationship state 或 owner-only persona 字段。
@@ -268,6 +279,16 @@ Query: ?token=...
   ]
 }
 ```
+
+### Profile Outfit Images
+
+- `GET /companions/{id}/profile-outfit/recommendations`：返回 profile 换装推荐。
+- `POST /companions/{id}/profile-outfit/generate`：创建 profile 换装 job；body 为推荐或自定义 prompt。
+- `GET /profile-outfit-images/jobs/{job_id}`：轮询 profile outfit job，成功后同步到用户资产。
+- `PUT /companions/{id}/profile-image`：用当前用户自己的 succeeded generation 设置 profile 图覆盖。
+- `DELETE /companions/{id}/profile-image`：清除当前用户的 profile 图覆盖。
+
+profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companion 的 canonical `art_url`。
 
 `art_style=anime` 是用户侧 bucket，匹配 `style:anime`、`anime`、`anime_jp`、`anime_kr`、`anime,jp`、`anime,kr`。`art_style=realistic` 匹配 `style:realistic`、`realistic`。Admin/model catalog 可继续保留 `Anime JP` / `Anime KR` 名称区分。
 

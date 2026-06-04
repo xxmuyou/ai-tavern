@@ -4,7 +4,15 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 
-import { fetchMe, listImageAssets, mediaSource, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
+import {
+  deleteImageAsset,
+  fetchMe,
+  listImageAssets,
+  mediaSource,
+  mediaUrl,
+  openBillingPortal,
+  updateRomancePreference,
+} from '@/api/companion-client';
 import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { WebAppShell } from '@/components/web/WebAppShell';
@@ -80,6 +88,17 @@ export default function WebMeScreen() {
     } catch {
       pushError('Subscription management is not available yet.');
       setIsOpeningPortal(false);
+    }
+  }
+
+  async function handleDeleteImageAsset(id: string) {
+    const previous = imageAssets;
+    setImageAssets((current) => current.filter((asset) => asset.id !== id));
+    try {
+      await deleteImageAsset(id);
+    } catch {
+      setImageAssets(previous);
+      pushError('Could not delete that image asset.');
     }
   }
 
@@ -236,7 +255,7 @@ export default function WebMeScreen() {
           </WebSection>
 
           <WebSection eyebrow="Atelier" title="My image assets" description="Generations you've saved into your workspace.">
-            <ImageAssetGrid assets={imageAssets} />
+            <ImageAssetGrid assets={imageAssets} onDelete={handleDeleteImageAsset} />
           </WebSection>
 
           <WebSection
@@ -273,7 +292,7 @@ export default function WebMeScreen() {
   );
 }
 
-function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
+function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDelete: (id: string) => void }) {
   if (!assets.length) {
     return (
       <WebCard padding="md" className="items-center">
@@ -307,11 +326,45 @@ function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
                 <Ionicons color="#7A6A5E" name="image-outline" size={24} />
               </View>
             )}
+            <View className="gap-2 p-3">
+              <Text className="text-caption text-app-muted">{asset.source === 'generated' ? 'Generated image' : 'Uploaded image'}</Text>
+              <View className="flex-row flex-wrap gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => downloadAsset(asset)}
+                  className="rounded-full border border-app-line bg-app-canvas px-3 py-1.5"
+                >
+                  <Text className="text-xs font-semibold text-app-ink-soft">Download</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => onDelete(asset.id)}
+                  className="rounded-full border border-app-danger/25 bg-app-danger-soft px-3 py-1.5"
+                >
+                  <Text className="text-xs font-semibold text-app-danger">Delete</Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
         );
       })}
     </View>
   );
+}
+
+function downloadAsset(asset: UserImageAsset): void {
+  const url = mediaUrl(asset.art_key);
+  if (!url) return;
+  if (typeof document !== 'undefined') {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = asset.art_key.split('/').pop() ?? 'xtbit-image';
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    return;
+  }
+  openExternalUrl(url);
 }
 
 function formatUsage(used: number, limit: number | null): string {

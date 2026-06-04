@@ -378,9 +378,16 @@ export async function loadOutfitByJob(
 export async function loadCompanionOutfitSource(
   env: Env,
   companionId: string,
+  userId: string | null = null,
 ): Promise<string | null> {
-  const row = await env.DB.prepare(`SELECT art_url FROM companions WHERE id = ?`)
-    .bind(companionId)
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(p.art_key, c.art_url) AS art_url
+     FROM companions c
+     LEFT JOIN companion_profile_images p
+       ON p.companion_id = c.id AND p.user_id = ?
+     WHERE c.id = ?`,
+  )
+    .bind(userId ?? "", companionId)
     .first<{ art_url: string | null }>();
   return row?.art_url ?? null;
 }
@@ -492,7 +499,7 @@ export async function processOutfitImageJob(env: Env, jobId: string): Promise<vo
 
   try {
     const outfit = await loadOutfitByJob(env, job.id);
-    const sourceArtUrl = outfit ? await loadCompanionOutfitSource(env, outfit.companion_id) : null;
+    const sourceArtUrl = outfit ? await loadCompanionOutfitSource(env, outfit.companion_id, outfit.user_id) : null;
     if (!sourceArtUrl) {
       throw new ImageGenError(
         "source_image_required",
