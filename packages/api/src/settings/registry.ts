@@ -229,6 +229,15 @@ export const SETTINGS: readonly SettingDef[] = [
       'Engine for chat moment images: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
   },
   {
+    key: "image_gen.wf_scene_provider",
+    group: "image_gen",
+    label: "WF_SCENE (scene background) provider",
+    type: "text",
+    envKey: "IMAGE_GEN_WF_SCENE_PROVIDER",
+    description:
+      'Engine for standalone scene background images: "runninghub", "openai", or "mock". Empty falls back to the default provider.',
+  },
+  {
     key: "image_gen.wf1_base_prompt",
     group: "image_gen",
     label: "WF1 base prompt (global)",

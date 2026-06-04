@@ -60,10 +60,11 @@ export {
 /**
  * Return the active image-gen provider for a given workflow mode.
  *
- * WF1 (`create`) and WF2 (`variation`) can run on different engines so they can
- * be switched independently (e.g. WF1 on openai while WF2 stays on runninghub).
- * The per-mode setting wins; an empty per-mode value falls back to the default
- * `image_gen.provider`, then to mock for local/CI.
+ * WF1 (`create`), WF2 (`variation`), WF_MOMENT and WF_SCENE can each run on a
+ * different engine so they switch independently (e.g. WF1 on openai while
+ * WF_SCENE backgrounds stay on runninghub). The per-workflow/per-mode setting
+ * wins; an empty value falls back to the default `image_gen.provider`, then to
+ * mock for local/CI.
  */
 export async function getImageGenProvider(
   env: Env,
@@ -74,9 +75,11 @@ export async function getImageGenProvider(
   const perMode =
     workflowKey === "wf_moment"
       ? cfg.wfMomentProvider
-      : mode === "create"
-        ? cfg.wf1Provider
-        : cfg.wf2Provider;
+      : workflowKey === "wf_scene"
+        ? cfg.wfSceneProvider
+        : mode === "create"
+          ? cfg.wf1Provider
+          : cfg.wf2Provider;
   const provider = (perMode?.trim() || cfg.provider || "mock").toLowerCase();
   switch (provider) {
     case "runninghub":

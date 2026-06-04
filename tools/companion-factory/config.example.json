@@ -1,0 +1,17 @@
+{
+  "apiBaseUrl": "http://localhost:8787",
+  "adminToken": "PASTE_AN_ADMIN_JWT_HERE",
+  "llm": {
+    "provider": "deepseek",
+    "apiKey": "PASTE_LLM_API_KEY",
+    "model": "deepseek-chat",
+    "baseUrl": "https://api.deepseek.com/v1"
+  },
+  "wf1Model": "RUN `node factory.mjs models` AND PASTE A wf1 OPTION ID",
+  "wfSceneModel": "RUN `node factory.mjs models` AND PASTE A wf_scene OPTION ID",
+  "wrangler": {
+    "configPath": "infra/cloudflare/wrangler.jsonc",
+    "dbName": "xtbit-apps-dev",
+    "remote": false
+  }
+}
