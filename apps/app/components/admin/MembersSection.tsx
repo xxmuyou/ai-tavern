@@ -4,6 +4,8 @@ import { Text, View } from 'react-native';
 import { WebButton, WebCard, WebFieldRow, WebInput, WebLoading, WebTag } from '@/components/web/ui';
 import { useAdminMembers } from '@/hooks/use-admin-members';
 
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
+
 export function MembersSection() {
   const { addEmail, emails, isLoading, isSaving, removeEmail, removingEmail } = useAdminMembers();
   const [email, setEmail] = useState('');
@@ -22,13 +24,13 @@ export function MembersSection() {
   }
 
   return (
-    <View className="gap-4">
-      <WebCard padding="md">
-        <Text className="font-serif text-title text-app-ink">Admin members</Text>
-        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-          Add emails to grant admin access. Built-in admins (from environment config) cannot be removed here.
-        </Text>
-        <View className="mt-4 gap-3">
+    <View className="gap-3">
+      <AdminPanel>
+        <AdminPanelHeader
+          subtitle="Add emails to grant admin access. Built-in admins (from environment config) cannot be removed here."
+          title="Admin members"
+        />
+        <View className="gap-3">
           <WebInput
             autoCapitalize="none"
             autoComplete="email"
@@ -45,12 +47,12 @@ export function MembersSection() {
             value={note}
           />
           <View className="self-start">
-            <WebButton isLoading={isSaving} label="Add email" onPress={handleAdd} />
+            <WebButton isLoading={isSaving} label="Add email" onPress={handleAdd} size="sm" />
           </View>
         </View>
-      </WebCard>
+      </AdminPanel>
 
-      <View className="gap-3">
+      <View className="gap-2">
         {emails.map((item) => (
           <WebCard key={`${item.source}:${item.email}`} padding="sm">
             <WebFieldRow

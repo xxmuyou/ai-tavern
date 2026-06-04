@@ -6,7 +6,9 @@ import type { AdminImageModel, AdminImageWorkflow, ImageModelInput, ImageWorkflo
 import { WebButton, WebLoading } from '@/components/web/ui';
 import { useAdminImageModels, useAdminImageWorkflows } from '@/hooks/use-admin-image-models';
 
-const INPUT_CLASS = 'min-h-12 rounded-lg border border-app-line bg-app-surface px-4 text-base text-app-ink';
+import { AdminCollapsible, AdminPanel, AdminPanelHeader } from './AdminPanel';
+
+const INPUT_CLASS = 'min-h-9 rounded-lg border border-app-line bg-app-surface px-3 text-sm text-app-ink';
 
 /**
  * RunningHub catalog admin.
@@ -62,23 +64,20 @@ function CheckpointCatalog({
   onSave: (id: string, input: ImageModelInput) => Promise<void>;
 }) {
   return (
-    <View className="gap-4 rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
-      <View>
-        <Text className="text-lg font-semibold text-app-ink">Checkpoint catalog</Text>
-        <Text className="mt-1 text-sm leading-6 text-app-muted">
-          Add uploaded RunningHub checkpoints here first. Tags are free-form categories for filtering
-          and display; checkpoint node field names are managed on workflows.
-        </Text>
-        {error ? <Text className="mt-2 text-sm font-semibold text-rose-deep">{error}</Text> : null}
-      </View>
-      <View className="gap-3">
+    <AdminPanel className="gap-4">
+      <AdminPanelHeader
+        error={error}
+        subtitle="Add uploaded RunningHub checkpoints here first. Tags are free-form categories; checkpoint node field names are managed on workflows."
+        title="Checkpoint catalog"
+      />
+      <View className="gap-2">
         {models.map((model) => (
           <CheckpointRow key={model.id} model={model} onDelete={onDelete} onSave={onSave} />
         ))}
         {models.length === 0 ? <Text className="text-sm text-app-muted">No checkpoints yet.</Text> : null}
       </View>
       <AddCheckpointForm onCreate={onCreate} />
-    </View>
+    </AdminPanel>
   );
 }
 
@@ -104,18 +103,18 @@ function CheckpointRow({
   }
 
   return (
-    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+    <AdminCollapsible subtitle={model.ckpt_name} title={model.label || '(unnamed checkpoint)'}>
       <ModelFields draft={draft} setDraft={setDraft} />
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <WebButton disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(model.id, draft))} />
+          <WebButton disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(model.id, draft))} size="sm" />
         </View>
-        <View className="w-28">
-          <WebButton disabled={busy} label="Delete" onPress={() => void run(() => onDelete(model.id))} variant="secondary" />
+        <View className="w-24">
+          <WebButton disabled={busy} label="Delete" onPress={() => void run(() => onDelete(model.id))} size="sm" variant="secondary" />
         </View>
       </View>
       {model.updated_by_email ? <Text className="text-xs text-app-muted">updated by {model.updated_by_email}</Text> : null}
-    </View>
+    </AdminCollapsible>
   );
 }
 
@@ -136,11 +135,10 @@ function AddCheckpointForm({ onCreate }: { onCreate: (input: ImageModelInput) =>
   }
 
   return (
-    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
-      <Text className="text-base font-semibold text-app-ink">Add checkpoint</Text>
+    <AdminCollapsible title="+ Add checkpoint">
       <ModelFields draft={draft} setDraft={setDraft} />
-      <WebButton disabled={busy || !draft.label.trim() || !draft.ckpt_name.trim()} isLoading={busy} label="Add checkpoint" onPress={() => void submit()} />
-    </View>
+      <WebButton disabled={busy || !draft.label.trim() || !draft.ckpt_name.trim()} isLoading={busy} label="Add checkpoint" onPress={() => void submit()} size="sm" />
+    </AdminCollapsible>
   );
 }
 
@@ -186,23 +184,20 @@ function WorkflowCatalog({
   workflows: AdminImageWorkflow[];
 }) {
   return (
-    <View className="gap-4 rounded-2xl border border-app-line bg-app-surface p-6 shadow-card">
-      <View>
-        <Text className="text-lg font-semibold text-app-ink">RunningHub workflows</Text>
-        <Text className="mt-1 text-sm leading-6 text-app-muted">
-          A workflow owns node IDs and the checkpoint field name. Pick which catalog checkpoints are
-          available for each create workflow.
-        </Text>
-        {error ? <Text className="mt-2 text-sm font-semibold text-rose-deep">{error}</Text> : null}
-      </View>
-      <View className="gap-3">
+    <AdminPanel className="gap-4">
+      <AdminPanelHeader
+        error={error}
+        subtitle="A workflow owns node IDs and the checkpoint field name. Pick which catalog checkpoints are available for each create workflow."
+        title="RunningHub workflows"
+      />
+      <View className="gap-2">
         {workflows.map((workflow) => (
           <WorkflowRow key={workflow.key} models={models} onDelete={onDelete} onSave={onSave} workflow={workflow} />
         ))}
         {workflows.length === 0 ? <Text className="text-sm text-app-muted">No workflows yet.</Text> : null}
       </View>
       <AddWorkflowForm models={models} onCreate={onCreate} />
-    </View>
+    </AdminPanel>
   );
 }
 
@@ -230,18 +225,18 @@ function WorkflowRow({
   }
 
   return (
-    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+    <AdminCollapsible subtitle={`${workflow.mode} · ${workflow.key}`} title={workflow.label || workflow.key}>
       <WorkflowFields draft={draft} isNew={false} models={models} setDraft={setDraft} />
       <View className="flex-row gap-2">
         <View className="flex-1">
-          <WebButton disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(workflow.key, draft))} />
+          <WebButton disabled={busy} isLoading={busy} label="Save" onPress={() => void run(() => onSave(workflow.key, draft))} size="sm" />
         </View>
-        <View className="w-28">
-          <WebButton disabled={busy} label="Delete" onPress={() => void run(() => onDelete(workflow.key))} variant="secondary" />
+        <View className="w-24">
+          <WebButton disabled={busy} label="Delete" onPress={() => void run(() => onDelete(workflow.key))} size="sm" variant="secondary" />
         </View>
       </View>
       {workflow.updated_by_email ? <Text className="text-xs text-app-muted">updated by {workflow.updated_by_email}</Text> : null}
-    </View>
+    </AdminCollapsible>
   );
 }
 
@@ -262,11 +257,10 @@ function AddWorkflowForm({ models, onCreate }: { models: AdminImageModel[]; onCr
   }
 
   return (
-    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
-      <Text className="text-base font-semibold text-app-ink">Add workflow</Text>
+    <AdminCollapsible title="+ Add workflow">
       <WorkflowFields draft={draft} isNew models={models} setDraft={setDraft} />
-      <WebButton disabled={busy || !draft.key.trim() || !draft.label.trim()} isLoading={busy} label="Add workflow" onPress={() => void submit()} />
-    </View>
+      <WebButton disabled={busy || !draft.key.trim() || !draft.label.trim()} isLoading={busy} label="Add workflow" onPress={() => void submit()} size="sm" />
+    </AdminCollapsible>
   );
 }
 

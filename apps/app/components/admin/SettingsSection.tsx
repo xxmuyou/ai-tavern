@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
-import { WebButton, WebCard, WebInput, WebLoading, WebTag } from '@/components/web/ui';
+import { WebButton, WebInput, WebLoading, WebTag } from '@/components/web/ui';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
+import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 
 const GROUP_LABELS: Record<string, string> = {
   auth: 'Google / Auth / OAuth / CORS',
@@ -33,34 +34,32 @@ export function SettingsSection() {
   const rows = activeGroup ? settings.filter((s) => s.group === activeGroup) : [];
 
   return (
-    <View className="gap-4">
-      <WebCard padding="md">
-        <Text className="font-serif text-title text-app-ink">Operational settings</Text>
-        <Text className="mt-1 text-body-sm leading-6 text-app-muted">
-          Pick a module to configure it. Saved values take effect within ~30s, no redeploy. Empty a field to fall back to the env default. This is per-environment.
-        </Text>
-        {error ? <Text className="mt-2 text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
+    <View className="gap-3">
+      <AdminPanel>
+        <AdminPanelHeader
+          error={error}
+          subtitle="Pick a module to configure it. Saved values take effect within ~30s, no redeploy. Empty a field to fall back to the env default. Per-environment."
+          title="Operational settings"
+        />
         {visibleGroups.length > 0 ? (
-          <View className="mt-4">
-            <AdminDropdown
-              labelForValue={(value) => (value ? GROUP_LABELS[value] ?? value : 'Select module')}
-              onChange={(value) => setSelectedGroup(value)}
-              options={visibleGroups.map((group) => ({ label: GROUP_LABELS[group] ?? group, value: group }))}
-              value={activeGroup}
-            />
-          </View>
+          <AdminDropdown
+            labelForValue={(value) => (value ? GROUP_LABELS[value] ?? value : 'Select module')}
+            onChange={(value) => setSelectedGroup(value)}
+            options={visibleGroups.map((group) => ({ label: GROUP_LABELS[group] ?? group, value: group }))}
+            value={activeGroup}
+          />
         ) : null}
-      </WebCard>
+      </AdminPanel>
 
       {activeGroup && rows.length > 0 ? (
-        <WebCard padding="md">
-          <Text className="font-serif text-title-sm text-app-ink">{GROUP_LABELS[activeGroup] ?? activeGroup}</Text>
-          <View className="mt-3 gap-3">
+        <AdminPanel>
+          <AdminPanelHeader title={GROUP_LABELS[activeGroup] ?? activeGroup} />
+          <View className="gap-2">
             {rows.map((item) => (
               <SettingRow key={item.key} item={item} onReveal={reveal} onSave={save} />
             ))}
           </View>
-        </WebCard>
+        </AdminPanel>
       ) : null}
     </View>
   );
@@ -145,7 +144,7 @@ export function SettingRow({
   if (isBoolean) {
     const on = (item.value ?? 'false') === 'true';
     return (
-      <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+      <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-3">
         <RowHeader item={item} />
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
@@ -165,7 +164,7 @@ export function SettingRow({
   }
 
   return (
-    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4">
+    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-3">
       <RowHeader item={item} />
       <WebInput
         keyboardType={item.type === 'number' ? 'number-pad' : 'default'}
@@ -234,7 +233,7 @@ export function SettingRow({
 
 function StatusOnlySettingRow({ item }: { item: AdminSettingItem }) {
   return (
-    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-4 opacity-75">
+    <View className="gap-3 rounded-xl border border-app-line bg-app-sunken/60 p-3 opacity-75">
       <RowHeader item={item} />
       <View className="flex-row items-center justify-between gap-3 rounded-xl border border-app-line bg-app-surface p-3">
         <View className="min-w-0 flex-1">

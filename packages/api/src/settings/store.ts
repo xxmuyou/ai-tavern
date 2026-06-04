@@ -110,6 +110,7 @@ export type ImageGenConfig = {
   wf2Provider: string | null;
   wfMomentProvider: string | null;
   wf1BasePrompt: string | null;
+  wfMomentBasePrompt: string | null;
   publicBaseUrl: string | null;
   runninghubBaseUrl: string | null;
   apiKey: string | null;
@@ -135,6 +136,7 @@ export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
     wf2Provider: p("image_gen.wf2_provider"),
     wfMomentProvider: p("image_gen.wf_moment_provider"),
     wf1BasePrompt: p("image_gen.wf1_base_prompt"),
+    wfMomentBasePrompt: p("image_gen.wf_moment_base_prompt"),
     publicBaseUrl: p("image_gen.public_base_url"),
     runninghubBaseUrl: p("image_gen.runninghub_base_url"),
     apiKey: p("image_gen.api_key"),
