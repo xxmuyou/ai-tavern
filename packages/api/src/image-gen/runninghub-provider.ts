@@ -9,7 +9,7 @@ import {
 } from "./types";
 import { getImageWorkflow } from "./models";
 import { ANATOMY_NEGATIVE } from "./prompts";
-import { workflowContractHasField } from "./runninghub-contract";
+import { findContractNode, workflowContractHasField } from "./runninghub-contract";
 import {
   COMPANION_CUTOUT_WORKFLOW_KEY,
   PORTRAIT_CREATE_WORKFLOW_KEY,
@@ -117,7 +117,7 @@ async function generateVariation(
   // Standard LoadImage fields take an uploaded fileName. URL-style workflow
   // fields receive a short-lived public URL instead; the workflow contract is
   // the source of truth for which one applies.
-  const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config.loadImageFieldName);
+  const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: config.loadImageFieldName || "image", fieldValue: sourceImageValue, nodeId: config.loadImageNodeId },
     { fieldName: config.promptFieldName || "text", fieldValue: req.prompt ?? "", nodeId: config.promptNodeId },
@@ -154,7 +154,7 @@ async function generateCutout(
     });
   }
 
-  const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config.loadImageFieldName);
+  const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: config.loadImageFieldName || "image", fieldValue: sourceImageValue, nodeId: config.loadImageNodeId },
   ];
@@ -172,17 +172,21 @@ async function resolveLoadImageValue(
   cfg: ImageGenConfig,
   env: Env,
   sourceArtUrl: string,
-  fieldName: string | undefined,
+  config: WorkflowConfig,
 ): Promise<string> {
-  if (loadImageFieldUsesUrl(fieldName)) {
+  if (loadImageFieldUsesUrl(config)) {
     return createSourceImageUrl(env, sourceArtUrl);
   }
   return uploadSourceImage(cfg, env, sourceArtUrl);
 }
 
-function loadImageFieldUsesUrl(fieldName: string | undefined): boolean {
+function loadImageFieldUsesUrl(config: WorkflowConfig): boolean {
+  const fieldName = config.loadImageFieldName;
   const normalized = fieldName?.trim().toLowerCase();
-  return normalized === "url" || normalized === "image_url";
+  if (normalized === "url" || normalized === "image_url") return true;
+
+  const loadNode = findContractNode(config.contractJson, config.loadImageNodeId);
+  return normalized === "image" && loadNode?.class_type === "LoadImageFromUrl";
 }
 
 async function createSourceImageUrl(env: Env, sourceArtUrl: string): Promise<string> {

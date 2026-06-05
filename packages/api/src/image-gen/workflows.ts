@@ -16,7 +16,7 @@ import { normalizeWorkflowKey } from "./workflow-keys";
  * Shape:
  *   {
  *     "portrait_create":   { "mode": "create",    "workflowId", "promptNodeId", "checkpointNodeId" },
- *     "profile_outfit":    { "mode": "variation", "architecture": "none", "workflowId", "promptNodeId", "loadImageNodeId", "loadImageFieldName": "url" },
+ *     "profile_outfit":    { "mode": "variation", "architecture": "none", "workflowId", "promptNodeId", "loadImageNodeId", "loadImageFieldName": "image" },
  *     "companion_cutout":  { "mode": "cutout",    "workflowId", "loadImageNodeId", "loadImageFieldName" }
  *   }
  */
@@ -35,7 +35,7 @@ export type WorkflowConfig = {
   checkpointFieldName?: string;
   /** variation mode: node that loads the source image. */
   loadImageNodeId?: string;
-  /** Field on the load-image node. "url"/"image_url" receives a signed URL; other fields receive an uploaded fileName. */
+  /** Field on the load-image node. URL fields and LoadImageFromUrl.image receive a signed URL; standard LoadImage.image receives an uploaded fileName. */
   loadImageFieldName?: string;
   /** variation mode: optional negative-prompt text node (anti-deformity). */
   negativePromptNodeId?: string;
