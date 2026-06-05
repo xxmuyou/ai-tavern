@@ -78,6 +78,7 @@ while IFS= read -r file; do
     fi
 
     npx wrangler r2 object put "$bucket/$key" \
+        --remote \
         --file "$file" \
         --content-type "$content_type"
 
