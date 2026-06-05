@@ -27,6 +27,7 @@ import {
   type OutfitPromptContext,
   type OutfitPromptSource,
 } from "./outfit-image";
+import { checkSourceArtAvailable } from "./source-art";
 
 export const TASK_PROFILE_OUTFIT_IMAGE = "profile_outfit_image";
 
@@ -230,6 +231,16 @@ export async function processProfileOutfitImageJob(env: Env, jobId: string): Pro
         { retryable: false },
       );
     }
+    const available = await checkSourceArtAvailable(env, sourceArtUrl);
+    if (!available.ok) {
+      throw new ImageGenError(
+        available.error,
+        available.key
+          ? `Source art is not available to image generation: ${available.key}`
+          : "source_art_url missing or invalid",
+        { retryable: false },
+      );
+    }
     const request: ImageGenRequest = {
       mode: "variation",
       prompt: job.prompt,
@@ -281,6 +292,19 @@ async function generateProfileOutfit(
   if (!loaded.ok) return loaded.response;
   const sourceArtUrl = await loadProfileOutfitSource(env, user.id, companionId);
   if (!sourceArtUrl) return jsonResponse({ error: "source_image_required" }, { status: 422 });
+  const available = await checkSourceArtAvailable(env, sourceArtUrl);
+  if (!available.ok) {
+    return jsonResponse(
+      {
+        error: available.error,
+        key: available.key ?? undefined,
+        message: available.key
+          ? `Source art is not available to image generation: ${available.key}`
+          : "source_art_url missing or invalid",
+      },
+      { status: 422 },
+    );
+  }
 
   const body = (await request.json().catch(() => null)) as GenerateBody | null;
   const parsed = await parseProfileOutfitPrompt(env, user, loaded.companion, body);

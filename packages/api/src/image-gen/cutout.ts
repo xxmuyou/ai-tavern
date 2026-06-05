@@ -12,6 +12,7 @@ import {
   type ImageGenJobRow,
   type ImageGenJobStatus,
 } from "./base-art";
+import { checkSourceArtAvailable } from "./source-art";
 import { COMPANION_CUTOUT_WORKFLOW_KEY } from "./workflow-keys";
 
 export const TASK_CUTOUT = "companion_cutout";
@@ -64,6 +65,17 @@ export async function createOrReuseCutoutJob(
   env: Env,
   input: { companionId: string; sourceArtUrl: string; userId: string | null },
 ): Promise<CompanionCutoutJobRow> {
+  const available = await checkSourceArtAvailable(env, input.sourceArtUrl);
+  if (!available.ok) {
+    throw new ImageGenError(
+      available.error,
+      available.key
+        ? `Source art is not available to image generation: ${available.key}`
+        : "source_art_url missing or invalid",
+      { retryable: false },
+    );
+  }
+
   const existing = await loadCutoutByCompanionAndSource(
     env,
     input.companionId,

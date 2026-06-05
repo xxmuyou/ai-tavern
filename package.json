@@ -23,6 +23,8 @@
     "migrate:db:prod": "bash ./scripts/tasks/run.sh api:d1-migrate-prod",
     "sync:runninghub:dev": "bash ./scripts/tasks/run.sh api:sync-runninghub-dev",
     "sync:runninghub:prod": "bash ./scripts/tasks/run.sh api:sync-runninghub-prod",
+    "upload:official-media:dev": "bash ./scripts/tasks/run.sh media:upload-official-dev",
+    "upload:official-media:prod": "bash ./scripts/tasks/run.sh media:upload-official-prod",
     "upload:secrets:dev": "bash ./scripts/upload-worker-secrets.sh dev",
     "upload:secrets:prod": "bash ./scripts/upload-worker-secrets.sh prod",
     "deploy:dev": "bash ./scripts/deploy-api-and-web.sh dev",

@@ -42,8 +42,10 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
     return 'idle';
   });
   const [outputKey, setOutputKey] = useState<string | null>(initialMoment?.output_key ?? null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const activeRef = useRef(true);
   const onMomentReadyRef = useRef(onMomentReady);
+  const pollingJobRef = useRef<string | null>(null);
 
   useEffect(() => {
     onMomentReadyRef.current = onMomentReady;
@@ -58,44 +60,79 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
 
   function markReady(jobId: string, key: string) {
     setOutputKey(key);
+    setErrorMessage(null);
     setPhase('ready');
     onMomentReadyRef.current?.({ job_id: jobId, output_key: key, status: 'succeeded' });
   }
 
+  function markError(message?: string | null) {
+    setErrorMessage(message?.trim() || 'Moment capture could not finish. Try again.');
+    setPhase('error');
+  }
+
   async function poll(jobId: string) {
+    if (pollingJobRef.current === jobId) return;
+    pollingJobRef.current = jobId;
     for (let i = 0; i < MAX_POLLS; i += 1) {
-      if (!activeRef.current) return;
+      if (!activeRef.current || pollingJobRef.current !== jobId) return;
       let res;
       try {
         res = await getMomentImageJob(jobId);
       } catch {
-        if (activeRef.current) setPhase('error');
+        if (activeRef.current && pollingJobRef.current === jobId) markError('Could not check the capture job.');
+        pollingJobRef.current = null;
         return;
       }
       if (res.status === 'succeeded' && res.output_key) {
-        if (activeRef.current) {
+        if (activeRef.current && pollingJobRef.current === jobId) {
           markReady(res.job_id || jobId, res.output_key);
         }
+        pollingJobRef.current = null;
         return;
       }
       if (isTerminalFailure(res.status)) {
-        if (activeRef.current) setPhase('error');
+        if (activeRef.current && pollingJobRef.current === jobId) markError(res.error_message ?? res.error_code);
+        pollingJobRef.current = null;
         return;
       }
       await delay(POLL_INTERVAL_MS);
     }
-    if (activeRef.current) setPhase('error');
+    if (activeRef.current && pollingJobRef.current === jobId) markError('Moment capture timed out.');
+    pollingJobRef.current = null;
   }
 
-  // Resume polling for a moment that was already in flight when history loaded.
+  // Resume or sync a moment that is already in flight when history loads or refreshes.
   useEffect(() => {
-    if (initialPending && initialMoment) {
-      void poll(initialMoment.job_id);
+    if (!initialMoment) {
+      if (phase !== 'capturing') {
+        setOutputKey(null);
+        setErrorMessage(null);
+        setPhase('idle');
+      }
+      return;
     }
+    if (initialMoment.status === 'succeeded' && initialMoment.output_key) {
+      pollingJobRef.current = null;
+      markReady(initialMoment.job_id, initialMoment.output_key);
+      return;
+    }
+    if (isTerminalFailure(initialMoment.status)) {
+      pollingJobRef.current = null;
+      markError();
+      return;
+    }
+    setOutputKey(initialMoment.output_key ?? null);
+    setErrorMessage(null);
+    setPhase('capturing');
+    void poll(initialMoment.job_id);
+    // This effect is keyed only by server-provided moment identity/status. The
+    // local helpers intentionally stay stable through refs/state setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialMoment?.job_id, initialMoment?.output_key, initialMoment?.status]);
 
   async function capture() {
+    pollingJobRef.current = null;
+    setErrorMessage(null);
     setPhase('capturing');
     try {
       const res = await generateMomentImage(messageId);
@@ -105,12 +142,12 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         return;
       }
       if (isTerminalFailure(res.status)) {
-        setPhase('error');
+        markError(res.error_message ?? res.error_code);
         return;
       }
       await poll(res.job_id);
     } catch {
-      if (activeRef.current) setPhase('error');
+      if (activeRef.current) markError('Could not start the capture job.');
     }
   }
 
@@ -147,6 +184,9 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         )}
         <Text className="text-xs font-medium text-app-primary">{label}</Text>
       </Pressable>
+      {phase === 'error' && errorMessage ? (
+        <Text className="mt-1 max-w-[80%] text-xs font-medium text-ember">{errorMessage}</Text>
+      ) : null}
     </View>
   );
 }

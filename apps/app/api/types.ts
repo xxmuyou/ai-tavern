@@ -1013,6 +1013,7 @@ export type AdminImageGenJob = {
   workflow_key: string | null;
   model: string | null;
   provider: string | null;
+  prompt_excerpt: string | null;
   error_code: string | null;
   error_message: string | null;
   provider_task_id: string | null;

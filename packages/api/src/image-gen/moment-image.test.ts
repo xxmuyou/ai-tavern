@@ -9,7 +9,8 @@ import {
   type StoryMomentImageRow,
 } from "./moment-image";
 import { loadBaseArtJob, type ImageGenJobRow } from "./base-art";
-import { processCutoutJob } from "./cutout";
+import { createOrReuseCutoutJob, processCutoutJob } from "./cutout";
+import { ImageGenError } from "./types";
 
 type Row = Record<string, unknown>;
 
@@ -440,6 +441,21 @@ describe("moment image job pipeline", () => {
       }),
     ]);
     expect(queue).toContainEqual(expect.objectContaining({ type: "image.generate" }));
+  });
+
+  it("createOrReuseCutoutJob rejects source art that is not available in R2", async () => {
+    const { env } = createEnv();
+
+    await expect(
+      createOrReuseCutoutJob(env, {
+        companionId: "maya",
+        sourceArtUrl: "portraits/maya/neutral.webp",
+        userId: "usr_1",
+      }),
+    ).rejects.toMatchObject({
+      code: "source_art_not_available",
+      message: "Source art is not available to image generation: portraits/maya/neutral.webp",
+    } satisfies Partial<ImageGenError>);
   });
 
   it("processCutoutJob writes the companion cutout cache", async () => {

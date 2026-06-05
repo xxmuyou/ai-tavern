@@ -23,6 +23,8 @@ Available tasks:
   app:local
   deploy:web-dev
   deploy:web-prod
+  media:upload-official-dev
+  media:upload-official-prod
 EOF
     exit 1
 }
@@ -110,6 +112,16 @@ task_api_sync_runninghub_prod() {
     run_in "." bash ./scripts/sync-runninghub-workflows.sh prod
 }
 
+task_media_upload_official_dev() {
+    load_env_file "$REPO_ROOT/.env.dev"
+    run_in "." bash ./scripts/upload-official-media.sh dev
+}
+
+task_media_upload_official_prod() {
+    load_env_file "$REPO_ROOT/.env.prod"
+    run_in "." bash ./scripts/upload-official-media.sh prod
+}
+
 task_api_local() {
     load_env_file "$REPO_ROOT/.env.local"
     run_in "packages/api" npx wrangler dev --config "$WRANGLER_CFG"
@@ -174,6 +186,8 @@ case "$task" in
     app:local)            task_app_local ;;
     deploy:web-dev)       task_deploy_web_dev ;;
     deploy:web-prod)      task_deploy_web_prod ;;
+    media:upload-official-dev)  task_media_upload_official_dev ;;
+    media:upload-official-prod) task_media_upload_official_prod ;;
     *)
         echo "Unknown task '$task'." >&2
         usage

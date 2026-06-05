@@ -717,9 +717,11 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 
 > 三个端点均走 `requireAdminUser`（401 `auth_required` / 403 `admin_required`），与 §9 其余 admin 端点一致。其他后台统计接口（`GET /admin/usage` 等）v1 暂不实现完整 dashboard。
 
-### `GET /admin/image-gen-jobs?status=<failed|...>&limit=<N>` (2026-06-01)
+### `GET /admin/image-gen-jobs?status=<failed|...>&limit=<N>&created_from=<ms>&created_to=<ms>` (2026-06-01)
 
-只读诊断：列出最近的出图任务及其**真实失败原因**（`error_message` 存 RunningHub 原文，如 `NODE_INFO_MISMATCH`），免去手连 D1。`status` 可选（缺省返回全部最近任务），`limit` 默认 50、上限 200。
+只读诊断：列出最近的出图任务及其**真实失败原因**（`error_message` 存 RunningHub 原文，如 `NODE_INFO_MISMATCH`），免去手连 D1。`status` 可选（缺省返回全部最近任务），`limit` 默认 50、上限 200。`created_from` / `created_to` 为 epoch milliseconds，前端用管理员浏览器的本地自然日计算范围，后端只按时间戳过滤。
+
+Web Admin 的 Portrait generation 页面只保留 `View logs` 入口；日志在浮窗中查看，默认摘要展示，点击单条 job 后展开完整详情。
 
 ```json
 // Response 200
@@ -728,6 +730,7 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
     { "id": "job_1", "status": "failed", "task": "companion_base_art", "workflow_key": "portrait_create",
       "model": "anime_animagine", "provider": "runninghub", "error_code": "provider_error",
       "error_message": "NODE_INFO_MISMATCH(nodeId=1, fieldName=style_name, reason=field_not_found_in_node_inputs)",
+      "prompt_excerpt": "Create a portrait...",
       "provider_task_id": null, "created_at": 1748785108000, "completed_at": 1748785109000 }
   ]
 }

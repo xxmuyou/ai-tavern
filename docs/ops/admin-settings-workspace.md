@@ -51,7 +51,7 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 |------|------|------|
 | `Users` | admin 名单、用户查询、积分调整、ledger | `admin_user_allowlist`、credits endpoints |
 | `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、MiniMax/DeepSeek/OpenAI key 配置状态 | `llm_config`、`llm.*` |
-| `Portrait generation` | 生图 provider、RunningHub/OpenAI/R2 key 配置状态、workflow contract、checkpoint/LoRA catalog、semantic workflow 的 Anime/Realistic asset lanes | `image_gen.*`、`image_models`、`image_loras`、`image_workflows`、lane membership tables |
+| `Portrait generation` | 生图 provider、RunningHub/OpenAI/R2 key 配置状态、workflow contract、checkpoint/LoRA catalog、semantic workflow 的 Anime/Realistic asset lanes、`View logs` 出图诊断浮窗 | `image_gen.*`、`image_models`、`image_loras`、`image_workflows`、lane membership tables、`image_generation_jobs` |
 | `Prompts` | expression 立绘系统提示词；后续其他 prompt 也放这里 | `expression_prompts` |
 | `Settings` | auth、billing、email、limits 等通用运营项 | `auth.*`、`billing.*`、`email.*`、`limits.*` |
 
@@ -68,6 +68,20 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 - **json**（legacy `image_gen.workflows`）：仅作旧 runtime fallback；日常使用 Portrait generation 的 catalog UI，见 §6。
 - **number / boolean / text**：分别为数字输入 / 开关 / 文本框。
 
+### 生图日志诊断
+
+Portrait generation 页面不直接铺开最近 job 列表；只保留 **View logs** 入口。点击后打开只读浮窗：
+
+- 顶部选择一个本地自然日，只看该日 `created_at` 落入范围内的 jobs。
+- `Failed` / `All` 切换仍保留；默认看失败日志。
+- 列表默认只显示摘要：status、task、workflow、error code、创建时间。
+- 点击单条日志展开完整详情：provider、model、provider task id、completed at、error message、prompt excerpt。
+
+这个浮窗只做诊断，不承担配置保存。常见含义：
+
+- `provider_not_configured` + `missing workflow id`：运行时 D1 `image_workflows` 里该 workflow 没有有效 `workflow_id`。即使 `config/runninghub-workflows.<env>.json` 已经写了值，也必须同步到 D1 catalog。
+- `source_art_not_found` / `source_art_not_available`：源图 key 对后端不可访问；前端 bundle 能显示不代表 R2 里有同名对象。
+
 ---
 
 ## 4. 访问控制
@@ -82,6 +96,7 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 
 - `.env.dev` / `.env.prod` 仍是**secret 与环境开关的 SOT**（见 [`secrets.md`](./secrets.md)）：首次部署、CI、Wrangler secret 注入都靠它，工作台为空时也靠它兜底。
 - RunningHub workflow contract、checkpoint/LoRA 默认值、base architecture 和 Anime/Realistic lanes 来自 repo 中按环境区分的配置文件；部署时同步进 D1 catalog。它们不是 secret，也不属于 `.env.*`。
+- 修改 `config/runninghub-workflows.dev.json` / `config/runninghub-workflows.prod.json` 后，必须执行 `pnpm sync:runninghub:dev` / `pnpm sync:runninghub:prod`，或走完整部署流程。运行时读取 D1 catalog，不直接读取 repo JSON。
 - 工作台是**非敏感运行期覆盖**：应急切 provider、调限流、临时验证 workflow/node 接线，不想等一次完整部署时用。长期接线配置必须回写 repo。
 - **secret 轮换只有一条权威路径**：走 `.env.*` + `pnpm upload:secrets:dev/prod` 或 `wrangler secret put` 注入 Wrangler secret（见 secrets.md §3）。后台不能查看、不能替换、不能临时覆盖 secret。
 
@@ -182,3 +197,21 @@ nodeInfoList = [
 - checkpoint 或 LoRA 属于不同底层架构，单纯换文件名跑不通，节点图、采样器、VAE、尺寸或 LoRA loader 都需要换。
 - 同一架构下 prompt/checkpoint/LoRA 节点 contract 不同，也应新增 workflow 或刷新 contract 后单独管理。
 - 做法：在 Admin 新增 semantic workflow，或在 `config/runninghub-workflows.<env>.json` 的 `workflows` 里加一个新 key；key 表达拓扑和用途，例如 `portrait_create`、`portrait_create_flux`、`companion_cutout`，不要把具体 checkpoint/LoRA 名塞进 key，也不要用数字编号。
+
+### 6.7 官方素材与 R2
+
+官方 seed companion / scene 的 `art_url` 保持稳定 key，例如 `portraits/aiko/neutral.webp`、`scenes/pier_coffee_shop.png`。这些 key 有两种消费者：
+
+- 前端 `mediaSource()` 可把它们映射到 app bundle 里的本地静态资源。
+- 后端 image-gen 只能读取 R2 object key、`/objects/...` URL 或外部 `https://...` URL。
+
+因此，所有 `apps/app/assets/ai-companion/portraits/**` 和 `apps/app/assets/ai-companion/scenes/**` 中的官方素材，都必须以相同 object key 上传到当前环境 R2，并写入 `asset_objects`。如果只存在于前端 bundle，profile outfit、chat moment cutout、RunningHub signed URL / upload path 都会在后端报源图不可用。
+
+同步命令：
+
+```bash
+bash ./scripts/upload-official-media.sh dev --dry-run
+pnpm upload:official-media:dev
+```
+
+prod 同理使用 `prod` / `pnpm upload:official-media:prod`。

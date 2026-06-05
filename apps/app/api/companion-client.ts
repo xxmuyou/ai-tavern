@@ -316,11 +316,13 @@ export async function listAdminImageWorkflows(): Promise<AdminImageWorkflowsResp
 }
 
 export async function listAdminImageGenJobs(
-  options: { status?: string; limit?: number } = {},
+  options: { createdFrom?: number; createdTo?: number; status?: string; limit?: number } = {},
 ): Promise<AdminImageGenJobsResponse> {
   const params = new URLSearchParams();
   if (options.status) params.set('status', options.status);
   if (options.limit) params.set('limit', String(options.limit));
+  if (options.createdFrom) params.set('created_from', String(options.createdFrom));
+  if (options.createdTo) params.set('created_to', String(options.createdTo));
   const query = params.toString();
   return requestJson<AdminImageGenJobsResponse>(
     `/admin/image-gen-jobs${query ? `?${query}` : ''}`,

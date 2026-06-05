@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 
 import type { AdminSettingItem } from '@/api/types';
 import { WebButton, WebLoading } from '@/components/web/ui';
+import { useAdminImageWorkflows } from '@/hooks/use-admin-image-models';
 import { useAdminSettings } from '@/hooks/use-admin-settings';
 
 import { AdminDropdown } from './AdminDropdown';
@@ -47,6 +48,7 @@ type WorkflowId = Workflow['id'];
 
 export function PortraitGenerationSection() {
   const { settings, isLoading, error, reveal, save } = useAdminSettings();
+  const workflowState = useAdminImageWorkflows();
   const [workflowId, setWorkflowId] = useState<WorkflowId>('portrait_create');
 
   if (isLoading) {
@@ -79,6 +81,7 @@ export function PortraitGenerationSection() {
         defaultProvider={defaultProvider}
         onReveal={reveal}
         onSave={save}
+        workflows={workflowState.workflows}
         workflow={workflow}
       />
 
@@ -93,17 +96,31 @@ function WorkflowPanel({
   onReveal,
   onSave,
   workflow,
+  workflows,
 }: {
   byKey: (key: string) => AdminSettingItem | null;
   defaultProvider: string;
   onReveal: RevealSettingFn;
   onSave: SaveSettingFn;
   workflow: Workflow;
+  workflows: ReturnType<typeof useAdminImageWorkflows>['workflows'];
 }) {
   const providerSetting = byKey(workflow.providerKey);
   const [saving, setSaving] = useState(false);
   // Empty per-workflow value falls back to the default provider (matches backend).
   const selected = providerSetting?.value?.trim() || defaultProvider;
+  const chatMomentWorkflowId = workflows.find((item) => item.key === 'chat_moment')?.workflow_id?.trim();
+  const companionCutoutWorkflowId = workflows.find((item) => item.key === 'companion_cutout')?.workflow_id?.trim();
+  const profileOutfitWorkflowId = workflows.find((item) => item.key === 'profile_outfit')?.workflow_id?.trim();
+  const showSharedOutfitWorkflowWarning =
+    workflow.id === 'profile_outfit' &&
+    selected === 'runninghub' &&
+    Boolean(profileOutfitWorkflowId) &&
+    profileOutfitWorkflowId === chatMomentWorkflowId;
+  const showCutoutSyncWarning =
+    workflow.id === 'companion_cutout' &&
+    selected === 'runninghub' &&
+    !companionCutoutWorkflowId;
 
   async function setProvider(provider: string) {
     if (!providerSetting || provider === (providerSetting.value?.trim() || '')) return;
@@ -149,6 +166,24 @@ function WorkflowPanel({
               />
             ) : null}
           </View>
+        </View>
+      ) : null}
+
+      {showSharedOutfitWorkflowWarning ? (
+        <View className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2">
+          <Text className="text-xs leading-5 text-ember">
+            profile_outfit and chat_moment share RunningHub workflow {profileOutfitWorkflowId}. Outfit prompts are still
+            sent to the prompt node, but a shared workflow can make generated outfits look stylistically similar.
+          </Text>
+        </View>
+      ) : null}
+
+      {showCutoutSyncWarning ? (
+        <View className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2">
+          <Text className="text-xs leading-5 text-ember">
+            companion_cutout has no workflow id in the runtime D1 catalog. If the repo config already has one, run
+            sync:runninghub for this environment so image generation uses the updated catalog.
+          </Text>
         </View>
       ) : null}
 

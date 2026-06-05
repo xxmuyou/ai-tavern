@@ -58,6 +58,7 @@ type ImageGenJobSummaryRow = {
   workflow_key: string | null;
   model: string | null;
   provider: string | null;
+  prompt_excerpt: string | null;
   error_code: string | null;
   error_message: string | null;
   provider_task_id: string | null;
@@ -78,17 +79,35 @@ async function handleImageGenJobs(request: Request, env: Env): Promise<Response>
   const status = url.searchParams.get("status");
   const rawLimit = Number(url.searchParams.get("limit") ?? "50");
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 200) : 50;
+  const rawCreatedFrom = Number(url.searchParams.get("created_from") ?? "");
+  const rawCreatedTo = Number(url.searchParams.get("created_to") ?? "");
+  const createdFrom = Number.isFinite(rawCreatedFrom) && rawCreatedFrom > 0 ? Math.trunc(rawCreatedFrom) : null;
+  const createdTo = Number.isFinite(rawCreatedTo) && rawCreatedTo > 0 ? Math.trunc(rawCreatedTo) : null;
 
-  const where = status && JOB_STATUSES.has(status) ? "WHERE status = ?" : "";
-  const sql = `SELECT id, status, task, workflow_key, model, provider, error_code, error_message,
+  const filters: string[] = [];
+  const values: unknown[] = [];
+  if (status && JOB_STATUSES.has(status)) {
+    filters.push("status = ?");
+    values.push(status);
+  }
+  if (createdFrom !== null) {
+    filters.push("created_at >= ?");
+    values.push(createdFrom);
+  }
+  if (createdTo !== null) {
+    filters.push("created_at < ?");
+    values.push(createdTo);
+  }
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const sql = `SELECT id, status, task, workflow_key, model, provider,
+                      SUBSTR(prompt, 1, 240) AS prompt_excerpt,
+                      error_code, error_message,
                       provider_task_id, created_at, completed_at
                FROM image_generation_jobs
                ${where}
                ORDER BY created_at DESC
                LIMIT ?`;
-  const stmt = where
-    ? env.DB.prepare(sql).bind(status, limit)
-    : env.DB.prepare(sql).bind(limit);
+  const stmt = env.DB.prepare(sql).bind(...values, limit);
   const { results } = await stmt.all<ImageGenJobSummaryRow>();
   return jsonResponse({ jobs: results ?? [] });
 }

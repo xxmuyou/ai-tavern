@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cn } from '@/components/web/ui';
 
@@ -23,7 +23,7 @@ export function AdminDropdown<T extends string | null>({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <View className="relative z-10">
+    <View className="relative" style={open ? styles.openRoot : styles.root}>
       <Pressable
         accessibilityRole="button"
         onPress={() => setOpen((current) => !current)}
@@ -37,7 +37,10 @@ export function AdminDropdown<T extends string | null>({
         </View>
       </Pressable>
       {open ? (
-        <View className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-hidden rounded-lg border border-app-line bg-app-surface shadow-card">
+        <View
+          className="absolute left-0 right-0 top-full mt-1 max-h-64 overflow-hidden rounded-lg border border-app-line bg-app-surface shadow-card"
+          style={styles.menu}
+        >
           <ScrollView keyboardShouldPersistTaps="handled">
             {options.map((option) => (
               <Pressable
@@ -65,3 +68,17 @@ export function AdminDropdown<T extends string | null>({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  menu: {
+    elevation: 32,
+    zIndex: 1000,
+  },
+  openRoot: {
+    elevation: 32,
+    zIndex: 1000,
+  },
+  root: {
+    zIndex: 1,
+  },
+});

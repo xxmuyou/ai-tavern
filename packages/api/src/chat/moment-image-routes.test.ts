@@ -39,6 +39,14 @@ function createEnv(): { env: Env; jobs: Row[]; moments: Row[]; queue: unknown[] 
       return null;
     }
 
+    if (sql.includes("FROM story_moment_images WHERE job_id = ?")) {
+      return moments.find((row) => row.job_id === values[0]) ?? null;
+    }
+
+    if (sql.includes("FROM image_generation_jobs WHERE id = ?")) {
+      return jobs.find((row) => row.id === values[0]) ?? null;
+    }
+
     if (sql.includes("FROM companions")) {
       return {
         appearance: "long dark hair, soft cardigan",
@@ -75,10 +83,15 @@ function createEnv(): { env: Env; jobs: Row[]; moments: Row[]; queue: unknown[] 
         values as [string, string, string, string, string, string, string, number, number];
       jobs.push({
         created_at,
+        error_code: null,
+        error_message: null,
         id,
         mode: mode_,
+        output_key: null,
         output_prefix,
+        provider_task_id: null,
         prompt,
+        status: "pending",
         task,
         updated_at,
         user_id,
@@ -125,13 +138,28 @@ function createEnv(): { env: Env; jobs: Row[]; moments: Row[]; queue: unknown[] 
         id,
         job_id,
         message_id,
+        output_key: null,
         prompt_snapshot,
         scene_id,
+        status: "queued",
         story_beat_id,
         thread_id,
         updated_at,
         user_id,
       });
+      return { meta: { changes: 1 } };
+    }
+
+    if (sql.startsWith("UPDATE story_moment_images SET")) {
+      const setClause = sql.slice(sql.indexOf("SET ") + 4, sql.indexOf(" WHERE id = ?"));
+      const cols = setClause.split(", ").map((part) => part.split(" = ")[0]!.trim());
+      const id = values[values.length - 1] as string;
+      const row = moments.find((item) => item.id === id);
+      if (row) {
+        cols.forEach((col, index) => {
+          row[col] = values[index];
+        });
+      }
       return { meta: { changes: 1 } };
     }
 
@@ -186,5 +214,45 @@ describe("moment image routes", () => {
       scene_id: null,
     });
     expect(queue).toEqual([expect.objectContaining({ type: "image.generate" })]);
+  });
+
+  it("syncs a failed generic image job onto the moment status response", async () => {
+    const { env, jobs, moments } = createEnv();
+    jobs.push({
+      completed_at: Date.now(),
+      created_at: Date.now(),
+      error_code: "stuck_pending",
+      error_message: "Job was never picked up by the queue consumer",
+      id: "job_failed",
+      output_key: null,
+      provider_task_id: null,
+      status: "failed",
+      updated_at: Date.now(),
+    });
+    moments.push({
+      companion_id: "maya",
+      id: "moment_failed",
+      job_id: "job_failed",
+      message_id: "msg_private",
+      output_key: null,
+      status: "queued",
+      updated_at: Date.now(),
+      user_id: "usr_1",
+    });
+
+    const response = await handleMomentImageRequest(
+      new Request("https://api.test/moment-images/jobs/job_failed"),
+      env,
+      "/moment-images/jobs/job_failed",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { error_code?: string; error_message?: string; status: string };
+    expect(body).toMatchObject({
+      error_code: "stuck_pending",
+      error_message: "Job was never picked up by the queue consumer",
+      status: "failed",
+    });
+    expect(moments[0]).toMatchObject({ status: "failed", output_key: null });
   });
 });

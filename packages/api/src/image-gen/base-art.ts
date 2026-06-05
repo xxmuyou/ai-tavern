@@ -188,10 +188,10 @@ export async function listStaleImageJobs(
 }
 
 /**
- * Jobs stuck in `pending` long past when a consumer should have picked them up —
- * i.e. their queue message was never sent or got lost (no provider_task_id yet).
- * Used by cron to re-enqueue them once so a dropped message self-heals instead of
- * stranding the job (and the UI) forever.
+ * Jobs stuck before a provider task was created. They may still be `pending`,
+ * or `processing` after a dependent job (for example a cutout) left them waiting
+ * without a RunningHub task id. Cron re-enqueues them once so the UI does not
+ * spin forever on an orphaned job.
  */
 export async function listStalePendingImageJobs(
   env: Env,
@@ -200,7 +200,7 @@ export async function listStalePendingImageJobs(
 ): Promise<ImageGenJobRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT * FROM image_generation_jobs
-     WHERE status = 'pending'
+     WHERE status IN ('pending', 'processing')
        AND provider_task_id IS NULL
        AND updated_at < ?
      ORDER BY updated_at ASC
