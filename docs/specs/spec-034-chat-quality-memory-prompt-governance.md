@@ -1,6 +1,6 @@
 # spec-034: Chat Quality, Memory, and Prompt Governance（聊天质量、记忆与 Prompt 治理）
 
-> **类型：** 后端 + LLM + 文档治理  |  **依赖：** spec-006(chat), spec-025(角色深度), spec-026(story beats), spec-029(user story arcs)  |  **估时：** 4-6 天  |  **状态：** 📝 draft
+> **类型：** 后端 + LLM + 文档治理  |  **依赖：** spec-006(chat), spec-025(角色深度), spec-026(story beats), spec-029(user story arcs)  |  **估时：** 4-6 天  |  **状态：** 🟡 in-progress
 
 ---
 

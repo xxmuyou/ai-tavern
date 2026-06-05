@@ -38,7 +38,7 @@ export async function handleChatRequest(
       return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
     }
     const user = await requireAuthUser(env, request);
-    return handleEditMessage(request, env, user, companionId, messageId);
+    return handleEditMessage(request, env, ctx, user, companionId, messageId);
   }
 
   const voiceMatch = pathname.match(/^\/chat\/([^/]+)\/messages\/([^/]+)\/voice$/);

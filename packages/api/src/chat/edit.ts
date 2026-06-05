@@ -23,8 +23,14 @@ import {
   parseExampleDialogues,
   parseSceneTags,
 } from "./loaders";
+import {
+  loadThreadMemories,
+  runMemoryExtractQuietly,
+  savePromptDebugSnapshot,
+  shouldWritePromptDebug,
+} from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
-import { buildChatPrompt, type HistoryMessage } from "./prompt";
+import { buildChatPromptArtifacts, type HistoryMessage, type UserPersonaForPrompt } from "./prompt";
 import { checkQuota, checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
 import { extractSignals } from "./signal-extract";
 import { formatDateUtc, recordUsage } from "./usage";
@@ -46,6 +52,7 @@ type EditBody = { text?: unknown };
 export async function handleEditMessage(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   user: UserRecord,
   companionId: string,
   messageId: string,
@@ -117,6 +124,9 @@ export async function handleEditMessage(
     ? await loadActiveActivityForChat(env, user.id, target.activity_id)
     : null;
   const persona = await resolveThreadPersona(env, user.id, thread.persona_id);
+  const userPersonaForPrompt: UserPersonaForPrompt = persona
+    ? { description: persona.description, gender: persona.gender, name: persona.name }
+    : null;
 
   await ensureRelationship(env, user.id, companionId, now);
   const relationship = await loadRelationship(env, user.id, companionId);
@@ -131,8 +141,9 @@ export async function handleEditMessage(
   const storyBeat = sceneId
     ? await loadStoryBeatForScene(env, user.id, companionId, sceneId)
     : null;
+  const threadMemories = await loadThreadMemories(env, thread.id);
 
-  const promptMessages = buildChatPrompt({
+  const promptArtifacts = buildChatPromptArtifacts({
     companion,
     narrative,
     recentMessages: priorMessages,
@@ -148,13 +159,22 @@ export async function handleEditMessage(
           activity_hint: activity.daily_state_snapshot.activity_hint,
         }
       : null,
-    userPersona: persona
-      ? { description: persona.description, gender: persona.gender, name: persona.name }
-      : null,
+    threadMemories,
+    userPersona: userPersonaForPrompt,
     exampleDialogues: parseExampleDialogues(companion.example_dialogues),
     threadSummary: thread.summary,
     userText: text,
   });
+  if (shouldWritePromptDebug(env, isAdmin)) {
+    await savePromptDebugSnapshot(env, {
+      companionId,
+      now,
+      segments: promptArtifacts.segments,
+      threadId: thread.id,
+      tokenEstimate: promptArtifacts.tokenEstimate,
+      userId: user.id,
+    });
+  }
 
   let reply: string;
   let usageTokens = { input_tokens: 0, output_tokens: 0 };
@@ -164,7 +184,7 @@ export async function handleEditMessage(
       {
         frequency_penalty: 0.4,
         max_tokens: 700,
-        messages: promptMessages,
+        messages: promptArtifacts.messages,
         presence_penalty: 0.3,
         task: "chat",
         temperature: 0.95,
@@ -238,6 +258,19 @@ export async function handleEditMessage(
 
   void incrementQuota(env, user.id, now, subscriber);
   void recordUsage(env, user.id, formatDateUtc(now), 1, finalExtract.cost_usd);
+  ctx.waitUntil(
+    runMemoryExtractQuietly(env, {
+      companion_id: companionId,
+      companion_name: companion.name,
+      companion_reply: reply,
+      relationship_narrative: narrative,
+      relationship_role: companion.relationship_role,
+      thread_id: thread.id,
+      user_id: user.id,
+      user_persona: userPersonaForPrompt,
+      user_text: text,
+    }),
+  );
 
   return jsonResponse({
     edited_message_id: target.id,

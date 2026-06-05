@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildChatPrompt } from "./prompt";
+import { buildChatPrompt, buildChatPromptArtifacts } from "./prompt";
 
 const companion = {
   appearance: "tall, kind eyes",
@@ -66,11 +66,13 @@ describe("buildChatPrompt", () => {
       userText: "Want to grab coffee later?",
     });
 
-    expect(messages.length).toBe(5);
+    expect(messages.length).toBe(6);
     expect(messages[1]).toEqual({ content: "Hi", role: "user" });
     expect(messages[2]).toEqual({ content: "Hey there.", role: "assistant" });
     expect(messages[3]).toEqual({ content: "How's your day?", role: "user" });
-    expect(messages[4]).toEqual({ content: "Want to grab coffee later?", role: "user" });
+    expect(messages[4]?.role).toBe("system");
+    expect(messages[4]?.content).toContain("Final guard before replying");
+    expect(messages[5]).toEqual({ content: "Want to grab coffee later?", role: "user" });
   });
 
   it("omits the scene section when scene is null", () => {
@@ -202,5 +204,66 @@ describe("buildChatPrompt", () => {
       userText: "hi",
     });
     expect(committed[0]?.content).toContain("committed");
+  });
+
+  it("injects thread memory and post-history guard as auditable segments", () => {
+    const artifacts = buildChatPromptArtifacts({
+      companion,
+      narrative: "Trusted.",
+      recentMessages: [{ content: "old promise", role: "user" }],
+      scene: null,
+      secretToReveal: null,
+      stage: "trusted",
+      threadMemories: [
+        {
+          content: "Maya promised to show Dr. Wen her unfinished painting next time.",
+          id: "mem-1",
+          importance: 90,
+          kind: "promise",
+          updated_at: 10,
+        },
+      ],
+      threadSummary: null,
+      userText: "你还记得吗？",
+    });
+
+    const memorySegment = artifacts.segments.find((segment) => segment.id === "thread_memory");
+    expect(memorySegment?.included).toBe(true);
+    expect(memorySegment?.content).toContain("unfinished painting");
+
+    const guardIndex = artifacts.messages.findIndex((message) => message.content.includes("Final guard before replying"));
+    expect(guardIndex).toBe(2);
+    expect(artifacts.messages.at(-1)).toEqual({ content: "你还记得吗？", role: "user" });
+  });
+
+  it("keeps required identity and output format segments when budget trims history", () => {
+    const artifacts = buildChatPromptArtifacts({
+      companion,
+      narrative: "Trusted.",
+      recentMessages: [
+        { content: "A very old turn that should be cut when budget is tiny.", role: "user" },
+        { content: "Another old turn that should also be cut.", role: "companion" },
+      ],
+      scene,
+      secretToReveal: null,
+      stage: "trusted",
+      threadMemories: [
+        {
+          content: "Low importance detail.",
+          id: "mem-low",
+          importance: 1,
+          kind: "open_loop",
+          updated_at: 1,
+        },
+      ],
+      threadSummary: "A longish summary that is less important than required identity and format.",
+      tokenBudget: 20,
+      userText: "hi",
+    });
+
+    expect(artifacts.segments.find((segment) => segment.id === "core_identity")?.included).toBe(true);
+    expect(artifacts.segments.find((segment) => segment.id === "output_format")?.included).toBe(true);
+    expect(artifacts.segments.find((segment) => segment.id === "post_history_guard")?.included).toBe(true);
+    expect(artifacts.segments.some((segment) => segment.id.startsWith("recent_history") && segment.trimReason === "budget")).toBe(true);
   });
 });
