@@ -14,6 +14,8 @@ type CompanionRow = {
   personality: string | null;
   background: string | null;
   speech_style: string | null;
+  voice_id: string | null;
+  voice_speed: string | null;
   relationship_role: string | null;
   want: string | null;
   secret: string | null;
@@ -528,12 +530,65 @@ describe("companions module", () => {
       name: string;
       gender: string;
       preferred_scenes: string[];
+      voice_id: string;
+      voice_speed: string;
     };
     expect(body.source).toBe("user");
     expect(body.name).toBe("Echo");
     expect(body.gender).toBe("female");
     expect(body.preferred_scenes).toEqual(["cafe", "park"]);
+    expect(body.voice_id).toBe("Arrogant_Miss");
+    expect(body.voice_speed).toBe("medium");
     expect(body.id.length).toBeGreaterThan(0);
+  });
+
+  it("POST persists explicit companion voice settings", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions", token, "POST", {
+        gender: "male",
+        name: "Voicey",
+        voice_id: "male-qn-qingse",
+        voice_speed: "fast",
+      }),
+      env,
+      "/companions",
+    );
+
+    expect(response?.status).toBe(201);
+    const body = (await response?.json()) as { voice_id: string; voice_speed: string };
+    expect(body.voice_id).toBe("male-qn-qingse");
+    expect(body.voice_speed).toBe("fast");
+  });
+
+  it("POST rejects invalid companion voice settings", async () => {
+    const env = createEnv({ companions: [], relationships: [] });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const badVoice = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions", token, "POST", {
+        gender: "female",
+        name: "Echo",
+        voice_id: "missing-voice",
+      }),
+      env,
+      "/companions",
+    );
+    expect(badVoice?.status).toBe(400);
+    expect(await badVoice?.json()).toMatchObject({ error: "invalid_voice_id" });
+
+    const badSpeed = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions", token, "POST", {
+        gender: "female",
+        name: "Echo",
+        voice_speed: "turbo",
+      }),
+      env,
+      "/companions",
+    );
+    expect(badSpeed?.status).toBe(400);
+    expect(await badSpeed?.json()).toMatchObject({ error: "invalid_voice_speed" });
   });
 
   it("POST seeds art_emotions with only the neutral key from uploaded art_url", async () => {
@@ -935,6 +990,8 @@ function officialCompanion(
     secret: null,
     source: "official",
     speech_style: null,
+    voice_id: null,
+    voice_speed: "medium",
     updated_at: 1747000000000,
     want: null,
     ...overrides,
@@ -971,6 +1028,8 @@ function userCompanion(
     secret: null,
     source: "user",
     speech_style: null,
+    voice_id: null,
+    voice_speed: "medium",
     updated_at: 1747000000000,
     want: null,
     ...overrides,
@@ -1332,6 +1391,8 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       personality,
       background,
       speech_style,
+      voice_id,
+      voice_speed,
       relationship_role,
       want,
       secret,
@@ -1349,6 +1410,8 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       string,
       string,
       string,
+      string | null,
+      string | null,
       string | null,
       string | null,
       string | null,
@@ -1390,6 +1453,8 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       secret,
       source: "user",
       speech_style,
+      voice_id,
+      voice_speed,
       tags,
       updated_at: updatedAt,
       want,
@@ -1417,6 +1482,8 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       art_emotions,
       clearCutout,
       gender,
+      voice_id,
+      voice_speed,
       updatedAt,
       id,
     ] = values as [
@@ -1436,6 +1503,8 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       string | null,
       string | null,
       number,
+      string | null,
+      string | null,
       string | null,
       number,
       string,
@@ -1461,6 +1530,8 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
         speech_style,
         tags,
         updated_at: updatedAt,
+        voice_id,
+        voice_speed,
         want,
       });
     }

@@ -42,6 +42,39 @@ export type Gender = 'male' | 'female';
 
 export type RomancePreference = Gender | 'any';
 
+export type VoiceSpeed = 'slow' | 'medium' | 'fast';
+
+export type VoiceGenderHint = Gender | 'neutral';
+
+export type VoiceOption = {
+  gender_hint?: VoiceGenderHint;
+  id: string;
+  label: string;
+  language: string;
+  language_label: string;
+};
+
+export type VoiceSpeedPreset = {
+  id: VoiceSpeed;
+  label: string;
+  value: number;
+};
+
+export type VoiceOptionsResponse = {
+  defaults: {
+    female_voice_id: string;
+    male_voice_id: string;
+    speed: VoiceSpeed;
+  };
+  provider: 'minimax';
+  speed_presets: VoiceSpeedPreset[];
+  voices: VoiceOption[];
+};
+
+export type VoicePreviewResponse = {
+  url: string;
+};
+
 export type TimeSlot = 'morning' | 'afternoon' | 'evening' | 'night';
 
 export type ActivityType = 'check_in' | 'hang_out' | 'invite' | 'date' | 'gift' | 'repair';
@@ -205,6 +238,8 @@ export type CompanionDetail = {
   relationship_role: string | null;
   source: CompanionSource;
   speech_style: string | null;
+  voice_id?: string | null;
+  voice_speed?: VoiceSpeed | null;
   // The character's opening line; shown as the first message of a fresh chat.
   greeting?: string | null;
   // spec-025 persona fields. Only present for the owner of a user-created
@@ -229,6 +264,8 @@ export type CompanionCreateInput = {
   preferred_scenes?: string[];
   relationship_role?: string;
   speech_style?: string;
+  voice_id?: string;
+  voice_speed?: VoiceSpeed;
   greeting?: string;
   example_dialogues?: string[];
   tags?: string[];

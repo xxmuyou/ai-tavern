@@ -42,7 +42,7 @@
 
 **真实 secret 不进 git**，统一在 `secrets.md` 管理。
 
-`.env.*` 只承载 secret、本地覆盖和少量环境开关。RunningHub workflow/node id、fieldName、workflow API contract、默认 checkpoint/LoRA 文件名与 Anime/Realistic lane 配置不以 `.env.*` 为长期来源；dev/prod 应使用 repo 中对应环境的 RunningHub workflow 配置文件与 contract 刷新结果，部署时同步到 D1。
+`.env.*` 只承载 secret、本地覆盖和少量环境开关。RunningHub workflow/node id、fieldName、workflow API contract、默认 checkpoint/LoRA 文件名与 Anime/Realistic lane 配置不以 `.env.*` 为长期来源；dev/prod 应使用 repo 中对应环境的 RunningHub workflow 配置文件与 contract 刷新结果，部署时同步到 D1。MiniMax TTS 的 GroupId、model、默认 voice、语速档位与系统音色 catalog 同样不是 secret，来源是 `config/minimax-voices.<env>.json`。
 
 ### 2.3 启动
 
@@ -207,6 +207,7 @@ prod 环境**首次部署前**需要按顺序创建：
 - 公共非 secret 信息（如 publishable key）直接写 `wrangler.jsonc` 的 `vars`
 - 真正的 secret 用 `wrangler secret put` 注入
 - RunningHub workflow/node/fieldName/contract/checkpoint/LoRA 与 Anime/Realistic lane 配置虽然不是 secret，但不写入 `.env.*` 作为长期配置；由 repo workflow 配置文件与 contract 刷新结果随部署同步到 D1
+- MiniMax TTS non-secret config 不写入 `.env.*`；由 `config/minimax-voices.<env>.json` 随代码部署打包
 
 ---
 

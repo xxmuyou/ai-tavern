@@ -7,6 +7,8 @@
 > **管理员工作台边界：** Admin UI 只管理非敏感运行时配置。API key / secret / signing key 只能通过 `.env.*`、Wrangler secrets、`pnpm upload:secrets:*` 或 `wrangler secret put` 管理。工作台只显示这些 secret 是否已配置，不显示值，也不允许覆盖；历史 D1 中如果存在同 key 覆盖值，运行时代码会忽略。
 >
 > **RunningHub workflow 接线和 contract 不是 secret。** `workflowId`、`promptNodeId`、`promptFieldName`、`checkpointNodeId`、`checkpointFieldName`、`loadImageNodeId`、latent/KSampler 参数映射、workflow API contract、checkpoint/LoRA 文件名与 Anime/Realistic lane 配置不放本文件的 secret 清单，也不应长期放 `.env.*`。它们由 repo 中按环境区分的 RunningHub 配置文件与 contract 刷新结果 seed 到 D1 catalog；checkpoint 文件名在 `image_models`，LoRA 文件名在 `image_loras`，可用组合由 semantic workflow 下的 `anime` / `realistic` asset lane 决定。
+>
+> **MiniMax TTS catalog/config 也不是 secret。** `.env.*` 只保留 `MINIMAX_API_KEY`。TTS GroupId、model、默认 voice、语速档位与系统音色列表由 `config/minimax-voices.<env>.json` 管理；不要再设置 `MINIMAX_GROUP_ID`、`MINIMAX_TTS_MODEL`、`MINIMAX_TTS_VOICE_FEMALE` 或 `MINIMAX_TTS_VOICE_MALE`。
 
 ---
 
@@ -16,7 +18,7 @@
 |------|------|------|----------|-------------------|
 | `DEEPSEEK_API_KEY` | DeepSeek LLM 调用 | platform.deepseek.com | Wrangler secret | 独立 |
 | `OPENAI_API_KEY` | OpenAI LLM（fallback / 备选） | platform.openai.com | Wrangler secret | 独立 |
-| `MINIMAX_API_KEY` | MiniMax M3 LLM 调用（chat 候选默认） | platform.minimaxi.com | Wrangler secret | 独立 |
+| `MINIMAX_API_KEY` | MiniMax M3 LLM 与 MiniMax T2A voice 调用 | platform.minimaxi.com | Wrangler secret | 独立 |
 | `ANTHROPIC_API_KEY` | Anthropic Claude（备选） | console.anthropic.com | Wrangler secret | 独立 |
 | `DOUBAO_API_KEY` | 豆包 / 火山引擎（备选 / 未来中文版） | volcengine.com | Wrangler secret | 独立 |
 | `CLOUDFLARE_AI_TOKEN` | Workers AI（摘要任务） | Cloudflare Dashboard | Wrangler secret | 独立（或同账户共享） |
@@ -61,7 +63,7 @@
 
 | Key | 缺失后果 | 备注 |
 |---|---|---|
-| `MINIMAX_API_KEY`（或当前 chat provider 对应 key） | LLM 调用返回 500 | 默认 chat 路由走 MiniMax M3；若 admin 切回 DeepSeek，则填 `DEEPSEEK_API_KEY` |
+| `MINIMAX_API_KEY`（或当前 chat provider / voice provider 对应 key） | LLM 或 voice 调用返回错误 | 默认 chat 路由走 MiniMax M3；voice 也使用 MiniMax T2A。若只切 chat 到 DeepSeek，voice 仍需要 MiniMax key |
 | `OPENAI_MODEL` | OpenAI 路径失败 | 仅当 OPENAI_API_KEY 配了才用得到 |
 | `EXPO_PUBLIC_API_URL` | Expo 客户端不知道连哪儿 | dev 默认 `http://127.0.0.1:8787` |
 
@@ -103,7 +105,7 @@ admin 身份由两层控制：
 ```bash
 # 主仓库
 cp .env.example .env.dev      # 首次
-vim .env.dev                  # 只填 MINIMAX_API_KEY / EXPO_PUBLIC_API_URL；若切 DeepSeek 再填 DEEPSEEK_API_KEY
+vim .env.dev                  # 只填 MINIMAX_API_KEY / EXPO_PUBLIC_API_URL；若切 DeepSeek chat 再填 DEEPSEEK_API_KEY
 pnpm install                  # 装 husky + dev deps
 pnpm dev                      # 自动准备本地 env，再起 worker (8787) + Expo (8081)
 
