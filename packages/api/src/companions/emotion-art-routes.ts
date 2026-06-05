@@ -1,7 +1,7 @@
 import { jsonResponse } from "../http";
 
 /**
- * spec-031 retires WF2 companion emotion portraits. Historical art_emotions
+ * spec-031 retires portrait variation companion emotion portraits. Historical art_emotions
  * data remains readable through companion records, but this surface no longer
  * starts or lists generation jobs.
  */

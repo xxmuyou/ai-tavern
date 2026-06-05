@@ -47,7 +47,7 @@
 | 019 | [User/VIP Companion Creation UI](./spec-019-companion-create-ui.md) | 新建 | 004, 010, 018 | 5-7 天 | 📝 draft |
 | 020 | [Companion 美术生成（文生图创建 + 风格 + 表情变体 + 透明 + 编辑接口）](./spec-020-companion-emotion-art-generation.md) | 新建 | 004, 006, 010, 019, 021 | 5-8 天 | 📝 draft |
 | 021 | [Credits Ledger and Metering](./spec-021-credits-ledger-and-metering.md) | 新建 | 010 | 5-8 天 | 🟢 done |
-| 022 | [Image Gen Provider: RunningHub（3 workflow + 风格 checkpoint）](./spec-022-image-gen-runninghub-integration.md) | 新建 | 020, 021 | 3-5 天 | 🟡 in-progress（WF-1 create + checkpoint 切换 + WF1 模型目录落地，待回填 workflow id 端到端验证；WF-2/3 待做） |
+| 022 | [Image Gen Provider: RunningHub（semantic workflows + Anime/Realistic asset lanes）](./spec-022-image-gen-runninghub-integration.md) | 新建 | 020, 021 | 3-5 天 | 🟡 in-progress（portrait create + checkpoint 切换 + workflow contract、checkpoint/LoRA catalog、Anime/Realistic lane 口径已落地到文档/配置；待代码收敛与端到端验证） |
 | 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 🟡 in-progress（积分端点 + 单测落地；工作台已扩展 Settings/图像模型/表情/LLM，见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)） |
 | 024 | [聊天内关系可见化 + 每轮反馈（沉浸感阶段 0）](./spec-024-in-chat-relationship-feedback.md) | 前端接线 | 006, 005, 012 | 2-3 天 | 🟡 in-progress（两端接线+HUD+每轮反馈已落地，typecheck/lint 通过，待运行端到端验证） |
 | 025 | [角色深度 + 解锁系统（沉浸感阶段 1）](./spec-025-character-depth-and-unlocks.md) | 后端+前端 | 004, 006, 005, 013, 019, 024 | 6-9 天 | 🟡 in-progress（persona 字段+prompt 强化+解锁系统全链路已落地，API 366 单测通过、两端 typecheck/lint 通过，待运行端到端验证；表情/场景的 Pro 门禁见实现记录待确认） |
@@ -56,8 +56,8 @@
 | 028 | [剧情引导与行动按钮重构（Web 优先）](./spec-028-guided-story-actions-ui.md) | 前端体验/UI | 024, 025, 026 | 2-3 天 | 🟡 in-progress（统一剧情拍/关系目标/日常状态的下一步引导，重排 Today/Scene/Chat 行动按钮） |
 | 029 | [User-created Story Arcs（自建角色剧情线与剧情包）](./spec-029-user-created-story-arcs.md) | 后端+前端+LLM+内容 | 002, 010, 019, 021, 026, 028 | 5-8 天 | 🟡 in-progress（自建角色剧情包、轻量编辑、Pro-only AI draft、手动完成节点、公开角色可选共享已接线；待端到端 QA） |
 | 030 | [Chat Outfit Images（聊天换衣服图）](./spec-030-chat-outfit-images.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 2-4 天 | 📝 draft（companion 消息下换衣服；推荐穿搭/自定义 prompt；一次性聊天图片，不改角色长期图片） |
-| 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 📝 draft（主形象走干净底图直接展示；新增 wf_cutout/cutout mode 聊天时 AI matting；瞬间图用抠图角色合成保一致；退役 WF2 表情立绘停写保数据；情绪只驱动 UI） |
-| 032 | [Web Public Companion Discovery Home（暗色首页 + 公开角色发现 + 风格标签收敛）](./spec-032-web-public-companion-discovery-home.md) | Web UI+API+内容标签 | 017, 018, 019, 022 | 2-4 天 | 🟡 in-progress（未登录首页直接展示真实 companions；用户侧风格只保留 Anime/Realistic，Anime JP/KR 仅保留为 admin/model 名称） |
+| 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 📝 draft（主形象走干净底图直接展示；新增 companion_cutout mode 聊天时 AI matting；瞬间图用抠图角色合成保一致；退役旧 emotion variation 立绘停写保数据；情绪只驱动 UI） |
+| 032 | [Web Public Companion Discovery Home（暗色首页 + 公开角色发现 + 风格标签收敛）](./spec-032-web-public-companion-discovery-home.md) | Web UI+API+内容标签 | 017, 018, 019, 022 | 2-4 天 | 🟡 in-progress（未登录首页直接展示真实 companions；用户侧与 Admin 主分类只保留 Anime/Realistic） |
 | 033 | [Profile Outfit Images and User Image Assets（profile 换装图 + 用户资产收口）](./spec-033-profile-outfit-image-assets.md) | 后端+Web UI+image-gen | 019, 022, 030, 031 | 2-4 天 | 🟡 in-progress（Change outfit 从聊天移到 profile；生成图自动进入 Me 资产；确认后作为用户私有 profile 图覆盖） |
 
 **估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
@@ -76,11 +76,11 @@
 - **E2 路径（Web UI）：** 012 → 018，优先把 Web 做成桌面工作台；mobile UI 另开后续 spec
 - **F 路径（部署）：** 014 + 015 可任意时间开（独立基础）
 - **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
-- **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，3 个 workflow create/variation/edit + 3 风格 checkpoint 参数）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
+- **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，workflow contract 校验节点字段 + checkpoint/LoRA 资产目录 + Anime/Realistic asset lanes）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
 - **I 路径（管理员后端）：** 011（LLM 端点，已 done）+ 023（积分查看/调整），管理员后端能力统一沿用 `requireAdminUser` 与 `admin/` 分派模式，UI 归 spec-018
 - **J 路径（自建角色剧情）：** 019 → 026 → 028 → 029。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 让自建角色拥有剧情包、用户自写 arc、AI 辅助草稿与手动完成机制。自建角色不再按“纯 sandbox + 数值”作为长期路线。
 - **K 路径（图片动作）：** 027 → 031 → 033。spec-027 先跑通聊天内异步图片生成、job 轮询与回看模式；spec-031 重构出图源和 cutout；spec-033 将换装从聊天动作迁移到 profile 图片管理。spec-030 的聊天换装后端保留为 legacy/deprecated，不再作为新 UI 入口。
-- **L 路径（Web 上线首页）：** 018 → 032。spec-032 是 web 首页收口：未登录也展示公开 companion discovery；mobile 不动；用户侧风格 bucket 收敛为 Anime/Realistic，JP/KR 只保留在 admin/model catalog。
+- **L 路径（Web 上线首页）：** 018 → 032。spec-032 是 web 首页收口：未登录也展示公开 companion discovery；mobile 不动；用户侧与 Admin 主分类都收敛为 Anime/Realistic。
 
 ---
 

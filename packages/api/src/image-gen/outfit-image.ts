@@ -12,9 +12,10 @@ import {
   type ImageGenJobRow,
   type ImageGenJobStatus,
 } from "./base-art";
+import { PROFILE_OUTFIT_WORKFLOW_KEY } from "./workflow-keys";
 
 export const TASK_OUTFIT_IMAGE = "chat_outfit_image";
-export const OUTFIT_WORKFLOW_KEY = "wf_outfit";
+export const OUTFIT_WORKFLOW_KEY = PROFILE_OUTFIT_WORKFLOW_KEY;
 
 const OUTPUT_PREFIX = "chat-outfits";
 const MODE_COLUMN = "image_to_image";

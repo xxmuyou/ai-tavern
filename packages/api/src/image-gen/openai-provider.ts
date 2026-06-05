@@ -10,8 +10,8 @@ import {
 /**
  * OpenAI Images provider.
  *
- * - `create` (WF1): text-to-image via the generations endpoint.
- * - `variation` (WF2): image-to-image via the edits endpoint, using the source
+ * - `create`: text-to-image via the generations endpoint.
+ * - `variation`: image-to-image via the edits endpoint, using the source
  *   portrait bytes pulled from R2 (the edits endpoint takes a file upload, not
  *   a URL, so we cannot reuse the RunningHub signed-URL path).
  *

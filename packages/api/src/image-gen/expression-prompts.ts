@@ -1,7 +1,7 @@
 import { NON_NEUTRAL_EMOTIONS, type NonNeutralEmotion } from "./types";
 
 /**
- * WF2 expression/pose prompts, keyed by gender × emotion (global, shared by all
+ * Retired expression/pose prompts, keyed by gender × emotion (global, shared by all
  * companions). Admin-editable — admins adjust these to change how each emotion's
  * portrait pose looks. See [[immersion_redesign_2026-05]].
  */

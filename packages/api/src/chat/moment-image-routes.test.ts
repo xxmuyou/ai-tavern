@@ -178,7 +178,7 @@ describe("moment image routes", () => {
       mode: "text_to_image",
       output_prefix: "chat-moments",
       task: "chat_moment_image",
-      workflow_key: "wf_moment",
+      workflow_key: "chat_moment",
     });
     expect(jobs[0]?.prompt).toContain("Scene: Private chat");
     expect(moments[0]).toMatchObject({

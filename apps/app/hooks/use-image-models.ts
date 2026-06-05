@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchImageModels, type ImageModelOption } from '@/api/companion-client';
 
 /**
- * Loads the active WF1 model catalog for the create form's model picker.
+ * Loads the active portrait create model catalog for the create form's model picker.
  */
 export function useImageModels() {
   const [models, setModels] = useState<ImageModelOption[]>([]);

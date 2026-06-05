@@ -46,18 +46,34 @@ export type ImageGenRequest = {
   mode?: ImageGenMode;
   /**
    * Workflow to run, keyed into the unified `image_gen.workflows` config.
-   * Resolved from the chosen model for `create` (defaults to `wf1`); `wf2` for
-   * legacy `variation`; `wf_cutout` for transparent matting. See
+   * Resolved from the chosen model for `create` (defaults to `portrait_create`);
+   * `companion_cutout` is used for transparent matting. See
    * image-gen/workflows.ts.
    */
   workflow_key?: string;
   /**
-   * Checkpoint file to inject for `create`. Comes from the creator-selected WF1
+   * Checkpoint file to inject for `create`. Comes from the creator-selected
    * checkpoint/model. Ignored when the workflow declares no checkpoint node.
    */
   ckpt_name?: string;
   /** Field name on the workflow's checkpoint node. Source is workflow config, not the model. */
   checkpoint_field_name?: string;
+  /** Admin/batch-only LoRA catalog id resolved before enqueue. Normal user create does not expose this. */
+  lora_id?: string;
+  /** LoRA file to inject. Supports at most one LoRA per generation. */
+  lora_name?: string;
+  /** LoRA model strength. */
+  lora_model_strength?: number;
+  /** Optional LoRA clip strength when the workflow exposes that input. */
+  lora_clip_strength?: number | null;
+  /** Concrete workflow parameter values, resolved before enqueue. */
+  generation_params?: {
+    size_preset: string;
+    width: number;
+    height: number;
+    batch_size: number;
+    seed: number;
+  };
   /**
    * R2 object key OR full URL of the source portrait. Required for
    * `variation`; for `create` only set when re-painting an uploaded image.

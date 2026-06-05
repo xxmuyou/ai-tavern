@@ -2,7 +2,7 @@
 
 > **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-020/022(image-gen), spec-027(chat moment images)  |  **估时：** 2-4 天  |  **状态：** 📝 draft / legacy
 
-> **2026-06 修订：** 聊天内 `Change outfit` UI 已废弃。`wf_outfit`、`chat_outfit_images` 和旧 API 可保留用于历史数据/兼容，但新产品入口迁移到 [`spec-033 Profile Outfit Images and User Image Assets`](./spec-033-profile-outfit-image-assets.md)。聊天 UI 只保留 `Capture this moment`。
+> **2026-06 修订：** 聊天内 `Change outfit` UI 已废弃。`profile_outfit`、`chat_outfit_images` 和旧 API 可保留用于历史数据/兼容，但新产品入口迁移到 [`spec-033 Profile Outfit Images and User Image Assets`](./spec-033-profile-outfit-image-assets.md)。聊天 UI 只保留 `Capture this moment`。
 
 ---
 
@@ -16,7 +16,7 @@ Legacy 目标体验：
 
 新行为不再使用聊天消息作为入口。换装图现在属于 profile 图片管理：用户在 companion profile 图片旁生成并确认，确认后成为当前用户私有 profile 图片覆盖，详见 spec-033。
 
-第一版使用 `art_url` 作为源图参考，通过 RunningHub 新 workflow `wf_outfit` 走现有 `variation` 图生图路径。这里不引入正式 `edit` mode，也不接 credits 扣费。
+第一版使用 `art_url` 作为源图参考，通过 RunningHub 新 workflow `profile_outfit` 走现有 `variation` 图生图路径。这里不引入正式 `edit` mode，也不接 credits 扣费。
 
 ## 目标 / 非目标
 
@@ -27,7 +27,7 @@ Legacy 目标体验：
 - 系统推荐使用规则模板，不调用 LLM；根据 scene / time slot / activity / relationship stage 做稳定选择。
 - 生成图片 job，完成后把图片挂回来源 message，作为聊天内可回看的 outfit image。
 - 复用 `image_generation_jobs`、RunningHub generic image job、webhook/cron reconciliation、mock provider。
-- 在 RunningHub 配置中新增 `wf_outfit`，mode 仍为 `variation`。
+- 在 RunningHub 配置中新增 `profile_outfit`，mode 仍为 `variation`。
 
 ### 非目标
 
@@ -114,7 +114,7 @@ The character has exactly one head, two arms, two hands, and one body. No duplic
 Single companion only. No text, no UI, no speech bubbles, no logos, no extra characters, no nudity, no lingerie, no fetish outfit.
 ```
 
-RunningHub negative prompt 继续使用现有 `ANATOMY_NEGATIVE`，并通过 `wf_outfit.negativePromptNodeId` 注入。
+RunningHub negative prompt 继续使用现有 `ANATOMY_NEGATIVE`，并通过 `profile_outfit.negativePromptNodeId` 注入。
 
 ## API / Data Model
 
@@ -169,7 +169,7 @@ CREATE INDEX idx_chat_outfit_images_job ON chat_outfit_images (job_id);
 
 - `task = 'chat_outfit_image'`
 - `mode = 'image_to_image'`
-- `workflow_key = 'wf_outfit'`
+- `workflow_key = 'profile_outfit'`
 - `prompt = prompt_snapshot`
 - `output_prefix = 'chat-outfits'`
 - `billing_ref = NULL`
@@ -190,8 +190,8 @@ type ChatMessage = {
 
 ## Workflow / Provider
 
-- `config/runninghub-workflows.dev.json` 与 `config/runninghub-workflows.prod.json` 新增 `wf_outfit`。
-- `wf_outfit.mode = "variation"`，不扩展 `image_workflows.mode` CHECK。
+- `config/runninghub-workflows.dev.json` 与 `config/runninghub-workflows.prod.json` 新增 `profile_outfit`。
+- `profile_outfit.mode = "variation"`，不扩展 `image_workflows.mode` CHECK。
 - 必填配置：
   - `workflowId`
   - `loadImageNodeId`
@@ -238,13 +238,13 @@ API：
 Job：
 
 - `chat_outfit_image` job 入队后调用 provider。
-- provider request 使用 `source_art_url = companion.art_url`、`workflow_key = wf_outfit`。
+- provider request 使用 `source_art_url = companion.art_url`、`workflow_key = profile_outfit`。
 - webhook/cron 完成 generic image job 后，job status endpoint 能 reconcile `chat_outfit_images.output_key/status`。
 
 Config：
 
-- `parseWorkflows` 能读取 `wf_outfit` 和 negative prompt 字段。
-- `scripts/sync-runninghub-workflows.sh dev --dry-run` 输出 `wf_outfit`，且 SQL 包含 negative prompt columns。
+- `parseWorkflows` 能读取 `profile_outfit` 和 negative prompt 字段。
+- `scripts/sync-runninghub-workflows.sh dev --dry-run` 输出 `profile_outfit`，且 SQL 包含 negative prompt columns。
 
 前端：
 
@@ -267,7 +267,7 @@ pnpm --filter @xtbit/app lint
 - 当前前端已移除 `OutfitImageCapture`；如需回滚 spec-033，只隐藏 profile 换装入口即可，旧 chat outfit API 仍保留。
 - API 字段对旧客户端向后兼容；旧客户端忽略 `outfit_image`。
 - 已存在 `chat_outfit_images` 不影响聊天主流程。
-- 若 `wf_outfit` 未配置或 RunningHub 不稳定，生成端点返回 provider config/provider error，聊天仍可正常使用。
+- 若 `profile_outfit` 未配置或 RunningHub 不稳定，生成端点返回 provider config/provider error，聊天仍可正常使用。
 - 不涉及 credits 扣费，因此无需退款或释放预占积分。
 
 ## 依赖

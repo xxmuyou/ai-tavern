@@ -39,7 +39,7 @@ function createEnv() {
     task: TASK_PROFILE_OUTFIT_IMAGE,
     updated_at: Date.now(),
     user_id: "user-1",
-    workflow_key: "wf_outfit",
+    workflow_key: "profile_outfit",
   });
   generations.set("gen-1", {
     companion_id: "maya",

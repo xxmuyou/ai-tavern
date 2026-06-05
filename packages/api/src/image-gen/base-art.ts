@@ -1,12 +1,19 @@
 import { resolveImageGenConfig } from "../settings/store";
+import { parseGenerationParamValues, type ImageGenerationParamValues } from "./generation-params";
 import {
   ImageGenError,
   getImageGenProvider,
+  resolveImageLoraSelection,
   type ImageGenRequest,
 } from "./index";
+import {
+  PORTRAIT_CREATE_LORA_WORKFLOW_KEY,
+  PORTRAIT_CREATE_WORKFLOW_KEY,
+  normalizeWorkflowKey,
+} from "./workflow-keys";
 
 /**
- * Companion base-art draft pipeline (spec-022 WF-1 create).
+ * Companion base-art draft pipeline (spec-022 portrait_create).
  *
  * The base portrait is generated BEFORE any companion exists, so it cannot
  * live in companion_art_jobs. It uses the generic image_generation_jobs table
@@ -37,6 +44,11 @@ export type ImageGenJobRow = {
   negative_prompt: string | null;
   ckpt_name: string | null;
   checkpoint_field_name: string | null;
+  lora_id: string | null;
+  lora_name: string | null;
+  lora_model_strength: number | null;
+  lora_clip_strength: number | null;
+  generation_params_json: string | null;
   input_keys: string | null;
   mask_key: string | null;
   output_prefix: string;
@@ -60,7 +72,7 @@ export type BaseArtQueuePayload = {
 
 const TASK_BASE_ART = "companion_base_art";
 const OUTPUT_PREFIX = "companion-base-art";
-const WF1_CLEAN_BACKGROUND_PROMPT =
+const PORTRAIT_CREATE_CLEAN_BACKGROUND_PROMPT =
   "Soft studio portrait, clean gradient or gentle bokeh background, centered subject, uncluttered composition, no props, no complex scenery.";
 
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
@@ -73,10 +85,13 @@ export type CreateBaseArtJobInput = {
   userId: string;
   source: BaseArtSource;
   workflowKey: string;
+  modelId?: string;
   prompt?: string;
   uploadKey?: string;
   ckptName?: string;
   checkpointFieldName?: string | null;
+  loraId?: string | null;
+  generationParams?: ImageGenerationParamValues | null;
 };
 
 export async function createBaseArtJob(
@@ -85,24 +100,38 @@ export async function createBaseArtJob(
 ): Promise<string> {
   const id = crypto.randomUUID();
   const now = Date.now();
+  const workflowKey = normalizeWorkflowKey(input.workflowKey) || PORTRAIT_CREATE_WORKFLOW_KEY;
   const mode = input.source === "upload" ? "image_to_image" : "text_to_image";
   const inputKeys = input.source === "upload" && input.uploadKey ? JSON.stringify([input.uploadKey]) : null;
+  const loraSelection = input.loraId
+    ? await resolveLoraForJob(env, {
+        loraId: input.loraId,
+        modelId: input.modelId,
+        workflowKey,
+      })
+    : null;
 
   await env.DB.prepare(
     `INSERT INTO image_generation_jobs
        (id, user_id, task, mode, status, workflow_key, prompt, ckpt_name, checkpoint_field_name,
-        input_keys, output_prefix, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        lora_id, lora_name, lora_model_strength, lora_clip_strength,
+        generation_params_json, input_keys, output_prefix, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
       input.userId,
       TASK_BASE_ART,
       mode,
-      input.workflowKey,
+      workflowKey,
       input.prompt ?? "",
       input.ckptName ?? null,
       input.checkpointFieldName ?? null,
+      loraSelection?.id ?? null,
+      loraSelection?.lora_name ?? null,
+      loraSelection?.model_strength ?? null,
+      loraSelection?.clip_strength ?? null,
+      input.generationParams ? JSON.stringify(input.generationParams) : null,
       inputKeys,
       OUTPUT_PREFIX,
       now,
@@ -298,12 +327,12 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
   try {
     const sourceArtUrl = parseFirstInputKey(job.input_keys);
     const cfg = await resolveImageGenConfig(env);
-    const workflowKey = job.workflow_key ?? "wf1";
-    // The global WF1 base prompt is a portrait style/quality preamble; only
-    // prepend it for wf1 so other workflows (e.g. wf_scene backgrounds) aren't
+    const workflowKey = normalizeWorkflowKey(job.workflow_key) || PORTRAIT_CREATE_WORKFLOW_KEY;
+    // The global portrait create base prompt is a portrait style/quality preamble; only
+    // prepend it for portrait_create so other workflows aren't
     // polluted with portrait-specific styling.
-    const basePrompt = workflowKey === "wf1"
-      ? [cfg.wf1BasePrompt?.trim(), WF1_CLEAN_BACKGROUND_PROMPT].filter(Boolean).join("\n")
+    const basePrompt = workflowKey === PORTRAIT_CREATE_WORKFLOW_KEY || workflowKey === PORTRAIT_CREATE_LORA_WORKFLOW_KEY
+      ? [cfg.portraitCreateBasePrompt?.trim(), PORTRAIT_CREATE_CLEAN_BACKGROUND_PROMPT].filter(Boolean).join("\n")
       : undefined;
     const request: ImageGenRequest = {
       mode: "create",
@@ -312,6 +341,11 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       workflow_key: workflowKey,
       ckpt_name: job.ckpt_name ?? undefined,
       checkpoint_field_name: job.checkpoint_field_name ?? undefined,
+      lora_clip_strength: job.lora_clip_strength,
+      lora_id: job.lora_id ?? undefined,
+      lora_model_strength: job.lora_model_strength ?? undefined,
+      lora_name: job.lora_name ?? undefined,
+      generation_params: parseGenerationParamValues(job.generation_params_json),
     };
     const provider = await getImageGenProvider(env, "create", request.workflow_key);
     const response = await provider.generate(request, env);
@@ -342,6 +376,32 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
     await failImageJob(env, job, code, message);
     throw err;
   }
+}
+
+async function resolveLoraForJob(
+  env: Env,
+  input: { workflowKey: string; modelId?: string; loraId: string },
+) {
+  if (!input.modelId) {
+    throw new ImageGenError(
+      "invalid_model_lora_combination",
+      "LoRA selection requires a workflow/checkpoint model binding",
+      { retryable: false },
+    );
+  }
+  const selection = await resolveImageLoraSelection(env, {
+    loraId: input.loraId,
+    modelId: input.modelId,
+    workflowKey: input.workflowKey,
+  });
+  if (!selection) {
+    throw new ImageGenError(
+      "invalid_model_lora_combination",
+      `LoRA ${input.loraId} is not allowed for ${input.workflowKey}::${input.modelId}`,
+      { retryable: false },
+    );
+  }
+  return selection;
 }
 
 export function isBaseArtJobPayload(value: unknown): value is BaseArtQueuePayload {

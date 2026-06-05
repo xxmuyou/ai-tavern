@@ -42,7 +42,7 @@
 
 **真实 secret 不进 git**，统一在 `secrets.md` 管理。
 
-`.env.*` 只承载 secret、本地覆盖和少量环境开关。RunningHub workflow/node id、checkpoint fieldName、默认 checkpoint 文件名不以 `.env.*` 为长期来源；dev/prod 应使用 repo 中对应环境的 RunningHub workflow 配置文件，部署时同步到 D1。
+`.env.*` 只承载 secret、本地覆盖和少量环境开关。RunningHub workflow/node id、fieldName、workflow API contract、默认 checkpoint/LoRA 文件名与 Anime/Realistic lane 配置不以 `.env.*` 为长期来源；dev/prod 应使用 repo 中对应环境的 RunningHub workflow 配置文件与 contract 刷新结果，部署时同步到 D1。
 
 ### 2.3 启动
 
@@ -87,7 +87,7 @@ localhost 不走 Google OIDC，也不发送真实 Magic Link 邮件。打开 `ht
 - 集成验证（前后端 + Stripe webhook + LLM 真实调用）
 - 内测（团队成员、早期 beta 用户）
 - 真实 LLM 调用（用 test/dev key，单独配额）
-- RunningHub workflow/node/checkpoint 配置使用 dev 配置文件作为 SOT，部署同步到 dev D1；admin 修改只作为临时验证。
+- RunningHub semantic workflow contract、node/fieldName、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置使用 dev 配置文件和 contract 刷新结果作为 SOT，部署同步到 dev D1；admin 修改只作为临时验证。
 
 ### 3.2 域名规划
 
@@ -162,7 +162,7 @@ prod 环境**首次部署前**需要按顺序创建：
 6. 把上述资源 ID 填进 `wrangler.jsonc` 的 prod env 块
 7. **首次部署后**，运行 migrations：`pnpm migrate:db:prod`
 8. 配置 secrets（见 `secrets.md`）
-9. 准备 prod RunningHub workflow 配置文件，并在部署流程中同步到 prod D1（如果 prod 启用真实生图）
+9. 准备 prod RunningHub semantic workflow contract、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置文件，并在部署流程中同步到 prod D1（如果 prod 启用真实生图）
 10. 配置自定义域（API + Web）
 11. 配置 Stripe live mode + webhook endpoint
 12. 配置 Apple Sign-In + Google OAuth（指向 prod 回调）
@@ -206,7 +206,7 @@ prod 环境**首次部署前**需要按顺序创建：
 - dev / prod 共用变量名，值不同
 - 公共非 secret 信息（如 publishable key）直接写 `wrangler.jsonc` 的 `vars`
 - 真正的 secret 用 `wrangler secret put` 注入
-- RunningHub workflow/node/checkpoint 配置虽然不是 secret，但不写入 `.env.*` 作为长期配置；由 repo workflow 配置文件随部署同步到 D1
+- RunningHub workflow/node/fieldName/contract/checkpoint/LoRA 与 Anime/Realistic lane 配置虽然不是 secret，但不写入 `.env.*` 作为长期配置；由 repo workflow 配置文件与 contract 刷新结果随部署同步到 D1
 
 ---
 

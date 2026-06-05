@@ -1,4 +1,9 @@
 import type { ImageGenMode } from "./types";
+import {
+  normalizeWorkflowGenerationParams,
+  type WorkflowGenerationParams,
+} from "./generation-params";
+import { normalizeWorkflowKey } from "./workflow-keys";
 
 /**
  * Unified RunningHub workflow wiring (deployment-managed, admin-overridable).
@@ -10,30 +15,42 @@ import type { ImageGenMode } from "./types";
  *
  * Shape:
  *   {
- *     "wf1":       { "mode": "create",    "workflowId", "promptNodeId", "checkpointNodeId" },
- *     "wf_outfit": { "mode": "variation", "workflowId", "promptNodeId", "loadImageNodeId" },
- *     "wf_cutout": { "mode": "cutout",    "workflowId", "loadImageNodeId" }
+ *     "portrait_create":   { "mode": "create",    "workflowId", "promptNodeId", "checkpointNodeId" },
+ *     "profile_outfit":    { "mode": "variation", "workflowId", "promptNodeId", "loadImageNodeId", "loadImageFieldName" },
+ *     "companion_cutout":  { "mode": "cutout",    "workflowId", "loadImageNodeId", "loadImageFieldName" }
  *   }
  */
 export type WorkflowConfig = {
   key: string;
   label?: string;
+  architecture?: string;
   mode: ImageGenMode;
   workflowId: string;
   promptNodeId: string;
-  /** Field name on the prompt node. Defaults to "text" (CLIPTextEncode); Qwen
-   * image-edit nodes (TextEncodeQwenImageEditPlus) use "prompt". */
+  /** Field name on the prompt node. Source of truth is the workflow contract. */
   promptFieldName?: string;
   /** create mode: node where the model's checkpoint override is injected. */
   checkpointNodeId?: string;
-  /** create mode: field on the checkpoint node. Defaults to ckpt_name. */
+  /** create mode: field on the checkpoint node. Source of truth is the workflow contract. */
   checkpointFieldName?: string;
   /** variation mode: node that loads the source image. */
   loadImageNodeId?: string;
+  /** Field on the load-image node. Source of truth is the workflow contract. */
+  loadImageFieldName?: string;
   /** variation mode: optional negative-prompt text node (anti-deformity). */
   negativePromptNodeId?: string;
   /** Field name on the negative-prompt node. Defaults to "prompt". */
   negativePromptFieldName?: string;
+  /** Compact parsed RunningHub API contract JSON. */
+  contractJson?: string;
+  contractHash?: string;
+  /** Optional LoRA loader node. First implementation supports at most one LoRA. */
+  loraNodeId?: string;
+  loraNameFieldName?: string;
+  loraModelStrengthFieldName?: string;
+  loraClipStrengthFieldName?: string;
+  generationParams?: WorkflowGenerationParams;
+  generationParamsJson?: string;
   /** Checkpoint ids enabled for this workflow by config seed. */
   modelIds?: string[];
 };
@@ -59,14 +76,16 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
 
   const out: Record<string, WorkflowConfig> = {};
   for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const workflowKey = normalizeWorkflowKey(key) || key;
     if (!value || typeof value !== "object" || Array.isArray(value)) continue;
     const entry = value as Record<string, unknown>;
     const workflowId = str(entry.workflowId);
     const promptNodeId = str(entry.promptNodeId);
     const mode: ImageGenMode = isImageGenMode(entry.mode) ? entry.mode : "create";
     if (!workflowId || (mode !== "cutout" && !promptNodeId)) continue;
-    out[key] = {
-      key,
+    out[workflowKey] = {
+      key: workflowKey,
+      architecture: str(entry.architecture) || "sdxl",
       label: str(entry.label) || undefined,
       mode,
       workflowId,
@@ -75,8 +94,23 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
       checkpointNodeId: str(entry.checkpointNodeId) || undefined,
       checkpointFieldName: str(entry.checkpointFieldName) || "ckpt_name",
       loadImageNodeId: str(entry.loadImageNodeId) || undefined,
+      loadImageFieldName: str(entry.loadImageFieldName) || "image",
       negativePromptNodeId: str(entry.negativePromptNodeId) || undefined,
       negativePromptFieldName: str(entry.negativePromptFieldName) || "prompt",
+      contractHash: str(entry.contractHash) || undefined,
+      contractJson: str(entry.contractJson) || undefined,
+      loraClipStrengthFieldName: str(entry.loraClipStrengthFieldName) || undefined,
+      loraModelStrengthFieldName: str(entry.loraModelStrengthFieldName) || "strength_model",
+      loraNameFieldName: str(entry.loraNameFieldName) || "lora_name",
+      loraNodeId: str(entry.loraNodeId) || undefined,
+      generationParams:
+        entry.generationParams && typeof entry.generationParams === "object" && !Array.isArray(entry.generationParams)
+          ? normalizeWorkflowGenerationParams(entry.generationParams)
+          : undefined,
+      generationParamsJson:
+        entry.generationParams && typeof entry.generationParams === "object" && !Array.isArray(entry.generationParams)
+          ? JSON.stringify(normalizeWorkflowGenerationParams(entry.generationParams))
+          : undefined,
       modelIds: Array.isArray(entry.modelIds)
         ? entry.modelIds.map((id) => str(id)).filter(Boolean)
         : undefined,
@@ -89,7 +123,8 @@ export function getWorkflowConfig(
   raw: string | null | undefined,
   key: string,
 ): WorkflowConfig | null {
-  return parseWorkflows(raw)[key] ?? null;
+  const workflowKey = normalizeWorkflowKey(key) || key;
+  return parseWorkflows(raw)[workflowKey] ?? null;
 }
 
 /**

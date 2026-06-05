@@ -55,7 +55,7 @@ describe("admin settings", () => {
       key: "image_gen.workflows",
       updated_at: 123,
       updated_by: "admin-1",
-      value: "{\"wf1\":{\"mode\":\"create\",\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
+      value: "{\"portrait_create\":{\"mode\":\"create\",\"workflowId\":\"workflow\",\"promptNodeId\":\"6\"}}",
     });
     const token = await issueToken(env, ADMIN_EMAIL);
 
@@ -81,7 +81,7 @@ describe("admin settings", () => {
     expect(workflows).toMatchObject({
       env_key: null,
       source: "db",
-      value: "{\"wf1\":{\"mode\":\"create\",\"workflowId\":\"wf\",\"promptNodeId\":\"6\"}}",
+      value: "{\"portrait_create\":{\"mode\":\"create\",\"workflowId\":\"workflow\",\"promptNodeId\":\"6\"}}",
     });
   });
 

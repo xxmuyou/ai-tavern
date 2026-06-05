@@ -6,7 +6,7 @@
 >
 > **管理员工作台边界：** Admin UI 只管理非敏感运行时配置。API key / secret / signing key 只能通过 `.env.*`、Wrangler secrets、`pnpm upload:secrets:*` 或 `wrangler secret put` 管理。工作台只显示这些 secret 是否已配置，不显示值，也不允许覆盖；历史 D1 中如果存在同 key 覆盖值，运行时代码会忽略。
 >
-> **RunningHub workflow 接线不是 secret。** `workflowId`、`promptNodeId`、`checkpointNodeId`、`checkpointFieldName`、`loadImageNodeId` 不放本文件的 secret 清单，也不应长期放 `.env.*`。它们由 repo 中按环境区分的 RunningHub 配置文件 seed 到 D1 catalog；checkpoint 文件名在 `image_models`，workflow/checkpoint 绑定在 `image_workflow_models`，都不是 secret。
+> **RunningHub workflow 接线和 contract 不是 secret。** `workflowId`、`promptNodeId`、`promptFieldName`、`checkpointNodeId`、`checkpointFieldName`、`loadImageNodeId`、latent/KSampler 参数映射、workflow API contract、checkpoint/LoRA 文件名与 Anime/Realistic lane 配置不放本文件的 secret 清单，也不应长期放 `.env.*`。它们由 repo 中按环境区分的 RunningHub 配置文件与 contract 刷新结果 seed 到 D1 catalog；checkpoint 文件名在 `image_models`，LoRA 文件名在 `image_loras`，可用组合由 semantic workflow 下的 `anime` / `realistic` asset lane 决定。
 
 ---
 
@@ -95,7 +95,7 @@ admin 身份由两层控制：
 | 要在 dev/prod 域名走真实 Google 登录流程 | `GOOGLE_OAUTH_CLIENT_ID` + `GOOGLE_OAUTH_CLIENT_SECRET`（redirect URI 使用对应域名的 `/api/auth/oidc/google/callback`） |
 | 要测真实 Magic Link 邮件 | `EMAIL_PROVIDER_API_KEY` + `EMAIL_FROM_ADDRESS`（Resend dev 用 `onboarding@resend.dev` 默认 sender，仅能发到 verify 过的邮箱） |
 | 要测 Stripe 订阅流程 | `STRIPE_SECRET_KEY`（test mode）+ `STRIPE_WEBHOOK_SECRET`（Stripe CLI listen 转发 webhook 时给出）|
-| 要测真实 RunningHub 生图 | `RUNNINGHUB_API_KEY` + `RUNNINGHUB_WEBHOOK_SECRET` + `R2_SIGNING_KEY`，并确保对应环境的 RunningHub workflow 配置已通过部署同步到 D1 |
+| 要测真实 RunningHub 生图 | `RUNNINGHUB_API_KEY` + `RUNNINGHUB_WEBHOOK_SECRET` + `R2_SIGNING_KEY`，并确保对应环境的 RunningHub semantic workflow contract、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置已通过部署同步到 D1 |
 | 准备发布到 prod | 全部按 §1 表格逐项准备，且独立 dev / prod |
 
 ### 1.5.6 dev 启动最快路径

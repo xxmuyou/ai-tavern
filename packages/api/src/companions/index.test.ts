@@ -126,8 +126,9 @@ describe("companions module", () => {
   it("filters public discovery by gender and style bucket", async () => {
     const env = createEnv({
       companions: [
-        officialCompanion("maya", "female", { tags: JSON.stringify(["anime_jp"]) }),
-        officialCompanion("lila", "female", { tags: JSON.stringify(["anime,kr"]) }),
+        officialCompanion("maya", "female", { tags: JSON.stringify(["style:anime"]) }),
+        officialCompanion("lila", "female", { tags: JSON.stringify(["anime"]) }),
+        officialCompanion("legacy", "female", { tags: JSON.stringify(["anime_jp"]) }),
         officialCompanion("iris", "female", { tags: JSON.stringify(["style:realistic"]) }),
         officialCompanion("ryan", "male", { tags: JSON.stringify(["style:anime"]) }),
       ],
@@ -1258,7 +1259,7 @@ function queryFirst<T>(
           task: "profile_outfit_image",
           updated_at: 1747000000000,
           user_id: "user-1",
-          workflow_key: "wf_outfit",
+          workflow_key: "profile_outfit",
         } as T)
       : null;
   }

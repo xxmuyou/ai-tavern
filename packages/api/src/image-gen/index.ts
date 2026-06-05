@@ -3,6 +3,15 @@ import { mockImageGenProvider } from "./mock-provider";
 import { openAiImageGenProvider } from "./openai-provider";
 import { runningHubImageGenProvider } from "./runninghub-provider";
 import type { ImageGenMode, ImageGenProvider } from "./types";
+import {
+  CHAT_MOMENT_WORKFLOW_KEY,
+  COMPANION_CUTOUT_WORKFLOW_KEY,
+  PROFILE_OUTFIT_WORKFLOW_KEY,
+  PORTRAIT_CREATE_WORKFLOW_KEY,
+  PORTRAIT_VARIATION_WORKFLOW_KEY,
+  SCENE_BACKGROUND_WORKFLOW_KEY,
+  normalizeWorkflowKey,
+} from "./workflow-keys";
 
 export {
   type CompanionPromptContext,
@@ -36,6 +45,10 @@ export {
 } from "./expression-prompts";
 export {
   type ImageModelOption,
+  type ImageLora,
+  type ImageLoraInput,
+  type ImageLoraRow,
+  type ImageLoraSelection,
   type ImageModel,
   type ImageModelInput,
   type ImageModelRow,
@@ -44,16 +57,23 @@ export {
   type ImageWorkflowInput,
   type ImageWorkflowRow,
   type ImageWorkflowWithModels,
+  createImageLora,
   createImageModel,
   deleteImageWorkflow,
+  deleteImageLora,
   deleteImageModel,
+  getImageLora,
   getImageModel,
   getImageModelSelection,
   getImageWorkflow,
   listActiveImageModels,
   listActiveImageModelOptions,
+  listImageLoraRows,
   listImageModelRows,
   listImageWorkflowRows,
+  normalizeArchitecture,
+  resolveImageLoraSelection,
+  updateImageLora,
   updateImageModel,
   upsertImageWorkflow,
 } from "./models";
@@ -61,9 +81,8 @@ export {
 /**
  * Return the active image-gen provider for a given workflow mode.
  *
- * WF1 (`create`), WF2 (`variation`), WF_MOMENT and WF_SCENE can each run on a
- * different engine so they switch independently (e.g. WF1 on openai while
- * WF_SCENE backgrounds stay on runninghub). The per-workflow/per-mode setting
+ * Semantic workflows can each run on a different engine independently. The
+ * per-workflow/per-mode setting
  * wins; an empty value falls back to the default `image_gen.provider`, then to
  * mock for local/CI.
  */
@@ -73,20 +92,23 @@ export async function getImageGenProvider(
   workflowKey?: string | null,
 ): Promise<ImageGenProvider> {
   const cfg = await resolveImageGenConfig(env);
+  const key = normalizeWorkflowKey(workflowKey);
   const perMode =
-    workflowKey === "wf_moment"
-      ? cfg.wfMomentProvider
-      : workflowKey === "wf_scene"
-        ? cfg.wfSceneProvider
-        : workflowKey === "wf_cutout"
-          ? cfg.wfCutoutProvider
-          : workflowKey === "wf_outfit"
-            ? cfg.wfOutfitProvider
-            : mode === "create"
-              ? cfg.wf1Provider
+    key === CHAT_MOMENT_WORKFLOW_KEY
+      ? cfg.chatMomentProvider
+      : key === SCENE_BACKGROUND_WORKFLOW_KEY
+        ? cfg.sceneBackgroundProvider
+        : key === COMPANION_CUTOUT_WORKFLOW_KEY
+          ? cfg.companionCutoutProvider
+          : key === PROFILE_OUTFIT_WORKFLOW_KEY
+            ? cfg.profileOutfitProvider
+            : key === PORTRAIT_CREATE_WORKFLOW_KEY || mode === "create"
+              ? cfg.portraitCreateProvider
+              : key === PORTRAIT_VARIATION_WORKFLOW_KEY
+                ? cfg.portraitVariationProvider
               : mode === "cutout"
-                ? cfg.wfCutoutProvider
-                : cfg.wf2Provider;
+                ? cfg.companionCutoutProvider
+                : cfg.portraitVariationProvider;
   const provider = (perMode?.trim() || cfg.provider || "mock").toLowerCase();
   switch (provider) {
     case "runninghub":

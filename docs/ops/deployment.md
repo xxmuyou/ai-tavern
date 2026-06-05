@@ -13,7 +13,7 @@
 | iOS | EAS Build → TestFlight → App Store | `eas build --platform ios --profile {profile}` |
 | Android | EAS Build → Play Internal → Play Store | `eas build --platform android --profile {profile}` |
 | D1 migrations | Wrangler | `pnpm migrate:db:{env}` |
-| RunningHub workflow config | Repo config → D1 sync | API deploy flow |
+| RunningHub semantic workflow contract / asset lane config | Repo config → D1 sync | API deploy flow |
 
 **部署原则：**
 - 不允许自动部署到 prod —— 始终需要 admin 手动确认 + 触发
@@ -38,7 +38,7 @@ pnpm deploy:api:dev
 wrangler deploy --env dev
 ```
 
-API 部署流程还必须在 migrations 之后同步 dev RunningHub workflow 配置到 dev D1。workflow/node/checkpoint 配置以 repo 中 dev 配置文件为准，不从 `.env.dev` 或 admin 手写值长期继承。
+API 部署流程还必须在 migrations 之后同步 dev RunningHub semantic workflow contract、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置到 dev D1。workflow/node/fieldName/contract/checkpoint/LoRA 配置以 repo 中 dev 配置文件与 RunningHub contract 刷新结果为准，不从 `.env.dev` 或 admin 手写值长期继承。
 
 ### 2.2 prod 部署
 
@@ -55,14 +55,14 @@ pnpm deploy:api:prod   # 会要求二次确认
 wrangler deploy --env prod
 ```
 
-prod API 部署同样必须同步 prod RunningHub workflow 配置到 prod D1；同步策略为“部署覆盖”。如果 admin 曾在后台临时改过 workflow/node/checkpoint 配置，prod 部署会恢复到 repo 中 review 过的配置。
+prod API 部署同样必须同步 prod RunningHub semantic workflow contract、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置到 prod D1；同步策略为“部署覆盖”。如果 admin 曾在后台临时改过 workflow/node/fieldName/contract/checkpoint/LoRA 配置，prod 部署会恢复到 repo 中 review 过的配置。
 
 **prod 部署前 checklist：**
 - [ ] 当前分支 == `main`
 - [ ] 本地测试通过
 - [ ] migrations 已 dev 验证
 - [ ] secrets 已配置（`secrets.md` §2）
-- [ ] prod RunningHub workflow 配置已 review，且不依赖 admin 手写
+- [ ] prod RunningHub semantic workflow contract、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置已 review，且不依赖 admin 手写
 - [ ] 关键 KPI 监测可用（Workers Analytics）
 
 ### 2.3 回滚
@@ -74,7 +74,7 @@ pnpm deploy:api:prod
 git checkout main
 ```
 
-如果回滚版本包含 RunningHub workflow 配置变更，回滚部署时也要同步该版本对应的 workflow 配置，避免 D1 保留新版本的 workflow/node/checkpoint 配置。
+如果回滚版本包含 RunningHub workflow/asset 配置变更，回滚部署时也要同步该版本对应的 workflow contract、checkpoint/LoRA catalog 与 Anime/Realistic lane 配置，避免 D1 保留新版本的 workflow/node/fieldName/contract/checkpoint/LoRA 配置。
 
 更稳的方式：用 Cloudflare Workers 的 **Versions / Gradual Deployment**（v1.x 引入）。
 

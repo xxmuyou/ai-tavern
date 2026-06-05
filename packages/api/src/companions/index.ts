@@ -1005,14 +1005,7 @@ function companionMatchesDiscoveryStyle(tags: string[], style: DiscoveryStyle): 
   if (style === "realistic") {
     return normalized.has("style:realistic") || normalized.has("realistic");
   }
-  return (
-    normalized.has("style:anime") ||
-    normalized.has("anime") ||
-    normalized.has("anime_jp") ||
-    normalized.has("anime_kr") ||
-    normalized.has("anime,jp") ||
-    normalized.has("anime,kr")
-  );
+  return normalized.has("style:anime") || normalized.has("anime");
 }
 
 type ParsedInput<T> = { value: T } | { error: true; response: Response };

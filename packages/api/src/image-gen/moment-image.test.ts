@@ -314,7 +314,7 @@ describe("moment image job pipeline", () => {
     expect(job.status).toBe("pending");
     expect(job.task).toBe("chat_moment_image");
     expect(job.mode).toBe("text_to_image");
-    expect(job.workflow_key).toBe("wf_moment");
+    expect(job.workflow_key).toBe("chat_moment");
     expect(job.output_prefix).toBe("chat-moments");
 
     const moment = moments.get(momentId)!;

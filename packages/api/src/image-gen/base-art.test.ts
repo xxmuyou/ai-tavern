@@ -32,6 +32,11 @@ function createEnv(extra: Record<string, unknown> = {}): {
         prompt,
         ckpt_name,
         checkpoint_field_name,
+        lora_id,
+        lora_name,
+        lora_model_strength,
+        lora_clip_strength,
+        generation_params_json,
         input_keys,
         output_prefix,
         created_at,
@@ -44,6 +49,11 @@ function createEnv(extra: Record<string, unknown> = {}): {
         string,
         string,
         string | null,
+        string | null,
+        string | null,
+        string | null,
+        number | null,
+        number | null,
         string | null,
         string | null,
         string,
@@ -59,6 +69,11 @@ function createEnv(extra: Record<string, unknown> = {}): {
         error_message: null,
         id,
         input_keys,
+        lora_clip_strength,
+        lora_id,
+        lora_model_strength,
+        lora_name,
+        generation_params_json,
         mask_key: null,
         mode: mode_,
         model: null,
@@ -151,7 +166,7 @@ describe("base-art job pipeline", () => {
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      workflowKey: "wf1",
+      workflowKey: "portrait_create",
       userId: "usr_1",
     });
 
@@ -159,7 +174,7 @@ describe("base-art job pipeline", () => {
     expect(row.status).toBe("pending");
     expect(row.task).toBe("companion_base_art");
     expect(row.mode).toBe("text_to_image");
-    expect(row.workflow_key).toBe("wf1");
+    expect(row.workflow_key).toBe("portrait_create");
     expect(queue).toEqual([
       expect.objectContaining({ job_id: jobId, type: "image.generate" }),
     ]);
@@ -171,7 +186,7 @@ describe("base-art job pipeline", () => {
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      workflowKey: "wf1",
+      workflowKey: "portrait_create",
       userId: "usr_1",
     });
     await processBaseArtJob(env, jobId);
@@ -182,7 +197,7 @@ describe("base-art job pipeline", () => {
     expect(assets.has(job.output_key!)).toBe(true);
   });
 
-  it("prepends the global WF1 base prompt only for wf1, not other workflows", async () => {
+  it("prepends the global portrait create base prompt only for portrait_create", async () => {
     const captured: string[] = [];
     vi.spyOn(mockImageGenProvider, "generate").mockImplementation(async (req) => {
       captured.push(req.prompt ?? "");
@@ -195,20 +210,20 @@ describe("base-art job pipeline", () => {
     });
 
     const { env, settings } = createEnv();
-    settings.set("image_gen.wf1_base_prompt", "STYLE_PREAMBLE");
+    settings.set("image_gen.portrait_create_base_prompt", "STYLE_PREAMBLE");
 
-    const wf1Job = await createBaseArtJob(env, {
+    const portraitJob = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      workflowKey: "wf1",
+      workflowKey: "portrait_create",
       userId: "usr_1",
     });
-    await processBaseArtJob(env, wf1Job);
+    await processBaseArtJob(env, portraitJob);
 
     const sceneJob = await createBaseArtJob(env, {
       prompt: "empty seaside cafe, no people",
       source: "text",
-      workflowKey: "wf_scene",
+      workflowKey: "scene_background",
       userId: "usr_1",
     });
     await processBaseArtJob(env, sceneJob);
@@ -236,14 +251,14 @@ describe("base-art job pipeline", () => {
     settings.set(
       "image_gen.workflows",
       JSON.stringify({
-        wf1: { mode: "create", promptNodeId: "6", workflowId: "kr-workflow" },
+          portrait_create: { mode: "create", promptNodeId: "6", workflowId: "portrait-workflow" },
       }),
     );
 
     const jobId = await createBaseArtJob(env, {
       prompt: "a calm girl",
       source: "text",
-      workflowKey: "wf1",
+      workflowKey: "portrait_create",
       userId: "usr_1",
     });
     await processBaseArtJob(env, jobId);

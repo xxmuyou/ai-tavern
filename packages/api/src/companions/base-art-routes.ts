@@ -1,7 +1,11 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import type { UserRecord } from "../identity";
-import { getImageModelSelection, listActiveImageModels } from "../image-gen";
+import { getImageModelSelection, ImageGenError, listActiveImageModels } from "../image-gen";
+import {
+  buildGenerationParamValues,
+  parseWorkflowGenerationParams,
+} from "../image-gen/generation-params";
 import { LLMRouterError, llmCall } from "../llm";
 import { LLMError } from "../llm/types";
 import {
@@ -11,7 +15,7 @@ import {
 } from "../image-gen/base-art";
 
 /**
- * spec-022 WF-1 create — companion base-art draft, generated BEFORE the
+ * spec-022 portrait_create — companion base-art draft, generated BEFORE the
  * companion exists (so not under /companions/{id}/):
  *   POST /companions/base-art/generate
  *   GET  /companions/base-art/jobs/{jobId}
@@ -33,6 +37,8 @@ export async function handleBaseArtRequest(
         ckpt_name: m.ckpt_name,
         id: m.id,
         label: m.label,
+        loras: m.loras,
+        generation_controls: m.generation_controls,
         model_id: m.model_id,
         tag: m.tag,
         workflow_key: m.workflow_key,
@@ -149,9 +155,15 @@ async function handleGenerate(
   const workflowKey = selection.workflow.key;
   const ckptName = selection.model.ckpt_name;
   const checkpointFieldName = selection.workflow.checkpoint_field_name || "ckpt_name";
+  const generationControls = parseWorkflowGenerationParams(selection.workflow.generation_params_json);
 
   const prompt = typeof raw.prompt === "string" ? raw.prompt.trim() : "";
   const uploadKey = typeof raw.upload_key === "string" ? raw.upload_key.trim() : "";
+  const loraId = typeof raw.lora_id === "string" ? raw.lora_id.trim() : "";
+  const parsedParams = parseBaseArtGenerationParams(raw, generationControls);
+  if (!parsedParams.ok) {
+    return jsonResponse({ error: "invalid_generation_params" }, { status: 400 });
+  }
 
   if (source === "text" && !prompt) {
     return jsonResponse({ error: "prompt_required" }, { status: 400 });
@@ -160,17 +172,65 @@ async function handleGenerate(
     return jsonResponse({ error: "upload_key_required" }, { status: 400 });
   }
 
-  const jobId = await createBaseArtJob(env, {
-    prompt: prompt || undefined,
-    source: source as BaseArtSource,
-    workflowKey,
-    ckptName,
-    checkpointFieldName,
-    uploadKey: uploadKey || undefined,
-    userId: user.id,
-  });
+  let jobId: string;
+  try {
+    jobId = await createBaseArtJob(env, {
+      prompt: prompt || undefined,
+      source: source as BaseArtSource,
+      workflowKey,
+      modelId: selection.model.id,
+      ckptName,
+      checkpointFieldName,
+      loraId: loraId || null,
+      generationParams: parsedParams.value,
+      uploadKey: uploadKey || undefined,
+      userId: user.id,
+    });
+  } catch (err) {
+    if (err instanceof ImageGenError && err.code === "invalid_model_lora_combination") {
+      return jsonResponse({ error: err.code }, { status: 400 });
+    }
+    throw err;
+  }
 
   return jsonResponse({ job_id: jobId, status: "queued" }, { status: 202 });
+}
+
+function parseBaseArtGenerationParams(
+  raw: Record<string, unknown>,
+  controls: ReturnType<typeof parseWorkflowGenerationParams>,
+): { ok: true; value: ReturnType<typeof buildGenerationParamValues> } | { ok: false } {
+  if (!controls) return { ok: true, value: null };
+  const sizePresetId = typeof raw.size_preset === "string" ? raw.size_preset.trim() : "";
+  if (sizePresetId && !controls.sizePresets.some((preset) => preset.id === sizePresetId)) {
+    return { ok: false };
+  }
+  const batchSize = readOptionalInteger(raw.batch_size);
+  if (
+    batchSize !== null &&
+    (batchSize < controls.batchSizeMin || batchSize > controls.batchSizeMax)
+  ) {
+    return { ok: false };
+  }
+  const seed = readOptionalInteger(raw.seed);
+  if (seed !== null && seed < 0) {
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    value: buildGenerationParamValues(controls, {
+      batchSize,
+      seed,
+      sizePresetId,
+    }),
+  };
+}
+
+function readOptionalInteger(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isFinite(parsed)) return null;
+  return Math.trunc(parsed);
 }
 
 async function handleJobStatus(

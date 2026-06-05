@@ -9,5 +9,6 @@
 
 ALTER TABLE image_workflows ADD COLUMN prompt_field_name TEXT NOT NULL DEFAULT 'text';
 
--- Qwen image-edit workflows want "prompt"; everything else keeps "text".
+-- Prompt field names are workflow-specific. Historical rows keep "text" until
+-- repo sync/Admin updates them from the RunningHub workflow API contract.
 UPDATE image_workflows SET prompt_field_name = 'prompt' WHERE key IN ('wf2', 'wf_moment');

@@ -115,12 +115,12 @@ CREATE TABLE story_moment_images (
 
 - `task = 'chat_moment_image'`
 - `mode = 'text_to_image'`
-- `workflow_key = 'wf_moment'`（若未配置，dev/mock 可 fallback）
+- `workflow_key = 'chat_moment'`（若未配置，dev/mock 可 fallback）
 - `output_prefix = 'chat-moments'`
 
 ## Workflow / Provider
 
-- RunningHub 新增可配置 workflow key：`wf_moment`。
+- RunningHub 新增可配置 workflow key：`chat_moment`。
 - v1 只要求 prompt node；不要求 load image node。
 - 如果未来 workflow 支持参考图，可选传 companion neutral portrait 作为软参考，但这不属于 v1 验收条件。
 - mock provider 返回可预测图片 key，保证 API 和前端测试不依赖外部生图服务。
@@ -151,4 +151,4 @@ CREATE TABLE story_moment_images (
 
 - 前端可隐藏按钮，已有 `story_moment_images` 记录不影响聊天。
 - API 字段对旧客户端不可见；message 历史仍按原逻辑返回。
-- 若 `wf_moment` 未配置，生产应返回明确 `provider_not_configured`，dev/mock 可继续通过测试。
+- 若 `chat_moment` 未配置，生产应返回明确 `provider_not_configured`，dev/mock 可继续通过测试。

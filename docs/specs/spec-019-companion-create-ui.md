@@ -76,16 +76,16 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 点「+ 创建」弹浮窗（未达配额时；达上限走 QuotaModal）：
 
-1. **选择生成模型**：从 `/image-models` 拉取 admin 配置的 active workflow-model options（返回 `{id, label, tag, workflow_key, model_id}`）。后端由 option 解析 workflow、checkpoint 文件名和 workflow 的 checkpoint fieldName；前端只展示 label，不硬编码风格枚举。
+1. **选择生成模型**：从 `/image-models` 拉取 admin 配置的 active workflow-model options（返回 `{id, label, tag, workflow_key, model_id, loras?, generation_controls?}`）。后端由 option 解析 workflow、checkpoint 文件名和 workflow 的 checkpoint fieldName；前端只展示 label，不硬编码风格枚举。
 2. **二选一拿基础图**：
    - **上传本地图片**：`POST /companions/upload-art` 拿到原图 key，直接作为最终 `art_url` / neutral 图；不调用 RunningHub，不做 img2img 重画，不消耗生图流程。
-   - **文生图**：填外貌描述 prompt → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `model`）。
+   - **文生图**：填外貌描述 prompt，可选 LoRA、比例模板、batch size、seed → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `model` + 可选 `lora_id` / `size_preset` / `batch_size` / `seed`）。
 3. **Prompt assistant**：生图输入旁增加小栏，英文提示文案固定为 `Not sure what kind of portrait you want? Ask me.`。用户在小对话框里描述需求后，后端返回一段可编辑的英文生图 prompt；该接口只生成 prompt，不直接触发生图，不保存资产。
 4. **异步预览 / 重抽**：文生图的 `base-art/generate` 返回 `job_id`，前端轮询 `GET /companions/base-art/jobs/{jobId}`：
    - `processing` → 显示「生成中」spinner。
    - `succeeded` → 预览基础图；满意则「下一步」，不满意可「重新生成」。
    - `failed` → toast 错误，可重试。
-5. **预览尺寸**：基础图预览和空状态占位都用较小的居中 `4:5` 画幅。Web/tablet 最大宽度约 `320px`，窄屏约 `240px`；图片不再 `width:100%` 撑满整块面板。
+5. **预览尺寸**：基础图预览和空状态占位都用较小的居中画幅，默认 `3:5`，并随用户选择的比例模板调整。Web/tablet 最大宽度约 `320px`，窄屏约 `240px`；图片不再 `width:100%` 撑满整块面板。
 6. **手动保存资产**：文生图成功后显示 `Save to My assets`。只有用户点击后才写入个人资产库；未保存的废稿仍可继续用于本次创建，但不出现在 Me。
 7. 拿到满意的基础图后，把 `art_key` / `art_url` 暂存到创建表单 state，进入第 2 步。
 

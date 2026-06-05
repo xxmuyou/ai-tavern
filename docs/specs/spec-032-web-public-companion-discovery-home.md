@@ -8,7 +8,7 @@
 
 Web 端准备先上线，当前首页仍残留浅色营销 landing、未登录 fake catalog skeleton，以及 mobile 体验妥协后的布局。产品方向已改为：用户进入 web 第一屏就看到真实 companions，直接按偏好选人。
 
-本 spec 是 spec-018 的 web 首页收口：只改 Web 首页和相关公开 discovery API，不重做 mobile。旧的“真实 / 二次元 JP / 二次元 KR”风格口径也在本 spec 收敛：用户侧只显示 **Realistic** 与 **Anime** 两个 bucket；`Anime JP` / `Anime KR` 继续作为 admin checkpoint 名称或运营标签存在，不作为首页独立筛选项。
+本 spec 是 spec-018 的 web 首页收口：只改 Web 首页和相关公开 discovery API，不重做 mobile。旧的多层风格口径在本 spec 收敛：用户侧和 Admin 主分类都只显示 **Realistic** 与 **Anime** 两个 bucket；不再使用地区标签拆分 Anime。
 
 ---
 
@@ -19,7 +19,7 @@ Web 端准备先上线，当前首页仍残留浅色营销 landing、未登录 f
 - 未登录用户可在 web 首页浏览真实 active companions。
 - 首页使用暗色、暧昧、角色优先的视觉方向，不再是产品营销页。
 - 首页显眼位置提供 `Female / Male` 与 `Anime / Realistic` 筛选。
-- `Anime` bucket 合并 JP/KR/其他二次元标签；admin/model catalog 仍保留 JP/KR 名称区分。
+- `Anime` bucket 只表达二次元/插画风，不再细分地区标签。
 - 点击 companion：未登录进入登录流程并保留目标 redirect；已登录进入 companion 详情。
 - 清理旧浅色 landing 与 fake catalog skeleton，不保留并行入口。
 
@@ -27,7 +27,7 @@ Web 端准备先上线，当前首页仍残留浅色营销 landing、未登录 f
 
 - 不重做 mobile/native 页面。
 - 不新增正式 `companions.art_style` 字段。
-- 不把 `anime_jp` / `anime_kr` 暴露为首页筛选项。
+- 不引入 Anime 的地区子分类。
 - 不改变 image model checkpoint catalog 的管理方式。
 
 ---
@@ -39,18 +39,14 @@ Companion discovery 使用 companion `tags` 承载用户侧风格 bucket：
 - `style:anime`
 - `style:realistic`
 
-公开列表过滤兼容历史标签：
+公开列表过滤只接受两个 bucket：
 
 | Query | 匹配 tags |
 |---|---|
-| `art_style=anime` | `style:anime`, `anime`, `anime_jp`, `anime_kr`, `anime,jp`, `anime,kr` |
+| `art_style=anime` | `style:anime`, `anime` |
 | `art_style=realistic` | `style:realistic`, `realistic` |
 
-Admin/model catalog 保留更细名称：
-
-- checkpoint label 可继续是 `Anime JP - Animagine XL`、`Anime KR - Ghost XL`。
-- checkpoint tag 可继续是 `anime,jp` / `anime,kr`，用于运营识别和模型管理。
-- 这些名称不直接暴露为用户侧首页筛选项。
+Admin/model catalog 也只使用 `Anime` / `Realistic` 作为主分类。自由 tags 只能作补充备注，不能重新引入地区分类。
 
 当前内置官方 portrait 更接近二次元/插画风，backfill 默认给有内置 portrait 的 official companions 补 `style:anime`。后续真实风角色补 `style:realistic`。
 
@@ -142,7 +138,7 @@ pnpm --filter @xtbit/app export:web
 
 - 未登录打开 `/` 可看到真实 companions。
 - `Female/Male` 切换只改变性别。
-- `Anime/Realistic` 切换只改变风格 bucket；`Anime` 匹配 JP/KR legacy tags。
+- `Anime/Realistic` 切换只改变风格 bucket；`Anime` 只匹配 `style:anime` / `anime`。
 - 未登录点击角色进入登录流程；登录后跳转目标详情。
 - 旧浅色营销 landing 和 fake skeleton catalog 不再出现。
 
@@ -153,4 +149,3 @@ pnpm --filter @xtbit/app export:web
 - 公开 API 可下线或让前端不调用；鉴权 `/companions` 不受影响。
 - tags backfill 只追加 `style:*`，可通过后续 migration 移除或忽略。
 - web 首页可恢复到旧 `index.web.tsx`，但不建议恢复 fake skeleton。
-

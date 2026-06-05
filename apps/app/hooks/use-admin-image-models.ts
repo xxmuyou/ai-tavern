@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
+  createAdminImageLora,
   createAdminImageModel,
   createAdminImageWorkflow,
+  deleteAdminImageLora,
   deleteAdminImageModel,
   deleteAdminImageWorkflow,
+  listAdminImageLoras,
   listAdminImageModels,
   listAdminImageWorkflows,
+  updateAdminImageLora,
   updateAdminImageModel,
   updateAdminImageWorkflow,
 } from '@/api/companion-client';
-import type { AdminImageModel, AdminImageWorkflow, ImageModelInput, ImageWorkflowInput } from '@/api/types';
+import type { AdminImageLora, AdminImageModel, AdminImageWorkflow, ImageLoraInput, ImageModelInput, ImageWorkflowInput } from '@/api/types';
 
 export function useAdminImageModels() {
   const [models, setModels] = useState<AdminImageModel[]>([]);
@@ -59,6 +63,55 @@ export function useAdminImageModels() {
   );
 
   return { models, isLoading, error, reload, create, update, remove } as const;
+}
+
+export function useAdminImageLoras() {
+  const [loras, setLoras] = useState<AdminImageLora[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await listAdminImageLoras();
+      setLoras(data.loras);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Failed to load LoRAs.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const create = useCallback(
+    async (input: ImageLoraInput) => {
+      await createAdminImageLora(input);
+      await reload();
+    },
+    [reload],
+  );
+
+  const update = useCallback(
+    async (id: string, input: ImageLoraInput) => {
+      await updateAdminImageLora(id, input);
+      await reload();
+    },
+    [reload],
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      await deleteAdminImageLora(id);
+      await reload();
+    },
+    [reload],
+  );
+
+  return { loras, isLoading, error, reload, create, update, remove } as const;
 }
 
 export function useAdminImageWorkflows() {

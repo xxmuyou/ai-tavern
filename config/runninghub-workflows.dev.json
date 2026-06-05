@@ -3,67 +3,299 @@
     {
       "id": "realistic_firstup",
       "label": "Realistic - Juggernaut XL",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
       "ckptName": "excelaxl_20251018b.safetensors",
       "tags": ["realistic"],
       "isActive": true,
       "sortOrder": 10
     },
     {
-      "id": "anime_jp_动漫二次元",
-      "label": "Anime JP - Animagine XL",
+      "id": "anime_animagine",
+      "label": "Anime - Animagine XL",
+      "architecture": "sdxl",
+      "styleFamily": "anime",
       "ckptName": "sdxl-动漫二次元_4.0.safetensors",
-      "tags": ["anime", "jp"],
+      "tags": ["anime"],
       "isActive": true,
       "sortOrder": 20
     },
     {
-      "id": "anime_kr_selfup",
-      "label": "Anime KR - Ghost XL",
+      "id": "anime_illustraversa",
+      "label": "Anime - IllustraVersa",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
       "ckptName": "illustraversa_vektor.safetensors",
-      "tags": ["anime", "kr"],
+      "tags": ["anime"],
       "isActive": true,
       "sortOrder": 30
+    },
+    {
+      "id": "anime_twilight_illustrious_v2",
+      "label": "Anime - Twilight Illustrious v2",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "ckptName": "Twilight-Illustrious-v2.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 40
     }
   ],
-  "workflows": {
-    "wf1": {
-      "label": "WF1 - base portrait (create)",
-      "mode": "create",
-      "workflowId": "2060270467856035841",
-      "promptNodeId": "2",
-      "checkpointNodeId": "1",
-      "checkpointFieldName": "ckpt_name",
-      "modelIds": ["realistic_firstup", "anime_jp_动漫二次元", "anime_kr_selfup"],
+  "loras": [
+    {
+      "id": "realistic_detail_tweaker_xl",
+      "label": "Realistic - Detail Tweaker XL",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
+      "loraName": "api-lora-cn/e092dcd5bb370b9df8fb09ce42dd4ae9.safetensors",
+      "tags": ["realistic"],
       "isActive": true,
       "sortOrder": 10
     },
-    "wf_moment": {
-      "label": "WF_MOMENT - chat scene moment (create)",
+    {
+      "id": "realistic_skin_texture_sdxl",
+      "label": "Realistic - Skin Texture SDXL",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
+      "loraName": "api-lora-cn/b0ccb33bb87003de81eb76dacb3479b2.safetensors",
+      "tags": ["realistic"],
+      "isActive": true,
+      "sortOrder": 20
+    },
+    {
+      "id": "realistic_xl_more_art_enhancer",
+      "label": "Realistic - XL More Art Enhancer",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
+      "loraName": "api-lora-cn/d9d67a5ebc781bfec6c8bc41a6d033e7.safetensors",
+      "tags": ["realistic"],
+      "isActive": true,
+      "sortOrder": 30
+    },
+    {
+      "id": "realistic_extremely_detailed_slider",
+      "label": "Realistic - Extremely Detailed Slider",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
+      "loraName": "api-lora-cn/7b508914d248f9af3a598203ee91462f.safetensors",
+      "tags": ["realistic"],
+      "isActive": true,
+      "sortOrder": 40
+    },
+    {
+      "id": "realistic_moyou_f1_web_v1",
+      "label": "Realistic - Moyou F.1 Web v1",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
+      "loraName": "墨幽-F.1-Lora-网图_v1.safetensors",
+      "tags": ["realistic"],
+      "isActive": true,
+      "sortOrder": 45
+    },
+    {
+      "id": "anime_stabilizer_il_nai_ck",
+      "label": "Anime - Stabilizer IL/NAI/CK",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/49b1033d0a0c1226213f2677f90c90d7.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 50
+    },
+    {
+      "id": "anime_gothic_neon_disney_il",
+      "label": "Anime - Gothic Neon Disney IL",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/ec255605d96ce082646e4b5be437bc41.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 60
+    },
+    {
+      "id": "anime_suit_skirt_il",
+      "label": "Anime - Suit Skirt IL",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/c0d0cff1993320a075948011d0465378.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 70
+    },
+    {
+      "id": "anime_bss_equinox_il",
+      "label": "Anime - BSS Equinox IL",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/7b39b49f484582e47e5c78918a9ebb17.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 80
+    },
+    {
+      "id": "realistic_skin_texture_flux1",
+      "label": "Realistic - Skin Texture Flux.1 D",
+      "architecture": "flux1",
+      "styleFamily": "realistic",
+      "loraName": "api-lora-cn/86f03ba0e353b359ca3f83ea9a27ace9.safetensors",
+      "tags": ["realistic"],
+      "isActive": true,
+      "sortOrder": 90
+    },
+    {
+      "id": "anime_zoda_nsfw_detailer_il",
+      "label": "Anime - Zoda NSFW Detailer IL",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/8bd378de9bf50521ed30109ecd7517ed.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 100
+    },
+    {
+      "id": "anime_zoda_nsfw_detailer_anima",
+      "label": "Anime - Zoda NSFW Detailer Anima",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/eb1210c99901bc7ee049354d58b23414.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 110
+    },
+    {
+      "id": "anime_bss_unusual_mixed_il",
+      "label": "Anime - BSS Unusual Mixed IL",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/e042acb9bfb1d91a1479ab7d21e84deb.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 120
+    },
+    {
+      "id": "anime_bss_gwzs_il",
+      "label": "Anime - BSS GWZS IL",
+      "architecture": "ilxl",
+      "styleFamily": "anime",
+      "loraName": "api-lora-cn/8cf6a60fb3730f1119215d6bb823353a.safetensors",
+      "tags": ["anime"],
+      "isActive": true,
+      "sortOrder": 130
+    }
+  ],
+  "workflows": {
+    "portrait_create": {
+      "label": "Portrait create",
+      "architecture": "sdxl",
+      "mode": "create",
+      "workflowId": "2060270467856035841",
+      "promptNodeId": "2",
+      "promptFieldName": "text",
+      "checkpointNodeId": "1",
+      "checkpointFieldName": "ckpt_name",
+      "negativePromptNodeId": "3",
+      "negativePromptFieldName": "text",
+      "generationParams": {
+        "sizePresets": [
+          { "id": "portrait_3_5", "label": "Portrait 3:5", "width": 768, "height": 1280 },
+          { "id": "portrait_2_3", "label": "Portrait 2:3", "width": 768, "height": 1152 },
+          { "id": "portrait_4_5", "label": "Portrait 4:5", "width": 1024, "height": 1280 },
+          { "id": "square_1_1", "label": "Square 1:1", "width": 1024, "height": 1024 },
+          { "id": "landscape_5_3", "label": "Landscape 5:3", "width": 1280, "height": 768 }
+        ],
+        "defaultSizePresetId": "portrait_3_5",
+        "latentNodeId": "4",
+        "widthFieldName": "width",
+        "heightFieldName": "height",
+        "batchSizeFieldName": "batch_size",
+        "ksamplerNodeId": "5",
+        "seedFieldName": "seed",
+        "batchSizeDefault": 1,
+        "batchSizeMin": 1,
+        "batchSizeMax": 4
+      },
+      "modelIds": ["realistic_firstup", "anime_animagine"],
+      "isActive": true,
+      "sortOrder": 10
+    },
+    "portrait_create_lora": {
+      "label": "Portrait create + LoRA",
+      "architecture": "sdxl",
+      "mode": "create",
+      "workflowId": "2062457572615081986",
+      "checkpointNodeId": "1",
+      "checkpointFieldName": "ckpt_name",
+      "loraNodeId": "2",
+      "loraNameFieldName": "file_name",
+      "loraModelStrengthFieldName": "strength_model",
+      "loraClipStrengthFieldName": "strength_clip",
+      "promptNodeId": "3",
+      "promptFieldName": "text",
+      "negativePromptNodeId": "4",
+      "negativePromptFieldName": "text",
+      "generationParams": {
+        "sizePresets": [
+          { "id": "portrait_3_5", "label": "Portrait 3:5", "width": 768, "height": 1280 },
+          { "id": "portrait_2_3", "label": "Portrait 2:3", "width": 768, "height": 1152 },
+          { "id": "portrait_4_5", "label": "Portrait 4:5", "width": 1024, "height": 1280 },
+          { "id": "square_1_1", "label": "Square 1:1", "width": 1024, "height": 1024 },
+          { "id": "landscape_5_3", "label": "Landscape 5:3", "width": 1280, "height": 768 }
+        ],
+        "defaultSizePresetId": "portrait_3_5",
+        "latentNodeId": "5",
+        "widthFieldName": "width",
+        "heightFieldName": "height",
+        "batchSizeFieldName": "batch_size",
+        "ksamplerNodeId": "6",
+        "seedFieldName": "seed",
+        "batchSizeDefault": 1,
+        "batchSizeMin": 1,
+        "batchSizeMax": 4
+      },
+      "modelIds": ["realistic_firstup"],
+      "loraBindings": [
+        { "modelId": "realistic_firstup", "loraId": "realistic_detail_tweaker_xl" },
+        { "modelId": "realistic_firstup", "loraId": "realistic_skin_texture_sdxl" },
+        { "modelId": "realistic_firstup", "loraId": "realistic_xl_more_art_enhancer" },
+        { "modelId": "realistic_firstup", "loraId": "realistic_extremely_detailed_slider" },
+        { "modelId": "realistic_firstup", "loraId": "realistic_moyou_f1_web_v1" }
+      ],
+      "isActive": true,
+      "sortOrder": 20
+    },
+    "chat_moment": {
+      "label": "Chat moment image",
+      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "2061634677726863362",
       "promptNodeId": "13",
       "promptFieldName": "prompt",
       "loadImageNodeId": "1",
+      "loadImageFieldName": "image",
       "negativePromptNodeId": "14",
       "negativePromptFieldName": "prompt",
       "isActive": true,
       "sortOrder": 30
     },
-    "wf_cutout": {
-      "label": "WF_CUTOUT - companion matting (cutout)",
+    "companion_cutout": {
+      "label": "Companion cutout",
+      "architecture": "sdxl",
       "mode": "cutout",
-      "workflowId": "",
-      "loadImageNodeId": "",
+      "workflowId": "2062732456842846209",
+      "loadImageNodeId": "1",
+      "loadImageFieldName": "url",
       "promptNodeId": "",
       "promptFieldName": "text",
       "isActive": true,
       "sortOrder": 35
     },
-    "wf_outfit": {
-      "label": "WF_OUTFIT - chat outfit image (variation)",
+    "profile_outfit": {
+      "label": "Profile outfit image",
+      "architecture": "sdxl",
       "mode": "variation",
       "workflowId": "2060982275310964738",
       "loadImageNodeId": "1",
+      "loadImageFieldName": "image",
       "promptNodeId": "13",
       "promptFieldName": "prompt",
       "negativePromptNodeId": "14",

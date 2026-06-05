@@ -9,28 +9,28 @@ import { AdminDropdown } from './AdminDropdown';
 import { AdminPanel, AdminPanelHeader } from './AdminPanel';
 import { SettingRow } from './SettingsSection';
 
-const WF1_BASE_PROMPT_KEY = 'image_gen.wf1_base_prompt';
-const WF_MOMENT_BASE_PROMPT_KEY = 'image_gen.wf_moment_base_prompt';
+const PORTRAIT_CREATE_BASE_PROMPT_KEY = 'image_gen.portrait_create_base_prompt';
+const CHAT_MOMENT_BASE_PROMPT_KEY = 'image_gen.chat_moment_base_prompt';
 
 const PROMPT_MODULES = [
   {
     description:
-      'WF1 (base portrait / create): one global prompt prepended to every create generation, across all art styles.',
-    id: 'wf1-base',
-    label: 'WF1 — base portrait prompt',
+      'Portrait create: one global prompt prepended to every create generation, across Anime and Realistic lanes.',
+    id: 'portrait-create',
+    label: 'Portrait create prompt',
   },
   {
     description:
-      'WF_MOMENT (chat scene moment / create): a global preamble prepended to every chat moment image prompt.',
-    id: 'wf-moment',
-    label: 'WF_MOMENT — moment prompt',
+      'Chat moment: a global preamble prepended to every chat moment image prompt.',
+    id: 'chat-moment',
+    label: 'Chat moment prompt',
   },
 ] as const;
 
 type PromptModuleId = (typeof PROMPT_MODULES)[number]['id'];
 
 export function PromptsSection() {
-  const [moduleId, setModuleId] = useState<PromptModuleId>('wf1-base');
+  const [moduleId, setModuleId] = useState<PromptModuleId>('portrait-create');
   const active = PROMPT_MODULES.find((module) => module.id === moduleId) ?? PROMPT_MODULES[0];
 
   return (
@@ -49,20 +49,20 @@ export function PromptsSection() {
         <Text className="text-xs leading-5 text-app-muted">{active.description}</Text>
       </AdminPanel>
 
-      {moduleId === 'wf1-base' ? (
+      {moduleId === 'portrait-create' ? (
         <BasePromptSection
-          description="A single style/quality preamble prepended to every WF1 create prompt, regardless of art style."
-          missingLabel="WF1 base prompt setting is not registered."
-          settingKey={WF1_BASE_PROMPT_KEY}
-          title="WF1 base prompt (global)"
+          description="A single style/quality preamble prepended to every portrait create prompt, across Anime and Realistic lanes."
+          missingLabel="Portrait create base prompt setting is not registered."
+          settingKey={PORTRAIT_CREATE_BASE_PROMPT_KEY}
+          title="Portrait create base prompt"
         />
       ) : null}
-      {moduleId === 'wf-moment' ? (
+      {moduleId === 'chat-moment' ? (
         <BasePromptSection
-          description="A global preamble prepended to every WF_MOMENT chat scene moment prompt."
-          missingLabel="WF_MOMENT base prompt setting is not registered."
-          settingKey={WF_MOMENT_BASE_PROMPT_KEY}
-          title="WF_MOMENT base prompt (global)"
+          description="A global preamble prepended to every chat moment prompt."
+          missingLabel="Chat moment base prompt setting is not registered."
+          settingKey={CHAT_MOMENT_BASE_PROMPT_KEY}
+          title="Chat moment base prompt"
         />
       ) : null}
     </View>

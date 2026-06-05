@@ -37,7 +37,7 @@
 
 1. 点「创建」弹浮窗，二选一拿到基础图：
    - **上传**：上传本地图片 → `POST /companions/upload-art` → 返回 key 直接作为最终 neutral 图；不调用 RunningHub，不做 img2img 重画。
-   - **文生图**：选 active image model，填 prompt → 走 WF-1 `create` 的 txt2img。可选是否消耗积分由 UI 决定（见 spec-019）。
+   - **文生图**：选 active image model，填 prompt → 走 portrait_create `create` 的 txt2img。可选是否消耗积分由 UI 决定（见 spec-019）。
    - 文生图是异步的：浮窗里「生成中 → 预览 → 满意进下一步 / 不满意重抽（重抽再扣分）」。
 2. 拿到满意的基础图后进入属性表单（name/gender/personality 等，**不参与出图**，只喂 chat 人设）。
 3. 点「完成」才 `POST /companions` 建角色，把 `{属性 + 基础图 key}` 一起提交；文生图来源可携带模型/风格信息，供后续变体生成使用。
@@ -93,12 +93,12 @@
 
 **风格字段历史修正（spec-032）：**
 
-旧草案里的 `companions.art_style = realistic | anime_jp | anime_kr` 已废弃，不再新增正式字段。角色发现页的用户侧风格使用 companion `tags`：`style:anime` / `style:realistic`。生图模型选择继续走 admin checkpoint catalog；checkpoint label/tag 可以保留 `Anime JP` / `Anime KR` 的运营区分，但用户侧 discovery 只归一为 `Anime`。
+旧草案里的多风格枚举已废弃，不再新增正式字段。角色发现页的用户侧风格使用 companion `tags`：`style:anime` / `style:realistic`。生图模型选择继续走 admin checkpoint catalog；Admin 主分类同样只保留 `Anime` / `Realistic`，不再使用地区标签拆分 Anime。
 
 **基础图来源**（`art_url` / `art_emotions.neutral` 二选一来源）—— 都在 companion **创建之前**确定：
 
 - **(a) 上传**：先 `POST /companions/upload-art` 拿到原图 key，直接作为最终 neutral 图提交给 `POST /companions`。当前产品流程不再调用 `base-art/generate source:"upload"` 重画。
-- **(b) 文生图**：调 `POST /companions/base-art/generate`（`source: "text"` + `prompt` + `model`），走 WF-1 txt2img 生成基础图（见 §F）。
+- **(b) 文生图**：调 `POST /companions/base-art/generate`（`source: "text"` + `prompt` + `model`），走 portrait_create txt2img 生成基础图（见 §F）。
 
 只有文生图返回**草稿生图任务**（异步），前端轮询拿到生成图 R2 key，预览满意后带进创建表单。上传路径是同步上传，不产生生图任务。
 
@@ -385,15 +385,15 @@ POST /admin/companions/{id}/emotion-art/prewarm
 - 默认只补缺失项，不覆盖已有图。
 - 请求可选 `{ "force": true }`，强制重新生成并替换非 neutral 图。
 
-> **实施进度（spec-022 WF-1 create 切片已落地）：** `base-art/generate` + `base-art/jobs/{jobId}` 两个端点、通用 `image_generation_jobs` 表（migration `0018`）、provider `create`（txt2img）模式、webhook/cron 识别均已实现并跑通（mock + 单测）。当前产品创建流程只使用文生图路径；`source:"upload"` img2img 重画属于保留的底层能力，不作为 v1 创建入口。变体生成、积分扣费仍待做。详见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 状态说明。
+> **实施进度（spec-022 portrait_create create 切片已落地）：** `base-art/generate` + `base-art/jobs/{jobId}` 两个端点、通用 `image_generation_jobs` 表（migration `0018`）、provider `create`（txt2img）模式、webhook/cron 识别均已实现并跑通（mock + 单测）。当前产品创建流程只使用文生图路径；`source:"upload"` img2img 重画属于保留的底层能力，不作为 v1 创建入口。变体生成、积分扣费仍待做。详见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md) 状态说明。
 
 `POST /companions/base-art/generate`（新增，创建前的文生图基础图草稿，**不绑 companion id**）
 
 - Auth required（`requireAuthUser`）。companion 此时还不存在，所以不挂在 `/companions/{id}/` 下。
-- body：`{ "source": "text", "model": "<image model id>", "prompt": "..." }`。`style` 仍可作为旧兼容参数，但新 UI 应传 `model`。
-  - `source: "text"`：必须带 `prompt`，走 WF-1 `create` 的 txt2img（无 `source_art_url`）。
+- body：`{ "source": "text", "model": "<image model id>", "prompt": "...", "lora_id"?: "...", "size_preset"?: "portrait_3_5", "batch_size"?: 1, "seed"?: 123 }`。`style` 仍可作为旧兼容参数，但新 UI 应传 `model`。
+  - `source: "text"`：必须带 `prompt`，走 portrait_create `create` 的 txt2img（无 `source_art_url`）。
   - `source: "upload"`：底层兼容能力，可带 `upload_key` 做 img2img；当前创建 UI 不使用。
-- 校验：`source` 非法 → `400 invalid_source`；text 缺 `prompt` → `400 prompt_required`；upload 缺 `upload_key` → `400 upload_key_required`；模型或兼容 `style` 非法 → `400 invalid_model`。
+- 校验：`source` 非法 → `400 invalid_source`；text 缺 `prompt` → `400 prompt_required`；upload 缺 `upload_key` → `400 upload_key_required`；模型或兼容 `style` 非法 → `400 invalid_model`；LoRA 未命中 workflow/model allowlist → `400 invalid_model_lora_combination`；参数模板或范围非法 → `400 invalid_generation_params`。
 - 异步返回 `202 { status: "queued", job_id }`（`job_id` 为 `image_generation_jobs` 任务）。前端用 `GET /companions/base-art/jobs/{jobId}` 轮询。
 - **不写任何 companion 字段**（companion 尚不存在）；产出仅为一张风格化基础图的 R2 key，由前端带进创建表单。
 - 积分系统启用后透传 spec-021 的 `402 credits_insufficient`；重抽 = 再次调用 = 再次扣费。
@@ -410,9 +410,9 @@ POST /admin/companions/{id}/emotion-art/prewarm
 
 - Auth required；权限同上。
 - body：`{ "prompt": "...", "mask"?: "<r2 key>", "target"?: "<emotion|new key>" }`。
-- 未来走 WF-3 `edit` mode；带 `mask` 走局部重绘换装，不带走整体 prompt 编辑。
+- 未来走 portrait_edit `edit` mode；带 `mask` 走局部重绘换装，不带走整体 prompt 编辑。
 - 风格沿用创建或编辑时选择的 workflow-model option；不读取 `companions.art_style`。
-- MVP 可先返回 `501 edit_not_ready`，等 WF-3 workflow 接好再开放——这是范围声明，不是占位 hack。
+- MVP 可先返回 `501 edit_not_ready`，等 portrait_edit workflow 接好再开放——这是范围声明，不是占位 hack。
 
 ### G. 异步生成流程
 
@@ -502,10 +502,10 @@ v1 可以不做实时推送；轮询 `GET /companions/{id}/emotion-art/jobs` 或
 1. 新增 migration：创建 `image_generation_jobs`、`companion_art_jobs`。旧 `art_style` 字段方案已废弃；角色 discovery 风格走 companion tags，生图模型走 checkpoint catalog。`image_generation_config` 暂不作为 MVP 必需项，当前配置走 env。
 2. 调整 companion create/update：`POST /companions` 接受 `art_url`，只写 `art_url` 和 `art_emotions.neutral`；文生图来源可记录模型/风格并触发 5 个非 neutral 变体（内部调用 expression pack），上传来源无可用模型/风格时回退 neutral。文生图草稿在创建之前由 `base-art/generate` 单独产出。
 3. 演进 `packages/api/src/image-gen/` 通用模块，封装 job 创建、配置解析、queue 处理、R2 写入和 `asset_objects` 记录。
-4. 新增 RunningHub workflow provider adapter，v1 默认；MVP 先支持 WF-1 create 与 WF-2 variation，WF-3 edit 保留接口和文档方向。详细接入见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
+4. 新增 RunningHub workflow provider adapter，v1 默认；MVP 先支持 portrait_create create 与 portrait_variation variation，portrait_edit edit 保留接口和文档方向。详细接入见 [`spec-022`](./spec-022-image-gen-runninghub-integration.md)。
 5. OpenAI image provider adapter 仅作为后续 fallback 方向，本期不强制启用。
 6. 新增 companion expression pack service：解析/更新 `art_emotions` JSON，封装 cache hit、job 去重和 stale 判断。
-7. 新增端点：`base-art/generate`（创建前的文生图草稿，不绑 id）+ `base-art/jobs/{jobId}`（轮询）、pack endpoint、单张 retry endpoint、admin prewarm endpoint；`art/edit`（WF-3，可先 `501 edit_not_ready`）。
+7. 新增端点：`base-art/generate`（创建前的文生图草稿，不绑 id）+ `base-art/jobs/{jobId}`（轮询）、pack endpoint、单张 retry endpoint、admin prewarm endpoint；`art/edit`（portrait_edit，可先 `501 edit_not_ready`）。
 8. 接入 spec-021 的 reserve/commit/refund 接口；在 spec-021 未完成前允许 admin/system bypass，普通用户端点返回 `501 credits_not_ready` 或使用 feature flag 关闭。
 9. 扩展 queue consumer：处理 `image.generate` 和 `companion.emotion_art.finalize`。
 10. 前端 chat/detail/edit 页面接入生成状态、pack 入口与 retry UI。

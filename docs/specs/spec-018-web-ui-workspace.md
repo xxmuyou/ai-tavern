@@ -55,7 +55,7 @@
 - Web chat 优化：消息区滚动、右侧关系状态、角色上下文与 scene context。
 - Web admin 扩展：LLM 配置、usage、用户/订阅查询、运行状态。
 - Web admin 用户积分面板：搜用户 → 看余额/流水 → 增加积分，消费 [`spec-023`](./spec-023-admin-workspace.md) 的管理员积分端点。
-- **已落地（2026-05）：** Web admin 已扩展出 **Settings（运行时运营配置）/ Image models（WF1 模型目录）/ Expression prompts（WF2）/ LLM** 多面板（仅 Web，原生端保留 members/credits/llm）。运营配置与生图/checkpoint 操作说明见 [`../ops/admin-settings-workspace.md`](../ops/admin-settings-workspace.md)。
+- **已落地（2026-05）：** Web admin 已扩展出 **Settings（运行时运营配置）/ Image models（portrait_create 模型目录）/ Expression prompts（portrait_variation）/ LLM** 多面板（仅 Web，原生端保留 members/credits/llm）。运营配置与生图/checkpoint 操作说明见 [`../ops/admin-settings-workspace.md`](../ops/admin-settings-workspace.md)。
 - Web billing 完整 QA：checkout、portal、success/cancel return。
 - 增加浏览器级 smoke 或 Playwright 检查。
 

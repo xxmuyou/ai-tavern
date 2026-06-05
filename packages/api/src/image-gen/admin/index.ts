@@ -1,21 +1,30 @@
 import { requireAdminUser } from "../../auth";
 import { jsonResponse } from "../../http";
 import { loadUpdatedByEmails } from "../../llm/admin/repo";
+import { resolveImageGenConfig } from "../../settings/store";
 import {
   createImageModel,
+  createImageLora,
   deleteImageWorkflow,
+  deleteImageLora,
   deleteImageModel,
   isImageGenMode,
+  listImageLoraRows,
   listImageModelRows,
   listImageWorkflowRows,
+  normalizeArchitecture,
+  updateImageLora,
   updateImageModel,
   upsertImageWorkflow,
+  type ImageLoraInput,
   type ImageModelInput,
   type ImageWorkflowInput,
 } from "../index";
+import { normalizeWorkflowGenerationParams } from "../generation-params";
+import { fetchRunningHubWorkflowContract, workflowContractHasField } from "../runninghub-contract";
 
 /**
- * Admin workspace endpoints for the WF1 model catalog and WF2 expression
+ * Admin workspace endpoints for image model catalog and retired expression
  * prompts. Mirrors the llm_config admin pattern.
  */
 export async function handleAdminImageGenRequest(
@@ -25,6 +34,9 @@ export async function handleAdminImageGenRequest(
 ): Promise<Response | null> {
   if (pathname.startsWith("/admin/image-models")) {
     return handleImageModels(request, env, pathname);
+  }
+  if (pathname.startsWith("/admin/image-loras")) {
+    return handleImageLoras(request, env, pathname);
   }
   if (pathname.startsWith("/admin/image-workflows")) {
     return handleImageWorkflows(request, env, pathname);
@@ -136,6 +148,61 @@ async function handleImageModels(
   return null;
 }
 
+async function handleImageLoras(
+  request: Request,
+  env: Env,
+  pathname: string,
+): Promise<Response | null> {
+  if (pathname === "/admin/image-loras" && request.method === "GET") {
+    await requireAdminUser(env, request);
+    const rows = await listImageLoraRows(env);
+    const emails = await loadUpdatedByEmails(
+      env,
+      rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
+    );
+    const loras = rows.map((r) => ({
+      ...r,
+      is_active: r.is_active === 1,
+      updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
+    }));
+    return jsonResponse({ loras });
+  }
+
+  if (pathname === "/admin/image-loras" && request.method === "POST") {
+    const admin = await requireAdminUser(env, request);
+    const body = await request.json().catch(() => null);
+    const parsed = parseLoraInput(body);
+    if (!parsed.ok) {
+      return jsonResponse({ error: parsed.error }, { status: 400 });
+    }
+    const id = slugifyModelId(parsed.value.label);
+    await createImageLora(env, id, parsed.value, admin.id);
+    return jsonResponse({ id, ok: true }, { status: 201 });
+  }
+
+  const idMatch = pathname.match(/^\/admin\/image-loras\/([^/]+)$/);
+  if (idMatch) {
+    const id = decodeURIComponent(idMatch[1] ?? "");
+    if (request.method === "PUT") {
+      const admin = await requireAdminUser(env, request);
+      const body = await request.json().catch(() => null);
+      const parsed = parseLoraInput(body);
+      if (!parsed.ok) {
+        return jsonResponse({ error: parsed.error }, { status: 400 });
+      }
+      await updateImageLora(env, id, parsed.value, admin.id);
+      return jsonResponse({ ok: true });
+    }
+    if (request.method === "DELETE") {
+      await requireAdminUser(env, request);
+      await deleteImageLora(env, id);
+      return jsonResponse({ ok: true });
+    }
+  }
+
+  return null;
+}
+
 async function handleImageWorkflows(
   request: Request,
   env: Env,
@@ -162,8 +229,19 @@ async function handleImageWorkflows(
     if (!parsed.ok) {
       return jsonResponse({ error: parsed.error }, { status: 400 });
     }
-    await upsertImageWorkflow(env, parsed.value, admin.id);
-    return jsonResponse({ key: parsed.value.key, ok: true }, { status: 201 });
+    const prepared = await prepareWorkflowInput(env, parsed.value);
+    if (!prepared.ok) {
+      return jsonResponse({ error: prepared.error }, { status: 400 });
+    }
+    try {
+      await upsertImageWorkflow(env, prepared.value, admin.id);
+    } catch (error) {
+      return jsonResponse(
+        { error: "invalid_workflow_asset_binding", message: error instanceof Error ? error.message : String(error) },
+        { status: 400 },
+      );
+    }
+    return jsonResponse({ key: prepared.value.key, ok: true }, { status: 201 });
   }
 
   const keyMatch = pathname.match(/^\/admin\/image-workflows\/([^/]+)$/);
@@ -177,7 +255,18 @@ async function handleImageWorkflows(
       if (!parsed.ok) {
         return jsonResponse({ error: parsed.error }, { status: 400 });
       }
-      await upsertImageWorkflow(env, parsed.value, admin.id);
+      const prepared = await prepareWorkflowInput(env, parsed.value);
+      if (!prepared.ok) {
+        return jsonResponse({ error: prepared.error }, { status: 400 });
+      }
+      try {
+        await upsertImageWorkflow(env, prepared.value, admin.id);
+      } catch (error) {
+        return jsonResponse(
+          { error: "invalid_workflow_asset_binding", message: error instanceof Error ? error.message : String(error) },
+          { status: 400 },
+        );
+      }
       return jsonResponse({ ok: true });
     }
     if (request.method === "DELETE") {
@@ -202,14 +291,63 @@ function parseModelInput(body: unknown): ParseResult {
     return { ok: false, error: "invalid_model" };
   }
   const tag = typeof raw.tag === "string" ? raw.tag.trim() : "";
+  const architecture = readOptionalString(raw.architecture);
+  try {
+    normalizeArchitecture(architecture, "checkpoint architecture", { required: true });
+  } catch {
+    return { ok: false, error: "invalid_model_architecture" };
+  }
   return {
     ok: true,
     value: {
       label,
       tag,
       ckpt_name: ckptName,
+      architecture,
+      purpose: readOptionalString(raw.purpose),
+      style_family: readOptionalString(raw.style_family),
+      tags: readOptionalString(raw.tags) || tag,
       is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),
       sort_order: readNumber(raw.sort_order),
+    },
+  };
+}
+
+type LoraParseResult =
+  | { ok: true; value: ImageLoraInput }
+  | { ok: false; error: string };
+
+function parseLoraInput(body: unknown): LoraParseResult {
+  const raw = (body ?? {}) as Record<string, unknown>;
+  const label = typeof raw.label === "string" ? raw.label.trim() : "";
+  const loraName = typeof raw.lora_name === "string" ? raw.lora_name.trim() : "";
+  if (!label || !loraName) {
+    return { ok: false, error: "invalid_lora" };
+  }
+  const clipStrengthRaw = raw.default_clip_strength;
+  const clipStrength =
+    clipStrengthRaw === null || clipStrengthRaw === undefined || clipStrengthRaw === ""
+      ? null
+      : readNumber(clipStrengthRaw);
+  const architecture = readOptionalString(raw.architecture);
+  try {
+    normalizeArchitecture(architecture, "LoRA architecture", { required: true });
+  } catch {
+    return { ok: false, error: "invalid_lora_architecture" };
+  }
+  return {
+    ok: true,
+    value: {
+      architecture,
+      default_clip_strength: clipStrength,
+      default_model_strength: readNumber(raw.default_model_strength) || 1,
+      is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),
+      label,
+      lora_name: loraName,
+      purpose: readOptionalString(raw.purpose),
+      sort_order: readNumber(raw.sort_order),
+      style_family: readOptionalString(raw.style_family),
+      tags: readOptionalString(raw.tags),
     },
   };
 }
@@ -225,6 +363,12 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
   const mode = isImageGenMode(raw.mode) ? raw.mode : null;
   if (!key || !label || !mode) {
     return { ok: false, error: "invalid_workflow" };
+  }
+  const architecture = readOptionalString(raw.architecture);
+  try {
+    normalizeArchitecture(architecture, "workflow architecture", { required: true });
+  } catch {
+    return { ok: false, error: "invalid_workflow_architecture" };
   }
   const workflowId = typeof raw.workflow_id === "string" ? raw.workflow_id.trim() : "";
   const promptNodeId = typeof raw.prompt_node_id === "string" ? raw.prompt_node_id.trim() : "";
@@ -244,6 +388,10 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
     typeof raw.load_image_node_id === "string" && raw.load_image_node_id.trim()
       ? raw.load_image_node_id.trim()
       : null;
+  const loadImageFieldName =
+    typeof raw.load_image_field_name === "string" && raw.load_image_field_name.trim()
+      ? raw.load_image_field_name.trim()
+      : "image";
   if (mode === "cutout" && !loadImageNodeId) {
     return { ok: false, error: "cutout_load_image_node_required" };
   }
@@ -255,18 +403,60 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
     typeof raw.negative_prompt_field_name === "string" && raw.negative_prompt_field_name.trim()
       ? raw.negative_prompt_field_name.trim()
       : "prompt";
+  const loraNodeId =
+    typeof raw.lora_node_id === "string" && raw.lora_node_id.trim()
+      ? raw.lora_node_id.trim()
+      : null;
+  const loraNameFieldName =
+    typeof raw.lora_name_field_name === "string" && raw.lora_name_field_name.trim()
+      ? raw.lora_name_field_name.trim()
+      : "lora_name";
+  const loraModelStrengthFieldName =
+    typeof raw.lora_model_strength_field_name === "string" && raw.lora_model_strength_field_name.trim()
+      ? raw.lora_model_strength_field_name.trim()
+      : "strength_model";
+  const loraClipStrengthFieldName =
+    typeof raw.lora_clip_strength_field_name === "string" && raw.lora_clip_strength_field_name.trim()
+      ? raw.lora_clip_strength_field_name.trim()
+      : null;
+  const generationParamsJson = readGenerationParamsJson(raw.generation_params_json);
+  if (generationParamsJson === false) {
+    return { ok: false, error: "invalid_generation_params" };
+  }
   const modelIds = Array.isArray(raw.model_ids)
     ? raw.model_ids.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)
+    : [];
+  const loraBindings = Array.isArray(raw.lora_bindings)
+    ? raw.lora_bindings
+        .map((binding) => {
+          const item = binding && typeof binding === "object" && !Array.isArray(binding)
+            ? (binding as Record<string, unknown>)
+            : {};
+          const modelId = typeof item.model_id === "string" ? item.model_id.trim() : "";
+          const loraIds = Array.isArray(item.lora_ids)
+            ? item.lora_ids.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)
+            : [];
+          return modelId ? { lora_ids: [...new Set(loraIds)], model_id: modelId } : null;
+        })
+        .filter((binding): binding is { model_id: string; lora_ids: string[] } => binding != null)
     : [];
   return {
     ok: true,
     value: {
+      architecture,
       checkpoint_field_name: checkpointFieldName,
       checkpoint_node_id: checkpointNodeId,
       is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),
       key,
       label,
+      load_image_field_name: loadImageFieldName,
       load_image_node_id: loadImageNodeId,
+      lora_bindings: loraBindings,
+      lora_clip_strength_field_name: loraClipStrengthFieldName,
+      lora_model_strength_field_name: loraModelStrengthFieldName,
+      lora_name_field_name: loraNameFieldName,
+      lora_node_id: loraNodeId,
+      generation_params_json: generationParamsJson,
       mode,
       model_ids: [...new Set(modelIds)],
       negative_prompt_field_name: negativePromptFieldName,
@@ -279,9 +469,119 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
   };
 }
 
+type WorkflowPrepareResult =
+  | { ok: true; value: ImageWorkflowInput }
+  | { ok: false; error: string };
+
+async function prepareWorkflowInput(env: Env, input: ImageWorkflowInput): Promise<WorkflowPrepareResult> {
+  if ((input.lora_bindings ?? []).some((binding) => binding.lora_ids.length > 0) && !input.lora_node_id) {
+    return { ok: false, error: "lora_node_required" };
+  }
+  if (!input.workflow_id.trim()) {
+    return {
+      ok: true,
+      value: {
+        ...input,
+        contract_hash: null,
+        contract_json: null,
+        contract_refreshed_at: null,
+      },
+    };
+  }
+
+  const cfg = await resolveImageGenConfig(env);
+  let contract: { contractJson: string; contractHash: string };
+  try {
+    contract = await fetchRunningHubWorkflowContract({
+      apiKey: cfg.apiKey,
+      baseUrl: cfg.runninghubBaseUrl,
+      workflowId: input.workflow_id,
+    });
+  } catch (error) {
+    console.warn(
+      `[admin/image-workflows] failed to refresh RunningHub workflow contract for ${input.key}:`,
+      error,
+    );
+    return { ok: false, error: "workflow_contract_refresh_failed" };
+  }
+
+  const value: ImageWorkflowInput = {
+    ...input,
+    contract_hash: contract.contractHash,
+    contract_json: contract.contractJson,
+    contract_refreshed_at: Date.now(),
+  };
+  const validation = validateWorkflowInputAgainstContract(value);
+  if (!validation.ok) return validation;
+  return { ok: true, value };
+}
+
+function validateWorkflowInputAgainstContract(input: ImageWorkflowInput): WorkflowPrepareResult {
+  const checks: Array<{ nodeId: string | null; fieldName: string | null; label: string }> = [
+    { fieldName: input.prompt_field_name, label: "prompt", nodeId: input.prompt_node_id },
+    { fieldName: input.checkpoint_field_name, label: "checkpoint", nodeId: input.checkpoint_node_id },
+    { fieldName: input.load_image_field_name, label: "load_image", nodeId: input.load_image_node_id },
+    {
+      fieldName: input.negative_prompt_field_name,
+      label: "negative_prompt",
+      nodeId: input.negative_prompt_node_id,
+    },
+    { fieldName: input.lora_name_field_name, label: "lora_name", nodeId: input.lora_node_id },
+    {
+      fieldName: input.lora_model_strength_field_name,
+      label: "lora_model_strength",
+      nodeId: input.lora_node_id,
+    },
+    {
+      fieldName: input.lora_clip_strength_field_name,
+      label: "lora_clip_strength",
+      nodeId: input.lora_node_id,
+    },
+  ];
+  const generationParams = input.generation_params_json
+    ? normalizeWorkflowGenerationParams(JSON.parse(input.generation_params_json))
+    : null;
+  if (generationParams?.latentNodeId) {
+    checks.push(
+      { fieldName: generationParams.widthFieldName ?? null, label: "latent_width", nodeId: generationParams.latentNodeId },
+      { fieldName: generationParams.heightFieldName ?? null, label: "latent_height", nodeId: generationParams.latentNodeId },
+      { fieldName: generationParams.batchSizeFieldName ?? null, label: "latent_batch_size", nodeId: generationParams.latentNodeId },
+    );
+  }
+  if (generationParams?.ksamplerNodeId) {
+    checks.push({
+      fieldName: generationParams.seedFieldName ?? null,
+      label: "ksampler_seed",
+      nodeId: generationParams.ksamplerNodeId,
+    });
+  }
+
+  for (const check of checks) {
+    if (!check.nodeId?.trim()) continue;
+    if (!workflowContractHasField(input.contract_json, check.nodeId, check.fieldName)) {
+      return { ok: false, error: `workflow_contract_mismatch:${check.label}` };
+    }
+  }
+  return { ok: true, value: input };
+}
+
+function readGenerationParamsJson(value: unknown): string | null | false {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") return false;
+  try {
+    return JSON.stringify(normalizeWorkflowGenerationParams(JSON.parse(value)));
+  } catch {
+    return false;
+  }
+}
+
 function readNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function readOptionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function slugifyModelId(label: string): string {

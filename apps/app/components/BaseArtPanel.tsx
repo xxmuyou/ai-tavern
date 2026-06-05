@@ -17,7 +17,7 @@ type BaseArtPanelProps = {
 };
 
 /**
- * spec-022 WF-1 create — step 1 of companion creation: pick a model, enter a
+ * spec-022 portrait_create — step 1 of companion creation: pick a model, enter a
  * prompt, generate a base portrait, preview, then confirm to carry it into the
  * character form. The model catalog is admin-managed; each model carries its
  * own style tag. Shared by the web and native create screens.
@@ -26,6 +26,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   const { models, isLoading: modelsLoading } = useImageModels();
   const [phase, setPhase] = useState<Phase>('idle');
   const [model, setModel] = useState<string | null>(null);
+  const [loraId, setLoraId] = useState<string | null>(null);
+  const [sizePresetId, setSizePresetId] = useState<string | null>(null);
+  const [batchSize, setBatchSize] = useState('1');
+  const [seed, setSeed] = useState('');
   const [prompt, setPrompt] = useState('');
   const [artKey, setArtKey] = useState<string | null>(null);
   const [artSource, setArtSource] = useState<ArtSource | null>(null);
@@ -51,6 +55,29 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
       setModel(models[0].id);
     }
   }, [model, models]);
+
+  const selectedModel = models.find((item) => item.id === model) ?? null;
+  const generationControls = selectedModel?.generation_controls ?? null;
+  const loraOptions = selectedModel?.loras ?? [];
+  const defaultSizePresetId = generationControls?.defaultSizePresetId ?? null;
+  const defaultBatchSize = generationControls?.batchSizeDefault ?? 1;
+  const selectedPreset =
+    generationControls?.sizePresets.find((preset) => preset.id === sizePresetId) ??
+    generationControls?.sizePresets.find((preset) => preset.id === generationControls.defaultSizePresetId) ??
+    generationControls?.sizePresets[0] ??
+    null;
+
+  useEffect(() => {
+    setLoraId(null);
+    if (defaultSizePresetId) {
+      setSizePresetId(defaultSizePresetId);
+      setBatchSize(String(defaultBatchSize));
+    } else {
+      setSizePresetId(null);
+      setBatchSize('1');
+    }
+    setSeed('');
+  }, [model, defaultSizePresetId, defaultBatchSize]);
 
   async function pollJob(jobId: string) {
     for (let i = 0; i < MAX_POLLS; i += 1) {
@@ -103,7 +130,17 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     setArtSource(null);
     setAssetSaved(false);
     try {
-      const { job_id } = await generateBaseArt({ prompt: trimmed, source: 'text', model });
+      const seedValue = seed.trim() ? Number(seed.trim()) : null;
+      const batchValue = Number(batchSize);
+      const { job_id } = await generateBaseArt({
+        batch_size: Number.isFinite(batchValue) ? Math.trunc(batchValue) : undefined,
+        lora_id: loraId || undefined,
+        model,
+        prompt: trimmed,
+        seed: seedValue === null ? null : Number.isFinite(seedValue) ? Math.trunc(seedValue) : null,
+        size_preset: sizePresetId ?? undefined,
+        source: 'text',
+      });
       await pollJob(job_id);
     } catch {
       if (activeRef.current) {
@@ -148,7 +185,6 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     setIsAssisting(true);
     setAssistantError(null);
     try {
-      const selectedModel = models.find((item) => item.id === model);
       const result = await assistBaseArtPrompt({ request, model_label: selectedModel?.label });
       if (activeRef.current) {
         setPrompt(result.prompt);
@@ -220,6 +256,94 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
               </Pressable>
             ))}
           </View>
+
+          {loraOptions.length > 0 ? (
+            <>
+              <Text className="mt-2 text-lg font-semibold text-app-text">LoRA</Text>
+              <View className="flex-row flex-wrap gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isBusy}
+                  onPress={() => setLoraId(null)}
+                  className={`rounded-full border px-3 py-2 ${
+                    !loraId ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                  }`}
+                >
+                  <Text className={`text-sm font-semibold ${!loraId ? 'text-white' : 'text-app-muted'}`}>No LoRA</Text>
+                </Pressable>
+                {loraOptions.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="button"
+                    disabled={isBusy}
+                    onPress={() => setLoraId(item.id)}
+                    className={`rounded-full border px-3 py-2 ${
+                      loraId === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                    }`}
+                  >
+                    <Text className={`text-sm font-semibold ${loraId === item.id ? 'text-white' : 'text-app-muted'}`}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : null}
+
+          {generationControls ? (
+            <>
+              <Text className="mt-2 text-lg font-semibold text-app-text">Image settings</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {generationControls.sizePresets.map((preset) => (
+                  <Pressable
+                    key={preset.id}
+                    accessibilityRole="button"
+                    disabled={isBusy}
+                    onPress={() => setSizePresetId(preset.id)}
+                    className={`rounded-full border px-3 py-2 ${
+                      (sizePresetId ?? generationControls.defaultSizePresetId) === preset.id
+                        ? 'border-app-primary bg-app-primary'
+                        : 'border-app-line bg-white'
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm font-semibold ${
+                        (sizePresetId ?? generationControls.defaultSizePresetId) === preset.id ? 'text-white' : 'text-app-muted'
+                      }`}
+                    >
+                      {preset.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View className="gap-3 web:flex-row">
+                <View className="web:flex-1">
+                  <Text className="mb-1 text-xs font-semibold text-app-muted">Batch size</Text>
+                  <TextInput
+                    className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
+                    editable={!isBusy}
+                    keyboardType="number-pad"
+                    onChangeText={setBatchSize}
+                    placeholder={`${generationControls.batchSizeDefault}`}
+                    placeholderTextColor="#687076"
+                    value={batchSize}
+                  />
+                </View>
+                <View className="web:flex-1">
+                  <Text className="mb-1 text-xs font-semibold text-app-muted">Seed</Text>
+                  <TextInput
+                    className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
+                    editable={!isBusy}
+                    keyboardType="number-pad"
+                    onChangeText={setSeed}
+                    placeholder="Random"
+                    placeholderTextColor="#687076"
+                    value={seed}
+                  />
+                </View>
+              </View>
+            </>
+          ) : null}
 
           <Text className="mt-2 text-lg font-semibold text-app-text">2. Describe the portrait</Text>
           <TextInput
@@ -300,7 +424,12 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
         <View className="items-center gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
           <Text className="text-lg font-semibold text-app-text">3. Preview</Text>
           <View className="w-full max-w-[320px] items-center overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
-            <Image accessibilityLabel="Generated portrait" resizeMode="contain" source={previewSource} style={styles.preview} />
+            <Image
+              accessibilityLabel="Generated portrait"
+              resizeMode="contain"
+              source={previewSource}
+              style={[styles.preview, selectedPreset ? { aspectRatio: selectedPreset.width / selectedPreset.height } : null]}
+            />
           </View>
           <View className="w-full max-w-[320px] gap-3">
             <Button label="Use this portrait" onPress={() => artKey && onConfirm(artKey, artSource === 'generated' ? model ?? undefined : undefined)} />

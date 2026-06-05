@@ -17,6 +17,7 @@ import {
   createOrReuseCutoutJob,
   loadCompanionCutoutSource,
 } from "./cutout";
+import { CHAT_MOMENT_WORKFLOW_KEY } from "./workflow-keys";
 
 /**
  * Chat moment image pipeline (spec-027).
@@ -29,7 +30,7 @@ import {
  */
 
 export const TASK_MOMENT_IMAGE = "chat_moment_image";
-export const MOMENT_WORKFLOW_KEY = "wf_moment";
+export const MOMENT_WORKFLOW_KEY = CHAT_MOMENT_WORKFLOW_KEY;
 const OUTPUT_PREFIX = "chat-moments";
 const MODE_COLUMN = "text_to_image";
 
@@ -309,7 +310,7 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
   await updateImageJob(env, job.id, { status: "processing" });
 
   try {
-    // Feed the companion's base 立绘 as the wf_moment load-image reference so the
+    // Feed the companion's base portrait as the chat_moment load-image reference so the
     // scene character stays consistent. When it's missing, omit source_art_url and
     // fall back to txt2img (the provider routes create+source_art_url to img2img).
     const moment = await loadMomentByJob(env, job.id);
@@ -317,7 +318,7 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
     if (sourceArtUrl === "waiting_for_cutout") {
       return;
     }
-    const basePrompt = (await resolveImageGenConfig(env)).wfMomentBasePrompt?.trim();
+    const basePrompt = (await resolveImageGenConfig(env)).chatMomentBasePrompt?.trim();
     const request: ImageGenRequest = {
       mode: "create",
       prompt: basePrompt ? `${basePrompt}\n\n${job.prompt}` : job.prompt,

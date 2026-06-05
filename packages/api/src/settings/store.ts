@@ -106,14 +106,14 @@ export async function getSettingNumber(
 
 export type ImageGenConfig = {
   provider: string;
-  wf1Provider: string | null;
-  wf2Provider: string | null;
-  wfMomentProvider: string | null;
-  wfSceneProvider: string | null;
-  wfCutoutProvider: string | null;
-  wfOutfitProvider: string | null;
-  wf1BasePrompt: string | null;
-  wfMomentBasePrompt: string | null;
+  portraitCreateProvider: string | null;
+  portraitVariationProvider: string | null;
+  chatMomentProvider: string | null;
+  sceneBackgroundProvider: string | null;
+  companionCutoutProvider: string | null;
+  profileOutfitProvider: string | null;
+  portraitCreateBasePrompt: string | null;
+  chatMomentBasePrompt: string | null;
   publicBaseUrl: string | null;
   runninghubBaseUrl: string | null;
   apiKey: string | null;
@@ -133,16 +133,51 @@ export type ImageGenConfig = {
 export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
   const map = await loadSettings(env);
   const p = (key: string) => pick(env, map, key);
+  const legacyEnv = (envKey: string) => readEnv(env, envKey);
+  const pCompat = (key: string, oldKey: string, oldEnvKey: string) =>
+    p(key) ?? map.get(oldKey)?.trim() ?? legacyEnv(oldEnvKey);
   return {
     provider: p("image_gen.provider") ?? "mock",
-    wf1Provider: p("image_gen.wf1_provider"),
-    wf2Provider: p("image_gen.wf2_provider"),
-    wfMomentProvider: p("image_gen.wf_moment_provider"),
-    wfSceneProvider: p("image_gen.wf_scene_provider"),
-    wfCutoutProvider: p("image_gen.wf_cutout_provider"),
-    wfOutfitProvider: p("image_gen.wf_outfit_provider"),
-    wf1BasePrompt: p("image_gen.wf1_base_prompt"),
-    wfMomentBasePrompt: p("image_gen.wf_moment_base_prompt"),
+    portraitCreateProvider: pCompat(
+      "image_gen.portrait_create_provider",
+      "image_gen.wf1_provider",
+      "IMAGE_GEN_WF1_PROVIDER",
+    ),
+    portraitVariationProvider: pCompat(
+      "image_gen.portrait_variation_provider",
+      "image_gen.wf2_provider",
+      "IMAGE_GEN_WF2_PROVIDER",
+    ),
+    chatMomentProvider: pCompat(
+      "image_gen.chat_moment_provider",
+      "image_gen.wf_moment_provider",
+      "IMAGE_GEN_WF_MOMENT_PROVIDER",
+    ),
+    sceneBackgroundProvider: pCompat(
+      "image_gen.scene_background_provider",
+      "image_gen.wf_scene_provider",
+      "IMAGE_GEN_WF_SCENE_PROVIDER",
+    ),
+    companionCutoutProvider: pCompat(
+      "image_gen.companion_cutout_provider",
+      "image_gen.wf_cutout_provider",
+      "IMAGE_GEN_WF_CUTOUT_PROVIDER",
+    ),
+    profileOutfitProvider: pCompat(
+      "image_gen.profile_outfit_provider",
+      "image_gen.wf_outfit_provider",
+      "IMAGE_GEN_WF_OUTFIT_PROVIDER",
+    ),
+    portraitCreateBasePrompt: pCompat(
+      "image_gen.portrait_create_base_prompt",
+      "image_gen.wf1_base_prompt",
+      "IMAGE_GEN_WF1_BASE_PROMPT",
+    ),
+    chatMomentBasePrompt: pCompat(
+      "image_gen.chat_moment_base_prompt",
+      "image_gen.wf_moment_base_prompt",
+      "IMAGE_GEN_WF_MOMENT_BASE_PROMPT",
+    ),
     publicBaseUrl: p("image_gen.public_base_url"),
     runninghubBaseUrl: p("image_gen.runninghub_base_url"),
     apiKey: p("image_gen.api_key"),

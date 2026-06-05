@@ -1,5 +1,6 @@
 import { resolveImageGenConfig, type ImageGenConfig } from "../settings/store";
-import { normalizeObjectKey } from "./signed-url";
+import { parseWorkflowGenerationParams } from "./generation-params";
+import { createSignedObjectUrl, normalizeObjectKey } from "./signed-url";
 import {
   ImageGenError,
   type ImageGenProvider,
@@ -8,9 +9,16 @@ import {
 } from "./types";
 import { getImageWorkflow } from "./models";
 import { ANATOMY_NEGATIVE } from "./prompts";
+import { workflowContractHasField } from "./runninghub-contract";
+import {
+  COMPANION_CUTOUT_WORKFLOW_KEY,
+  PORTRAIT_CREATE_WORKFLOW_KEY,
+  PORTRAIT_VARIATION_WORKFLOW_KEY,
+  normalizeWorkflowKey,
+} from "./workflow-keys";
 import { getWorkflowConfig, type WorkflowConfig } from "./workflows";
 
-type NodeInfo = { nodeId: string; fieldName: string; fieldValue: string };
+type NodeInfo = { nodeId: string; fieldName: string; fieldValue: number | string };
 
 type RunningHubCreateResponse = {
   code: number;
@@ -32,6 +40,7 @@ type RunningHubUploadResponse = {
 
 const DEFAULT_BASE_URL = "https://www.runninghub.ai";
 const MODEL = "companion-expression-pack-v1";
+const LOAD_IMAGE_URL_TTL_SECONDS = 6 * 60 * 60;
 
 export const runningHubImageGenProvider: ImageGenProvider = {
   name: "runninghub",
@@ -48,9 +57,9 @@ export const runningHubImageGenProvider: ImageGenProvider = {
   },
 };
 
-/** WF-1 create (txt2img): override prompt node, plus checkpoint when switching models. */
+/** Portrait create (txt2img): override prompt node, plus checkpoint when switching models. */
 async function generateCreate(req: ImageGenRequest, env: Env, cfg: ImageGenConfig): Promise<ImageGenResponse> {
-  const workflowKey = req.workflow_key?.trim() || "wf1";
+  const workflowKey = normalizeWorkflowKey(req.workflow_key) || PORTRAIT_CREATE_WORKFLOW_KEY;
   const config = await readWorkflowConfig(env, cfg, workflowKey);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: config.promptFieldName || "text", fieldValue: req.prompt ?? "", nodeId: config.promptNodeId },
@@ -72,17 +81,19 @@ async function generateCreate(req: ImageGenRequest, env: Env, cfg: ImageGenConfi
         `no checkpointNodeId configured; using the workflow's built-in checkpoint.`,
     );
   }
+  appendLora(nodeInfoList, config, req);
   appendNegativePrompt(nodeInfoList, config);
-  return submitTask(cfg, config.workflowId, nodeInfoList, `companion-create-${workflowKey}`);
+  appendGenerationParams(nodeInfoList, config, req);
+  return submitTask(cfg, config, nodeInfoList, `companion-create-${workflowKey}`);
 }
 
-/** WF-2 variation (img2img): load-image + prompt. */
+/** Portrait variation (img2img): load-image + prompt. */
 async function generateVariation(
   req: ImageGenRequest,
   env: Env,
   cfg: ImageGenConfig,
 ): Promise<ImageGenResponse> {
-  const workflowKey = req.workflow_key?.trim() || "wf2";
+  const workflowKey = normalizeWorkflowKey(req.workflow_key) || PORTRAIT_VARIATION_WORKFLOW_KEY;
   const config = await readWorkflowConfig(env, cfg, workflowKey);
   if (!config.loadImageNodeId) {
     throw new ImageGenError(
@@ -107,22 +118,22 @@ async function generateVariation(
   // uploaded into its input dir — not a URL. Upload the source bytes first,
   // then inject the returned fileName. (Feeding a URL here makes RunningHub
   // accept the task but fail at the LoadImage node during render.)
-  const fileName = await uploadSourceImage(cfg, env, req.source_art_url);
+  const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config.loadImageFieldName);
   const nodeInfoList: NodeInfo[] = [
-    { fieldName: "image", fieldValue: fileName, nodeId: config.loadImageNodeId },
+    { fieldName: config.loadImageFieldName || "image", fieldValue: sourceImageValue, nodeId: config.loadImageNodeId },
     { fieldName: config.promptFieldName || "text", fieldValue: req.prompt ?? "", nodeId: config.promptNodeId },
   ];
   appendNegativePrompt(nodeInfoList, config);
-  return submitTask(cfg, config.workflowId, nodeInfoList, MODEL);
+  return submitTask(cfg, config, nodeInfoList, MODEL);
 }
 
-/** WF_CUTOUT matting: load-image only, prompt node optional. */
+/** Companion cutout matting: load-image only, prompt node optional. */
 async function generateCutout(
   req: ImageGenRequest,
   env: Env,
   cfg: ImageGenConfig,
 ): Promise<ImageGenResponse> {
-  const workflowKey = req.workflow_key?.trim() || "wf_cutout";
+  const workflowKey = normalizeWorkflowKey(req.workflow_key) || COMPANION_CUTOUT_WORKFLOW_KEY;
   const config = await readWorkflowConfig(env, cfg, workflowKey, { promptRequired: false });
   if (!config.loadImageNodeId) {
     throw new ImageGenError(
@@ -144,9 +155,9 @@ async function generateCutout(
     });
   }
 
-  const fileName = await uploadSourceImage(cfg, env, req.source_art_url);
+  const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config.loadImageFieldName);
   const nodeInfoList: NodeInfo[] = [
-    { fieldName: "image", fieldValue: fileName, nodeId: config.loadImageNodeId },
+    { fieldName: config.loadImageFieldName || "image", fieldValue: sourceImageValue, nodeId: config.loadImageNodeId },
   ];
   if (config.promptNodeId) {
     nodeInfoList.push({
@@ -155,7 +166,60 @@ async function generateCutout(
       nodeId: config.promptNodeId,
     });
   }
-  return submitTask(cfg, config.workflowId, nodeInfoList, `companion-cutout-${workflowKey}`);
+  return submitTask(cfg, config, nodeInfoList, `companion-cutout-${workflowKey}`);
+}
+
+async function resolveLoadImageValue(
+  cfg: ImageGenConfig,
+  env: Env,
+  sourceArtUrl: string,
+  fieldName: string | undefined,
+): Promise<string> {
+  if (loadImageFieldUsesUrl(fieldName)) {
+    return createSourceImageUrl(env, sourceArtUrl);
+  }
+  return uploadSourceImage(cfg, env, sourceArtUrl);
+}
+
+function loadImageFieldUsesUrl(fieldName: string | undefined): boolean {
+  const normalized = fieldName?.trim().toLowerCase();
+  return normalized === "url" || normalized === "image_url";
+}
+
+async function createSourceImageUrl(env: Env, sourceArtUrl: string): Promise<string> {
+  const trimmed = sourceArtUrl.trim();
+  if (!trimmed) {
+    throw new ImageGenError("invalid_source_art_url", "source_art_url missing or invalid", {
+      retryable: false,
+    });
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      throw new ImageGenError("invalid_source_art_url", "source_art_url missing or invalid", {
+        retryable: false,
+      });
+    }
+    const path = url.pathname.replace(/^\/+/, "");
+    if (!path.startsWith("objects/") && !path.startsWith("api/objects/")) {
+      return trimmed;
+    }
+  }
+
+  try {
+    return await createSignedObjectUrl(env, trimmed, { ttlSeconds: LOAD_IMAGE_URL_TTL_SECONDS });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message === "invalid_source_art_url") {
+      throw new ImageGenError("invalid_source_art_url", "source_art_url missing or invalid", {
+        retryable: false,
+      });
+    }
+    throw new ImageGenError("provider_not_configured", message, { retryable: false });
+  }
 }
 
 /**
@@ -230,7 +294,7 @@ function fileNameFor(key: string, contentType: string): string {
  * Append the anti-deformity negative prompt — only when the workflow declares a
  * negative text node. Without it the model keeps the source limbs and adds the
  * prompt's new gesture limbs, producing extra arms/hands and duplicate heads
- * ("三头六臂"). Applies to every RunningHub workflow (wf1/wf2/wf_moment) that
+ * ("三头六臂"). Applies to every RunningHub workflow that
  * wires a negative node.
  */
 function appendNegativePrompt(nodeInfoList: NodeInfo[], config: WorkflowConfig): void {
@@ -242,9 +306,86 @@ function appendNegativePrompt(nodeInfoList: NodeInfo[], config: WorkflowConfig):
   });
 }
 
+function appendLora(nodeInfoList: NodeInfo[], config: WorkflowConfig, req: ImageGenRequest): void {
+  const loraName = req.lora_name?.trim();
+  if (!loraName) return;
+  if (!config.loraNodeId) {
+    throw new ImageGenError(
+      "invalid_model_lora_combination",
+      `RunningHub workflow "${config.key}" does not declare a LoRA node`,
+      { retryable: false },
+    );
+  }
+  nodeInfoList.push({
+    fieldName: config.loraNameFieldName || "lora_name",
+    fieldValue: loraName,
+    nodeId: config.loraNodeId,
+  });
+  const modelStrength =
+    typeof req.lora_model_strength === "number" && Number.isFinite(req.lora_model_strength)
+      ? req.lora_model_strength
+      : 1;
+  nodeInfoList.push({
+    fieldName: config.loraModelStrengthFieldName || "strength_model",
+    fieldValue: modelStrength,
+    nodeId: config.loraNodeId,
+  });
+  if (req.lora_clip_strength !== undefined && req.lora_clip_strength !== null) {
+    if (!config.loraClipStrengthFieldName) {
+      throw new ImageGenError(
+        "workflow_contract_mismatch",
+        `RunningHub workflow "${config.key}" does not declare a LoRA clip strength field`,
+        { retryable: false },
+      );
+    }
+    nodeInfoList.push({
+      fieldName: config.loraClipStrengthFieldName,
+      fieldValue: req.lora_clip_strength,
+      nodeId: config.loraNodeId,
+    });
+  }
+}
+
+function appendGenerationParams(nodeInfoList: NodeInfo[], config: WorkflowConfig, req: ImageGenRequest): void {
+  const values = req.generation_params;
+  if (!values) return;
+  const params = config.generationParams ?? parseWorkflowGenerationParams(config.generationParamsJson);
+  if (!params) return;
+  if (params.latentNodeId) {
+    if (params.widthFieldName) {
+      nodeInfoList.push({
+        fieldName: params.widthFieldName,
+        fieldValue: values.width,
+        nodeId: params.latentNodeId,
+      });
+    }
+    if (params.heightFieldName) {
+      nodeInfoList.push({
+        fieldName: params.heightFieldName,
+        fieldValue: values.height,
+        nodeId: params.latentNodeId,
+      });
+    }
+    if (params.batchSizeFieldName) {
+      nodeInfoList.push({
+        fieldName: params.batchSizeFieldName,
+        fieldValue: values.batch_size,
+        nodeId: params.latentNodeId,
+      });
+    }
+  }
+  if (params.ksamplerNodeId && params.seedFieldName) {
+    nodeInfoList.push({
+      fieldName: params.seedFieldName,
+      fieldValue: values.seed,
+      nodeId: params.ksamplerNodeId,
+    });
+  }
+}
+
 async function submitTask(
   cfg: ImageGenConfig,
-  workflowId: string,
+  config: WorkflowConfig,
   nodeInfoList: NodeInfo[],
   model: string,
 ): Promise<ImageGenResponse> {
@@ -254,8 +395,9 @@ async function submitTask(
     apiKey,
     nodeInfoList,
     webhookUrl: cfg.webhookUrl ? buildWebhookUrl(cfg.webhookUrl, cfg.webhookSecret) : undefined,
-    workflowId,
+    workflowId: config.workflowId,
   };
+  validateNodeInfoList(config.workflowId, nodeInfoList, config);
 
   const response = await fetch(`${baseUrl}/task/openapi/create`, {
     body: JSON.stringify(body),
@@ -314,26 +456,37 @@ async function readWorkflowConfig(
   options?: { promptRequired?: boolean },
 ): Promise<WorkflowConfig> {
   requireApiKey(cfg);
-  const dbWorkflow = await getImageWorkflow(env, key).catch(() => null);
+  const workflowKey = normalizeWorkflowKey(key) || key;
+  const dbWorkflow = await getImageWorkflow(env, workflowKey).catch(() => null);
   const config = dbWorkflow
     ? {
+        architecture: dbWorkflow.architecture || "sdxl",
         checkpointFieldName: dbWorkflow.checkpoint_field_name || "ckpt_name",
         checkpointNodeId: dbWorkflow.checkpoint_node_id ?? undefined,
         key: dbWorkflow.key,
         label: dbWorkflow.label,
+        loadImageFieldName: dbWorkflow.load_image_field_name || "image",
         loadImageNodeId: dbWorkflow.load_image_node_id ?? undefined,
+        loraClipStrengthFieldName: dbWorkflow.lora_clip_strength_field_name ?? undefined,
+        loraModelStrengthFieldName: dbWorkflow.lora_model_strength_field_name || "strength_model",
+        loraNameFieldName: dbWorkflow.lora_name_field_name || "lora_name",
+        loraNodeId: dbWorkflow.lora_node_id ?? undefined,
+        generationParams: parseWorkflowGenerationParams(dbWorkflow.generation_params_json) ?? undefined,
+        generationParamsJson: dbWorkflow.generation_params_json ?? undefined,
         mode: dbWorkflow.mode,
         negativePromptFieldName: dbWorkflow.negative_prompt_field_name || "prompt",
         negativePromptNodeId: dbWorkflow.negative_prompt_node_id ?? undefined,
         promptFieldName: dbWorkflow.prompt_field_name || "text",
         promptNodeId: dbWorkflow.prompt_node_id,
+        contractHash: dbWorkflow.contract_hash ?? undefined,
+        contractJson: dbWorkflow.contract_json ?? undefined,
         workflowId: dbWorkflow.workflow_id,
       }
-    : getWorkflowConfig(cfg.workflows, key);
+    : getWorkflowConfig(cfg.workflows, workflowKey);
   if (!config) {
     throw new ImageGenError(
       "provider_not_configured",
-      `RunningHub workflow not configured: ${key}`,
+      `RunningHub workflow not configured: ${workflowKey}`,
       { retryable: false },
     );
   }
@@ -342,12 +495,25 @@ async function readWorkflowConfig(
     throw new ImageGenError(
       "provider_not_configured",
       promptRequired
-        ? `RunningHub workflow "${key}" missing workflow id or prompt node id`
-        : `RunningHub workflow "${key}" missing workflow id`,
+        ? `RunningHub workflow "${workflowKey}" missing workflow id or prompt node id`
+        : `RunningHub workflow "${workflowKey}" missing workflow id`,
       { retryable: false },
     );
   }
   return config;
+}
+
+function validateNodeInfoList(workflowId: string, nodeInfoList: NodeInfo[], config: WorkflowConfig): void {
+  if (!config.contractJson) return;
+  for (const nodeInfo of nodeInfoList) {
+    if (!workflowContractHasField(config.contractJson, nodeInfo.nodeId, nodeInfo.fieldName)) {
+      throw new ImageGenError(
+        "workflow_contract_mismatch",
+        `RunningHub workflow "${workflowId}" contract does not contain nodeId=${nodeInfo.nodeId}, fieldName=${nodeInfo.fieldName}`,
+        { retryable: false },
+      );
+    }
+  }
 }
 
 function buildWebhookUrl(webhookUrl: string, webhookSecret: string | null): string {

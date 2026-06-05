@@ -3,42 +3,51 @@
     {
       "id": "realistic_juggernaut",
       "label": "Realistic - Juggernaut XL",
+      "architecture": "sdxl",
+      "styleFamily": "realistic",
       "ckptName": "juggernautXL_ragnarokBy.safetensors",
       "tags": ["realistic"],
       "isActive": true,
       "sortOrder": 10
     },
     {
-      "id": "anime_jp_animagine",
-      "label": "Anime JP - Animagine XL",
+      "id": "anime_animagine",
+      "label": "Anime - Animagine XL",
+      "architecture": "sdxl",
+      "styleFamily": "anime",
       "ckptName": "animagineXL40_v4Opt.safetensors",
-      "tags": ["anime", "jp"],
+      "tags": ["anime"],
       "isActive": true,
       "sortOrder": 20
     },
     {
-      "id": "anime_kr_ghostxl",
-      "label": "Anime KR - Ghost XL",
+      "id": "anime_ghostxl",
+      "label": "Anime - Ghost XL",
+      "architecture": "sdxl",
+      "styleFamily": "anime",
       "ckptName": "ghostxl_v10BakedVAE.safetensors",
-      "tags": ["anime", "kr"],
+      "tags": ["anime"],
       "isActive": true,
       "sortOrder": 30
     }
   ],
   "workflows": {
-    "wf1": {
-      "label": "WF1 - base portrait (create)",
+    "portrait_create": {
+      "label": "Portrait create",
+      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "",
       "promptNodeId": "",
+      "promptFieldName": "text",
       "checkpointNodeId": "",
       "checkpointFieldName": "ckpt_name",
-      "modelIds": ["realistic_juggernaut", "anime_jp_animagine", "anime_kr_ghostxl"],
+      "modelIds": ["realistic_juggernaut", "anime_animagine", "anime_ghostxl"],
       "isActive": true,
       "sortOrder": 10
     },
-    "wf_moment": {
-      "label": "WF_MOMENT - chat scene moment (create)",
+    "chat_moment": {
+      "label": "Chat moment image",
+      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "",
       "promptNodeId": "",
@@ -48,21 +57,25 @@
       "isActive": true,
       "sortOrder": 30
     },
-    "wf_cutout": {
-      "label": "WF_CUTOUT - companion matting (cutout)",
+    "companion_cutout": {
+      "label": "Companion cutout",
+      "architecture": "sdxl",
       "mode": "cutout",
       "workflowId": "",
       "loadImageNodeId": "",
+      "loadImageFieldName": "image",
       "promptNodeId": "",
       "promptFieldName": "text",
       "isActive": true,
       "sortOrder": 35
     },
-    "wf_outfit": {
-      "label": "WF_OUTFIT - chat outfit image (variation)",
+    "profile_outfit": {
+      "label": "Profile outfit image",
+      "architecture": "sdxl",
       "mode": "variation",
       "workflowId": "",
       "loadImageNodeId": "",
+      "loadImageFieldName": "image",
       "promptNodeId": "",
       "promptFieldName": "prompt",
       "negativePromptNodeId": "",

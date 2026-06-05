@@ -24,11 +24,13 @@ import type {
   CreditBalanceResponse,
   CreditLedgerResponse,
   AdminImageGenJobsResponse,
+  AdminImageLorasResponse,
   AdminImageModelsResponse,
   AdminImageWorkflowsResponse,
   AdminSettingsResponse,
   CreditPackageId,
   DailyState,
+  ImageLoraInput,
   ImageModelInput,
   ImageModelOption,
   ImageModelsResponse,
@@ -305,6 +307,10 @@ export async function listAdminImageModels(): Promise<AdminImageModelsResponse> 
   return requestJson<AdminImageModelsResponse>('/admin/image-models');
 }
 
+export async function listAdminImageLoras(): Promise<AdminImageLorasResponse> {
+  return requestJson<AdminImageLorasResponse>('/admin/image-loras');
+}
+
 export async function listAdminImageWorkflows(): Promise<AdminImageWorkflowsResponse> {
   return requestJson<AdminImageWorkflowsResponse>('/admin/image-workflows');
 }
@@ -339,6 +345,28 @@ export async function updateAdminImageModel(id: string, input: ImageModelInput):
 
 export async function deleteAdminImageModel(id: string): Promise<{ ok: true }> {
   return requestJson<{ ok: true }>(`/admin/image-models/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function createAdminImageLora(input: ImageLoraInput): Promise<{ id: string }> {
+  return requestJson<{ id: string }>('/admin/image-loras', {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function updateAdminImageLora(id: string, input: ImageLoraInput): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/image-loras/${encodeURIComponent(id)}`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PUT',
+  });
+}
+
+export async function deleteAdminImageLora(id: string): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>(`/admin/image-loras/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

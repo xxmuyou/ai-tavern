@@ -290,7 +290,7 @@ Query: ?token=...
 
 profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companion 的 canonical `art_url`。
 
-`art_style=anime` 是用户侧 bucket，匹配 `style:anime`、`anime`、`anime_jp`、`anime_kr`、`anime,jp`、`anime,kr`。`art_style=realistic` 匹配 `style:realistic`、`realistic`。Admin/model catalog 可继续保留 `Anime JP` / `Anime KR` 名称区分。
+`art_style=anime` 是用户侧 bucket，只匹配 `style:anime`、`anime`。`art_style=realistic` 匹配 `style:realistic`、`realistic`。Admin/model catalog 的主分类同样只保留 `Anime` / `Realistic`。
 
 ### `GET /companions/{id}`
 
@@ -725,15 +725,15 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 // Response 200
 {
   "jobs": [
-    { "id": "job_1", "status": "failed", "task": "companion_base_art", "workflow_key": "wf1",
-      "model": "anime_jp_animagine", "provider": "runninghub", "error_code": "provider_error",
-      "error_message": "NODE_INFO_MISMATCH(nodeId=1, fieldName=Anime_JP, reason=field_not_found_in_node_inputs)",
+    { "id": "job_1", "status": "failed", "task": "companion_base_art", "workflow_key": "portrait_create",
+      "model": "anime_animagine", "provider": "runninghub", "error_code": "provider_error",
+      "error_message": "NODE_INFO_MISMATCH(nodeId=1, fieldName=style_name, reason=field_not_found_in_node_inputs)",
       "provider_task_id": null, "created_at": 1748785108000, "completed_at": 1748785109000 }
   ]
 }
 ```
 
-`fieldName=Anime_JP` 代表旧数据把 style/model 标签误写成 RunningHub 节点字段名；新任务应由 workflow 的 `checkpointFieldName`（通常 `ckpt_name`）提供字段名。
+`fieldName=style_name` 代表旧数据把 style/model 标签误写成 RunningHub 节点字段名；新任务应由 workflow 的 `checkpointFieldName`（通常 `ckpt_name`）提供字段名。
 
 > 配套：base-art job status（`GET /companions/base-art/jobs/{jobId}`）现也透传 `error_message`；生成 companion 表情立绘（`POST /companions/{id}/emotion-art/{emotion}/generate`）对非 Pro 用户返回 402 `subscription_required`。
 

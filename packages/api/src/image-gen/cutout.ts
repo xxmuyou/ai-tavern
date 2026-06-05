@@ -12,9 +12,10 @@ import {
   type ImageGenJobRow,
   type ImageGenJobStatus,
 } from "./base-art";
+import { COMPANION_CUTOUT_WORKFLOW_KEY } from "./workflow-keys";
 
 export const TASK_CUTOUT = "companion_cutout";
-export const CUTOUT_WORKFLOW_KEY = "wf_cutout";
+export const CUTOUT_WORKFLOW_KEY = COMPANION_CUTOUT_WORKFLOW_KEY;
 
 const OUTPUT_PREFIX = "companion-cutout";
 const MODE_COLUMN = "cutout";

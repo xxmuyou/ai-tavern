@@ -13,10 +13,10 @@ import { SettingRow, SourceTag } from './SettingsSection';
 import type { RevealSettingFn, SaveSettingFn } from './SettingsSection';
 
 const DEFAULT_PROVIDER_KEY = 'image_gen.provider';
-const WF1_PROVIDER_KEY = 'image_gen.wf1_provider';
-const WF_MOMENT_PROVIDER_KEY = 'image_gen.wf_moment_provider';
-const WF_CUTOUT_PROVIDER_KEY = 'image_gen.wf_cutout_provider';
-const WF_OUTFIT_PROVIDER_KEY = 'image_gen.wf_outfit_provider';
+const PORTRAIT_CREATE_PROVIDER_KEY = 'image_gen.portrait_create_provider';
+const CHAT_MOMENT_PROVIDER_KEY = 'image_gen.chat_moment_provider';
+const COMPANION_CUTOUT_PROVIDER_KEY = 'image_gen.companion_cutout_provider';
+const PROFILE_OUTFIT_PROVIDER_KEY = 'image_gen.profile_outfit_provider';
 // Engines the backend can actually route to (see image-gen/index.ts).
 const IMAGE_PROVIDERS = ['mock', 'runninghub', 'openai'] as const;
 
@@ -36,10 +36,10 @@ const OPENAI_KEYS = [
 ] as const;
 
 const WORKFLOWS = [
-  { id: 'wf1', mode: 'create', label: 'WF1 - base portrait (create)', providerKey: WF1_PROVIDER_KEY },
-  { id: 'wf_moment', mode: 'create', label: 'WF_MOMENT - chat scene moment (create)', providerKey: WF_MOMENT_PROVIDER_KEY },
-  { id: 'wf_cutout', mode: 'cutout', label: 'WF_CUTOUT - companion matting (cutout)', providerKey: WF_CUTOUT_PROVIDER_KEY },
-  { id: 'wf_outfit', mode: 'variation', label: 'WF_OUTFIT - chat outfit image (variation)', providerKey: WF_OUTFIT_PROVIDER_KEY },
+  { id: 'portrait_create', mode: 'create', label: 'Portrait create', providerKey: PORTRAIT_CREATE_PROVIDER_KEY },
+  { id: 'chat_moment', mode: 'create', label: 'Chat moment', providerKey: CHAT_MOMENT_PROVIDER_KEY },
+  { id: 'companion_cutout', mode: 'cutout', label: 'Companion cutout', providerKey: COMPANION_CUTOUT_PROVIDER_KEY },
+  { id: 'profile_outfit', mode: 'variation', label: 'Profile outfit', providerKey: PROFILE_OUTFIT_PROVIDER_KEY },
 ] as const;
 
 type Workflow = (typeof WORKFLOWS)[number];
@@ -47,7 +47,7 @@ type WorkflowId = Workflow['id'];
 
 export function PortraitGenerationSection() {
   const { settings, isLoading, error, reveal, save } = useAdminSettings();
-  const [workflowId, setWorkflowId] = useState<WorkflowId>('wf1');
+  const [workflowId, setWorkflowId] = useState<WorkflowId>('portrait_create');
 
   if (isLoading) {
     return <WebLoading fullscreen={false} label="Loading portrait generation settings..." />;

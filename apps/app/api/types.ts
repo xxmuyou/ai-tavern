@@ -275,16 +275,51 @@ export type BaseArtJobStatus = 'pending' | 'processing' | 'succeeded' | 'failed'
 
 export type BaseArtGenerateInput = {
   source: 'text' | 'upload';
+  batch_size?: number;
+  lora_id?: string | null;
   model?: string;
   prompt?: string;
+  seed?: number | null;
+  size_preset?: string;
   upload_key?: string;
+};
+
+export type ImageSizePreset = {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+};
+
+export type WorkflowGenerationControls = {
+  sizePresets: ImageSizePreset[];
+  defaultSizePresetId: string;
+  latentNodeId?: string;
+  widthFieldName?: string;
+  heightFieldName?: string;
+  batchSizeFieldName?: string;
+  ksamplerNodeId?: string;
+  seedFieldName?: string;
+  batchSizeDefault: number;
+  batchSizeMin: number;
+  batchSizeMax: number;
+};
+
+export type ImageModelLoraOption = {
+  id: string;
+  label: string;
+  lora_name: string;
+  model_strength: number;
+  clip_strength: number | null;
 };
 
 export type ImageModelOption = {
   checkpoint_applies?: boolean;
   ckpt_name?: string;
+  generation_controls?: WorkflowGenerationControls | null;
   id: string;
   label: string;
+  loras?: ImageModelLoraOption[];
   model_id?: string;
   tag: string;
   workflow_key?: string;
@@ -891,12 +926,16 @@ export type LlmUsageResponse = {
   window: LlmUsageWindow;
 };
 
-// --- Admin: WF1 model catalog ---
+// --- Admin: image model catalog ---
 export type AdminImageModel = {
   id: string;
   label: string;
   tag: string;
   ckpt_name: string;
+  architecture: string;
+  style_family: string;
+  purpose: string;
+  tags: string;
   is_active: boolean;
   sort_order: number;
   updated_at: number;
@@ -907,17 +946,54 @@ export type AdminImageModelsResponse = {
   models: AdminImageModel[];
 };
 
+export type AdminImageLora = {
+  id: string;
+  label: string;
+  lora_name: string;
+  architecture: string;
+  style_family: string;
+  purpose: string;
+  tags: string;
+  default_model_strength: number;
+  default_clip_strength: number | null;
+  is_active: boolean;
+  sort_order: number;
+  updated_at: number;
+  updated_by_email: string | null;
+};
+
+export type AdminImageLorasResponse = {
+  loras: AdminImageLora[];
+};
+
+export type ImageWorkflowLoraBinding = {
+  model_id: string;
+  lora_ids: string[];
+};
+
 export type AdminImageWorkflow = {
+  architecture: string;
   checkpoint_field_name: string;
   checkpoint_node_id: string | null;
+  contract_hash: string | null;
+  contract_json: string | null;
+  contract_refreshed_at: number | null;
   is_active: boolean;
   key: string;
   label: string;
+  load_image_field_name: string;
   load_image_node_id: string | null;
+  lora_bindings: ImageWorkflowLoraBinding[];
+  lora_clip_strength_field_name: string | null;
+  lora_model_strength_field_name: string;
+  lora_name_field_name: string;
+  lora_node_id: string | null;
+  generation_params_json: string | null;
   mode: 'create' | 'variation' | 'cutout';
   model_ids: string[];
   negative_prompt_node_id: string | null;
   negative_prompt_field_name: string;
+  prompt_field_name: string;
   prompt_node_id: string;
   sort_order: number;
   updated_at: number;
@@ -952,26 +1028,53 @@ export type ImageModelInput = {
   label: string;
   tag: string;
   ckpt_name: string;
+  architecture?: string;
+  style_family?: string;
+  purpose?: string;
+  tags?: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
+export type ImageLoraInput = {
+  label: string;
+  lora_name: string;
+  architecture?: string;
+  style_family?: string;
+  purpose?: string;
+  tags?: string;
+  default_model_strength: number;
+  default_clip_strength: number | null;
   is_active: boolean;
   sort_order: number;
 };
 
 export type ImageWorkflowInput = {
+  architecture?: string;
   checkpoint_field_name: string | null;
   checkpoint_node_id: string | null;
   is_active: boolean;
   key: string;
   label: string;
+  load_image_field_name: string | null;
   load_image_node_id: string | null;
+  lora_bindings?: ImageWorkflowLoraBinding[];
+  lora_clip_strength_field_name: string | null;
+  lora_model_strength_field_name: string | null;
+  lora_name_field_name: string | null;
+  lora_node_id: string | null;
+  generation_params_json?: string | null;
   mode: 'create' | 'variation' | 'cutout';
   model_ids: string[];
   negative_prompt_node_id: string | null;
+  negative_prompt_field_name: string | null;
+  prompt_field_name: string | null;
   prompt_node_id: string;
   sort_order: number;
   workflow_id: string;
 };
 
-// --- Admin: WF2 expression prompts (gender × emotion) ---
+// --- Admin: retired expression prompts (gender × emotion) ---
 export type ExpressionGender = 'male' | 'female';
 
 export type ExpressionPromptItem = {

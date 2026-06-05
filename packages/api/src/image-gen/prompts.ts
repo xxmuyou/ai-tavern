@@ -34,7 +34,7 @@ const BASE_CONSTRAINTS = [
 ].join(" ");
 
 /**
- * Global negative-prompt guardrail injected into the WF2 RunningHub workflow's
+ * Global negative-prompt guardrail injected into RunningHub workflows'
  * negative text node (when the workflow declares one). Suppresses the duplicate
  * limbs / multiple heads that img2img can hallucinate when the prompt asks for a
  * new arm/hand gesture. RunningHub-only — OpenAI image edit has no negative input.

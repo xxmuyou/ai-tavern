@@ -21,8 +21,8 @@
 | `migrate:db:local` | `tasks/run.sh api:d1-migrate-local` | 在本地 D1(SQLite)上应用迁移 |
 | `migrate:db:dev` | `tasks/run.sh api:d1-migrate-dev` | 在远端 dev D1 上应用迁移 |
 | `migrate:db:prod` | `tasks/run.sh api:d1-migrate-prod` | 在远端 prod D1 上应用迁移 |
-| `sync:runninghub:dev` | `tasks/run.sh api:sync-runninghub-dev` | 把 dev RunningHub workflow/checkpoint 配置同步到 D1 |
-| `sync:runninghub:prod` | `tasks/run.sh api:sync-runninghub-prod` | 把 prod RunningHub workflow/checkpoint 配置同步到 D1 |
+| `sync:runninghub:dev` | `tasks/run.sh api:sync-runninghub-dev` | 把 dev RunningHub semantic workflow contract、checkpoint/LoRA 与 Anime/Realistic lane 配置同步到 D1 |
+| `sync:runninghub:prod` | `tasks/run.sh api:sync-runninghub-prod` | 把 prod RunningHub semantic workflow contract、checkpoint/LoRA 与 Anime/Realistic lane 配置同步到 D1 |
 | `upload:secrets:dev` | `scripts/upload-worker-secrets.sh dev` | 把 `.env.dev` 的 Worker 密钥推到 Cloudflare(dev) |
 | `upload:secrets:prod` | `scripts/upload-worker-secrets.sh prod` | 把 `.env.prod` 的 Worker 密钥推到 Cloudflare(prod) |
 | `deploy:dev` | `scripts/deploy-api-and-web.sh dev` | 校验 + 迁移 + 部署 API + Web 到 dev(一键) |
@@ -84,11 +84,11 @@ pnpm upload:secrets:prod            # 推 prod 密钥
 
 ### `sync-runninghub-workflows.sh`(`pnpm sync:runninghub:*`)
 
-把 repo 中的 RunningHub 默认 checkpoint/workflow 配置同步到对应环境 D1 catalog。配置文件包含 `checkpoints[]` 与 `workflows{}`；同步会 upsert `image_models`、`image_workflows`、`image_workflow_models`，并保留写入 legacy `app_settings.image_gen.workflows` 作为旧 runtime fallback。
+把 repo 中的 RunningHub 默认 semantic workflow contract、latent/KSampler 参数映射、checkpoint、LoRA 与 Anime/Realistic lane 配置同步到对应环境 D1 catalog。当前同步脚本仍兼容 `checkpoints[]`、`loras[]`、`workflows{}` 与旧 membership 字段；目标配置形态是每个 workflow 下只有 `anime` / `realistic` 两个 asset lane。同步会 upsert 相关 catalog 表，并保留写入 legacy `app_settings.image_gen.workflows` 作为旧 runtime fallback。参数映射字段同样参与 workflow contract 校验。
 
 - dev 来源:`config/runninghub-workflows.dev.json`
 - prod 来源:`config/runninghub-workflows.prod.json`
-- 写入 catalog 表，并顺带 `DELETE` 旧键 `image_gen.create_workflows` / `image_gen.wf2_workflow_id` / `image_gen.wf2_load_image_node_id` / `image_gen.wf2_prompt_node_id` 清理历史漂移。
+- 写入 catalog 表，并顺带清理旧版 workflow settings 键，避免历史漂移。
 
 ```bash
 pnpm sync:runninghub:dev              # 同步 dev 配置到 dev D1
@@ -98,7 +98,7 @@ pnpm sync:runninghub:prod             # 同步 prod 配置到 prod D1
 
 ### `deploy-api-and-web.sh`(`pnpm deploy:{dev,prod}`)
 
-一键部署,顺序:本地校验(`typecheck` + `test`)→ D1 迁移 → RunningHub workflow/checkpoint 同步 → 部署 API → 部署 Web → 健康检查 + Web 入口比对。
+一键部署,顺序:本地校验(`typecheck` + `test`)→ D1 迁移 → RunningHub semantic workflow contract、checkpoint/LoRA 与 Anime/Realistic lane 同步 → 部署 API → 部署 Web → 健康检查 + Web 入口比对。
 
 ```bash
 pnpm deploy:dev                 # 部署到 dev
