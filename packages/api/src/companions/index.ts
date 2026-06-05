@@ -4,6 +4,13 @@ import { QUOTA_LIMITS } from "../billing/quota";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { ZERO_DIMENSIONS, computeLevel } from "../relationships";
+import {
+  defaultVoiceIdForGender,
+  defaultVoiceSpeed,
+  isValidVoiceId,
+  normalizeVoiceSpeed,
+  type VoiceSpeedId,
+} from "../voice/config";
 import { getOrComputeDailyState, getOrGenerateFlavorText } from "../life/daily-state";
 import { computeDateLocal, computeTimeSlot } from "../life/time-slot";
 import {
@@ -51,6 +58,8 @@ type CompanionRow = {
   personality: string | null;
   background: string | null;
   speech_style: string | null;
+  voice_id: string | null;
+  voice_speed: string | null;
   relationship_role: string | null;
   want: string | null;
   secret: string | null;
@@ -660,6 +669,8 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     relationship_role: row.relationship_role,
     source: row.source,
     speech_style: row.speech_style,
+    voice_id: row.voice_id ?? defaultVoiceIdForGender(env, row.gender),
+    voice_speed: normalizeVoiceSpeed(row.voice_speed) ?? defaultVoiceSpeed(env),
   };
 
   // The persona "driver" fields are spoilers (and `secret` is gated content),
@@ -716,7 +727,7 @@ async function exportCard(env: Env, user: UserRecord, companionId: string): Prom
 }
 
 async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promise<Response> {
-  const input = parseCreateInput(raw);
+  const input = parseCreateInput(env, raw);
   if ("error" in input) {
     return input.response;
   }
@@ -735,11 +746,11 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
   await env.DB.prepare(
     `INSERT INTO companions
       (id, source, created_by, is_active, name, appearance, personality,
-       background, speech_style, relationship_role, want, secret, boundary,
+       background, speech_style, voice_id, voice_speed, relationship_role, want, secret, boundary,
        greeting, example_dialogues, tags,
        preferred_scenes, art_url, art_emotions, gender, initial_dims,
        created_at, updated_at)
-     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   )
     .bind(
       id,
@@ -749,6 +760,8 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
       input.value.personality ?? null,
       input.value.background ?? null,
       input.value.speech_style ?? null,
+      input.value.voice_id ?? defaultVoiceIdForGender(env, input.value.gender),
+      input.value.voice_speed ?? defaultVoiceSpeed(env),
       input.value.relationship_role ?? null,
       input.value.want ?? null,
       input.value.secret ?? null,
@@ -772,7 +785,7 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
     return jsonResponse({ error: "internal_error" }, { status: 500 });
   }
 
-  return jsonResponse(serializeOwnCompanion(created), { status: 201 });
+  return jsonResponse(serializeOwnCompanion(env, created), { status: 201 });
 }
 
 async function updateCompanion(
@@ -794,7 +807,7 @@ async function updateCompanion(
     return jsonResponse({ error: "forbidden_not_owner" }, { status: 403 });
   }
 
-  const patch = parseUpdateInput(raw);
+  const patch = parseUpdateInput(env, raw);
   if ("error" in patch) {
     return patch.response;
   }
@@ -821,6 +834,8 @@ async function updateCompanion(
     speech_style: patch.value.speech_style ?? existing.speech_style,
     tags:
       patch.value.tags !== undefined ? JSON.stringify(patch.value.tags) : existing.tags,
+    voice_id: patch.value.voice_id ?? existing.voice_id,
+    voice_speed: patch.value.voice_speed ?? existing.voice_speed,
     want: patch.value.want ?? existing.want,
   };
   // spec-020: when the neutral art_url changes, drop all non-neutral
@@ -844,7 +859,7 @@ async function updateCompanion(
          boundary = ?, greeting = ?, example_dialogues = ?, tags = ?,
          preferred_scenes = ?, art_url = ?, art_emotions = ?,
          art_cutout_key = CASE WHEN ? THEN NULL ELSE art_cutout_key END,
-         gender = ?, updated_at = ?
+         gender = ?, voice_id = ?, voice_speed = ?, updated_at = ?
      WHERE id = ?`,
   )
     .bind(
@@ -865,6 +880,8 @@ async function updateCompanion(
       artEmotions,
       artUrlChanged ? 1 : 0,
       merged.gender,
+      merged.voice_id,
+      merged.voice_speed ?? defaultVoiceSpeed(env),
       Date.now(),
       companionId,
     )
@@ -875,7 +892,7 @@ async function updateCompanion(
     return jsonResponse({ error: "internal_error" }, { status: 500 });
   }
 
-  return jsonResponse(serializeOwnCompanion(updated));
+  return jsonResponse(serializeOwnCompanion(env, updated));
 }
 
 async function deleteCompanion(env: Env, user: UserRecord, companionId: string): Promise<Response> {
@@ -928,7 +945,7 @@ async function loadCompanion(env: Env, companionId: string): Promise<CompanionRo
     `SELECT id, source, created_by, is_active, is_public, name, appearance,
             personality, background, speech_style, relationship_role, want,
             secret, boundary, greeting, example_dialogues, tags, play_count,
-            preferred_scenes, art_url, art_emotions, gender,
+            preferred_scenes, art_url, art_emotions, gender, voice_id, voice_speed,
             initial_dims, created_at, updated_at
      FROM companions
      WHERE id = ?`,
@@ -961,7 +978,7 @@ async function countActiveUserCompanions(env: Env, userId: string): Promise<numb
   return row?.n ?? 0;
 }
 
-function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
+function serializeOwnCompanion(env: Env, row: CompanionRow): Record<string, unknown> {
   return {
     appearance: row.appearance,
     art_emotions: serializeArtEmotions(row.art_emotions),
@@ -984,6 +1001,8 @@ function serializeOwnCompanion(row: CompanionRow): Record<string, unknown> {
     speech_style: row.speech_style,
     tags: parseStringArray(row.tags),
     updated_at: row.updated_at,
+    voice_id: row.voice_id ?? defaultVoiceIdForGender(env, row.gender),
+    voice_speed: normalizeVoiceSpeed(row.voice_speed) ?? defaultVoiceSpeed(env),
     want: row.want,
   };
 }
@@ -1017,6 +1036,8 @@ type CreateValue = {
   personality?: string;
   background?: string;
   speech_style?: string;
+  voice_id?: string;
+  voice_speed?: VoiceSpeedId;
   relationship_role?: string;
   want?: string;
   secret?: string;
@@ -1028,7 +1049,7 @@ type CreateValue = {
   art_url?: string;
 };
 
-function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
+function parseCreateInput(env: Env, raw: unknown): ParsedInput<CreateValue> {
   if (!isObject(raw)) {
     return invalid("invalid_body");
   }
@@ -1041,6 +1062,15 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
   const gender = readGender(raw);
   if (!gender) {
     return invalid("gender_required");
+  }
+
+  const voiceId = readVoiceId(env, raw);
+  if (voiceId === false) {
+    return invalid("invalid_voice_id");
+  }
+  const voiceSpeed = readVoiceSpeed(raw);
+  if (voiceSpeed === false) {
+    return invalid("invalid_voice_speed");
   }
 
   return {
@@ -1058,6 +1088,8 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
       relationship_role: readOptionalEnum(raw, "relationship_role", KNOWN_RELATIONSHIP_ROLES),
       secret: readOptionalText(raw, "secret"),
       speech_style: readOptionalText(raw, "speech_style"),
+      voice_id: voiceId,
+      voice_speed: voiceSpeed,
       want: readOptionalText(raw, "want"),
       boundary: readOptionalText(raw, "boundary"),
     },
@@ -1066,7 +1098,7 @@ function parseCreateInput(raw: unknown): ParsedInput<CreateValue> {
 
 type UpdateValue = Partial<Omit<CreateValue, "gender">> & { gender?: Gender };
 
-function parseUpdateInput(raw: unknown): ParsedInput<UpdateValue> {
+function parseUpdateInput(env: Env, raw: unknown): ParsedInput<UpdateValue> {
   if (!isObject(raw)) {
     return invalid("invalid_body");
   }
@@ -1085,6 +1117,20 @@ function parseUpdateInput(raw: unknown): ParsedInput<UpdateValue> {
   if ("personality" in raw) value.personality = readOptionalText(raw, "personality");
   if ("background" in raw) value.background = readOptionalText(raw, "background");
   if ("speech_style" in raw) value.speech_style = readOptionalText(raw, "speech_style");
+  if ("voice_id" in raw) {
+    const voiceId = readVoiceId(env, raw);
+    if (voiceId === false) {
+      return invalid("invalid_voice_id");
+    }
+    value.voice_id = voiceId;
+  }
+  if ("voice_speed" in raw) {
+    const voiceSpeed = readVoiceSpeed(raw);
+    if (voiceSpeed === false) {
+      return invalid("invalid_voice_speed");
+    }
+    value.voice_speed = voiceSpeed;
+  }
   if ("want" in raw) value.want = readOptionalText(raw, "want");
   if ("secret" in raw) value.secret = readOptionalText(raw, "secret");
   if ("boundary" in raw) value.boundary = readOptionalText(raw, "boundary");
@@ -1118,6 +1164,23 @@ function readGender(obj: Record<string, unknown>): Gender | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
   return KNOWN_GENDERS.has(normalized as Gender) ? (normalized as Gender) : null;
+}
+
+function readVoiceId(env: Env, obj: Record<string, unknown>): string | undefined | false {
+  const value = obj["voice_id"];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return isValidVoiceId(env, trimmed) ? trimmed : false;
+}
+
+function readVoiceSpeed(obj: Record<string, unknown>): VoiceSpeedId | undefined | false {
+  const value = obj["voice_speed"];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return false;
+  const normalized = normalizeVoiceSpeed(value.trim().toLowerCase());
+  return normalized ?? false;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

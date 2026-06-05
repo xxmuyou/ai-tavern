@@ -2,14 +2,20 @@ import { isAdminUser } from "../auth/guards";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 import { createSignedObjectUrl } from "../image-gen/signed-url";
-import { synthesizeSpeech, voiceIdForGender, VoiceError } from "../voice/minimax-t2a";
+import {
+  defaultVoiceIdForGender,
+  loadMiniMaxVoiceConfig,
+  normalizeVoiceSpeed,
+  speedValueForPreset,
+} from "../voice/config";
+import { synthesizeSpeech, VoiceError } from "../voice/minimax-t2a";
 import { canChatWithCompanion, loadCompanionForChat, loadThread } from "./loaders";
 import { checkRateLimit } from "./quota";
 import { loadMessageRow } from "./variants";
 
 // Bump when synthesis params change (volume, model, etc.) so cached clips that
 // were rendered with the old settings are no longer reused.
-const VOICE_RENDER_VERSION = "4";
+const VOICE_RENDER_VERSION = "5";
 
 /**
  * Generate (or reuse) spoken audio for a companion reply and return a signed
@@ -57,13 +63,22 @@ export async function handleMessageVoice(
   // Cache key covers everything that changes the rendered audio: the voice id
   // and a render version we bump whenever synthesis params (e.g. volume) change,
   // so old clips are not served after a tuning change.
-  const voiceId = voiceIdForGender(env, companion.gender);
-  const key = `chat-voice/${messageId}-${await shortHash(`${VOICE_RENDER_VERSION}|${voiceId}|${text}`)}.mp3`;
+  const config = loadMiniMaxVoiceConfig(env);
+  const voiceId = companion.voice_id ?? defaultVoiceIdForGender(env, companion.gender);
+  const voiceSpeed = normalizeVoiceSpeed(companion.voice_speed) ?? config.defaults.speed;
+  const speed = speedValueForPreset(env, voiceSpeed);
+  const key = `chat-voice/${messageId}-${await shortHash(`${VOICE_RENDER_VERSION}|${voiceId}|${voiceSpeed}|${text}`)}.mp3`;
 
   const existing = await env.ASSETS.head(key);
   if (!existing) {
     try {
-      const bytes = await synthesizeSpeech(env, { text, voiceId });
+      const bytes = await synthesizeSpeech(env, {
+        groupId: config.group_id,
+        model: config.model,
+        speed,
+        text,
+        voiceId,
+      });
       await env.ASSETS.put(key, bytes, { httpMetadata: { contentType: "audio/mpeg" } });
     } catch (err) {
       if (err instanceof VoiceError) {

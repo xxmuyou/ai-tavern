@@ -1,0 +1,2318 @@
+{
+  "provider": "minimax",
+  "group_id": "2061321948939424466",
+  "model": "speech-2.6-turbo",
+  "defaults": {
+    "female_voice_id": "Arrogant_Miss",
+    "male_voice_id": "male-qn-qingse",
+    "speed": "medium"
+  },
+  "speed_presets": [
+    {
+      "id": "slow",
+      "label": "Slow",
+      "value": 0.8
+    },
+    {
+      "id": "medium",
+      "label": "Medium",
+      "value": 1
+    },
+    {
+      "id": "fast",
+      "label": "Fast",
+      "value": 1.25
+    }
+  ],
+  "voices": [
+    {
+      "id": "male-qn-qingse",
+      "label": "青涩青年音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "male-qn-jingying",
+      "label": "精英青年音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "male-qn-badao",
+      "label": "霸道青年音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "male-qn-daxuesheng",
+      "label": "青年大学生音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "female-shaonv",
+      "label": "少女音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "female-yujie",
+      "label": "御姐音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "female-chengshu",
+      "label": "成熟女性音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "female-tianmei",
+      "label": "甜美女性音色",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "male-qn-qingse-jingpin",
+      "label": "青涩青年音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "male-qn-jingying-jingpin",
+      "label": "精英青年音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "male-qn-badao-jingpin",
+      "label": "霸道青年音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "male-qn-daxuesheng-jingpin",
+      "label": "青年大学生音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "female-shaonv-jingpin",
+      "label": "少女音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "female-yujie-jingpin",
+      "label": "御姐音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "female-chengshu-jingpin",
+      "label": "成熟女性音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "female-tianmei-jingpin",
+      "label": "甜美女性音色-beta",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "clever_boy",
+      "label": "聪明男童",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "cute_boy",
+      "label": "可爱男童",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "lovely_girl",
+      "label": "萌萌女童",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "cartoon_pig",
+      "label": "卡通猪小琪",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "bingjiao_didi",
+      "label": "病娇弟弟",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "junlang_nanyou",
+      "label": "俊朗男友",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "chunzhen_xuedi",
+      "label": "纯真学弟",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "lengdan_xiongzhang",
+      "label": "冷淡学长",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "badao_shaoye",
+      "label": "霸道少爷",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "tianxin_xiaoling",
+      "label": "甜心小玲",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "qiaopi_mengmei",
+      "label": "俏皮萌妹",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "wumei_yujie",
+      "label": "妩媚御姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "diadia_xuemei",
+      "label": "嗲嗲学妹",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "danya_xuejie",
+      "label": "淡雅学姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Reliable_Executive",
+      "label": "沉稳高管",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_News_Anchor",
+      "label": "新闻女声",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Mature_Woman",
+      "label": "傲娇御姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Unrestrained_Young_Man",
+      "label": "不羁青年",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Arrogant_Miss",
+      "label": "嚣张小姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Robot_Armor",
+      "label": "机械战甲",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Chinese (Mandarin)_Kind-hearted_Antie",
+      "label": "热心大婶",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_HK_Flight_Attendant",
+      "label": "港普空姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Humorous_Elder",
+      "label": "搞笑大爷",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Gentleman",
+      "label": "温润男声",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Warm_Bestie",
+      "label": "温暖闺蜜",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Male_Announcer",
+      "label": "播报男声",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Sweet_Lady",
+      "label": "甜美女声",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Southern_Young_Man",
+      "label": "南方小哥",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Wise_Women",
+      "label": "阅历姐姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Gentle_Youth",
+      "label": "温润青年",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Warm_Girl",
+      "label": "温暖少女",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Kind-hearted_Elder",
+      "label": "花甲奶奶",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Cute_Spirit",
+      "label": "憨憨萌兽",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Radio_Host",
+      "label": "电台男主播",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Lyrical_Voice",
+      "label": "抒情男声",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Straightforward_Boy",
+      "label": "率真弟弟",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Sincere_Adult",
+      "label": "真诚青年",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Gentle_Senior",
+      "label": "温柔学姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Stubborn_Friend",
+      "label": "嘴硬竹马",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Crisp_Girl",
+      "label": "清脆少女",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Chinese (Mandarin)_Pure-hearted_Boy",
+      "label": "清澈邻家弟弟",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Chinese (Mandarin)_Soft_Girl",
+      "label": "柔和少女",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Cantonese_ProfessionalHost（F)",
+      "label": "专业女主持",
+      "language": "zh-cantonese",
+      "language_label": "中文 (粤语)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Cantonese_GentleLady",
+      "label": "温柔女声",
+      "language": "zh-cantonese",
+      "language_label": "中文 (粤语)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Cantonese_ProfessionalHost（M)",
+      "label": "专业男主持",
+      "language": "zh-cantonese",
+      "language_label": "中文 (粤语)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Cantonese_PlayfulMan",
+      "label": "活泼男声",
+      "language": "zh-cantonese",
+      "language_label": "中文 (粤语)",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Cantonese_CuteGirl",
+      "label": "可爱女孩",
+      "language": "zh-cantonese",
+      "language_label": "中文 (粤语)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Cantonese_KindWoman",
+      "label": "善良女声",
+      "language": "zh-cantonese",
+      "language_label": "中文 (粤语)",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Santa_Claus",
+      "label": "Santa Claus",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Grinch",
+      "label": "Grinch",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Rudolph",
+      "label": "Rudolph",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Arnold",
+      "label": "Arnold",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Charming_Santa",
+      "label": "Charming Santa",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Charming_Lady",
+      "label": "Charming Lady",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Sweet_Girl",
+      "label": "Sweet Girl",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Cute_Elf",
+      "label": "Cute Elf",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Attractive_Girl",
+      "label": "Attractive Girl",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Serene_Woman",
+      "label": "Serene Woman",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "English_Trustworthy_Man",
+      "label": "Trustworthy Man",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "English_Graceful_Lady",
+      "label": "Graceful Lady",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "English_Aussie_Bloke",
+      "label": "Aussie Bloke",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "English_Whispering_girl",
+      "label": "Whispering girl",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "English_Diligent_Man",
+      "label": "Diligent Man",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "English_Gentle-voiced_man",
+      "label": "Gentle-voiced man",
+      "language": "en",
+      "language_label": "英文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_IntellectualSenior",
+      "label": "Intellectual Senior",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Japanese_DecisivePrincess",
+      "label": "Decisive Princess",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Japanese_LoyalKnight",
+      "label": "Loyal Knight",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_DominantMan",
+      "label": "Dominant Man",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_SeriousCommander",
+      "label": "Serious Commander",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_ColdQueen",
+      "label": "Cold Queen",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Japanese_DependableWoman",
+      "label": "Dependable Woman",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Japanese_GentleButler",
+      "label": "Gentle Butler",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_KindLady",
+      "label": "Kind Lady",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Japanese_CalmLady",
+      "label": "Calm Lady",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Japanese_OptimisticYouth",
+      "label": "Optimistic Youth",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_GenerousIzakayaOwner",
+      "label": "Generous Izakaya Owner",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Japanese_SportyStudent",
+      "label": "Sporty Student",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Japanese_InnocentBoy",
+      "label": "Innocent Boy",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Japanese_GracefulMaiden",
+      "label": "Graceful Maiden",
+      "language": "ja",
+      "language_label": "日文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_SweetGirl",
+      "label": "Sweet Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_CheerfulBoyfriend",
+      "label": "Cheerful Boyfriend",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_EnchantingSister",
+      "label": "Enchanting Sister",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_ShyGirl",
+      "label": "Shy Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_ReliableSister",
+      "label": "Reliable Sister",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_StrictBoss",
+      "label": "Strict Boss",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_SassyGirl",
+      "label": "Sassy Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_ChildhoodFriendGirl",
+      "label": "Childhood Friend Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_PlayboyCharmer",
+      "label": "Playboy Charmer",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_ElegantPrincess",
+      "label": "Elegant Princess",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_BraveFemaleWarrior",
+      "label": "Brave Female Warrior",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_BraveYouth",
+      "label": "Brave Youth",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_CalmLady",
+      "label": "Calm Lady",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_EnthusiasticTeen",
+      "label": "Enthusiastic Teen",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_SoothingLady",
+      "label": "Soothing Lady",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_IntellectualSenior",
+      "label": "Intellectual Senior",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_LonelyWarrior",
+      "label": "Lonely Warrior",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_MatureLady",
+      "label": "Mature Lady",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_InnocentBoy",
+      "label": "Innocent Boy",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_CharmingSister",
+      "label": "Charming Sister",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_AthleticStudent",
+      "label": "Athletic Student",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_BraveAdventurer",
+      "label": "Brave Adventurer",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_CalmGentleman",
+      "label": "Calm Gentleman",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_WiseElf",
+      "label": "Wise Elf",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_CheerfulCoolJunior",
+      "label": "Cheerful Cool Junior",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_DecisiveQueen",
+      "label": "Decisive Queen",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_ColdYoungMan",
+      "label": "Cold Young Man",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_MysteriousGirl",
+      "label": "Mysterious Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_QuirkyGirl",
+      "label": "Quirky Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_ConsiderateSenior",
+      "label": "Considerate Senior",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_CheerfulLittleSister",
+      "label": "Cheerful Little Sister",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_DominantMan",
+      "label": "Dominant Man",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_AirheadedGirl",
+      "label": "Airheaded Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_ReliableYouth",
+      "label": "Reliable Youth",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_FriendlyBigSister",
+      "label": "Friendly Big Sister",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_GentleBoss",
+      "label": "Gentle Boss",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_ColdGirl",
+      "label": "Cold Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_HaughtyLady",
+      "label": "Haughty Lady",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_CharmingElderSister",
+      "label": "Charming Elder Sister",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_IntellectualMan",
+      "label": "Intellectual Man",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_CaringWoman",
+      "label": "Caring Woman",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_WiseTeacher",
+      "label": "Wise Teacher",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_ConfidentBoss",
+      "label": "Confident Boss",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Korean_AthleticGirl",
+      "label": "Athletic Girl",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_PossessiveMan",
+      "label": "Possessive Man",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_GentleWoman",
+      "label": "Gentle Woman",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_CockyGuy",
+      "label": "Cocky Guy",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Korean_ThoughtfulWoman",
+      "label": "Thoughtful Woman",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Korean_OptimisticYouth",
+      "label": "Optimistic Youth",
+      "language": "ko",
+      "language_label": "韩文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_SereneWoman",
+      "label": "Serene Woman",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_MaturePartner",
+      "label": "Mature Partner",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_CaptivatingStoryteller",
+      "label": "Captivating Storyteller",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Narrator",
+      "label": "Narrator",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_WiseScholar",
+      "label": "Wise Scholar",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Kind-heartedGirl",
+      "label": "Kind-hearted Girl",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_DeterminedManager",
+      "label": "Determined Manager",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_BossyLeader",
+      "label": "Bossy Leader",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_ReservedYoungMan",
+      "label": "Reserved Young Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_ConfidentWoman",
+      "label": "Confident Woman",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_ThoughtfulMan",
+      "label": "Thoughtful Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_Strong-WilledBoy",
+      "label": "Strong-willed Boy",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_SophisticatedLady",
+      "label": "Sophisticated Lady",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_RationalMan",
+      "label": "Rational Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_AnimeCharacter",
+      "label": "Anime Character",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Deep-tonedMan",
+      "label": "Deep-toned Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_Fussyhostess",
+      "label": "Fussy hostess",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_SincereTeen",
+      "label": "Sincere Teen",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_FrankLady",
+      "label": "Frank Lady",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_Comedian",
+      "label": "Comedian",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Debator",
+      "label": "Debator",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_ToughBoss",
+      "label": "Tough Boss",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Wiselady",
+      "label": "Wise Lady",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_Steadymentor",
+      "label": "Steady Mentor",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Jovialman",
+      "label": "Jovial Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_SantaClaus",
+      "label": "Santa Claus",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Rudolph",
+      "label": "Rudolph",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Intonategirl",
+      "label": "Intonate Girl",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_Arnold",
+      "label": "Arnold",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_Ghost",
+      "label": "Ghost",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_HumorousElder",
+      "label": "Humorous Elder",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_EnergeticBoy",
+      "label": "Energetic Boy",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_WhimsicalGirl",
+      "label": "Whimsical Girl",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_StrictBoss",
+      "label": "Strict Boss",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_ReliableMan",
+      "label": "Reliable Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_SereneElder",
+      "label": "Serene Elder",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_AngryMan",
+      "label": "Angry Man",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_AssertiveQueen",
+      "label": "Assertive Queen",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_CaringGirlfriend",
+      "label": "Caring Girlfriend",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_PowerfulSoldier",
+      "label": "Powerful Soldier",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_PassionateWarrior",
+      "label": "Passionate Warrior",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_ChattyGirl",
+      "label": "Chatty Girl",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_RomanticHusband",
+      "label": "Romantic Husband",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_CompellingGirl",
+      "label": "Compelling Girl",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Spanish_PowerfulVeteran",
+      "label": "Powerful Veteran",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Spanish_SensibleManager",
+      "label": "Sensible Manager",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Spanish_ThoughtfulLady",
+      "label": "Thoughtful Lady",
+      "language": "es",
+      "language_label": "西班牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_SentimentalLady",
+      "label": "Sentimental Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_BossyLeader",
+      "label": "Bossy Leader",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Wiselady",
+      "label": "Wise lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Strong-WilledBoy",
+      "label": "Strong-willed Boy",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_Deep-VoicedGentleman",
+      "label": "Deep-voiced Gentleman",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_UpsetGirl",
+      "label": "Upset Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_PassionateWarrior",
+      "label": "Passionate Warrior",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_AnimeCharacter",
+      "label": "Anime Character",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_ConfidentWoman",
+      "label": "Confident Woman",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_AngryMan",
+      "label": "Angry Man",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_CaptivatingStoryteller",
+      "label": "Captivating Storyteller",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Godfather",
+      "label": "Godfather",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_ReservedYoungMan",
+      "label": "Reserved Young Man",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_SmartYoungGirl",
+      "label": "Smart Young Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Kind-heartedGirl",
+      "label": "Kind-hearted Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Pompouslady",
+      "label": "Pompous lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Grinch",
+      "label": "Grinch",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Debator",
+      "label": "Debator",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_SweetGirl",
+      "label": "Sweet Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_AttractiveGirl",
+      "label": "Attractive Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_ThoughtfulMan",
+      "label": "Thoughtful Man",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_PlayfulGirl",
+      "label": "Playful Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_GorgeousLady",
+      "label": "Gorgeous Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_LovelyLady",
+      "label": "Lovely Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_SereneWoman",
+      "label": "Serene Woman",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_SadTeen",
+      "label": "Sad Teen",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_MaturePartner",
+      "label": "Mature Partner",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Comedian",
+      "label": "Comedian",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_NaughtySchoolgirl",
+      "label": "Naughty Schoolgirl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Narrator",
+      "label": "Narrator",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_ToughBoss",
+      "label": "Tough Boss",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Fussyhostess",
+      "label": "Fussy hostess",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Dramatist",
+      "label": "Dramatist",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Steadymentor",
+      "label": "Steady Mentor",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Jovialman",
+      "label": "Jovial Man",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_CharmingQueen",
+      "label": "Charming Queen",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_SantaClaus",
+      "label": "Santa Claus",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Rudolph",
+      "label": "Rudolph",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_Arnold",
+      "label": "Arnold",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_CharmingSanta",
+      "label": "Charming Santa",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_CharmingLady",
+      "label": "Charming Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Ghost",
+      "label": "Ghost",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_HumorousElder",
+      "label": "Humorous Elder",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_CalmLeader",
+      "label": "Calm Leader",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_GentleTeacher",
+      "label": "Gentle Teacher",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_EnergeticBoy",
+      "label": "Energetic Boy",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_ReliableMan",
+      "label": "Reliable Man",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_SereneElder",
+      "label": "Serene Elder",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_GrimReaper",
+      "label": "Grim Reaper",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_AssertiveQueen",
+      "label": "Assertive Queen",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_WhimsicalGirl",
+      "label": "Whimsical Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_StressedLady",
+      "label": "Stressed Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_FriendlyNeighbor",
+      "label": "Friendly Neighbor",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_CaringGirlfriend",
+      "label": "Caring Girlfriend",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_PowerfulSoldier",
+      "label": "Powerful Soldier",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_FascinatingBoy",
+      "label": "Fascinating Boy",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_RomanticHusband",
+      "label": "Romantic Husband",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_StrictBoss",
+      "label": "Strict Boss",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_InspiringLady",
+      "label": "Inspiring Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_PlayfulSpirit",
+      "label": "Playful Spirit",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_ElegantGirl",
+      "label": "Elegant Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_CompellingGirl",
+      "label": "Compelling Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_PowerfulVeteran",
+      "label": "Powerful Veteran",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_SensibleManager",
+      "label": "Sensible Manager",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_ThoughtfulLady",
+      "label": "Thoughtful Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_TheatricalActor",
+      "label": "Theatrical Actor",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_FragileBoy",
+      "label": "Fragile Boy",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_ChattyGirl",
+      "label": "Chatty Girl",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_Conscientiousinstructor",
+      "label": "Conscientious Instructor",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_RationalMan",
+      "label": "Rational Man",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Portuguese_WiseScholar",
+      "label": "Wise Scholar",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Portuguese_FrankLady",
+      "label": "Frank Lady",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Portuguese_DeterminedManager",
+      "label": "Determined Manager",
+      "language": "pt",
+      "language_label": "葡萄牙文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "French_Male_Speech_New",
+      "label": "Level-Headed Man",
+      "language": "fr",
+      "language_label": "法文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "French_Female_News Anchor",
+      "label": "Patient Female Presenter",
+      "language": "fr",
+      "language_label": "法文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "French_CasualMan",
+      "label": "Casual Man",
+      "language": "fr",
+      "language_label": "法文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "French_MovieLeadFemale",
+      "label": "Movie Lead Female",
+      "language": "fr",
+      "language_label": "法文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "French_FemaleAnchor",
+      "label": "Female Anchor",
+      "language": "fr",
+      "language_label": "法文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "French_MaleNarrator",
+      "label": "Male Narrator",
+      "language": "fr",
+      "language_label": "法文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Indonesian_SweetGirl",
+      "label": "Sweet Girl",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Indonesian_ReservedYoungMan",
+      "label": "Reserved Young Man",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Indonesian_CharmingGirl",
+      "label": "Charming Girl",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Indonesian_CalmWoman",
+      "label": "Calm Woman",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Indonesian_ConfidentWoman",
+      "label": "Confident Woman",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Indonesian_CaringMan",
+      "label": "Caring Man",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Indonesian_BossyLeader",
+      "label": "Bossy Leader",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Indonesian_DeterminedBoy",
+      "label": "Determined Boy",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Indonesian_GentleGirl",
+      "label": "Gentle Girl",
+      "language": "id",
+      "language_label": "印尼文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "German_FriendlyMan",
+      "label": "Friendly Man",
+      "language": "de",
+      "language_label": "德文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "German_SweetLady",
+      "label": "Sweet Lady",
+      "language": "de",
+      "language_label": "德文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "German_PlayfulMan",
+      "label": "Playful Man",
+      "language": "de",
+      "language_label": "德文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Russian_HandsomeChildhoodFriend",
+      "label": "Handsome Childhood Friend",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Russian_BrightHeroine",
+      "label": "Bright Queen",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Russian_AmbitiousWoman",
+      "label": "Ambitious Woman",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Russian_ReliableMan",
+      "label": "Reliable Man",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Russian_CrazyQueen",
+      "label": "Crazy Girl",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Russian_PessimisticGirl",
+      "label": "Pessimistic Girl",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Russian_AttractiveGuy",
+      "label": "Attractive Guy",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Russian_Bad-temperedBoy",
+      "label": "Bad-tempered Boy",
+      "language": "ru",
+      "language_label": "俄文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Italian_BraveHeroine",
+      "label": "Brave Heroine",
+      "language": "it",
+      "language_label": "意大利文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Italian_Narrator",
+      "label": "Narrator",
+      "language": "it",
+      "language_label": "意大利文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Italian_WanderingSorcerer",
+      "label": "Wandering Sorcerer",
+      "language": "it",
+      "language_label": "意大利文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Italian_DiligentLeader",
+      "label": "Diligent Leader",
+      "language": "it",
+      "language_label": "意大利文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Arabic_CalmWoman",
+      "label": "Calm Woman",
+      "language": "ar",
+      "language_label": "阿拉伯文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Arabic_FriendlyGuy",
+      "label": "Friendly Guy",
+      "language": "ar",
+      "language_label": "阿拉伯文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Turkish_CalmWoman",
+      "label": "Calm Woman",
+      "language": "tr",
+      "language_label": "土耳其文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Turkish_Trustworthyman",
+      "label": "Trustworthy man",
+      "language": "tr",
+      "language_label": "土耳其文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Ukrainian_CalmWoman",
+      "label": "Calm Woman",
+      "language": "uk",
+      "language_label": "乌克兰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Ukrainian_WiseScholar",
+      "label": "Wise Scholar",
+      "language": "uk",
+      "language_label": "乌克兰文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Dutch_kindhearted_girl",
+      "label": "Kind-hearted girl",
+      "language": "nl",
+      "language_label": "荷兰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Dutch_bossy_leader",
+      "label": "Bossy leader",
+      "language": "nl",
+      "language_label": "荷兰文",
+      "gender_hint": "neutral"
+    },
+    {
+      "id": "Vietnamese_kindhearted_girl",
+      "label": "Kind-hearted girl",
+      "language": "vi",
+      "language_label": "越南文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Thai_male_1_sample8",
+      "label": "Serene Man",
+      "language": "th",
+      "language_label": "泰文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Thai_male_2_sample2",
+      "label": "Friendly Man",
+      "language": "th",
+      "language_label": "泰文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Thai_female_1_sample1",
+      "label": "Confident Woman",
+      "language": "th",
+      "language_label": "泰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Thai_female_2_sample2",
+      "label": "Energetic Woman",
+      "language": "th",
+      "language_label": "泰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Polish_male_1_sample4",
+      "label": "Male Narrator",
+      "language": "pl",
+      "language_label": "波兰文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Polish_male_2_sample3",
+      "label": "Male Anchor",
+      "language": "pl",
+      "language_label": "波兰文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Polish_female_1_sample1",
+      "label": "Calm Woman",
+      "language": "pl",
+      "language_label": "波兰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Polish_female_2_sample3",
+      "label": "Casual Woman",
+      "language": "pl",
+      "language_label": "波兰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Romanian_male_1_sample2",
+      "label": "Reliable Man",
+      "language": "ro",
+      "language_label": "罗马尼亚文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Romanian_male_2_sample1",
+      "label": "Energetic Youth",
+      "language": "ro",
+      "language_label": "罗马尼亚文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Romanian_female_1_sample4",
+      "label": "Optimistic Youth",
+      "language": "ro",
+      "language_label": "罗马尼亚文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Romanian_female_2_sample1",
+      "label": "Gentle Woman",
+      "language": "ro",
+      "language_label": "罗马尼亚文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "greek_male_1a_v1",
+      "label": "Thoughtful Mentor",
+      "language": "el",
+      "language_label": "希腊文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "Greek_female_1_sample1",
+      "label": "Gentle Lady",
+      "language": "el",
+      "language_label": "希腊文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "Greek_female_2_sample3",
+      "label": "Girl Next Door",
+      "language": "el",
+      "language_label": "希腊文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "czech_male_1_v1",
+      "label": "Assured Presenter",
+      "language": "cs",
+      "language_label": "捷克文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "czech_female_5_v7",
+      "label": "Steadfast Narrator",
+      "language": "cs",
+      "language_label": "捷克文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "czech_female_2_v2",
+      "label": "Elegant Lady",
+      "language": "cs",
+      "language_label": "捷克文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "finnish_male_3_v1",
+      "label": "Upbeat Man",
+      "language": "fi",
+      "language_label": "芬兰文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "finnish_male_1_v2",
+      "label": "Friendly Boy",
+      "language": "fi",
+      "language_label": "芬兰文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "finnish_female_4_v1",
+      "label": "Assetive Woman",
+      "language": "fi",
+      "language_label": "芬兰文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "hindi_male_1_v2",
+      "label": "Trustworthy Advisor",
+      "language": "hi",
+      "language_label": "印地文",
+      "gender_hint": "male"
+    },
+    {
+      "id": "hindi_female_2_v1",
+      "label": "Tranquil Woman",
+      "language": "hi",
+      "language_label": "印地文",
+      "gender_hint": "female"
+    },
+    {
+      "id": "hindi_female_1_v2",
+      "label": "News Anchor",
+      "language": "hi",
+      "language_label": "印地文",
+      "gender_hint": "female"
+    }
+  ]
+}

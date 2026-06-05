@@ -74,6 +74,8 @@ import type {
   UserImageAsset,
   UserImageAssetCreateInput,
   UserImageAssetsResponse,
+  VoicePreviewResponse,
+  VoiceOptionsResponse,
 } from './types';
 
 const CONFIGURED_API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://127.0.0.1:8787';
@@ -539,6 +541,18 @@ export async function getCompanion(id: string): Promise<CompanionDetailResponse>
 export async function createCompanion(input: CompanionCreateInput): Promise<CompanionDetailResponse> {
   return requestJson<CompanionDetailResponse>('/companions', {
     body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function getVoiceOptions(): Promise<VoiceOptionsResponse> {
+  return requestJson<VoiceOptionsResponse>('/voice/options');
+}
+
+export async function getVoicePreview(voiceId: string): Promise<VoicePreviewResponse> {
+  return requestJson<VoicePreviewResponse>('/voice/preview', {
+    body: JSON.stringify({ voice_id: voiceId }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });

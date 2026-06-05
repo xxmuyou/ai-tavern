@@ -169,6 +169,8 @@ if (input.art_url && !input.art_emotions) {
 | `background` | 多行 TextInput | ❌ | 最大 4000 字符 |
 | `speech_style` | 多行 TextInput | ❌ | 最大 4000 字符 |
 | `relationship_role` | 下拉（colleague/neighbor/friend/crush/stranger/family） | ❌ | — |
+| `voice_id` | MiniMax 级联下拉：Gender → Language/Region → Voice，小喇叭试听 | ❌ | 必须来自 `GET /voice/options`；试听调用 `POST /voice/preview` |
+| `voice_speed` | 分段控件（slow / medium / fast） | ❌ | 默认 `medium`；影响实际聊天语音，不影响试听 |
 | `preferred_scenes` | 场景多选（从 `GET /scenes` 拉清单） | ❌ | 最多 32 个 |
 | `want` | 多行 TextInput + preset chips | ❌ | 最大 4000 字符 |
 | `secret` | 多行 TextInput | ❌ | 最大 4000 字符 |

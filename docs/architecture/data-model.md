@@ -115,6 +115,8 @@ CREATE TABLE companions (
   background        TEXT,                       -- 背景故事
   speech_style      TEXT,                       -- 说话风格
   relationship_role TEXT,                       -- colleague/neighbor/friend/crush/stranger/family
+  voice_id          TEXT,                       -- MiniMax voice id；NULL 时按 gender 用 config 默认
+  voice_speed       TEXT DEFAULT 'medium',      -- slow / medium / fast
   preferred_scenes  TEXT,                       -- JSON array of scene_id
   art_url           TEXT,                       -- R2 上的立绘 URL
   art_emotions      TEXT,                       -- JSON map: emotion -> url（spec-012）

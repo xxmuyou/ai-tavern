@@ -28,6 +28,7 @@ import { handleRelationshipsRequest } from "./relationships";
 import { handlePersonasRequest } from "./personas";
 import { handleScenesRequest } from "./scenes";
 import { handleStoryTemplatesRequest } from "./story-beats";
+import { handleVoiceRequest } from "./voice/options";
 import { enforceRateLimit, isRequestBodyTooLarge, jsonCorsResponse, withCors } from "./security";
 export { GameRoom } from "./room";
 
@@ -113,6 +114,11 @@ export default {
       const companionsResponse = await handleCompanionsRequest(request, env, pathname);
       if (companionsResponse) {
         return await withCors(request, env, companionsResponse);
+      }
+
+      const voiceResponse = await handleVoiceRequest(request, env, pathname);
+      if (voiceResponse) {
+        return await withCors(request, env, voiceResponse);
       }
 
       const storyTemplatesResponse = await handleStoryTemplatesRequest(request, env, pathname);
