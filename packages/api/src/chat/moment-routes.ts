@@ -8,6 +8,7 @@ import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
 import { loadStoryBeatForScene } from "../story-beats";
 import { loadBaseArtJob } from "../image-gen/base-art";
+import { pollStaleRunningHubArtJobs } from "../image-gen/runninghub-results";
 import {
   buildMomentPrompt,
   createMomentImageJob,
@@ -240,7 +241,11 @@ async function handleJobStatus(
   if (!moment || moment.user_id !== user.id) {
     return notFound();
   }
-  const job = await loadBaseArtJob(env, jobId);
+  let job = await loadBaseArtJob(env, jobId);
+  if (job && isMaybeStale(job.status, job.updated_at)) {
+    await pollStaleRunningHubArtJobs(env);
+    job = await loadBaseArtJob(env, jobId);
+  }
   const reconciled = job ? await reconcileMomentFromJob(env, moment, job) : moment;
 
   return jsonResponse({
@@ -250,4 +255,11 @@ async function handleJobStatus(
     output_key: reconciled.output_key ?? undefined,
     status: reconciled.status,
   });
+}
+
+function isMaybeStale(status: string, updatedAt: number): boolean {
+  if (status === "succeeded" || status === "failed" || status === "cancelled") {
+    return false;
+  }
+  return Date.now() - updatedAt > 2 * 60 * 1000;
 }

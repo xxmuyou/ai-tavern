@@ -223,7 +223,7 @@ export default {
           return await jsonCorsResponse(request, env, { error: "invalid_object_key" }, { status: 400 });
         }
 
-        return handleSignedObjectRequest(request, env, decodeURIComponent(objectKey));
+        return await withCors(request, env, await handleSignedObjectRequest(request, env, decodeURIComponent(objectKey)));
       }
 
       const objectMatch = pathname.match(/^\/objects\/(.+)$/);

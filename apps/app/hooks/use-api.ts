@@ -26,6 +26,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     return await requestJson<T>(path, init);
   } catch (error) {
     const status = (error as Error & { status?: number }).status;
+    const retryAfter = (error as Error & { retryAfter?: number | null }).retryAfter ?? null;
     const message = error instanceof Error ? error.message : 'Request failed';
 
     if (status === 401) {
@@ -36,7 +37,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       throw new QuotaExceededError('You have reached your daily limit.', 402, 'quota_exceeded');
     }
     if (status === 429) {
-      throw new RateLimitedError('Too many requests. Please try again later.', null);
+      throw new RateLimitedError(message || 'Too many requests. Please try again later.', retryAfter);
     }
     if (status && status >= 500) {
       throw new ServerError('The server is temporarily unavailable. Please try again later.', status, 'server_error');

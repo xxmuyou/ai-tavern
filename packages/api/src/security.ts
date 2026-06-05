@@ -59,6 +59,10 @@ export async function resolveAllowedCorsOrigin(request: Request, env: SecurityEn
     return null;
   }
 
+  if ((env.APP_ENV !== "prod") && isLoopbackWebOrigin(origin)) {
+    return origin;
+  }
+
   return (await readAllowedOrigins(env)).has(origin) ? origin : null;
 }
 
@@ -162,4 +166,14 @@ function hashish(value: string): string {
 function readPositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function isLoopbackWebOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]");
+  } catch {
+    return false;
+  }
 }

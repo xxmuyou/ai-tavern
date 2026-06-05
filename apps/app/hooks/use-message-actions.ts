@@ -90,7 +90,7 @@ export function useMessageActions(
       setSpeakingId(messageId);
       try {
         const { url } = await getMessageVoice(companionId, messageId);
-        playAudioUrl(url);
+        await playAudioUrl(url);
       } catch (error) {
         onError?.(error instanceof Error ? error.message : 'Could not play the voice.');
       } finally {

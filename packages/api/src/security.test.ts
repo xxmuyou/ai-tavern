@@ -27,6 +27,25 @@ describe("api security helpers", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe("http://localhost:8081");
   });
 
+  it("allows loopback origins on arbitrary ports outside production", async () => {
+    const env = { APP_ENV: "dev" } as unknown as Env;
+
+    expect(await resolveAllowedCorsOrigin(new Request("https://api.example.com", {
+      headers: { origin: "http://localhost:8087" },
+    }), env)).toBe("http://localhost:8087");
+    expect(await resolveAllowedCorsOrigin(new Request("https://api.example.com", {
+      headers: { origin: "http://127.0.0.1:5173" },
+    }), env)).toBe("http://127.0.0.1:5173");
+  });
+
+  it("does not auto-allow loopback origins in production", async () => {
+    const env = { APP_ENV: "prod" } as unknown as Env;
+
+    expect(await resolveAllowedCorsOrigin(new Request("https://api.example.com", {
+      headers: { origin: "http://localhost:8087" },
+    }), env)).toBeNull();
+  });
+
   it("checks mutation request body size from content-length", async () => {
     const env = { REQUEST_BODY_LIMIT_BYTES: "10" } as unknown as Env;
 

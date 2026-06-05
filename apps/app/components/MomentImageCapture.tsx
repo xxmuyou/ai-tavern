@@ -78,8 +78,10 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
       let res;
       try {
         res = await getMomentImageJob(jobId);
-      } catch {
-        if (activeRef.current && pollingJobRef.current === jobId) markError('Could not check the capture job.');
+      } catch (error) {
+        if (activeRef.current && pollingJobRef.current === jobId) {
+          markError(error instanceof Error ? error.message : 'Could not check the capture job.');
+        }
         pollingJobRef.current = null;
         return;
       }
@@ -146,8 +148,10 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         return;
       }
       await poll(res.job_id);
-    } catch {
-      if (activeRef.current) markError('Could not start the capture job.');
+    } catch (error) {
+      if (activeRef.current) {
+        markError(error instanceof Error ? error.message : 'Could not start the capture job.');
+      }
     }
   }
 
@@ -157,7 +161,13 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
     return (
       <View className="w-full px-4 pb-2 pt-1">
         <View className="max-w-[80%] self-start overflow-hidden rounded-2xl border border-app-line bg-app-card">
-          <Image accessibilityLabel="Captured moment" resizeMode="cover" source={source} style={styles.image} />
+          <Image
+            accessibilityLabel="Captured moment"
+            onError={() => markError('Captured image could not be loaded from storage.')}
+            resizeMode="cover"
+            source={source}
+            style={styles.image}
+          />
         </View>
       </View>
     );

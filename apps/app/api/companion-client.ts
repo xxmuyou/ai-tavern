@@ -121,7 +121,8 @@ export type MagicLinkResponse = {
 
 export type ApiRequestError = Error & {
   apiBaseUrl?: string;
-  code?: 'api_unreachable';
+  code?: string;
+  retryAfter?: number | null;
   status?: number;
 };
 
@@ -1200,15 +1201,30 @@ async function* streamChatSse(url: string, body: ChatMessageInput | undefined): 
     headers.set('content-type', 'application/json');
   }
 
-  const response = await fetch(url, {
-    body: body === undefined ? undefined : JSON.stringify(body),
-    headers,
-    method: 'POST',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      body: body === undefined ? undefined : JSON.stringify(body),
+      headers,
+      method: 'POST',
+    });
+  } catch {
+    const error = new Error(`API is unreachable at ${API_BASE_URL}`) as Error & {
+      apiBaseUrl?: string;
+      code?: string;
+    };
+    error.apiBaseUrl = API_BASE_URL;
+    error.code = 'api_unreachable';
+    throw error;
+  }
 
   if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    const error = new Error(payload.error ?? `HTTP ${response.status}`);
+    const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+    const error = new Error(apiErrorMessage(payload, `HTTP ${response.status}`));
+    const retryAfter = parseRetryAfter(response.headers.get('retry-after'));
+    (error as Error & { code?: string; retryAfter?: number | null; status?: number }).code =
+      payload.code ?? payload.error;
+    (error as Error & { retryAfter?: number | null }).retryAfter = retryAfter;
     (error as Error & { status?: number }).status = response.status;
     throw error;
   }
@@ -1355,15 +1371,33 @@ export async function requestJson<T>(
     error.code = 'api_unreachable';
     throw error;
   }
-  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
 
   if (!response.ok) {
-    const error: ApiRequestError = new Error(payload.error ?? `HTTP ${response.status}`);
+    const error: ApiRequestError = new Error(apiErrorMessage(payload, `HTTP ${response.status}`));
+    error.code = payload.code ?? payload.error;
+    error.retryAfter = parseRetryAfter(response.headers.get('retry-after'));
     error.status = response.status;
     throw error;
   }
 
   return payload;
+}
+
+type ApiErrorPayload = {
+  code?: string;
+  error?: string;
+  message?: string;
+};
+
+function apiErrorMessage(payload: ApiErrorPayload, fallback: string): string {
+  return payload.message ?? payload.error ?? payload.code ?? fallback;
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
 export function readSseEvent(block: string): SseEvent | null {
