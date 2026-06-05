@@ -123,9 +123,11 @@ describe("relationships GET endpoint", () => {
     expect(body.dimensions.closeness).toBe(50);
     expect(body.dimensions.friendship).toBe(40);
     expect(body.first_met_at).toBe(1747000000000);
-    expect(body.stage).toBe("familiar");
-    expect(body.next_goal).toBe("Earn their trust — listen, follow through, show up.");
-    expect(body.recommended_activity).toBe("check_in");
+    // spec-035: a "Friend"-band relationship (closeness 50, friendship 40) now
+    // reads as `trusted` via the closeness+friendship path, not stuck in familiar.
+    expect(body.stage).toBe("trusted");
+    expect(body.next_goal).toBe("Grow even closer — share more and keep showing up.");
+    expect(body.recommended_activity).toBe("hang_out");
     expect(body.milestones).toEqual([{ at: 1747000000000, type: "first_met" }]);
   });
 

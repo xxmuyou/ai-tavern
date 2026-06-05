@@ -15,12 +15,14 @@ import {
   type TextInputKeyPressEventData,
 } from 'react-native';
 
-import { clearChatHistory, getCompanion } from '@/api/companion-client';
+import { clearChatHistory, getCompanion, getInviteTargets } from '@/api/companion-client';
 import type {
   ChatEmotionKey,
+  ChatInviteResult,
   ChatMessage,
   ChatMomentImage,
   ChatUnlock,
+  InviteTarget,
   RelationshipDimensions,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
@@ -29,6 +31,7 @@ import { Button } from '@/components/Button';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { EmptyState } from '@/components/EmptyState';
+import { InvitePopup } from '@/components/InvitePopup';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
@@ -84,8 +87,12 @@ function ChatScreenInner() {
   const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneArt?: string; sceneId?: string }>();
   const companionId = typeof params.companionId === 'string' ? params.companionId : '';
   const activityId = typeof params.activityId === 'string' ? params.activityId : undefined;
-  const sceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
-  const sceneArt = typeof params.sceneArt === 'string' && params.sceneArt.length > 0 ? params.sceneArt : null;
+  const initialSceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
+  const initialSceneArt =
+    typeof params.sceneArt === 'string' && params.sceneArt.length > 0 ? params.sceneArt : null;
+  // spec-036: scene is mutable mid-chat — an accepted invitation switches it.
+  const [sceneId, setSceneId] = useState<string | undefined>(initialSceneId);
+  const [sceneArt, setSceneArt] = useState<string | null>(initialSceneArt);
   const router = useRouter();
   const { pushError } = useErrorBanner();
 
@@ -105,6 +112,12 @@ function ChatScreenInner() {
   const [signalToken, setSignalToken] = useState(0);
   const [lastUnlocks, setLastUnlocks] = useState<ChatUnlock[] | null>(null);
   const [unlockToken, setUnlockToken] = useState(0);
+  // spec-036: in-chat invitation to go somewhere.
+  const [invitePickerVisible, setInvitePickerVisible] = useState(false);
+  const [inviteTargets, setInviteTargets] = useState<InviteTarget[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState<InviteTarget | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const shouldScrollOnNextRef = useRef(true);
@@ -215,6 +228,42 @@ function ChatScreenInner() {
     }
   }, []);
 
+  const showInviteNotice = useCallback((message: string) => {
+    setInviteNotice(message);
+    globalThis.setTimeout(() => setInviteNotice(null), 3200);
+  }, []);
+
+  const handleInviteResult = useCallback(
+    (invite: ChatInviteResult, target: InviteTarget | null) => {
+      if (invite.accepted && invite.scene_id) {
+        setSceneId(invite.scene_id);
+        setSceneArt(invite.scene_art_url ?? null);
+        showInviteNotice(`You headed to ${target?.name ?? 'a new place'} together.`);
+      } else {
+        showInviteNotice(`${companion.name} didn't take you up on it.`);
+      }
+    },
+    [companion.name, showInviteNotice],
+  );
+
+  const openInvitePicker = useCallback(async () => {
+    setInvitePickerVisible(true);
+    setInviteLoading(true);
+    try {
+      const res = await getInviteTargets(companionId, sceneId);
+      setInviteTargets(res.targets);
+    } catch {
+      setInviteTargets([]);
+    } finally {
+      setInviteLoading(false);
+    }
+  }, [companionId, sceneId]);
+
+  const handleInviteSelect = useCallback((target: InviteTarget) => {
+    setPendingInvite(target);
+    setInvitePickerVisible(false);
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = draft.trim();
     if (!text || stream.isStreaming) {
@@ -236,14 +285,19 @@ function ChatScreenInner() {
 
     let serverMessageId = '';
     try {
+      const invitedTarget = pendingInvite;
       const result = await stream.send(text, {
         activityId,
+        inviteSceneId: invitedTarget?.id,
         personaId: activePersonaId ?? undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
+        },
+        onInviteResult: (invite) => {
+          handleInviteResult(invite, invitedTarget);
         },
         onSignals: (signals) => {
           setLastSignals(signals);
@@ -255,6 +309,8 @@ function ChatScreenInner() {
         },
         sceneId,
       });
+      // The invitation only applies to this turn; clear it once sent.
+      setPendingInvite(null);
       const finalMessage: ChatMessage = {
         companion_id: companionId,
         content: result.text,
@@ -286,7 +342,7 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -545,14 +601,50 @@ function ChatScreenInner() {
           </View>
         ) : null}
 
+        {inviteNotice ? (
+          <View className="border-t border-app-line bg-app-primarySoft px-4 py-2">
+            <Text className="text-center text-sm font-medium text-app-primary">{inviteNotice}</Text>
+          </View>
+        ) : null}
+
+        {pendingInvite ? (
+          <View className="flex-row items-center justify-between border-t border-app-line bg-app-bg px-4 py-2">
+            <View className="flex-1 flex-row items-center gap-2">
+              <Ionicons color="#6E59C7" name="navigate-outline" size={16} />
+              <Text numberOfLines={1} className="flex-1 text-sm text-app-text">
+                {`Inviting to ${pendingInvite.name} — send your message`}
+              </Text>
+            </View>
+            <Pressable
+              accessibilityLabel="Cancel invitation"
+              accessibilityRole="button"
+              onPress={() => setPendingInvite(null)}
+              className="ml-2 h-7 w-7 items-center justify-center rounded-full"
+            >
+              <Ionicons color="#687076" name="close" size={16} />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View className="border-t border-app-line bg-app-card px-3 py-3">
           <View className="flex-row items-end gap-2">
+            <Pressable
+              accessibilityLabel="Invite to go somewhere"
+              accessibilityRole="button"
+              disabled={stream.isStreaming}
+              onPress={() => void openInvitePicker()}
+              className={`h-11 w-11 items-center justify-center rounded-full border border-app-line ${
+                pendingInvite ? 'bg-app-primarySoft' : 'bg-app-bg'
+              }`}
+            >
+              <Ionicons color="#6E59C7" name="navigate-outline" size={20} />
+            </Pressable>
             <TextInput
               accessibilityLabel="Message input"
               multiline
               onChangeText={setDraft}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
+              placeholder={pendingInvite ? `Invite ${companion.name} to ${pendingInvite.name}...` : 'Type your message...'}
               placeholderTextColor="#687076"
               value={draft}
               className="max-h-32 min-h-11 flex-1 rounded-2xl border border-app-line bg-app-bg px-4 py-2 text-base text-app-text"
@@ -575,6 +667,15 @@ function ChatScreenInner() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      <InvitePopup
+        visible={invitePickerVisible}
+        loading={inviteLoading}
+        targets={inviteTargets}
+        companionName={companion.name}
+        onSelect={handleInviteSelect}
+        onClose={() => setInvitePickerVisible(false)}
+      />
 
       <Modal
         animationType="fade"

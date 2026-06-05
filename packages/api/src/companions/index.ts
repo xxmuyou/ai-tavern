@@ -27,6 +27,7 @@ import { handleCompanionEmotionArtRequest } from "./emotion-art-routes";
 import type { Gender } from "./gender-weight";
 import { handleCompanionArtUpload } from "./upload-art";
 import { handleCompanionStoryRequest } from "../story-beats";
+import { handleInviteTargetsRequest } from "../scenes/invite";
 import {
   clearCompanionProfileImage,
   handleProfileOutfitRequest,
@@ -255,6 +256,11 @@ export async function handleCompanionsRequest(
     }
     const user = await requireAuthUser(env, request);
     return handleCompanionStoryRequest(request, env, user, companionId, suffix);
+  }
+
+  const inviteTargetsResponse = await handleInviteTargetsRequest(request, env, pathname);
+  if (inviteTargetsResponse) {
+    return inviteTargetsResponse;
   }
 
   const momentImagesMatch = pathname.match(/^\/companions\/([^/]+)\/moment-images$/);

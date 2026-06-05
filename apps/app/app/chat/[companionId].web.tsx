@@ -14,17 +14,20 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { getCompanion, mediaSource } from '@/api/companion-client';
+import { getCompanion, getInviteTargets, mediaSource } from '@/api/companion-client';
 import type {
+  ChatInviteResult,
   ChatMessage,
   ChatMomentImage,
   ChatUnlock,
   CompanionDetail,
+  InviteTarget,
   RelationshipDimensions,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
+import { InvitePopup } from '@/components/InvitePopup';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
@@ -61,10 +64,16 @@ function isStreamingItem(item: ChatListItem): item is StreamingItem {
 }
 
 export default function WebChatScreen() {
-  const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneId?: string }>();
+  const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneId?: string; sceneArt?: string }>();
   const companionId = typeof params.companionId === 'string' ? params.companionId : '';
   const activityId = typeof params.activityId === 'string' ? params.activityId : undefined;
-  const sceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
+  const initialSceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
+  const initialSceneArt =
+    typeof params.sceneArt === 'string' && params.sceneArt.length > 0 ? params.sceneArt : null;
+  // spec-036: scene is mutable mid-chat — an accepted invitation switches it.
+  const [sceneId, setSceneId] = useState<string | undefined>(initialSceneId);
+  const [sceneArt, setSceneArt] = useState<string | null>(initialSceneArt);
+  const [sceneName, setSceneName] = useState<string | null>(null);
   const router = useRouter();
   const { pushError } = useErrorBanner();
   const history = useChatHistory(companionId);
@@ -97,6 +106,12 @@ export default function WebChatScreen() {
   const [signalToken, setSignalToken] = useState(0);
   const [lastUnlocks, setLastUnlocks] = useState<ChatUnlock[] | null>(null);
   const [unlockToken, setUnlockToken] = useState(0);
+  // spec-036: in-chat invitation to go somewhere.
+  const [invitePickerVisible, setInvitePickerVisible] = useState(false);
+  const [inviteTargets, setInviteTargets] = useState<InviteTarget[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [pendingInvite, setPendingInvite] = useState<InviteTarget | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const threadScrollRef = useRef<ScrollView>(null);
   const shouldAutoScrollRef = useRef(true);
   const didInitialScrollRef = useRef(false);
@@ -194,6 +209,43 @@ export default function WebChatScreen() {
     return Math.max(0, Math.ceil((rateLimitedUntil - now) / 1000));
   }, [now, rateLimitedUntil]);
 
+  const showInviteNotice = useCallback((message: string) => {
+    setInviteNotice(message);
+    globalThis.setTimeout(() => setInviteNotice(null), 3200);
+  }, []);
+
+  const handleInviteResult = useCallback(
+    (invite: ChatInviteResult, target: InviteTarget | null) => {
+      if (invite.accepted && invite.scene_id) {
+        setSceneId(invite.scene_id);
+        setSceneArt(invite.scene_art_url ?? null);
+        setSceneName(target?.name ?? null);
+        showInviteNotice(`You headed to ${target?.name ?? 'a new place'} together.`);
+      } else {
+        showInviteNotice(`${companion?.name ?? 'They'} didn't take you up on it.`);
+      }
+    },
+    [companion?.name, showInviteNotice],
+  );
+
+  const openInvitePicker = useCallback(async () => {
+    setInvitePickerVisible(true);
+    setInviteLoading(true);
+    try {
+      const res = await getInviteTargets(companionId, sceneId);
+      setInviteTargets(res.targets);
+    } catch {
+      setInviteTargets([]);
+    } finally {
+      setInviteLoading(false);
+    }
+  }, [companionId, sceneId]);
+
+  const handleInviteSelect = useCallback((target: InviteTarget) => {
+    setPendingInvite(target);
+    setInvitePickerVisible(false);
+  }, []);
+
   const handleSend = useCallback(async () => {
     const text = draft.trim();
     if (!text || stream.isStreaming || remainingSeconds > 0) return;
@@ -210,13 +262,18 @@ export default function WebChatScreen() {
 
     let serverMessageId = '';
     try {
+      const invitedTarget = pendingInvite;
       const result = await stream.send(text, {
         activityId,
+        inviteSceneId: invitedTarget?.id,
         personaId: activePersonaId ?? undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
+        onInviteResult: (invite) => {
+          handleInviteResult(invite, invitedTarget);
+        },
         onSignals: (signals) => {
           setLastSignals(signals);
           setSignalToken((token) => token + 1);
@@ -227,6 +284,8 @@ export default function WebChatScreen() {
         },
         sceneId,
       });
+      // The invitation only applies to this turn; clear it once sent.
+      setPendingInvite(null);
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -258,7 +317,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -414,6 +473,28 @@ export default function WebChatScreen() {
 
           {/* Everything below the pinned header keeps the card's rounded bottom. */}
           <View className="overflow-hidden rounded-b-2xl">
+          {sceneArt ? (
+            <View className="relative h-28 w-full overflow-hidden border-b border-white/5">
+              <Image
+                accessibilityLabel={sceneName ? `Scene: ${sceneName}` : 'Current scene'}
+                resizeMode="cover"
+                source={mediaSource(sceneArt) ?? undefined}
+                style={StyleSheet.absoluteFill}
+              />
+              <View pointerEvents="none" style={twilightStyles.sceneScrim} />
+              {sceneName ? (
+                <View className="absolute bottom-2 left-4 flex-row items-center gap-1.5 rounded-full bg-black/45 px-3 py-1">
+                  <Ionicons color="#FFFFFF" name="location" size={12} />
+                  <Text className="text-caption font-semibold text-white">{sceneName}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {inviteNotice ? (
+            <View className="border-b border-white/5 bg-rose/15 px-5 py-2">
+              <Text className="text-center text-caption font-semibold text-rose-soft">{inviteNotice}</Text>
+            </View>
+          ) : null}
           <ActivityContextBanner
             activity={activity}
             isMutating={activityActions.isMutating}
@@ -504,13 +585,42 @@ export default function WebChatScreen() {
 
           {/* Composer */}
           <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
+            {pendingInvite ? (
+              <View className="mb-3 flex-row items-center justify-between rounded-2xl border border-rose/30 bg-rose/10 px-3 py-2">
+                <View className="flex-1 flex-row items-center gap-2">
+                  <Ionicons color="#F6C6D6" name="navigate" size={14} />
+                  <Text numberOfLines={1} className="flex-1 text-caption font-semibold text-rose-soft">
+                    {`Inviting to ${pendingInvite.name} — send your message`}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel invitation"
+                  onPress={() => setPendingInvite(null)}
+                  className="ml-2 h-6 w-6 items-center justify-center rounded-full bg-white/10"
+                >
+                  <Ionicons color="rgba(255,255,255,0.7)" name="close" size={13} />
+                </Pressable>
+              </View>
+            ) : null}
             <View className="flex-row items-end gap-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Invite to go somewhere"
+                disabled={stream.isStreaming}
+                onPress={() => void openInvitePicker()}
+                className={`h-12 w-12 items-center justify-center rounded-2xl border border-white/10 ${
+                  pendingInvite ? 'bg-rose/20' : 'bg-white/5'
+                }`}
+              >
+                <Ionicons color="rgba(255,255,255,0.75)" name="navigate-outline" size={18} />
+              </Pressable>
               <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
                 <TextInput
                   multiline
                   onChangeText={setDraft}
                   onKeyPress={handleKeyPress}
-                  placeholder="Write a message..."
+                  placeholder={pendingInvite ? `Invite ${companion?.name ?? 'them'} to ${pendingInvite.name}...` : 'Write a message...'}
                   placeholderTextColor="rgba(255,255,255,0.40)"
                   value={draft}
                   className="max-h-32 min-h-10 flex-1 py-1 text-body text-white"
@@ -538,6 +648,15 @@ export default function WebChatScreen() {
           </View>
         </View>
       </View>
+
+      <InvitePopup
+        visible={invitePickerVisible}
+        loading={inviteLoading}
+        targets={inviteTargets}
+        companionName={companion?.name ?? 'them'}
+        onSelect={handleInviteSelect}
+        onClose={() => setInvitePickerVisible(false)}
+      />
 
       <WebDialog
         description="You've used today's free messages. Upgrade to Pro to keep the conversation going."
@@ -587,6 +706,14 @@ const twilightStyles = StyleSheet.create({
     top: 0,
     zIndex: 20,
   } as unknown as ViewStyle,
+  sceneScrim: {
+    backgroundColor: 'rgba(14,11,20,0.35)',
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   thread: {
     backgroundColor: '#0E0B14',
     flexGrow: 1,
