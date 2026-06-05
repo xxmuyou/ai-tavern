@@ -10,30 +10,34 @@
 
 ### 1.1 错误响应格式
 
+错误体是**扁平结构**，`error` 直接是 snake_case 字符串码（不是嵌套对象）。个别端点会附带 `message` 等额外字段。
+
 ```json
-{
-  "error": {
-    "code": "QUOTA_EXCEEDED",
-    "message": "Daily limit reached. Subscribe to keep going.",
-    "details": { /* 可选 */ }
-  }
-}
+{ "error": "quota_exceeded" }
+```
+
+```json
+// 带附加说明的例子（如已退役端点）
+{ "error": "feature_retired", "message": "Companion emotion-art generation has been retired." }
 ```
 
 ### 1.2 通用错误码
 
+> 错误码均为 snake_case 小写。下表为跨模块通用码，各端点专属码（如 `invalid_companion_id`、`gender_required`）见对应小节。
+
 | HTTP | code | 说明 |
 |------|------|------|
-| 400 | `INVALID_REQUEST` | 请求体格式或字段错误 |
-| 401 | `UNAUTHENTICATED` | 未登录 / token 失效 |
-| 403 | `FORBIDDEN` | 已登录但无权限（如 admin 端点） |
-| 404 | `NOT_FOUND` | 资源不存在 |
-| 409 | `CONFLICT` | 状态冲突（如重复创建） |
-| 402 | `QUOTA_EXCEEDED` | 当日额度用完 |
-| 402 | `subscription_required` | 需 Pro 订阅的功能（如生成 companion 表情立绘）被免费用户触发 |
-| 429 | `RATE_LIMITED` | 速率限制（10 条/分钟） |
-| 500 | `INTERNAL` | 服务端错误 |
-| 503 | `LLM_UNAVAILABLE` | 所有 LLM 供应商不可用 |
+| 400 | `invalid_request` / `invalid_body` | 请求体格式或字段错误 |
+| 401 | `auth_required` / `invalid_token` | 未登录 / token 失效 |
+| 403 | `forbidden` / `admin_required` / `forbidden_not_owner` | 已登录但无权限 |
+| 404 | `not_found` | 资源不存在 |
+| 405 | `method_not_allowed` | 方法不允许 |
+| 402 | `quota_exceeded` | 当日额度用完 / 额度限制 |
+| 410 | `endpoint_retired` / `feature_retired` | 端点或功能已退役（见 §13） |
+| 413 | `request_body_too_large` | 请求体超过大小限制（默认 1MB） |
+| 429 | `rate_limited` | 速率限制 |
+| 500 | `internal_error` | 服务端错误 |
+| 503 | `llm_unavailable` | 所有 LLM 供应商不可用 |
 
 ### 1.3 流式响应
 
@@ -167,16 +171,17 @@ Query: ?token=...
 
 ```json
 // Header: Authorization
-// Response 200
+// Response 200 —— 扁平结构，字段不包在 user{} 里
 {
-  "user": {
-    "id": "...",
-    "email": "...",
-    "display_name": "...",
-    "created_at": ...,
-    "linked_providers": ["google", "email"]
-  },
+  "id": "...",
+  "email": "...",
+  "email_verified": true,
+  "display_name": "...",
   "romance_preference": "male" | "female" | "any",
+  "timezone": "Asia/Shanghai",
+  "push_enabled": false,
+  "linked_providers": ["google", "email"],
+  "is_admin": false,
   "subscription": {
     "tier": "free" | "pro",
     "status": "active" | "trialing" | "past_due" | "canceled" | "free",
@@ -185,14 +190,14 @@ Query: ?token=...
     "cancel_at_period_end": false
   },
   "quota": {
-    "messages_used_today": 12,
     "messages_limit_today": 30,
+    "messages_used_today": 12,
     "subscriber_soft_threshold_exceeded": false
   }
 }
 ```
 
-**说明：** `current_period_end` 为 Unix milliseconds；免费用户 `price_id/current_period_end` 为 `null`。`romance_preference` 默认 `any`。
+**说明：** `current_period_end` 为 Unix milliseconds；免费用户 `price_id/current_period_end` 为 `null`。`romance_preference` 默认 `any`。`is_admin` 来自邮箱白名单覆盖。
 
 ### `PATCH /auth/me/preferences`
 
@@ -367,9 +372,13 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 // Response 204
 ```
 
-### `POST /companions/assist`
+### `POST /companions/assist` *(已废弃 / 暂未实现)*
 
-AI 辅助生成角色卡（用户填部分字段，AI 补全）。
+> **状态：** 这是早期设想的功能（AI 辅助补全角色卡文本字段），目前**暂时废弃**。后端未接线，路由直接 404（`companions/index.ts` 注释 `spec-002 will wire`）；前端无调用。若日后恢复需重新立 spec。
+>
+> 注意：现有的 `POST /companions/base-art/prompt-assist`（出图 prompt 辅助，见 §11.7）与 `POST /companions/{id}/story-arcs/assist`（剧情线 AI 起草，见 §11.6）是**不同的功能**，与本端点无关。
+
+原设想形态（仅存档，未实现）：
 
 ```json
 // Request
@@ -764,9 +773,11 @@ Web Admin 的 Portrait generation 页面只保留 `View logs` 入口；日志在
 }
 ```
 
-`fieldName=style_name` 代表旧数据把 style/model 标签误写成 RunningHub 节点字段名；新任务应由 workflow 的 `checkpointFieldName`（通常 `ckpt_name`）提供字段名。
+`fieldName=style_name` 代表旧数据把 style/model 标签误写成 RunningHub 节点字段名；新任务应由 workflow contract 校验后的 `checkpointFieldName` 提供字段名。
 
-> 配套：base-art job status（`GET /companions/base-art/jobs/{jobId}`）现也透传 `error_message`；生成 companion 表情立绘（`POST /companions/{id}/emotion-art/{emotion}/generate`）对非 Pro 用户返回 402 `subscription_required`。
+> 配套：base-art job status（`GET /companions/base-art/jobs/{jobId}`）现也透传 `error_message`。
+>
+> **已退役（spec-031）：** companion 表情立绘生成（`POST /companions/{id}/emotion-art/{emotion}/generate`、`/companions/{id}/emotion-art/jobs`）已停用，现统一返回 **410 `feature_retired`**。历史 `art_emotions` 数据仍可随 companion 记录读取，但不再启动/列出生成任务。`subscription_required` 这一错误码也随之不再使用。
 
 ---
 
@@ -776,21 +787,21 @@ Web Admin 的 Portrait generation 页面只保留 `View logs` 入口；日志在
 
 ```json
 // Response 200
-{ "ok": true, "version": "1.0.0-rc.1", "uptime_s": 12345 }
+{ "ok": true, "service": "xtbit-apps-api", "version": "1.0.0-rc.1", "environment": "dev" }
 ```
+
+`environment` 来自 `APP_ENV`。Workers 无常驻进程，不提供 uptime 字段。
 
 ### `GET /config/bootstrap`
 
-前端初始化时调用，拉公共配置。
+返回 KV `client:bootstrap` 中的公共配置，原样透传。
 
 ```json
 // Response 200
-{
-  "stripe_publishable_key": "pk_test_...",
-  "feature_flags": { "user_companion_creation": true },
-  "support_email": "support@aiappsbox.com"   // 来自 ops/secrets.md，TBD
-}
+{ "config": { /* KV client:bootstrap 的内容；未设置时为 {} */ } }
 ```
+
+> **现状：** KV `client:bootstrap` 目前在仓库内无任何 seed/写入流程，前端也尚未调用此端点，因此实际通常返回 `{ "config": {} }`。早期设想的 `stripe_publishable_key` / `feature_flags` / `support_email` 等结构化字段**从未实现**；如需公开这些配置，应另立 spec 决定是放进 KV payload 还是改为专门字段。
 
 ### `GET /db/ping`
 
@@ -798,7 +809,81 @@ D1 连通性诊断（仅 admin / 内部）。
 
 ---
 
-## 11. 路由优先级与中间件
+## 11. 其他已实现端点（简明清单）
+
+> 以下端点均已在代码中实现并接线，但本文档前面章节尚未展开完整契约。此处给出**路径 + 方法 + 一句话**，详细请求/响应以对应 spec 与代码为准，避免重复维护导致再次漂移。
+
+### 11.1 Credits（积分账本，spec-021）
+
+- `GET /credits/balance` — 当前用户积分余额（含每月发放 grant）。
+- `GET /credits/ledger` — 积分流水。
+- `POST /credits/checkout` — 创建积分购买 Checkout。
+
+### 11.2 Personas（用户人设，spec-034 / user-persona）
+
+- `GET /personas`、`POST /personas` — 列出 / 创建用户 persona。
+- `PATCH /personas/{id}`、`DELETE /personas/{id}` — 更新 / 删除。
+
+### 11.3 Life / 日常模拟（daily-life-sim）
+
+- `GET /today` — 今日状态聚合。
+- `GET /activities`、`POST /activities/{id}/complete`、`POST /activities/{id}/cancel` — 日常活动。
+- `GET /memories` — 记忆列表。
+- `POST /push/tokens`、`DELETE /push/tokens/{token}` — 推送 token 注册 / 注销。
+
+### 11.4 Me / 用户资产（spec-033）
+
+- `GET /me/image-assets`、`POST /me/image-assets`、`DELETE /me/image-assets/{id}` — 用户私有图片资产收口。
+
+### 11.5 Chat 扩展（spec-006 / 024 / voice / variants）
+
+- `POST /chat/{companion_id}/messages/{message_id}/regenerate` — 重生成回复。
+- `POST /chat/{companion_id}/messages/{message_id}/edit` — 编辑消息。
+- `POST /chat/{companion_id}/messages/{message_id}/voice` — 生成语音。
+- `POST /chat/{companion_id}/messages/{message_id}/variant` — 候选回复切换。
+
+### 11.6 Companions 扩展
+
+- `POST /companions/upload-art` — 上传角色图（admin / 自创）。
+- `GET /companions/{id}/export` — 导出角色卡（companion-import 配套）。
+- `POST /companions/{id}/publish` — 发布为公开角色（spec-031）。
+- `POST/DELETE /companions/{id}/favorite` — 收藏 / 取消收藏。
+- `GET /companions/{id}/daily-state` — 角色当日状态（life-sim）。
+- `GET/POST /companions/{id}/story-arcs`、`/story-arcs/from-template`、`/story-arcs/assist`、`/story-beats/{id}`(+`/complete`/`/reopen`) — 角色剧情拍（spec-026 / 029）。
+- `GET /companions/{id}/moment-images` — 角色瞬间图列表（spec-027）。
+- `GET /story-arc-templates` — 剧情包模板（spec-029）。
+
+### 11.7 Companion 底图 / 出图（spec-020 / 022 / 027 / 030 / 031 / 033）
+
+- `GET /image-models` — 可选出图模型（用户侧）。
+- `POST /companions/base-art/generate` — 生成角色底图。
+- `POST /companions/base-art/prompt-assist` — 出图 prompt 辅助。
+- `GET /companions/base-art/jobs/{id}` — 底图 job 轮询。
+- `POST /chat/{companion_id}/messages/{message_id}/moment-image/generate`、`GET /moment-images/jobs/{id}` — 聊天瞬间图（spec-027）。
+- `POST /chat/.../outfit-image`（推荐 / 自定义）、`GET /outfit-images/jobs/{id}` — 聊天换装图（spec-030，legacy/deprecated 入口）。
+- profile 换装图见 §3「Profile Outfit Images」。
+
+### 11.8 Relationships 扩展
+
+- `GET /relationships/{companion_id}/unlocks` — 关系解锁状态（spec-025）。
+
+### 11.9 Admin 扩展（需 admin 权限）
+
+- `GET /admin/llm/config/{task}`、`GET /admin/llm/usage` — 单任务配置 / LLM 用量。
+- `GET/POST /admin/admin-allowlist`、`DELETE /admin/admin-allowlist/{id}` — 管理员白名单。
+- `GET /admin/settings`、`PUT/DELETE /admin/settings/{key}`、`POST /admin/settings/{key}/reveal` — 运行配置（见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)）。
+- `/admin/image-models`、`/admin/image-workflows`、`/admin/expression-prompts`（GET/POST/PUT/DELETE）— 出图模型 / workflow / 表情 prompt 目录（spec-022）。
+
+### 11.10 平台 / 基础设施
+
+- `POST /jobs` — 投递通用 job 到队列。
+- `GET/PUT /objects/{key}`、`GET /objects/signed/{key}` — R2 资产读写 / 签名访问。
+- `/rooms/{id}`(+`/events`) — Durable Object GameRoom。
+- RunningHub 出图回调 webhook（由 `image-gen/runninghub-results` 处理，路径见代码）。
+
+---
+
+## 12. 路由优先级与中间件
 
 请求处理顺序（Workers 入口 `index.ts`）：
 
@@ -813,7 +898,7 @@ D1 连通性诊断（仅 admin / 内部）。
 
 ---
 
-## 12. 移除 / 弃用的端点（与现有代码对照）
+## 13. 移除 / 弃用的端点（与现有代码对照）
 
 现有代码（参考 `_archive/2026-05/`）含但 v1 删除的端点：
 
@@ -821,15 +906,21 @@ D1 连通性诊断（仅 admin / 内部）。
 - `/companion/*/dimensions` — 直接读维度数值的接口，前端不应使用
 - `/apps/{appKey}/*`、`/api/{appKey}/*` — multi-app 路由抽象删除
 
+v1 期间被退役 / 暂停的端点（代码仍在但不再提供功能）：
+
+- `/companions/{id}/emotion-art/*` — 表情立绘生成，spec-031 退役，返回 410 `feature_retired`（见 §9）。
+- `POST /companions/assist` — AI 补全角色卡，暂时废弃、未接线，路由 404（见 §3）。
+- `POST /chat/.../outfit-image`（聊天内换装）— 后端保留为 legacy/deprecated，新 UI 入口改走 profile 换装（spec-033）。
+
 ---
 
-## 13. 待最终敲定
+## 14. 待最终敲定
 
 - [ ] Google OAuth client ID / secret 获取（dev + prod 各一套，存 wrangler）
 - [ ] Apple Sign-In key / team id / client id（dev + prod，spec-009 只预留）
 - [ ] Email Magic Link 邮件发送服务（spec-009 选择 Resend）
 - [ ] JWT 时长（30 天 vs 7 天 + refresh token）
 - [ ] WebSocket 是否替代 SSE 做对话流（v1 用 SSE 简单，v2 看需要）
-- [ ] `/companions/assist` 是否计入用户配额（一次辅助生成 ≈ 0.5 对话条）
+- [ ] ~~`/companions/assist` 是否计入用户配额~~（该端点已废弃，见 §3 / §13；若恢复需重新立 spec 并决定配额）
 - [ ] admin 端点的鉴权细节（除邮箱白名单，是否要二级验证）
 - [ ] 国际化 / i18n 接口（错误消息走 `accept-language`？v1 仅英文）
