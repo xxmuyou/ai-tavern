@@ -56,7 +56,9 @@ const POSITIVE_RULES: readonly StageRule[] = [
       target_value: 75,
     },
     recommended: { activity_type: "date", reason: "Spend a meaningful evening together." },
-    progress: (d) => clamp01((d.romance - 50) / 25),
+    // Composite toward the committed gate (romance>=75 && trust>=55) so the bar
+    // reflects both, not romance alone.
+    progress: (d) => clamp01((clamp01((d.romance - 50) / 25) + clamp01((d.trust - 30) / 25)) / 2),
   },
   {
     stage: "romantic_tension",
@@ -82,25 +84,34 @@ const POSITIVE_RULES: readonly StageRule[] = [
   },
   {
     stage: "trusted",
-    predicate: (d) => d.trust >= 35,
+    // Reaching "trusted" no longer hinges on the single `trust` dimension. Either
+    // earned trust, OR enough closeness+friendship (the `computeLevel` "Friend"
+    // band: closeness>40 && friendship>30) counts as a real, trusting bond. This
+    // is what unblocks ordinary friendly chat from getting stuck in `familiar`.
+    predicate: (d) => d.trust >= 30 || (d.closeness >= 40 && d.friendship >= 30),
     nextGoal: {
-      description: "Deepen the friendship by hanging out more often.",
+      description: "Grow even closer — share more and keep showing up.",
       target_dim: "friendship",
       target_value: 50,
     },
     recommended: { activity_type: "hang_out", reason: "Make this a regular spot in their week." },
-    progress: (d) => clamp01((d.friendship - 30) / 20),
+    // Composite toward the close_friend gate (closeness>=60 && friendship>=50 && trust>=40).
+    progress: (d) => clamp01((d.closeness / 60 + d.friendship / 50 + d.trust / 40) / 3),
   },
   {
     stage: "familiar",
     predicate: (d) => d.closeness >= 20,
     nextGoal: {
-      description: "Earn their trust — listen, follow through, show up.",
-      target_dim: "trust",
-      target_value: 35,
+      description: "Spend more time together — get closer, build a real friendship.",
+      target_dim: "closeness",
+      target_value: 40,
     },
     recommended: { activity_type: "check_in", reason: "Small consistent check-ins beat one grand gesture." },
-    progress: (d) => clamp01((d.trust - 20) / 15),
+    // Progress toward the (multi-path) `trusted` gate: either the trust path or the
+    // closeness+friendship path — whichever is further along. Crucially this no
+    // longer sits at 0% while trust is low; closeness/friendship now move the bar.
+    progress: (d) =>
+      clamp01(Math.max(d.trust / 30, Math.min(d.closeness / 40, d.friendship / 30))),
   },
   {
     stage: "first_contact",

@@ -56,9 +56,17 @@ data: {"closeness": 1, "romance": 1, ...}
 event: emotion
 data: {"value": "warm"}
 
+event: unlocks
+data: [ /* 本轮新解锁项，见 §B5 / spec-025 */ ]
+
+event: invite_result
+data: {"accepted": true, "scene_id": "tavern", "scene_art_url": "...", "reason": "..."}
+
 event: done
 data: {"message_id": "...", "usage": {...}}
 ```
+
+> `unlocks`、`invite_result` 为按需事件：仅在该轮产生新解锁、或请求带 `invite_scene_id`（spec-036, draft）时出现。
 
 ### 1.4 鉴权
 
@@ -453,16 +461,26 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 // Request
 {
   "text": "Hey, what are you reading?",
-  "scene_id": "pier_coffee_shop"
+  "scene_id": "pier_coffee_shop",
+  "activity_id": null,                  // 可选：锁定到某日常活动（会强制 scene 匹配）
+  "persona_id": null,                   // 可选：本 thread 以哪个用户人设说话
+  "invite_scene_id": null               // 可选（spec-036, draft）：本轮发起"邀请前往某场景"
 }
 
 // Response: SSE 流（见 §1.3）
 
 // 错误
-// 402 QUOTA_EXCEEDED 当日 30 条用完
-// 429 RATE_LIMITED 一分钟 10 条
+// 402 quota_exceeded 当日免费额度用完
+// 429 rate_limited 一分钟过多消息
 // 503 LLM_UNAVAILABLE 所有 provider 失败
 ```
+
+> **邀约换场景（spec-036, draft）：** 当请求带合法的 `invite_scene_id`（必须是该角色的可邀约目标，见下方 invite-targets），后端在 prompt 注入一段"用户邀请你前往 {场景}"的指令；本轮仍以**当前** `scene_id` 生成回复。回复结束后跑一次接受/拒绝判定，并通过 SSE 额外事件 `invite_result` 推送：
+> ```json
+> // event: invite_result
+> { "accepted": true, "scene_id": "tavern", "scene_art_url": "...", "reason": "..." }
+> ```
+> 客户端收到 `accepted: true` 才切换 `scene_id` + 背景；`accepted: false` 不切。越界/与关系阶段不符的邀约由现有每轮 signal 打分自然产生负向维度（distance/tension 上升），无独立惩罚逻辑。判定失败时回退 `accepted: false`（绝不误切）。
 
 **服务端处理：**
 1. 校验 auth + 订阅
@@ -497,6 +515,21 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 
 ```
 // Response 204
+```
+
+### `GET /companions/{companion_id}/invite-targets` *(spec-036, draft)*
+
+聊天内"邀请前往"浮窗的目的地候选。仅返回 `is_active = 1`、`default_companions` 含该角色、且 `unlock_condition` 对当前用户通过的场景；可用 `from_scene_id` 排除当前所在场景。关系门槛不到位的亲密场景（如设了高关系 `unlock_condition` 的场景）天然不出现在列表中。
+
+```
+// Query: ?from_scene_id=pier_coffee_shop （可选）
+// Response 200
+{
+  "targets": [
+    { "id": "tavern", "name": "The Tavern", "mood": "Warm, noisy", "art_url": "..." },
+    ...
+  ]
+}
 ```
 
 ---

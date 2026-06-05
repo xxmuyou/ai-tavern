@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { clearStoredAuthSession, sendChatMessage } from '@/api/companion-client';
-import type { ChatUnlock, RelationshipDimensions } from '@/api/types';
+import type { ChatInviteResult, ChatUnlock, RelationshipDimensions } from '@/api/types';
 import {
   ApiError,
   NetworkError,
@@ -29,12 +29,14 @@ export type ChatStreamCallbacks = {
   onEmotion?: (emotion: ChatEmotion) => void;
   onSignals?: (signals: Partial<RelationshipDimensions>) => void;
   onUnlocks?: (unlocks: ChatUnlock[]) => void;
+  onInviteResult?: (result: ChatInviteResult) => void;
 };
 
 export type SendOptions = ChatStreamCallbacks & {
   activityId?: string;
   sceneId?: string;
   personaId?: string;
+  inviteSceneId?: string;
 };
 
 function asEmotion(value: unknown): ChatEmotion | null {
@@ -105,6 +107,7 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       try {
         const stream = sendChatMessage(companionId, {
           activity_id: options.activityId,
+          invite_scene_id: options.inviteSceneId,
           persona_id: options.personaId,
           scene_id: options.sceneId,
           text,
@@ -125,6 +128,14 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             if (list.length > 0) {
               options.onUnlocks?.(list);
             }
+          } else if (event.type === 'invite_result') {
+            const data = (event.data as Partial<ChatInviteResult> | undefined) ?? {};
+            options.onInviteResult?.({
+              accepted: data.accepted === true,
+              reason: typeof data.reason === 'string' ? data.reason : '',
+              scene_art_url: typeof data.scene_art_url === 'string' ? data.scene_art_url : null,
+              scene_id: typeof data.scene_id === 'string' ? data.scene_id : null,
+            });
           } else if (event.type === 'emotion') {
             const rawValue = (event.data as { value?: unknown } | undefined)?.value;
             const next = asEmotion(rawValue);

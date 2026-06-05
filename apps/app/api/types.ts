@@ -678,7 +678,30 @@ export type ChatMessageInput = {
   activity_id?: string;
   scene_id?: string;
   persona_id?: string;
+  // spec-036: when set, this turn carries an invitation to go to that scene.
+  invite_scene_id?: string;
   text: string;
+};
+
+// spec-036: a candidate destination for an in-chat "invite to go somewhere".
+export type InviteTarget = {
+  id: string;
+  name: string;
+  mood: string;
+  art_url: string | null;
+};
+
+export type InviteTargetsResponse = {
+  targets: InviteTarget[];
+};
+
+// spec-036: SSE `invite_result` payload — whether the companion agreed to the
+// invitation and, if so, the scene to switch to.
+export type ChatInviteResult = {
+  accepted: boolean;
+  reason: string;
+  scene_id: string | null;
+  scene_art_url: string | null;
 };
 
 // A user-authored "who I am" identity injected into the chat prompt so the

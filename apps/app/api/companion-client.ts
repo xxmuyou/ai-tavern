@@ -59,6 +59,7 @@ import type {
   RelationshipUnlocksResponse,
   RomancePreference,
   EditMessageResponse,
+  InviteTargetsResponse,
   SceneEnterResponse,
   ScenesListResponse,
   SelectVariantResponse,
@@ -479,6 +480,18 @@ export async function enterScene(sceneId: string): Promise<SceneEnterResponse> {
   return requestJson<SceneEnterResponse>(`/scenes/${encodeURIComponent(sceneId)}/enter`, {
     method: 'POST',
   });
+}
+
+// spec-036: scenes this companion appears in that the user has unlocked, for the
+// in-chat "invite to go somewhere" popup. `fromSceneId` excludes the current scene.
+export async function getInviteTargets(
+  companionId: string,
+  fromSceneId?: string | null,
+): Promise<InviteTargetsResponse> {
+  const query = fromSceneId ? `?from_scene_id=${encodeURIComponent(fromSceneId)}` : '';
+  return requestJson<InviteTargetsResponse>(
+    `/companions/${encodeURIComponent(companionId)}/invite-targets${query}`,
+  );
 }
 
 export async function listCompanions(

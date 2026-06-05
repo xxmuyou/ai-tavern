@@ -35,13 +35,21 @@ import {
   isSubscriberActive,
 } from "./quota";
 import { extractSignals, type Emotion } from "./signal-extract";
+import { resolveInvite } from "./invite-resolve";
+import { resolveInviteTarget, type InviteTarget } from "../scenes/invite";
 import { createSSEStream, type SSEHandle } from "./sse";
 import { maybeEnqueueSummary } from "./summary-queue";
 import { formatDateUtc, recordUsage } from "./usage";
 
 const RECENT_MESSAGES_LIMIT = 50;
 
-type PostBody = { text?: unknown; scene_id?: unknown; activity_id?: unknown; persona_id?: unknown };
+type PostBody = {
+  text?: unknown;
+  scene_id?: unknown;
+  activity_id?: unknown;
+  persona_id?: unknown;
+  invite_scene_id?: unknown;
+};
 
 type HistoryRow = { role: "user" | "companion"; content: string };
 
@@ -111,6 +119,19 @@ export async function handlePostMessage(
   }
 
   const scene = sceneIdInput ? await loadSceneForChat(env, sceneIdInput) : null;
+
+  // spec-036: an in-chat invitation to go somewhere. Only honoured when it
+  // resolves to a legitimate, unlocked target for this companion; an activity
+  // lock (which pins the scene) suppresses invites so the companion can't
+  // "teleport" out of a committed activity.
+  const inviteSceneIdInput =
+    !activity && typeof body.invite_scene_id === "string" && body.invite_scene_id.length > 0
+      ? body.invite_scene_id
+      : null;
+  const inviteTarget: InviteTarget | null = inviteSceneIdInput
+    ? await resolveInviteTarget(env, user.id, companionId, inviteSceneIdInput)
+    : null;
+
   await ensureRelationship(env, user.id, companionId, now);
   const relationship = await loadRelationship(env, user.id, companionId);
   const narrative = buildRelationshipNarrative(
@@ -167,6 +188,7 @@ export async function handlePostMessage(
           activity_hint: activity.daily_state_snapshot.activity_hint,
         }
       : null,
+    invite: inviteTarget ? { mood: inviteTarget.mood, name: inviteTarget.name } : null,
     threadSummary: thread.summary,
     userText,
   });
@@ -203,6 +225,7 @@ export async function handlePostMessage(
       ctx,
       env,
       firstResult,
+      inviteTarget,
       iterator,
       narrative,
       now,
@@ -227,6 +250,7 @@ type RunChatArgs = {
   thread: ChatThreadRow;
   scene_id: string | null;
   activity_id: string | null;
+  inviteTarget: InviteTarget | null;
   narrative: string;
   userText: string;
   subscriber: boolean;
@@ -235,7 +259,7 @@ type RunChatArgs = {
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, narrative, userText, subscriber, now, ctx } =
+  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, inviteTarget, narrative, userText, subscriber, now, ctx } =
     args;
 
   let replyBuffer = "";
@@ -338,6 +362,28 @@ async function runChat(args: RunChatArgs): Promise<void> {
   sse.writeEvent("signals", finalExtract.signals);
   sse.writeEvent("emotion", { value: finalExtract.emotion satisfies Emotion });
   sse.writeEvent("unlocks", unlockEvents);
+
+  // spec-036: if this turn carried an invitation, decide whether the character
+  // agreed and tell the client. Only `accepted: true` switches the scene; any
+  // failure falls back to "stay put". Relationship damage from an inappropriate
+  // invite already happened above through the normal signal extraction.
+  if (inviteTarget) {
+    const resolution = await resolveInvite(env, {
+      companionReply: replyBuffer,
+      narrative,
+      targetMood: inviteTarget.mood,
+      targetName: inviteTarget.name,
+      userId: user.id,
+      userText,
+    });
+    sse.writeEvent("invite_result", {
+      accepted: resolution.accepted,
+      reason: resolution.reason,
+      scene_art_url: resolution.accepted ? inviteTarget.art_url : null,
+      scene_id: resolution.accepted ? inviteTarget.id : null,
+    });
+  }
+
   sse.writeEvent("done", {
     message_id: companionMessageId,
     usage: {

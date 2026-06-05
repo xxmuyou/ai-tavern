@@ -31,6 +31,13 @@ export type ActivityForPrompt = {
   activity_hint: string;
 } | null;
 
+// spec-036: the user is inviting the character to go to another location this
+// turn. The character should react in voice and genuinely decide whether to go.
+export type InviteForPrompt = {
+  name: string;
+  mood: string;
+} | null;
+
 // Who the user is roleplaying as. Injected so the character knows who it is
 // actually talking to, instead of addressing a faceless "user".
 export type UserPersonaForPrompt = {
@@ -43,6 +50,7 @@ export type ChatPromptInput = {
   companion: CompanionForPrompt;
   scene: SceneForPrompt;
   activity?: ActivityForPrompt;
+  invite?: InviteForPrompt;
   userPersona?: UserPersonaForPrompt;
   // Sample lines in the character's voice, injected as few-shot voice anchors.
   exampleDialogues?: string[];
@@ -130,7 +138,7 @@ export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
 }
 
 function buildSystemPrompt(input: ChatPromptInput): string {
-  const { companion, scene, activity, userPersona, exampleDialogues, narrative, threadSummary, secretToReveal, stage, storyBeat } = input;
+  const { companion, scene, activity, invite, userPersona, exampleDialogues, narrative, threadSummary, secretToReveal, stage, storyBeat } = input;
 
   const lines: string[] = [];
   const role = companion.relationship_role ?? "companion";
@@ -183,6 +191,17 @@ function buildSystemPrompt(input: ChatPromptInput): string {
       lines.push(`What you were doing before the user arrived: ${activity.activity_hint}`);
     }
     lines.push("Respond in a way that honours the activity and your current mood. Do not teleport to a different scene.");
+  }
+
+  if (invite) {
+    lines.push("");
+    lines.push("# An invitation just now");
+    lines.push(
+      `The user is inviting you to go to ${invite.name} (${invite.mood}). Decide IN CHARACTER whether you would actually go there now, given how well you know them, who you are, and your boundaries.`,
+    );
+    lines.push(
+      "You are free to say yes, or to decline, deflect, stall, or push back if the invitation feels too forward, too soon, or out of step with where things stand between you. If it's inappropriate for your relationship, treat it as such. Answer naturally in your own voice — do not narrate a scene change yourself; the world will move only if you agree.",
+    );
   }
 
   if (storyBeat?.status === "active") {

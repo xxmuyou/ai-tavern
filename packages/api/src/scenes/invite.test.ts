@@ -1,0 +1,131 @@
+import { describe, expect, it } from "vitest";
+
+import { loadInviteTargets, resolveInviteTarget } from "./invite";
+
+type SceneRow = {
+  id: string;
+  name: string;
+  mood: string;
+  art_url: string | null;
+  default_companions: string | null;
+  unlock_condition: string | null;
+  display_order: number;
+  is_active?: number;
+};
+
+type RelRow = { user_id: string; companion_id: string; closeness?: number; romance?: number };
+
+type Fixtures = { scenes: SceneRow[]; relationships: RelRow[] };
+
+function createEnv(fixtures: Fixtures): Env {
+  const statementFor = (values: unknown[]) => ({
+    async all<T>(): Promise<{ results: T[] }> {
+      // loadCandidateScenes: all active scenes ordered.
+      return {
+        results: fixtures.scenes
+          .filter((s) => (s.is_active ?? 1) === 1)
+          .sort((a, b) => a.display_order - b.display_order || a.id.localeCompare(b.id)) as unknown as T[],
+      };
+    },
+    async first<T>(): Promise<T | null> {
+      // evaluateUnlock: relationship row for (userId, companionId).
+      const [userId, companionId] = values as [string, string];
+      const rel = fixtures.relationships.find(
+        (r) => r.user_id === userId && r.companion_id === companionId,
+      );
+      return (rel
+        ? { closeness: rel.closeness ?? 0, romance: rel.romance ?? 0 }
+        : null) as T | null;
+    },
+    async run() {
+      return { meta: { changes: 0 } };
+    },
+  });
+  return {
+    DB: {
+      prepare() {
+        const unbound = statementFor([]);
+        return { ...unbound, bind: (...v: unknown[]) => statementFor(v) };
+      },
+    },
+  } as unknown as Env;
+}
+
+const cafe: SceneRow = {
+  art_url: "cafe.png",
+  default_companions: '["maya","ryan"]',
+  display_order: 1,
+  id: "cafe",
+  mood: "Calm",
+  name: "Cafe",
+  unlock_condition: null,
+};
+const tavern: SceneRow = {
+  art_url: "tavern.png",
+  default_companions: '["maya"]',
+  display_order: 2,
+  id: "tavern",
+  mood: "Warm, noisy",
+  name: "Tavern",
+  unlock_condition: null,
+};
+const hotel: SceneRow = {
+  art_url: "hotel.png",
+  default_companions: '["maya"]',
+  display_order: 3,
+  id: "hotel",
+  mood: "Intimate",
+  name: "Hotel",
+  // locked until romance >= 50 with maya
+  unlock_condition: JSON.stringify({ companion_id: "maya", dim: "romance", type: "min_relationship", value: 50 }),
+};
+const rooftop: SceneRow = {
+  art_url: "rooftop.png",
+  default_companions: '["ryan"]', // maya not present here
+  display_order: 4,
+  id: "rooftop",
+  mood: "Quiet",
+  name: "Rooftop",
+  unlock_condition: null,
+};
+
+describe("loadInviteTargets", () => {
+  it("lists unlocked scenes where the companion appears, excluding the current scene and ones she's not in", async () => {
+    const env = createEnv({ relationships: [], scenes: [cafe, tavern, hotel, rooftop] });
+    const targets = await loadInviteTargets(env, "user-1", "maya", "cafe");
+    // cafe excluded (current), rooftop excluded (no maya), hotel excluded (locked, romance 0 < 50)
+    expect(targets.map((t) => t.id)).toEqual(["tavern"]);
+    expect(targets[0]).toMatchObject({ art_url: "tavern.png", mood: "Warm, noisy", name: "Tavern" });
+  });
+
+  it("reveals an intimate scene only once its relationship gate is met", async () => {
+    const locked = createEnv({ relationships: [{ companion_id: "maya", romance: 10, user_id: "user-1" }], scenes: [tavern, hotel] });
+    expect((await loadInviteTargets(locked, "user-1", "maya", null)).map((t) => t.id)).toEqual(["tavern"]);
+
+    const unlocked = createEnv({ relationships: [{ companion_id: "maya", romance: 60, user_id: "user-1" }], scenes: [tavern, hotel] });
+    expect((await loadInviteTargets(unlocked, "user-1", "maya", null)).map((t) => t.id)).toEqual(["tavern", "hotel"]);
+  });
+});
+
+describe("resolveInviteTarget", () => {
+  it("returns the target when valid (companion present + unlocked)", async () => {
+    const env = createEnv({ relationships: [], scenes: [cafe, tavern] });
+    const target = await resolveInviteTarget(env, "user-1", "maya", "tavern");
+    expect(target).toMatchObject({ id: "tavern", name: "Tavern" });
+  });
+
+  it("returns null for a scene the companion is not in", async () => {
+    const env = createEnv({ relationships: [], scenes: [rooftop] });
+    expect(await resolveInviteTarget(env, "user-1", "maya", "rooftop")).toBeNull();
+  });
+
+  it("returns null for a locked scene (cannot invite past the relationship gate)", async () => {
+    const env = createEnv({ relationships: [{ companion_id: "maya", romance: 0, user_id: "user-1" }], scenes: [hotel] });
+    expect(await resolveInviteTarget(env, "user-1", "maya", "hotel")).toBeNull();
+  });
+
+  it("returns null for an unknown scene id", async () => {
+    const env = createEnv({ relationships: [], scenes: [cafe] });
+    expect(await resolveInviteTarget(env, "user-1", "maya", "nope")).toBeNull();
+  });
+});
