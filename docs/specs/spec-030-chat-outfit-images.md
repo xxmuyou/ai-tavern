@@ -16,7 +16,7 @@ Legacy 目标体验：
 
 新行为不再使用聊天消息作为入口。换装图现在属于 profile 图片管理：用户在 companion profile 图片旁生成并确认，确认后成为当前用户私有 profile 图片覆盖，详见 spec-033。
 
-第一版使用 `art_url` 作为源图参考，通过 RunningHub 新 workflow `profile_outfit` 走现有 `variation` 图生图路径。这里不引入正式 `edit` mode，也不接 credits 扣费。
+第一版使用 `art_url` 作为源图参考，通过 RunningHub workflow `profile_outfit` 走现有 `variation` 图生图路径。当前 RunningHub workflow 是 URL 输入型、无基座 workflow：输入短期签名 URL + 业务 prompt，不引入正式 `edit` mode，也不接 credits 扣费。
 
 ## 目标 / 非目标
 
@@ -27,7 +27,7 @@ Legacy 目标体验：
 - 系统推荐使用规则模板，不调用 LLM；根据 scene / time slot / activity / relationship stage 做稳定选择。
 - 生成图片 job，完成后把图片挂回来源 message，作为聊天内可回看的 outfit image。
 - 复用 `image_generation_jobs`、RunningHub generic image job、webhook/cron reconciliation、mock provider。
-- 在 RunningHub 配置中新增 `profile_outfit`，mode 仍为 `variation`。
+- 在 RunningHub 配置中保留语义 key `profile_outfit`，mode 仍为 `variation`，`architecture = "none"`。
 
 ### 非目标
 
@@ -192,6 +192,8 @@ type ChatMessage = {
 
 - `config/runninghub-workflows.dev.json` 与 `config/runninghub-workflows.prod.json` 新增 `profile_outfit`。
 - `profile_outfit.mode = "variation"`，不扩展 `image_workflows.mode` CHECK。
+- `profile_outfit.architecture = "none"`，不配置 `modelIds` / `loraBindings`。
+- `profile_outfit.loadImageFieldName = "url"`，provider 传 source image 的短期签名 URL；旧 `image` 字段会触发 upload/fileName 路径，不适用于当前 workflow。
 - 必填配置：
   - `workflowId`
   - `loadImageNodeId`
@@ -238,12 +240,12 @@ API：
 Job：
 
 - `chat_outfit_image` job 入队后调用 provider。
-- provider request 使用 `source_art_url = companion.art_url`、`workflow_key = profile_outfit`。
+- provider request 使用 `source_art_url = companion.art_url`、`workflow_key = profile_outfit`，RunningHub nodeInfoList 注入 signed URL 和 prompt。
 - webhook/cron 完成 generic image job 后，job status endpoint 能 reconcile `chat_outfit_images.output_key/status`。
 
 Config：
 
-- `parseWorkflows` 能读取 `profile_outfit` 和 negative prompt 字段。
+- `parseWorkflows` 能读取 `profile_outfit`、`architecture=none`、URL load-image 字段和 negative prompt 字段。
 - `scripts/sync-runninghub-workflows.sh dev --dry-run` 输出 `profile_outfit`，且 SQL 包含 negative prompt columns。
 
 前端：

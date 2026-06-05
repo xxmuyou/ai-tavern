@@ -114,15 +114,16 @@ CREATE TABLE story_moment_images (
 `image_generation_jobs` 复用现有队列表，新增：
 
 - `task = 'chat_moment_image'`
-- `mode = 'text_to_image'`
+- `mode = 'create'`；当存在 companion cutout/source image 时，RunningHub provider 会走 load-image + prompt 的 img2img/参考图路径。
 - `workflow_key = 'chat_moment'`（若未配置，dev/mock 可 fallback）
 - `output_prefix = 'chat-moments'`
 
 ## Workflow / Provider
 
-- RunningHub 新增可配置 workflow key：`chat_moment`。
-- v1 只要求 prompt node；不要求 load image node。
-- 如果未来 workflow 支持参考图，可选传 companion neutral portrait 作为软参考，但这不属于 v1 验收条件。
+- RunningHub 可配置 workflow key：`chat_moment`。
+- 当前 RunningHub workflow 是 URL 输入型、无基座 workflow：`architecture = "none"`，`loadImageFieldName = "url"`，不绑定 checkpoint/LoRA。
+- 需要同时配置 load-image node 和 prompt node；业务 prompt 仍注入 prompt node，source image 传短期签名 URL。
+- 旧 `loadImageFieldName = "image"` 会触发 upload/fileName 路径，不适用于当前 URL 输入 workflow。
 - mock provider 返回可预测图片 key，保证 API 和前端测试不依赖外部生图服务。
 
 ## 验证
@@ -134,7 +135,7 @@ CREATE TABLE story_moment_images (
    - 同一 message 重复点击返回已有 pending/succeeded 记录。
    - `prompt_snapshot` 包含 scene、time slot、companion、emotion、最近聊天内容。
 2. Job：
-   - `chat_moment_image` job 入队并调用 image-gen provider。
+   - `chat_moment_image` job 入队并调用 image-gen provider，RunningHub 请求包含 signed URL 和 prompt。
    - job succeeded 后更新 `story_moment_images.output_key/status`。
    - job failed 后保留错误码，前端可 retry。
 3. 前端：

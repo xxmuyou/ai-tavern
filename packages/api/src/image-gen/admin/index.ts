@@ -293,7 +293,7 @@ function parseModelInput(body: unknown): ParseResult {
   const tag = typeof raw.tag === "string" ? raw.tag.trim() : "";
   const architecture = readOptionalString(raw.architecture);
   try {
-    normalizeArchitecture(architecture, "checkpoint architecture", { required: true });
+    normalizeArchitecture(architecture, "checkpoint architecture", { assetOnly: true, required: true });
   } catch {
     return { ok: false, error: "invalid_model_architecture" };
   }
@@ -331,7 +331,7 @@ function parseLoraInput(body: unknown): LoraParseResult {
       : readNumber(clipStrengthRaw);
   const architecture = readOptionalString(raw.architecture);
   try {
-    normalizeArchitecture(architecture, "LoRA architecture", { required: true });
+    normalizeArchitecture(architecture, "LoRA architecture", { assetOnly: true, required: true });
   } catch {
     return { ok: false, error: "invalid_lora_architecture" };
   }
@@ -394,6 +394,9 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
       : "image";
   if (mode === "cutout" && !loadImageNodeId) {
     return { ok: false, error: "cutout_load_image_node_required" };
+  }
+  if (architecture === "none" && !loadImageNodeId) {
+    return { ok: false, error: "none_workflow_load_image_node_required" };
   }
   const negativePromptNodeId =
     typeof raw.negative_prompt_node_id === "string" && raw.negative_prompt_node_id.trim()

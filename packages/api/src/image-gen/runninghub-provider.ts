@@ -114,10 +114,9 @@ async function generateVariation(
       retryable: false,
     });
   }
-  // RunningHub's LoadImage node takes the *fileName* of an image already
-  // uploaded into its input dir — not a URL. Upload the source bytes first,
-  // then inject the returned fileName. (Feeding a URL here makes RunningHub
-  // accept the task but fail at the LoadImage node during render.)
+  // Standard LoadImage fields take an uploaded fileName. URL-style workflow
+  // fields receive a short-lived public URL instead; the workflow contract is
+  // the source of truth for which one applies.
   const sourceImageValue = await resolveLoadImageValue(cfg, env, req.source_art_url, config.loadImageFieldName);
   const nodeInfoList: NodeInfo[] = [
     { fieldName: config.loadImageFieldName || "image", fieldValue: sourceImageValue, nodeId: config.loadImageNodeId },

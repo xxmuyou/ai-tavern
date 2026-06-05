@@ -180,6 +180,28 @@ describe("RunningHub workflow/model catalog", () => {
     }, "admin")).rejects.toThrow(/lane anime cannot bind LoRA/);
   });
 
+  it("allows none-architecture workflows only without checkpoint or LoRA bindings", async () => {
+    await expect(upsertImageWorkflow(createEnv(), {
+      ...workflowInput(),
+      architecture: "none",
+      checkpoint_node_id: null,
+      key: "chat_moment",
+      load_image_field_name: "url",
+      load_image_node_id: "1",
+      mode: "create",
+      model_ids: [],
+      prompt_node_id: "13",
+    }, "admin")).resolves.toBeUndefined();
+
+    await expect(upsertImageWorkflow(createEnv(), {
+      ...workflowInput(),
+      architecture: "none",
+      lora_bindings: [{ lora_ids: ["anime_detail"], model_id: "anime_default" }],
+      lora_node_id: "12",
+      model_ids: ["anime_default"],
+    }, "admin")).rejects.toThrow(/architecture none cannot bind checkpoint or LoRA assets/);
+  });
+
   it("resolves matching workflow/checkpoint/LoRA bindings only", async () => {
     await expect(upsertImageWorkflow(createEnv(), {
       ...workflowInput(),

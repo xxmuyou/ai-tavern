@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getImageGenProvider, workflowHasCheckpointNode } from ".";
+import { getImageGenProvider, parseWorkflows, workflowHasCheckpointNode } from ".";
 import { ANATOMY_NEGATIVE } from "./prompts";
 import { ImageGenError, type ImageGenRequest } from "./types";
 
@@ -201,6 +201,110 @@ describe("runningHubImageGenProvider", () => {
         ),
         nodeId: "1",
       },
+    ]);
+  });
+
+  it("creates a chat moment task with a signed source URL when the load-image node accepts url", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-moment-url-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          chat_moment: {
+            architecture: "none",
+            mode: "create",
+            workflowId: "moment-url-workflow",
+            promptNodeId: "13",
+            promptFieldName: "prompt",
+            loadImageNodeId: "1",
+            loadImageFieldName: "url",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "create", "chat_moment")).generate(
+      {
+        mode: "create",
+        prompt: "a quiet cafe",
+        source_art_url: "companions/user/u1/cutout.png",
+        workflow_key: "chat_moment",
+      },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.workflowId).toBe("moment-url-workflow");
+    expect(body.nodeInfoList).toEqual([
+      {
+        fieldName: "url",
+        fieldValue: expect.stringMatching(
+          /^https:\/\/dev\.aiappsbox\.com\/api\/objects\/signed\/companions%2Fuser%2Fu1%2Fcutout\.png\?exp=\d+&sig=[a-f0-9]{64}$/,
+        ),
+        nodeId: "1",
+      },
+      { fieldName: "prompt", fieldValue: "a quiet cafe", nodeId: "13" },
+    ]);
+  });
+
+  it("creates a profile outfit task with a signed source URL when the load-image node accepts url", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-outfit-url-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          profile_outfit: {
+            architecture: "none",
+            mode: "variation",
+            workflowId: "outfit-url-workflow",
+            promptNodeId: "13",
+            promptFieldName: "prompt",
+            loadImageNodeId: "1",
+            loadImageFieldName: "url",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "variation", "profile_outfit")).generate(
+      {
+        mode: "variation",
+        prompt: "change outfit to a black dress",
+        source_art_url: "companions/user/u1/profile.webp",
+        workflow_key: "profile_outfit",
+      },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.workflowId).toBe("outfit-url-workflow");
+    expect(body.nodeInfoList).toEqual([
+      {
+        fieldName: "url",
+        fieldValue: expect.stringMatching(
+          /^https:\/\/dev\.aiappsbox\.com\/api\/objects\/signed\/companions%2Fuser%2Fu1%2Fprofile\.webp\?exp=\d+&sig=[a-f0-9]{64}$/,
+        ),
+        nodeId: "1",
+      },
+      { fieldName: "prompt", fieldValue: "change outfit to a black dress", nodeId: "13" },
     ]);
   });
 
@@ -630,6 +734,30 @@ describe("workflowHasCheckpointNode", () => {
   it("returns false for null or malformed JSON", () => {
     expect(workflowHasCheckpointNode(null, "portrait_create")).toBe(false);
     expect(workflowHasCheckpointNode("not json", "portrait_create")).toBe(false);
+  });
+});
+
+describe("parseWorkflows", () => {
+  it("parses none-architecture URL workflows", () => {
+    expect(parseWorkflows(JSON.stringify({
+      chat_moment: {
+        architecture: "none",
+        loadImageFieldName: "url",
+        loadImageNodeId: "1",
+        mode: "create",
+        promptNodeId: "13",
+        workflowId: "moment-url-workflow",
+      },
+    }))).toMatchObject({
+      chat_moment: {
+        architecture: "none",
+        loadImageFieldName: "url",
+        loadImageNodeId: "1",
+        mode: "create",
+        promptNodeId: "13",
+        workflowId: "moment-url-workflow",
+      },
+    });
   });
 });
 

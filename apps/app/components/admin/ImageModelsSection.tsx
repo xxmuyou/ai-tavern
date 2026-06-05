@@ -9,7 +9,7 @@ import { useAdminImageLoras, useAdminImageModels, useAdminImageWorkflows } from 
 import { AdminCollapsible, AdminPanel, AdminPanelHeader } from './AdminPanel';
 
 const INPUT_CLASS = 'min-h-9 rounded-lg border border-app-line bg-app-surface px-3 text-sm text-app-ink';
-const BASE_ARCHITECTURES = ['sdxl', 'sd15', 'ilxl', 'flux1'] as const;
+const BASE_ARCHITECTURES = ['sdxl', 'sd15', 'ilxl', 'flux1', 'none'] as const;
 
 /**
  * RunningHub catalog admin.
@@ -312,7 +312,7 @@ function AssetTagFields<T extends { architecture?: string; purpose?: string; sty
   return (
     <View className="web:grid web:grid-cols-2 web:gap-3">
       <Field label="Architecture">
-        <ArchitecturePicker onChange={(architecture) => setDraft({ ...draft, architecture })} value={draft.architecture ?? ''} />
+        <ArchitecturePicker assetOnly onChange={(architecture) => setDraft({ ...draft, architecture })} value={draft.architecture ?? ''} />
       </Field>
       <Field label="Style family">
         <TextInput className={INPUT_CLASS} onChangeText={(style_family) => setDraft({ ...draft, style_family })} placeholder="anime / realistic" placeholderTextColor="#687076" value={draft.style_family ?? ''} />
@@ -327,10 +327,11 @@ function AssetTagFields<T extends { architecture?: string; purpose?: string; sty
   );
 }
 
-function ArchitecturePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+function ArchitecturePicker({ assetOnly = false, onChange, value }: { assetOnly?: boolean; onChange: (value: string) => void; value: string }) {
+  const architectures = assetOnly ? BASE_ARCHITECTURES.filter((architecture) => architecture !== 'none') : BASE_ARCHITECTURES;
   return (
     <View className="flex-row flex-wrap gap-2">
-      {BASE_ARCHITECTURES.map((architecture) => {
+      {architectures.map((architecture) => {
         const active = value === architecture;
         return (
           <Pressable

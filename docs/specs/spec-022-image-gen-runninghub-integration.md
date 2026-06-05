@@ -5,8 +5,8 @@
 > **重构（2026-06-02 修正）：「checkpoint catalog + workflow catalog」统一结构。** 生图配置从「按写死 style 枚举」和错误的「model 自带 workflow/fieldName」收敛为三层（仅 RunningHub；OpenAI/mock 不受影响）：
 > - **checkpoint/model 是独立目录。** `image_models` 只保存 `label` / `tag` / `ckpt_name` / active / 排序，用于命名、分类、管理 RunningHub 已上传 checkpoint。
 > - **workflow 拥有节点接线。** `image_workflows` 保存 `workflowId` / `promptNodeId` / `promptFieldName` / `checkpointNodeId` / `checkpointFieldName` / `loadImageNodeId` / `loadImageFieldName`。`checkpointFieldName` 属于 workflow；当前兼容默认值是 `ckpt_name`，但后续保存/入队必须通过 workflow contract 校验。`loadImageFieldName` 为 `url` / `image_url` 时，RunningHub provider 传可公开访问的签名 URL；其它 load-image 字段默认传 upload API 返回的 `fileName`。
-> - **base architecture 是底模兼容 SOT。** `image_workflows.architecture`、`image_models.architecture`、`image_loras.architecture` 必须一致，第一版枚举为 `sdxl` / `sd15` / `ilxl` / `flux1`。`Anime/Realistic` 不是底模兼容字段。
-> - **workflow 下有 Anime/Realistic asset lanes。** 每条 semantic workflow 只按 `anime` / `realistic` 分两类资产池；同一 architecture + 同一 lane 内 active checkpoint 与 active LoRA 默认可组合。
+> - **base architecture 是底模兼容 SOT。** `image_workflows.architecture`、`image_models.architecture`、`image_loras.architecture` 必须一致，第一版枚举为 `sdxl` / `sd15` / `ilxl` / `flux1`；workflow 额外允许 `none` 表示无基座、无 checkpoint/LoRA 绑定。`Anime/Realistic` 不是底模兼容字段。
+> - **workflow 下有 Anime/Realistic asset lanes。** 每条有基座的 semantic workflow 只按 `anime` / `realistic` 分两类资产池；同一 architecture + 同一 lane 内 active checkpoint 与 active LoRA 默认可组合。`architecture=none` 的 workflow 不配置资产 lane。
 > - **配置文件只做 seed。** `config/runninghub-workflows.<env>.json` 可声明默认 `checkpoints[]` 和 `workflows{}`，同步脚本 upsert 到 D1；运行时和 Admin 均读 DB catalog。
 > - 生图请求 `ImageGenRequest`：`style?: ArtStyle` → `workflow_key?: string` + `ckpt_name?: string`；`checkpoint_field_name` 只允许来自 workflow 解析结果（详见 §C.0）。
 >
@@ -63,7 +63,7 @@
 
 - 在 spec-020 的 `ImageGenProvider` 抽象下实现首个真实 provider `RunningHubImageGenProvider`
 - 规划支持 **3 个 workflow（create / variation / edit）**；MVP 先支持 create + variation，edit 接口可先返回 `501 edit_not_ready`
-- checkpoint/LoRA catalog 使用 `architecture=sdxl|sd15|ilxl|flux1` 做底模兼容约束，使用 `style_family=anime|realistic` 做主分类；同一 semantic workflow 的同一 architecture + lane 内，active checkpoint 与 active LoRA 默认可组合。后端按用户选择的 workflow/lane/checkpoint 覆盖 checkpoint 节点的 contract-validated fieldName，不使用代码级多风格枚举。
+- checkpoint/LoRA catalog 使用 `architecture=sdxl|sd15|ilxl|flux1` 做底模兼容约束，使用 `style_family=anime|realistic` 做主分类；同一 semantic workflow 的同一 architecture + lane 内，active checkpoint 与 active LoRA 默认可组合。后端按用户选择的 workflow/lane/checkpoint 覆盖 checkpoint 节点的 contract-validated fieldName，不使用代码级多风格枚举。URL 输入型、无基座 workflow 使用 `architecture=none`，不能绑定 checkpoint/LoRA。
 - 通过环境变量 `IMAGE_GEN_PROVIDER` 在 mock / runninghub 之间切换；本地 / CI 默认 mock，staging / production 显式配 `runninghub`
 - 通过 R2 签名 URL 把源图安全分发给 runninghub，无需公开 bucket
 - 通过 webhook 异步接收任务结果，写回 R2 和 DB；不依赖长轮询
@@ -395,8 +395,8 @@ workflowId、nodeId、fieldName、workflow API contract、checkpoint/LoRA catalo
 
 - `checkpoints[]`：默认 checkpoint/model catalog，部署同步 upsert 到 `image_models`。`architecture` 必填且只能是 `sdxl` / `sd15` / `ilxl` / `flux1`；`styleFamily` 只能是 `anime` 或 `realistic`；`tags` 只作补充，不能引入新的主分类。
 - `loras[]`：默认 LoRA catalog。`architecture` 与 `styleFamily` 必须和可绑定 checkpoint 一致；第一阶段单次生成只支持 0-1 个 LoRA。
-- `workflows{}`：workflowId、mode、`architecture`、可覆盖节点字段、latent/KSampler 参数映射、contract hash。字段名必须来自 RunningHub contract；空值代表未配置，不能靠基座名推断。
-- `modelIds` / `loraBindings`：workflow 下的资产 membership；sync/Admin 保存时强制 workflow/checkpoint/LoRA `architecture` 一致，checkpoint/LoRA `styleFamily` 一致。
+- `workflows{}`：workflowId、mode、`architecture`、可覆盖节点字段、latent/KSampler 参数映射、contract hash。字段名必须来自 RunningHub contract；空值代表未配置，不能靠基座名推断。`architecture=none` 只用于不吃 checkpoint/LoRA 的 workflow，例如 URL 输入型 `chat_moment` / `profile_outfit`。
+- `modelIds` / `loraBindings`：workflow 下的资产 membership；sync/Admin 保存时强制 workflow/checkpoint/LoRA `architecture` 一致，checkpoint/LoRA `styleFamily` 一致。`architecture=none` 时必须为空。
 - 要新增 workflow，在此列表加一个 semantic key，或直接在 Admin 里新增；key 表达拓扑/用途，不表达具体 checkpoint/LoRA 名，也不使用数字编号。
 
 同步后写入 D1 catalog 表，并保留 `image_gen.workflows` 作为旧 runtime fallback：
@@ -519,7 +519,7 @@ CREATE TABLE image_workflow_models (... PRIMARY KEY (workflow_key, model_id));
 - apiKey 错 → `provider_config_error`（不重试）
 - workflowId 错 → `APIKEY_INVALID_NODE_INFO`（不重试）
 - workflow contract 缺失或 `nodeId + fieldName` 不存在 → Admin 保存或 job 入队前拒绝，不调用 RunningHub
-- workflow/checkpoint/LoRA 组合未命中同一 architecture + Anime/Realistic lane → 拒绝入队，不调用 RunningHub
+- workflow/checkpoint/LoRA 组合未命中同一 architecture + Anime/Realistic lane，或 `architecture=none` workflow 绑定了 checkpoint/LoRA → 拒绝入队，不调用 RunningHub
 - webhook 不可达 → 5 分钟后 cron 兜底拉 status
 - 15 分钟仍 processing → 标 failed `code=timeout`
 - webhook 端点拒绝无签名 / 错签名请求

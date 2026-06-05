@@ -96,8 +96,8 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 **结论：不要按 SDXL/SD/ILXL/FLUX 这类基座名推断 `prompt` / `text` / LoRA 字段，也不要按地区细分 Anime。** RunningHub 的 `nodeInfoList.fieldName` 必须来自该 workflow API JSON 中对应 `nodeId.inputs` 的真实 key。正确分工是：
 
 - **semantic workflow 负责表达用途。** 例如 `portrait_create`、`chat_moment`、`companion_cutout`、`profile_outfit`。workflow key 必须可读，不能使用数字编号。
-- **base architecture 负责底模兼容。** `sdxl` / `sd15` / `ilxl` / `flux1` 是独立字段，不是自由 tag。workflow、checkpoint、LoRA 必须三者一致；不一致不能保存、同步或入队。
-- **Anime/Realistic lane 负责资产分类。** 每条 workflow 下只有 `Anime` 和 `Realistic` 两个主 lane；同一 architecture + 同一 lane 内的 active checkpoint 与 active LoRA 默认可以组合。
+- **base architecture 负责底模兼容。** `sdxl` / `sd15` / `ilxl` / `flux1` 是独立字段，不是自由 tag。workflow、checkpoint、LoRA 必须三者一致；不一致不能保存、同步或入队。workflow 额外允许 `none`，表示 URL 输入型/无基座 workflow，不能绑定 checkpoint 或 LoRA。
+- **Anime/Realistic lane 负责资产分类。** 每条有基座的 workflow 下只有 `Anime` 和 `Realistic` 两个主 lane；同一 architecture + 同一 lane 内的 active checkpoint 与 active LoRA 默认可以组合。`architecture=none` 的 workflow 不配置资产 lane。
 - **workflow contract 负责不报节点错误。** 先从 RunningHub 拉取或导出 workflow API JSON，再校验 `nodeId + fieldName` 是否存在。
 - **asset catalog 只保存文件名和展示信息。** checkpoint 文件名来自 `image_models.ckpt_name`；LoRA 文件名来自 `image_loras.lora_name`；它们不决定节点字段名。
 
@@ -155,11 +155,11 @@ nodeInfoList = [
 2. 把 `workflowId` 加到 repo 对应环境配置，或在 Admin 新增 semantic workflow；key 必须表达用途，例如 `portrait_create`。
 3. 在 Admin 点击刷新 contract，或由 sync 脚本调用 RunningHub `getJsonApiFormat`，缓存 API JSON 里的节点与 inputs。
 4. 从 contract 里选择 prompt、checkpoint、load image、negative prompt、LoRA、latent 宽高/batch、KSampler seed 等要覆盖的节点和字段。
-5. 给 workflow、checkpoint、LoRA 填同一个底模架构，例如 `sdxl`。`style_family` 不能代替 architecture。
+5. 给有基座的 workflow、checkpoint、LoRA 填同一个底模架构，例如 `sdxl`。URL 输入型无基座 workflow 填 `none`，并保持 checkpoint/LoRA 绑定为空；`style_family` 不能代替 architecture。
 6. 在该 workflow 下选择 `Anime` 或 `Realistic` lane。
 7. 添加 checkpoint：记录 RunningHub 中的准确 `ckpt_name`，放入对应 lane。
 8. 添加 LoRA：记录 RunningHub 中的准确 `lora_name`，填写默认 strength，放入对应 lane。第一阶段单次生成只支持 0-1 个 LoRA。
-9. 批量出图前，系统先验证 workflow/checkpoint/LoRA architecture 一致，再验证 lane membership 和 contract；latent/KSampler 参数字段也必须命中 contract，任一失败都拒绝入队。
+9. 批量出图前，系统先验证 workflow/checkpoint/LoRA architecture 一致，再验证 lane membership 和 contract；`architecture=none` 时拒绝任何 checkpoint/LoRA 绑定；latent/KSampler 参数字段也必须命中 contract，任一失败都拒绝入队。
 
 ### 6.4 接入「自己上传的 checkpoint」的步骤
 

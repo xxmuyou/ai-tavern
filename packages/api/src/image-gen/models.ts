@@ -222,8 +222,10 @@ const LORA_COLUMNS =
 const WORKFLOW_COLUMNS =
   "key, label, architecture, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, load_image_field_name, negative_prompt_node_id, negative_prompt_field_name, contract_json, contract_hash, contract_refreshed_at, lora_node_id, lora_name_field_name, lora_model_strength_field_name, lora_clip_strength_field_name, generation_params_json, is_active, sort_order, updated_at, updated_by";
 const ASSET_LANES = new Set(["anime", "realistic"]);
-export const BASE_ARCHITECTURES = ["sdxl", "sd15", "ilxl", "flux1"] as const;
+export const BASE_ARCHITECTURES = ["sdxl", "sd15", "ilxl", "flux1", "none"] as const;
+const ASSET_BASE_ARCHITECTURES = BASE_ARCHITECTURES.filter((value) => value !== "none");
 const BASE_ARCHITECTURE_SET = new Set<string>(BASE_ARCHITECTURES);
+const ASSET_BASE_ARCHITECTURE_SET = new Set<string>(ASSET_BASE_ARCHITECTURES);
 
 function toImageModel(row: ImageModelRow): ImageModel {
   return {
@@ -511,7 +513,7 @@ export async function createImageModel(
 ): Promise<void> {
   const now = Date.now();
   const tag = normalizeLaneList(input.tag, "checkpoint tag", { required: true });
-  const architecture = normalizeArchitecture(input.architecture, "checkpoint architecture", { required: true });
+  const architecture = normalizeArchitecture(input.architecture, "checkpoint architecture", { required: true, assetOnly: true });
   const styleFamily = normalizeLane(input.style_family, "checkpoint style_family");
   const tags = normalizeLaneList(input.tags ?? input.tag, "checkpoint tags");
   await env.DB.prepare(
@@ -545,7 +547,7 @@ export async function updateImageModel(
 ): Promise<void> {
   const now = Date.now();
   const tag = normalizeLaneList(input.tag, "checkpoint tag", { required: true });
-  const architecture = normalizeArchitecture(input.architecture, "checkpoint architecture", { required: true });
+  const architecture = normalizeArchitecture(input.architecture, "checkpoint architecture", { required: true, assetOnly: true });
   const styleFamily = normalizeLane(input.style_family, "checkpoint style_family");
   const tags = normalizeLaneList(input.tags ?? input.tag, "checkpoint tags");
   await env.DB.prepare(
@@ -582,7 +584,7 @@ export async function createImageLora(
   updatedBy: string,
 ): Promise<void> {
   const now = Date.now();
-  const architecture = normalizeArchitecture(input.architecture, "LoRA architecture", { required: true });
+  const architecture = normalizeArchitecture(input.architecture, "LoRA architecture", { required: true, assetOnly: true });
   const styleFamily = normalizeLane(input.style_family, "LoRA style_family");
   const tags = normalizeLaneList(input.tags ?? input.style_family ?? "", "LoRA tags");
   await env.DB.prepare(
@@ -616,7 +618,7 @@ export async function updateImageLora(
   updatedBy: string,
 ): Promise<void> {
   const now = Date.now();
-  const architecture = normalizeArchitecture(input.architecture, "LoRA architecture", { required: true });
+  const architecture = normalizeArchitecture(input.architecture, "LoRA architecture", { required: true, assetOnly: true });
   const styleFamily = normalizeLane(input.style_family, "LoRA style_family");
   const tags = normalizeLaneList(input.tags ?? input.style_family ?? "", "LoRA tags");
   await env.DB.prepare(
@@ -879,6 +881,9 @@ async function validateWorkflowAssetBindings(
 ): Promise<void> {
   const modelIds = [...new Set(input.modelIds.map((id) => id.trim()).filter(Boolean))];
   const loraIds = [...new Set(input.loraBindings.flatMap((binding) => binding.lora_ids).map((id) => id.trim()).filter(Boolean))];
+  if (input.architecture === "none" && (modelIds.length > 0 || loraIds.length > 0)) {
+    throw new Error(`workflow ${input.workflowKey} architecture none cannot bind checkpoint or LoRA assets.`);
+  }
   const models = await loadAssetsByIds<AssetBindingModel>(
     env,
     "image_models",
@@ -964,17 +969,19 @@ function normalizeLoraBindings(
 export function normalizeArchitecture(
   value: string | null | undefined,
   fieldName: string,
-  options?: { required?: boolean },
+  options?: { assetOnly?: boolean; required?: boolean },
 ): string {
   const trimmed = value?.trim().toLowerCase() ?? "";
+  const allowed = options?.assetOnly ? ASSET_BASE_ARCHITECTURES : BASE_ARCHITECTURES;
+  const allowedSet = options?.assetOnly ? ASSET_BASE_ARCHITECTURE_SET : BASE_ARCHITECTURE_SET;
   if (!trimmed) {
     if (options?.required) {
-      throw new Error(`${fieldName} must be one of ${BASE_ARCHITECTURES.join(", ")}.`);
+      throw new Error(`${fieldName} must be one of ${allowed.join(", ")}.`);
     }
     return "";
   }
-  if (!BASE_ARCHITECTURE_SET.has(trimmed)) {
-    throw new Error(`${fieldName} must be one of ${BASE_ARCHITECTURES.join(", ")}.`);
+  if (!allowedSet.has(trimmed)) {
+    throw new Error(`${fieldName} must be one of ${allowed.join(", ")}.`);
   }
   return trimmed;
 }
