@@ -1,3 +1,4 @@
+import { handleAdminChatPromptDebugRequest } from "./chat-prompt-debug";
 import { handleAdminCompanionArtRequest } from "./companion-art";
 import { handleAdminCreditsRequest } from "./credits";
 import { handleAdminAllowlistRequest } from "./user-allowlist";
@@ -12,6 +13,9 @@ export async function handleAdminRequest(
 
   const companionArtResponse = await handleAdminCompanionArtRequest(request, env, pathname);
   if (companionArtResponse) return companionArtResponse;
+
+  const chatPromptDebugResponse = await handleAdminChatPromptDebugRequest(request, env, pathname);
+  if (chatPromptDebugResponse) return chatPromptDebugResponse;
 
   const creditsResponse = await handleAdminCreditsRequest(request, env, pathname);
   if (creditsResponse) return creditsResponse;

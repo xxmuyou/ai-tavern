@@ -2,6 +2,7 @@ export const LLM_TASKS = [
   "chat",
   "signal",
   "summary",
+  "memory_extract",
   "character-assist",
   "image_prompt_assist",
   "story_beat_assist",

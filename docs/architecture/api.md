@@ -343,7 +343,9 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
   "personality": "...",
   "background": "...",
   "speech_style": "...",
-  "relationship_role": "friend"
+  "relationship_role": "friend",
+  "voice_id": "Arrogant_Miss",
+  "voice_speed": "slow" | "medium" | "fast"
   // 不传 source（强制 'user'）, preferred_scenes 默认空
 }
 
@@ -353,6 +355,8 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 // 错误
 // 400 gender_required 当未传 gender 字段
 // 400 invalid_gender 当 gender 不是 'male'/'female'
+// 400 invalid_voice_id 当 voice_id 不在当前 MiniMax voice catalog 中
+// 400 invalid_voice_speed 当 voice_speed 不是 slow/medium/fast
 // 402 QUOTA_EXCEEDED 当 active companion 数 >= 3 且非订阅用户
 ```
 
@@ -361,8 +365,75 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 修改自创角色（官方角色不可改）。
 
 ```json
+// Request 可部分更新 POST /companions 的字段，也包括:
+{
+  "voice_id": "English_Graceful_Lady",
+  "voice_speed": "fast"
+}
+
 // Response 200 / 403 FORBIDDEN
 ```
+
+### `GET /voice/options`
+
+返回 MiniMax voice catalog、默认 voice 和语速档位，供创建/编辑 companion 时选择。
+`group_id` 属于服务端 TTS 调用配置，不在此响应中返回。
+
+```json
+{
+  "provider": "minimax",
+  "defaults": {
+    "female_voice_id": "Arrogant_Miss",
+    "male_voice_id": "male-qn-qingse",
+    "speed": "medium"
+  },
+  "speed_presets": [
+    { "id": "slow", "label": "Slow", "value": 0.8 },
+    { "id": "medium", "label": "Medium", "value": 1 },
+    { "id": "fast", "label": "Fast", "value": 1.25 }
+  ],
+  "voices": [
+    {
+      "id": "Arrogant_Miss",
+      "label": "嚣张小姐",
+      "language": "zh-mandarin",
+      "language_label": "中文 (普通话)",
+      "gender_hint": "female"
+    }
+  ]
+}
+```
+
+`language` 只用于 UI 分组/筛选；语音合成仍使用 MiniMax
+`language_boost: "auto"`。`gender_hint` 只用于推荐排序，不限制选择。
+
+### `POST /voice/preview`
+
+为创建/编辑 companion 表单中选定的 voice id 生成或复用试听音频 URL。试听文本固定为
+`Hi, I’m here with you. Let’s take this one moment at a time.`，试听语速固定为
+`medium`，不读取 companion 表单中的 `voice_speed`。试听音频是全局 R2 缓存，不按用户、
+companion 或 message 分桶。
+
+```json
+// Header: Authorization
+// Request
+{
+  "voice_id": "Arrogant_Miss"
+}
+
+// Response 200
+{
+  "url": "https://..."
+}
+
+// 错误
+// 400 invalid_voice_id 当 voice_id 不在当前 MiniMax voice catalog 中
+// 503 voice_not_configured 当缓存未命中且 MiniMax/R2 签名配置不足
+// 502 voice_provider_error 当 MiniMax 试听合成失败
+```
+
+缓存 key 包含 render version、MiniMax model、固定试听文本、voice id 和 `medium`，
+因此同一 voice id 的重复试听不会重复调用 MiniMax。
 
 ### `DELETE /companions/{id}`
 
@@ -463,6 +534,14 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 // 429 RATE_LIMITED 一分钟 10 条
 // 503 LLM_UNAVAILABLE 所有 provider 失败
 ```
+
+### `POST /chat/{companion_id}/messages/{message_id}/voice`
+
+为一条 companion 回复生成或复用语音 URL。
+
+服务端根据 companion 的 `voice_id` 与 `voice_speed` 调用 MiniMax T2A；旧角色缺少
+voice 设置时按 `config/minimax-voices.<env>.json` 的默认值回退。生成结果以 voice id、
+speed、文本和 render version 参与缓存 key，避免改声音后复用旧音频。
 
 **服务端处理：**
 1. 校验 auth + 订阅

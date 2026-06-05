@@ -24,8 +24,14 @@ import {
   parseSceneTags,
   type ChatThreadRow,
 } from "./loaders";
+import {
+  loadThreadMemories,
+  runMemoryExtractQuietly,
+  savePromptDebugSnapshot,
+  shouldWritePromptDebug,
+} from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
-import { buildChatPrompt } from "./prompt";
+import { buildChatPromptArtifacts, type UserPersonaForPrompt } from "./prompt";
 import { resolveThreadPersona } from "../personas";
 import { applyHostilityOverride, assessHostileInput } from "./hostility";
 import {
@@ -135,6 +141,9 @@ export async function handlePostMessage(
     thread.persona_id = requestedPersonaId;
   }
   const persona = await resolveThreadPersona(env, user.id, thread.persona_id);
+  const userPersonaForPrompt: UserPersonaForPrompt = persona
+    ? { description: persona.description, gender: persona.gender, name: persona.name }
+    : null;
 
   // spec-025: gate the secret on unlock state, and feed the current stage so
   // the prompt can pick how intimately the character addresses the user.
@@ -144,17 +153,17 @@ export async function handlePostMessage(
   const storyBeat = sceneIdInput
     ? await loadStoryBeatForScene(env, user.id, companionId, sceneIdInput)
     : null;
+  const threadMemories = await loadThreadMemories(env, thread.id);
 
-  const promptMessages = buildChatPrompt({
+  const promptArtifacts = buildChatPromptArtifacts({
     companion,
     narrative,
     recentMessages,
     secretToReveal,
     stage,
     storyBeat,
-    userPersona: persona
-      ? { description: persona.description, gender: persona.gender, name: persona.name }
-      : null,
+    threadMemories,
+    userPersona: userPersonaForPrompt,
     exampleDialogues: parseExampleDialogues(companion.example_dialogues),
     scene: scene
       ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
@@ -170,6 +179,18 @@ export async function handlePostMessage(
     threadSummary: thread.summary,
     userText,
   });
+  if (shouldWritePromptDebug(env, isAdmin)) {
+    ctx.waitUntil(
+      savePromptDebugSnapshot(env, {
+        companionId,
+        now,
+        segments: promptArtifacts.segments,
+        threadId: thread.id,
+        tokenEstimate: promptArtifacts.tokenEstimate,
+        userId: user.id,
+      }),
+    );
+  }
 
   // Pull the first chunk before opening the SSE response so we can surface
   // "all providers failed" as a clean 503 JSON instead of an empty event stream.
@@ -180,7 +201,7 @@ export async function handlePostMessage(
       // not a clipped assistant. frequency/presence penalties cut samey phrasing.
       frequency_penalty: 0.4,
       max_tokens: 700,
-      messages: promptMessages,
+      messages: promptArtifacts.messages,
       presence_penalty: 0.3,
       task: "chat",
       temperature: 0.95,
@@ -206,12 +227,15 @@ export async function handlePostMessage(
       iterator,
       narrative,
       now,
+      relationship_role: companion.relationship_role,
       scene_id: sceneIdInput,
       sse,
       subscriber,
       thread,
       user,
+      userPersona: userPersonaForPrompt,
       userText,
+      companionName: companion.name,
     }),
   );
   return sse.response;
@@ -228,14 +252,17 @@ type RunChatArgs = {
   scene_id: string | null;
   activity_id: string | null;
   narrative: string;
+  companionName: string;
+  relationship_role: string | null;
   userText: string;
+  userPersona: UserPersonaForPrompt;
   subscriber: boolean;
   now: number;
   ctx: ExecutionContext;
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, narrative, userText, subscriber, now, ctx } =
+  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, narrative, companionName, relationship_role, userText, userPersona, subscriber, now, ctx } =
     args;
 
   let replyBuffer = "";
@@ -365,6 +392,19 @@ async function runChat(args: RunChatArgs): Promise<void> {
   const totalCost = finalExtract.cost_usd; // call 1 cost is logged inside llmStream.
   void recordUsage(env, user.id, formatDateUtc(now), 1, totalCost);
   void maybeEnqueueSummary(env, thread.id, thread.message_count + 2);
+  ctx.waitUntil(
+    runMemoryExtractQuietly(env, {
+      companion_id: companionId,
+      companion_name: companionName,
+      companion_reply: replyBuffer,
+      relationship_narrative: narrative,
+      relationship_role,
+      thread_id: thread.id,
+      user_id: user.id,
+      user_persona: userPersona,
+      user_text: userText,
+    }),
+  );
 }
 
 type PersistInput = {

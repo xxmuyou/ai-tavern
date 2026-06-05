@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { hexToBytes, synthesizeSpeech, voiceIdForGender, VoiceError } from "./minimax-t2a";
+import { hexToBytes, synthesizeSpeech, VoiceError } from "./minimax-t2a";
+import { defaultVoiceIdForGender, loadMiniMaxVoiceConfig, speedValueForPreset } from "./config";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -12,21 +13,26 @@ describe("hexToBytes", () => {
   });
 });
 
-describe("voiceIdForGender", () => {
-  it("uses gendered defaults and honours overrides", () => {
-    expect(voiceIdForGender({} as Env, "male")).toBe("male-qn-qingse");
-    expect(voiceIdForGender({} as Env, "female")).toBe("female-tianmei");
-    expect(voiceIdForGender({} as Env, null)).toBe("female-tianmei");
-    expect(voiceIdForGender({ MINIMAX_TTS_VOICE_MALE: "custom" } as Env, "male")).toBe("custom");
+describe("MiniMax voice config", () => {
+  it("loads repo-managed defaults and speed presets", () => {
+    const config = loadMiniMaxVoiceConfig({ APP_ENV: "dev" } as Env);
+    expect(config.model).toBe("speech-2.6-turbo");
+    expect(config.group_id).toBe("2061321948939424466");
+    expect(config.voices.length).toBeGreaterThan(300);
+    expect(defaultVoiceIdForGender({ APP_ENV: "dev" } as Env, "female")).toBe("Arrogant_Miss");
+    expect(defaultVoiceIdForGender({ APP_ENV: "dev" } as Env, "male")).toBe("male-qn-qingse");
+    expect(speedValueForPreset({ APP_ENV: "dev" } as Env, "slow")).toBe(0.8);
+    expect(speedValueForPreset({ APP_ENV: "dev" } as Env, "fast")).toBe(1.25);
   });
 });
 
 describe("synthesizeSpeech", () => {
-  const env = { MINIMAX_API_KEY: "k", MINIMAX_GROUP_ID: "g" } as Env;
+  const env = { MINIMAX_API_KEY: "k" } as Env;
+  const opts = { groupId: "g", model: "speech-2.6-turbo", speed: 1.25, text: "hi", voiceId: "female-tianmei" };
 
   it("throws voice_not_configured without key/group", async () => {
     await expect(
-      synthesizeSpeech({} as Env, { text: "hi", voiceId: "v" }),
+      synthesizeSpeech({} as Env, opts),
     ).rejects.toMatchObject({ code: "voice_not_configured" });
   });
 
@@ -39,8 +45,13 @@ describe("synthesizeSpeech", () => {
         }),
       ),
     );
-    const bytes = await synthesizeSpeech(env, { text: "hi", voiceId: "female-tianmei" });
+    const bytes = await synthesizeSpeech(env, opts);
     expect(Array.from(bytes)).toEqual([10, 11, 12]);
+    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.minimaxi.com/v1/t2a_v2?GroupId=g");
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.model).toBe("speech-2.6-turbo");
+    expect(body.voice_setting).toMatchObject({ speed: 1.25, voice_id: "female-tianmei" });
   });
 
   it("throws voice_provider_error on a non-zero status_code", async () => {
@@ -52,6 +63,6 @@ describe("synthesizeSpeech", () => {
         }),
       ),
     );
-    await expect(synthesizeSpeech(env, { text: "hi", voiceId: "v" })).rejects.toBeInstanceOf(VoiceError);
+    await expect(synthesizeSpeech(env, opts)).rejects.toBeInstanceOf(VoiceError);
   });
 });

@@ -12,6 +12,8 @@
 
 **RunningHub workflow 例外：** workflow 接线、workflow API contract、latent/KSampler 参数映射、checkpoint/LoRA catalog 与 Anime/Realistic asset lane 不是 secret，也不应长期放在 `.env.*` / `wrangler.jsonc vars` 里手写。它们属于“生图流水线拓扑与资产配置”，由 repo 中按环境区分的配置文件 seed 到 D1 catalog，也可在 Admin 里运行期调整。checkpoint 文件名只在 `image_models`；LoRA 文件名只在 `image_loras`；可用组合由 semantic workflow 下的 Anime/Realistic lane 决定。
 
+**MiniMax voice catalog 例外：** TTS GroupId、model、默认 voice、语速档位与系统音色列表也不是 secret，但本阶段不放 Admin UI 管理。它们由 `config/minimax-voices.<env>.json` 随代码部署打包；Admin 只继续管理现有运营设置、生图 catalog 和 LLM 路由。
+
 **API key / secret / signing key 不属于运行时覆盖层。** 这些值只通过 `.env.*`、Wrangler secrets、`pnpm upload:secrets:*` 或 `wrangler secret put` 管理。后台只显示它们是否已配置，不显示值，也不能编辑。
 
 ---

@@ -29,6 +29,7 @@
 - [`architecture/data-model.md`](./architecture/data-model.md) — D1 表设计与关系
 - [`architecture/api.md`](./architecture/api.md) — HTTP API 端点清单
 - [`architecture/llm.md`](./architecture/llm.md) — LLM 多供应商集成与 prompt 设计
+- [`architecture/voice.md`](./architecture/voice.md) — MiniMax TTS 配置、voice catalog 与 companion voice 设置
 
 ### 运维（Where & When）
 - [`ops/environments.md`](./ops/environments.md) — 本地 / dev / prod 环境

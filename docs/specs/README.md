@@ -59,7 +59,7 @@
 | 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 🟢 done（WF2 表情立绘已退役返回 410 保数据；干净底图直接展示；cutout 工作流 + 聊天时 matting + 瞬间图合成已落地，见 commit "Implement companion cutout moment workflow"；情绪只驱动 UI） |
 | 032 | [Web Public Companion Discovery Home（暗色首页 + 公开角色发现 + 风格标签收敛）](./spec-032-web-public-companion-discovery-home.md) | Web UI+API+内容标签 | 017, 018, 019, 022 | 2-4 天 | 🟡 in-progress（未登录首页直接展示真实 companions；用户侧与 Admin 主分类只保留 Anime/Realistic） |
 | 033 | [Profile Outfit Images and User Image Assets（profile 换装图 + 用户资产收口）](./spec-033-profile-outfit-image-assets.md) | 后端+Web UI+image-gen | 019, 022, 030, 031 | 2-4 天 | 🟢 done（Change outfit 从聊天移到 profile；生成图自动进入 Me 资产；确认后作为用户私有 profile 图覆盖；profile-outfit 端点 + /me/image-assets 已落地，见 commit "Implement profile outfit image assets"） |
-| 034 | [Chat Quality, Memory, and Prompt Governance（聊天质量、记忆与 Prompt 治理）](./spec-034-chat-quality-memory-prompt-governance.md) | 后端+LLM+文档治理 | 006, 025, 026, 029 | 4-6 天 | 📝 draft（单线程 memory、PromptSegment 分层、post-history guard、prompt debug；不复刻完整 SillyTavern） |
+| 034 | [Chat Quality, Memory, and Prompt Governance（聊天质量、记忆与 Prompt 治理）](./spec-034-chat-quality-memory-prompt-governance.md) | 后端+LLM+文档治理 | 006, 025, 026, 029 | 4-6 天 | 🟡 in-progress（单线程 memory、PromptSegment 分层、post-history guard、prompt debug；不复刻完整 SillyTavern） |
 
 **估时总计：** 约 64-94 工程日（不含美术、QA、市场准备）
 

@@ -17,8 +17,13 @@ import {
   parseExampleDialogues,
   parseSceneTags,
 } from "./loaders";
+import {
+  loadThreadMemories,
+  savePromptDebugSnapshot,
+  shouldWritePromptDebug,
+} from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
-import { buildChatPrompt, type HistoryMessage } from "./prompt";
+import { buildChatPromptArtifacts, type HistoryMessage, type UserPersonaForPrompt } from "./prompt";
 import { checkQuota, checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
 import { createSSEStream, type SSEHandle } from "./sse";
 import { formatDateUtc, recordUsage } from "./usage";
@@ -93,6 +98,9 @@ export async function handleRegenerateMessage(
     ? await loadActiveActivityForChat(env, user.id, target.activity_id)
     : null;
   const persona = await resolveThreadPersona(env, user.id, thread.persona_id);
+  const userPersonaForPrompt: UserPersonaForPrompt = persona
+    ? { description: persona.description, gender: persona.gender, name: persona.name }
+    : null;
 
   await ensureRelationship(env, user.id, companionId, now);
   const relationship = await loadRelationship(env, user.id, companionId);
@@ -107,8 +115,9 @@ export async function handleRegenerateMessage(
   const storyBeat = sceneId
     ? await loadStoryBeatForScene(env, user.id, companionId, sceneId)
     : null;
+  const threadMemories = await loadThreadMemories(env, thread.id);
 
-  const promptMessages = buildChatPrompt({
+  const promptArtifacts = buildChatPromptArtifacts({
     companion,
     narrative,
     recentMessages,
@@ -124,20 +133,32 @@ export async function handleRegenerateMessage(
           activity_hint: activity.daily_state_snapshot.activity_hint,
         }
       : null,
-    userPersona: persona
-      ? { description: persona.description, gender: persona.gender, name: persona.name }
-      : null,
+    threadMemories,
+    userPersona: userPersonaForPrompt,
     exampleDialogues: parseExampleDialogues(companion.example_dialogues),
     threadSummary: thread.summary,
     userText,
   });
+  if (shouldWritePromptDebug(env, isAdmin)) {
+    ctx.waitUntil(
+      savePromptDebugSnapshot(env, {
+        companionId,
+        messageId,
+        now,
+        segments: promptArtifacts.segments,
+        threadId: thread.id,
+        tokenEstimate: promptArtifacts.tokenEstimate,
+        userId: user.id,
+      }),
+    );
+  }
 
   const iterator = llmStream(
     env,
     {
       frequency_penalty: 0.4,
       max_tokens: 700,
-      messages: promptMessages,
+      messages: promptArtifacts.messages,
       presence_penalty: 0.3,
       task: "chat",
       // A touch hotter than the first pass so a regeneration reads as a genuine

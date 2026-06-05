@@ -7,6 +7,8 @@ export type ChatCompanionRow = {
   is_active: number;
   name: string;
   gender: string | null;
+  voice_id: string | null;
+  voice_speed: string | null;
   appearance: string | null;
   personality: string | null;
   background: string | null;
@@ -41,7 +43,7 @@ export async function loadCompanionForChat(
 ): Promise<ChatCompanionRow | null> {
   return env.DB.prepare(
     `SELECT id, source, created_by, is_active,
-            name, gender, appearance, personality, background, speech_style, relationship_role,
+            name, gender, voice_id, voice_speed, appearance, personality, background, speech_style, relationship_role,
             want, secret, boundary, greeting, example_dialogues
      FROM companions
      WHERE id = ?`,

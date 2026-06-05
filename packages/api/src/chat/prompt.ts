@@ -31,6 +31,39 @@ export type ActivityForPrompt = {
   activity_hint: string;
 } | null;
 
+export type ThreadMemoryForPrompt = {
+  id: string;
+  kind: "relationship_fact" | "user_preference" | "promise" | "open_loop" | "character_state";
+  content: string;
+  importance: number;
+  updated_at: number;
+};
+
+export type PromptSegmentPosition =
+  | "system_preamble"
+  | "pre_history"
+  | "in_history"
+  | "post_history"
+  | "final_user";
+
+export type PromptSegment = {
+  id: string;
+  role: "system" | "user" | "assistant";
+  position: PromptSegmentPosition;
+  priority: number;
+  required: boolean;
+  content: string;
+  tokenEstimate: number;
+  included: boolean;
+  trimReason: "budget" | "empty" | "not_applicable" | "inactive_memory" | null;
+};
+
+export type ChatPromptArtifacts = {
+  messages: LLMMessage[];
+  segments: PromptSegment[];
+  tokenEstimate: number;
+};
+
 // Who the user is roleplaying as. Injected so the character knows who it is
 // actually talking to, instead of addressing a faceless "user".
 export type UserPersonaForPrompt = {
@@ -48,8 +81,10 @@ export type ChatPromptInput = {
   exampleDialogues?: string[];
   narrative: string;
   threadSummary: string | null;
+  threadMemories?: ThreadMemoryForPrompt[];
   recentMessages: HistoryMessage[];
   userText: string;
+  tokenBudget?: number;
   // spec-025: the character's secret, passed in ONLY when the relationship has
   // unlocked it (caller gates this). null = keep it hidden.
   secretToReveal: string | null;
@@ -59,6 +94,9 @@ export type ChatPromptInput = {
   // spec-026: optional authored story beat for the current companion/scene.
   storyBeat?: StoryBeatPublic | null;
 };
+
+const DEFAULT_TOKEN_BUDGET = 12_000;
+const MAX_THREAD_MEMORIES = 8;
 
 // spec-025 §B4.3: how the character should address the user at each stage.
 function addressGuidanceForStage(stage: RelationshipStage): string {
@@ -115,28 +153,229 @@ function intimacyFlavorForStage(stage: RelationshipStage): string {
 }
 
 export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
-  const systemText = buildSystemPrompt(input);
-  const messages: LLMMessage[] = [{ content: systemText, role: "system" }];
+  return buildChatPromptArtifacts(input).messages;
+}
 
-  for (const msg of input.recentMessages) {
-    messages.push({
-      content: msg.content,
-      role: msg.role === "companion" ? "assistant" : "user",
-    });
+export function buildChatPromptArtifacts(input: ChatPromptInput): ChatPromptArtifacts {
+  const segments = applyPromptBudget(buildPromptSegments(input), input.tokenBudget ?? DEFAULT_TOKEN_BUDGET);
+  const messages = assembleMessages(segments);
+  const tokenEstimate = segments
+    .filter((segment) => segment.included)
+    .reduce((sum, segment) => sum + segment.tokenEstimate, 0);
+  return { messages, segments, tokenEstimate };
+}
+
+function assembleMessages(segments: PromptSegment[]): LLMMessage[] {
+  const messages: LLMMessage[] = [];
+  let systemBuffer: string[] = [];
+
+  const flushSystem = (): void => {
+    if (systemBuffer.length === 0) return;
+    messages.push({ content: systemBuffer.join("\n\n"), role: "system" });
+    systemBuffer = [];
+  };
+
+  for (const segment of segments) {
+    if (!segment.included) continue;
+    if (segment.role === "system" && segment.position !== "post_history") {
+      systemBuffer.push(segment.content);
+      continue;
+    }
+
+    flushSystem();
+    messages.push({ content: segment.content, role: segment.role });
   }
 
-  messages.push({ content: input.userText, role: "user" });
+  flushSystem();
   return messages;
 }
 
-function buildSystemPrompt(input: ChatPromptInput): string {
-  const { companion, scene, activity, userPersona, exampleDialogues, narrative, threadSummary, secretToReveal, stage, storyBeat } = input;
+function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
+  const segments: PromptSegment[] = [];
 
+  pushSegment(segments, {
+    content: buildCoreIdentity(input),
+    id: "core_identity",
+    position: "system_preamble",
+    priority: 1000,
+    required: true,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildCharacterCard(input),
+    id: "character_card",
+    position: "system_preamble",
+    priority: 950,
+    required: true,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildUserPersona(input),
+    id: "user_persona",
+    position: "pre_history",
+    priority: 720,
+    required: false,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildCurrentScene(input),
+    id: "current_scene",
+    position: "pre_history",
+    priority: 700,
+    required: false,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildStoryBeat(input),
+    id: "story_beat",
+    position: "pre_history",
+    priority: 690,
+    required: false,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildRelationshipState(input),
+    id: "relationship_state",
+    position: "pre_history",
+    priority: 900,
+    required: true,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildRules(input),
+    id: "output_format",
+    position: "pre_history",
+    priority: 880,
+    required: true,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildThreadMemory(input),
+    id: "thread_memory",
+    position: "pre_history",
+    priority: 650,
+    required: false,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildThreadSummary(input),
+    id: "thread_summary",
+    position: "pre_history",
+    priority: 620,
+    required: false,
+    role: "system",
+  });
+
+  input.recentMessages.forEach((msg, index) => {
+    pushSegment(segments, {
+      content: msg.content,
+      id: `recent_history:${String(index).padStart(3, "0")}`,
+      position: "in_history",
+      priority: 100 + index,
+      required: false,
+      role: msg.role === "companion" ? "assistant" : "user",
+    });
+  });
+
+  pushSegment(segments, {
+    content: buildPostHistoryGuard(input),
+    id: "post_history_guard",
+    position: "post_history",
+    priority: 920,
+    required: true,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: input.userText,
+    id: "latest_user_message",
+    position: "final_user",
+    priority: 1000,
+    required: true,
+    role: "user",
+  });
+
+  return segments;
+}
+
+function pushSegment(
+  segments: PromptSegment[],
+  segment: Omit<PromptSegment, "included" | "tokenEstimate" | "trimReason">,
+): void {
+  const content = segment.content.trim();
+  const tokenEstimate = estimateTokens(content);
+  segments.push({
+    ...segment,
+    content,
+    included: content.length > 0,
+    tokenEstimate,
+    trimReason: content.length > 0 ? null : "empty",
+  });
+}
+
+function applyPromptBudget(segments: PromptSegment[], budget: number): PromptSegment[] {
+  const result = segments.map((segment) => ({ ...segment }));
+  const nonEmpty = result.filter((segment) => segment.trimReason !== "empty");
+  for (const segment of nonEmpty) {
+    segment.included = true;
+    segment.trimReason = null;
+  }
+
+  let total = includedTokens(nonEmpty);
+  if (total <= budget) return result;
+
+  const trimmable = nonEmpty
+    .filter((segment) => !segment.required)
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return historyOrderWeight(a.id) - historyOrderWeight(b.id);
+    });
+
+  for (const segment of trimmable) {
+    if (total <= budget) break;
+    segment.included = false;
+    segment.trimReason = "budget";
+    total -= segment.tokenEstimate;
+  }
+
+  return result;
+}
+
+function includedTokens(segments: PromptSegment[]): number {
+  return segments
+    .filter((segment) => segment.included)
+    .reduce((sum, segment) => sum + segment.tokenEstimate, 0);
+}
+
+function historyOrderWeight(id: string): number {
+  if (!id.startsWith("recent_history:")) return 0;
+  const parsed = Number(id.split(":")[1]);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  const cjkChars = text.match(/[\u3400-\u9fff]/g)?.length ?? 0;
+  const nonCjkChars = Math.max(0, text.length - cjkChars);
+  return Math.max(1, Math.ceil(cjkChars * 0.8 + nonCjkChars / 4));
+}
+
+function buildCoreIdentity(input: ChatPromptInput): string {
+  const role = input.companion.relationship_role ?? "companion";
+  return `You are roleplaying as ${input.companion.name}, a ${role}.\nYou are ${input.companion.name}; you are not an AI assistant, narrator, developer tool, or system.`;
+}
+
+function buildCharacterCard(input: ChatPromptInput): string {
+  const { companion, exampleDialogues, secretToReveal } = input;
   const lines: string[] = [];
-  const role = companion.relationship_role ?? "companion";
-  lines.push(`You are roleplaying as ${companion.name}, a ${role}.`);
-
-  lines.push("");
   lines.push("# Character");
   if (companion.personality) lines.push(`Personality: ${companion.personality}`);
   if (companion.background) lines.push(`Background: ${companion.background}`);
@@ -163,8 +402,13 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     }
   }
 
+  return lines.join("\n");
+}
+
+function buildCurrentScene(input: ChatPromptInput): string {
+  const { scene, activity } = input;
+  const lines: string[] = [];
   if (scene) {
-    lines.push("");
     lines.push("# Current Scene");
     lines.push(`Location: ${scene.name}`);
     lines.push(`Mood: ${scene.mood}`);
@@ -174,7 +418,6 @@ function buildSystemPrompt(input: ChatPromptInput): string {
   }
 
   if (activity) {
-    lines.push("");
     lines.push("# Current Activity");
     lines.push(`Activity type: ${activity.type}`);
     lines.push(`Your mood right now: ${activity.mood}`);
@@ -185,8 +428,14 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     lines.push("Respond in a way that honours the activity and your current mood. Do not teleport to a different scene.");
   }
 
+  return lines.join("\n");
+}
+
+function buildStoryBeat(input: ChatPromptInput): string {
+  const { storyBeat } = input;
+  if (storyBeat?.status !== "active") return "";
+  const lines: string[] = [];
   if (storyBeat?.status === "active") {
-    lines.push("");
     lines.push("# Current story beat");
     lines.push(`Beat title: ${storyBeat.title}`);
     lines.push(`Opening hook: ${storyBeat.opener}`);
@@ -195,9 +444,13 @@ function buildSystemPrompt(input: ChatPromptInput): string {
       "Let this beat color the scene. You may bring it up, dodge around it, or invite the user into it, but do not force the user's choice or narrate their actions.",
     );
   }
+  return lines.join("\n");
+}
 
+function buildUserPersona(input: ChatPromptInput): string {
+  const { userPersona } = input;
+  const lines: string[] = [];
   if (userPersona && userPersona.name) {
-    lines.push("");
     lines.push("# Who you are talking to");
     lines.push(`The user is roleplaying as ${userPersona.name}.`);
     if (userPersona.gender) lines.push(`Their gender: ${userPersona.gender}.`);
@@ -206,18 +459,39 @@ function buildSystemPrompt(input: ChatPromptInput): string {
       "Treat them as this person: use their name when it fits, and let who they are shape how you speak to them. Never narrate or decide their actions, thoughts, or words for them.",
     );
   }
+  return lines.join("\n");
+}
 
-  lines.push("");
+function buildRelationshipState(input: ChatPromptInput): string {
+  const lines: string[] = [];
   lines.push("# Relationship with the user");
-  lines.push(narrative);
+  lines.push(input.narrative);
+  lines.push(`How to address the user given where this relationship stands: ${addressGuidanceForStage(input.stage)}`);
+  lines.push(`How much warmth and intimacy fits right now: ${intimacyFlavorForStage(input.stage)}`);
+  return lines.join("\n");
+}
 
-  if (threadSummary && threadSummary.trim().length > 0) {
-    lines.push("");
-    lines.push("# Conversation summary so far");
-    lines.push(threadSummary);
-  }
+function buildThreadMemory(input: ChatPromptInput): string {
+  const memories = (input.threadMemories ?? [])
+    .filter((memory) => memory.content.trim().length > 0)
+    .sort((a, b) => b.importance - a.importance || b.updated_at - a.updated_at)
+    .slice(0, MAX_THREAD_MEMORIES);
+  if (memories.length === 0) return "";
 
-  lines.push("");
+  return [
+    "# Stable memories from this conversation",
+    ...memories.map((memory) => `- [${memory.kind}, importance ${memory.importance}] ${memory.content}`),
+  ].join("\n");
+}
+
+function buildThreadSummary(input: ChatPromptInput): string {
+  const summary = input.threadSummary?.trim();
+  if (!summary) return "";
+  return ["# Conversation summary so far", summary].join("\n");
+}
+
+function buildRules(input: ChatPromptInput): string {
+  const lines: string[] = [];
   lines.push("# Rules");
   lines.push("Always reply in the same language the user writes in. If the user writes in Chinese, reply in Chinese; if in English, reply in English. Match the user's language for every turn, regardless of the language used in this prompt or the character description.");
   lines.push("Stay strictly in character. Output prose only — no JSON, no meta-commentary.");
@@ -232,12 +506,11 @@ function buildSystemPrompt(input: ChatPromptInput): string {
   lines.push(
     "Don't hand over everything at once. Hold something back, leave a thread unresolved, give the user a reason to come back. Reveal deeper things gradually as the relationship earns it.",
   );
-  lines.push(`How to address the user given where this relationship stands: ${addressGuidanceForStage(stage)}`);
-  lines.push(`How much warmth and intimacy fits right now: ${intimacyFlavorForStage(stage)}`);
+  lines.push(`How to address the user given where this relationship stands: ${addressGuidanceForStage(input.stage)}`);
+  lines.push(`How much warmth and intimacy fits right now: ${intimacyFlavorForStage(input.stage)}`);
   lines.push(
     "If the user insults, degrades, threatens, or tries to physically attack you, react with clear self-respect: become irritated or cold, set a boundary, withdraw, refuse to continue the bit, or demand an apology. Do not reward abuse with playful banter.",
   );
-  lines.push("");
   lines.push("# Output format (CRITICAL — read carefully)");
   lines.push(
     "Every action, gesture, facial expression, scene description, or inner observation MUST be wrapped in <narration>...</narration> tags.",
@@ -256,5 +529,20 @@ function buildSystemPrompt(input: ChatPromptInput): string {
     "Mix narration and dialogue freely. Do not nest tags. Do not output any other XML-like tags.",
   );
 
+  return lines.join("\n");
+}
+
+function buildPostHistoryGuard(input: ChatPromptInput): string {
+  const lines = [
+    "# Final guard before replying",
+    `You are ${input.companion.name}. Stay in this character's identity, voice, goals, mood, and boundaries.`,
+  ];
+  if (input.userPersona?.name) {
+    lines.push(`You are speaking to ${input.userPersona.name}. Do not rename them or overwrite who they are.`);
+  }
+  lines.push(`Relationship guidance: ${addressGuidanceForStage(input.stage)}`);
+  lines.push("Never narrate or decide the user's actions, thoughts, feelings, or words.");
+  lines.push("Use <narration>...</narration> for actions/gestures/inner observations; spoken dialogue stays outside tags.");
+  lines.push("Match the user's current language. Do not output JSON, analysis, system text, or meta-commentary.");
   return lines.join("\n");
 }

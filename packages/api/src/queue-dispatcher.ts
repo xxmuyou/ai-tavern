@@ -1,4 +1,5 @@
 import { LLMError } from "./llm";
+import { isMemoryExtractPayload, processMemoryExtract } from "./chat/memory";
 import { processSummary } from "./chat/summary-consumer";
 import type { SummaryJobPayload } from "./chat/summary-queue";
 import { isBaseArtJobPayload, loadBaseArtJob, processBaseArtJob } from "./image-gen/base-art";
@@ -48,6 +49,35 @@ export async function dispatchQueueBatch(
           JSON.stringify({
             error: err instanceof Error ? err.message : String(err),
             message: "Summary job failed, will retry",
+            thread_id: body.thread_id,
+          }),
+        );
+        message.retry();
+      }
+      continue;
+    }
+
+    if (isMemoryExtractPayload(body)) {
+      try {
+        await processMemoryExtract(env, body);
+        message.ack();
+      } catch (err) {
+        if (err instanceof LLMError && !err.retryable) {
+          console.warn(
+            JSON.stringify({
+              error: err.message,
+              error_code: err.code,
+              message: "Memory extract job dropped (non-retryable LLM config error)",
+              thread_id: body.thread_id,
+            }),
+          );
+          message.ack();
+          continue;
+        }
+        console.error(
+          JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+            message: "Memory extract job failed, will retry",
             thread_id: body.thread_id,
           }),
         );
