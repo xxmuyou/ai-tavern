@@ -44,6 +44,39 @@ describe("openAICall (non-streaming)", () => {
     expect(response.cost_usd).toBeGreaterThan(0);
   });
 
+  it("disables thinking for minimax but not for other providers", async () => {
+    const makeResponse = () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "ok" } }],
+          usage: { completion_tokens: 1, prompt_tokens: 1 },
+        }),
+        { headers: { "content-type": "application/json" }, status: 200 },
+      );
+
+    const minimaxFetch = vi.fn(async () => makeResponse());
+    vi.stubGlobal("fetch", minimaxFetch);
+    await openAICall(
+      { apiKey: "k", baseURL: "https://api.minimaxi.com/v1", model: "MiniMax-M3", provider: "minimax" },
+      { messages: [{ content: "hi", role: "user" }], task: "chat" },
+    );
+    const minimaxBody = JSON.parse(
+      (minimaxFetch.mock.calls as unknown as Array<[string, RequestInit & { body: string }]>)[0]![1].body,
+    ) as { thinking?: unknown };
+    expect(minimaxBody.thinking).toEqual({ type: "disabled" });
+
+    const openaiFetch = vi.fn(async () => makeResponse());
+    vi.stubGlobal("fetch", openaiFetch);
+    await openAICall(
+      { apiKey: "k", model: "gpt-4o-mini", provider: "openai" },
+      { messages: [{ content: "hi", role: "user" }], task: "chat" },
+    );
+    const openaiBody = JSON.parse(
+      (openaiFetch.mock.calls as unknown as Array<[string, RequestInit & { body: string }]>)[0]![1].body,
+    ) as { thinking?: unknown };
+    expect(openaiBody.thinking).toBeUndefined();
+  });
+
   it("parses structured JSON when json_schema is set", async () => {
     const responsePayload = JSON.stringify({ closeness: 1, romance: 0 });
     const fetchMock = vi.fn(async () =>

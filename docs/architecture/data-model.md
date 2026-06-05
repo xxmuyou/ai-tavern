@@ -14,7 +14,7 @@
 | **R2** | 角色立绘、场景插图、用户上传素材 |
 | **KV** | 每日配额计数器、轻量缓存（如场景列表的内存化结果） |
 | **Durable Objects** | v1 不主用（仅在引入群聊时启用） |
-| **Queues** | 异步任务（对话历史摘要、邮件通知、清理 job） |
+| **Queues** | 异步任务（对话历史摘要、thread memory 提取、邮件通知、清理 job） |
 
 ## 2. D1 表清单
 
@@ -28,6 +28,8 @@
 | `relationships` | 用户 ↔ companion 的关系数值（7 维度） |
 | `threads` | 对话 thread（每对 user-companion 一条） |
 | `messages` | 对话消息（流水） |
+| `thread_memories` | 单线程结构化长期记忆（关系事实、偏好、承诺、未完成剧情） |
+| `prompt_debug_snapshots` | admin/dev prompt 分段调试快照（可关闭） |
 | `events` | 事件触发记录 |
 | `billing_customers` | 用户与 Stripe Customer 映射 |
 | `billing_subscriptions` | Stripe 订阅状态 |
@@ -230,7 +232,62 @@ CREATE INDEX idx_messages_created ON messages(created_at);
 
 **说明：**
 - `signals` 仅在 role='companion' 时填
-- 老消息不删除（用于审计 / 用户复看），但 prompt 注入只用最近 N 条 + 摘要
+- 老消息不删除（用于审计 / 用户复看），但 prompt 注入只用最近 N 条 + 摘要 + 当前 thread 的结构化 memory
+
+### 3.7a `thread_memories`
+
+当前 `(user, companion, thread)` 内的长期记忆。第一版不跨 thread、不跨角色共享，避免串戏和隐私边界不清。
+
+```sql
+CREATE TABLE thread_memories (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id),
+  companion_id  TEXT NOT NULL REFERENCES companions(id),
+  thread_id     TEXT NOT NULL REFERENCES threads(id),
+  kind          TEXT NOT NULL,                 -- relationship_fact / user_preference / promise / open_loop / character_state
+  content       TEXT NOT NULL,                 -- standalone sentence，直接注入 prompt 也能理解
+  importance    INTEGER NOT NULL DEFAULT 50,   -- 1..100，越高越优先注入
+  status        TEXT NOT NULL DEFAULT 'active',-- active / resolved / dismissed
+  source        TEXT NOT NULL DEFAULT 'ai_extract',
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL
+);
+
+CREATE INDEX idx_thread_memories_thread
+  ON thread_memories(thread_id, status, importance, updated_at);
+CREATE INDEX idx_thread_memories_user_companion
+  ON thread_memories(user_id, companion_id, status);
+```
+
+**说明：**
+- 写入由异步 `memory_extract` LLM task 驱动；失败不影响主聊天链路。
+- prompt 注入最多取 active 记忆，按 `importance DESC, updated_at DESC` 排序。
+- `summary` 仍负责压缩历史；`thread_memories` 负责可复用事实。
+
+### 3.7b `prompt_debug_snapshots`
+
+admin/dev 下的 prompt inspector 数据。用于解释每轮哪些 segment 被注入、哪些被预算裁剪。
+
+```sql
+CREATE TABLE prompt_debug_snapshots (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT REFERENCES users(id),
+  companion_id   TEXT,
+  thread_id      TEXT,
+  message_id     TEXT,
+  segments_json  TEXT NOT NULL,                -- segment id/role/priority/token/included/trim_reason
+  token_estimate INTEGER,
+  created_at     INTEGER NOT NULL
+);
+
+CREATE INDEX idx_prompt_debug_thread
+  ON prompt_debug_snapshots(thread_id, created_at);
+```
+
+**说明：**
+- 可由 feature flag 在 prod 关闭写入。
+- 不记录 API key、Authorization header 或 provider secrets。
+- 仅 admin/dev 端点可读，普通用户没有 prompt debug API。
 
 ### 3.8 `events`
 
@@ -370,7 +427,7 @@ admin 配置 task ↔ provider/model 的映射。
 
 ```sql
 CREATE TABLE llm_config (
-  task           TEXT PRIMARY KEY,              -- 'chat' / 'signal' / 'summary' / 'character-assist'
+  task           TEXT PRIMARY KEY,              -- 'chat' / 'signal' / 'summary' / 'memory_extract' / 'character-assist'
   provider       TEXT NOT NULL,
   model          TEXT NOT NULL,
   fallback_provider TEXT,
@@ -387,6 +444,7 @@ INSERT INTO llm_config VALUES
   ('chat',             'minimax',    'MiniMax-M3',                   'deepseek',   'deepseek-chat', ...),
   ('signal',           'deepseek',   'deepseek-chat',                NULL,         NULL,          ...),
   ('summary',          'cloudflare', '@cf/meta/llama-3.1-8b-instruct', 'deepseek', 'deepseek-chat', ...),
+  ('memory_extract',   'deepseek',   'deepseek-chat',                'openai',     'gpt-4o-mini', ...),
   ('character-assist', 'deepseek',   'deepseek-chat',                NULL,         NULL,          ...);
 ```
 
@@ -445,6 +503,7 @@ xtbit-assets/
 | 用户场景列表 | `scenes` + KV cache |
 | 用户角色列表（官方 + 自创） | `companions` where `source='official' OR created_by=user_id` |
 | 用户与某角色的对话历史 | `messages` where `thread_id=X` order by `created_at` desc limit 20 |
+| 当前 thread 记忆注入 | `thread_memories` where `thread_id=X AND status='active'` order by `importance desc, updated_at desc` |
 | 用户与某角色的关系数值 | `relationships`（主键 `user_id + companion_id`） |
 | 用户订阅校验 | `billing_subscriptions` where `user_id=X AND status IN ('active','trialing') AND current_period_end > now()` |
 | admin 看板：日成本 | `llm_logs` group by date |
@@ -480,6 +539,8 @@ pnpm migrate:db:prod   # prod 环境（需要 admin 确认）
 |------|---------|
 | `users` | 永久保留；用户删除账号 → 标记 `status='deleted'`（保留 30 天供恢复，之后真正删除及关联数据） |
 | `messages` | 永久保留（核心产品价值） |
+| `thread_memories` | 随 thread 保留；用户删除历史时应随 thread 重置策略一起清理或标记 inactive |
+| `prompt_debug_snapshots` | dev/admin 诊断数据，prod 可关闭；开启时建议短期保留 |
 | `events` | 永久保留 |
 | `usage_log` | 永久保留（合规审计 / 财务） |
 | `llm_logs` | 30 天后归档到 R2，原表清理 |

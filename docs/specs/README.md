@@ -59,8 +59,9 @@
 | 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 📝 draft（主形象走干净底图直接展示；新增 companion_cutout mode 聊天时 AI matting；瞬间图用抠图角色合成保一致；退役旧 emotion variation 立绘停写保数据；情绪只驱动 UI） |
 | 032 | [Web Public Companion Discovery Home（暗色首页 + 公开角色发现 + 风格标签收敛）](./spec-032-web-public-companion-discovery-home.md) | Web UI+API+内容标签 | 017, 018, 019, 022 | 2-4 天 | 🟡 in-progress（未登录首页直接展示真实 companions；用户侧与 Admin 主分类只保留 Anime/Realistic） |
 | 033 | [Profile Outfit Images and User Image Assets（profile 换装图 + 用户资产收口）](./spec-033-profile-outfit-image-assets.md) | 后端+Web UI+image-gen | 019, 022, 030, 031 | 2-4 天 | 🟡 in-progress（Change outfit 从聊天移到 profile；生成图自动进入 Me 资产；确认后作为用户私有 profile 图覆盖） |
+| 034 | [Chat Quality, Memory, and Prompt Governance（聊天质量、记忆与 Prompt 治理）](./spec-034-chat-quality-memory-prompt-governance.md) | 后端+LLM+文档治理 | 006, 025, 026, 029 | 4-6 天 | 📝 draft（单线程 memory、PromptSegment 分层、post-history guard、prompt debug；不复刻完整 SillyTavern） |
 
-**估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
+**估时总计：** 约 64-94 工程日（不含美术、QA、市场准备）
 
 ---
 
@@ -81,6 +82,7 @@
 - **J 路径（自建角色剧情）：** 019 → 026 → 028 → 029。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 让自建角色拥有剧情包、用户自写 arc、AI 辅助草稿与手动完成机制。自建角色不再按“纯 sandbox + 数值”作为长期路线。
 - **K 路径（图片动作）：** 027 → 031 → 033。spec-027 先跑通聊天内异步图片生成、job 轮询与回看模式；spec-031 重构出图源和 cutout；spec-033 将换装从聊天动作迁移到 profile 图片管理。spec-030 的聊天换装后端保留为 legacy/deprecated，不再作为新 UI 入口。
 - **L 路径（Web 上线首页）：** 018 → 032。spec-032 是 web 首页收口：未登录也展示公开 companion discovery；mobile 不动；用户侧与 Admin 主分类都收敛为 Anime/Realistic。
+- **M 路径（聊天质量治理）：** 006 → 025 → 026/029 → 034。spec-034 不阻塞 image-gen，但阻塞聊天体验验收；上线前至少要完成 prompt 分层、post-history guard、单线程 memory 注入与 prompt debug。
 
 ---
 
@@ -92,6 +94,7 @@
 - E2E 测试通过（至少：登录 → 进场景 → 与官方角色对话 → 触发事件 → 数值变化 → 订阅）
 - 内容 seed（10 场景 + 10 角色 + 美术资源）就位
 - 若以“AI 聊天向养成游戏”作为 v1.x 体验验收口径，spec-028 与 spec-029 需要进入 RC 前检查项：用户必须知道下一步做什么，自建角色必须能拥有可推进剧情线。
+- 聊天质量治理（spec-034）至少完成 prompt 分层、post-history guard、单线程 memory 注入与 prompt debug，避免长聊时角色身份/格式/关键承诺漂移。
 - v1 上线 checklist（[`ops/secrets.md §5`](../ops/secrets.md#5-待获取--待配置v1-上线前-checklist)）全部清零
 - 不允许任何 spec 以"临时 hard-code / console fallback / 后续再接表"作为 done 状态
 

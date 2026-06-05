@@ -60,7 +60,7 @@ export function MessageActions({
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Regenerate reply"
+        accessibilityLabel="Rewrite this reply"
         disabled={disabled || isRegenerating}
         onPress={onRegenerate}
         className="flex-row items-center gap-1"
@@ -68,9 +68,12 @@ export function MessageActions({
         {isRegenerating ? (
           <ActivityIndicator size="small" />
         ) : (
-          <Text className={`text-xs font-semibold ${disabled ? 'text-app-muted/50' : 'text-app-primary'}`}>
-            ↻ Regenerate
-          </Text>
+          <>
+            <Ionicons color={disabled ? '#B0B4B8' : '#9AA0A6'} name="refresh-outline" size={14} />
+            <Text className={`text-xs font-medium ${disabled ? 'text-app-muted/50' : 'text-app-muted'}`}>
+              Rewrite
+            </Text>
+          </>
         )}
       </Pressable>
 

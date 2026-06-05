@@ -145,6 +145,15 @@ function buildBody(config: ProviderConfig, request: LLMRequest, stream: boolean)
       body.max_tokens = request.max_tokens;
     }
   }
+
+  // MiniMax-M3 is a reasoning model: by default it streams a long
+  // <think>…</think> chain-of-thought before the reply, which we discard — the
+  // user just sees a long stall before the first visible token. Turn thinking
+  // off so it answers immediately (MiniMax's documented low-latency chat mode).
+  // Other providers ignore this field; only send it for MiniMax.
+  if (config.provider === "minimax") {
+    body.thinking = { type: "disabled" };
+  }
   if (request.temperature !== undefined) body.temperature = request.temperature;
   if (request.top_p !== undefined) body.top_p = request.top_p;
   if (request.frequency_penalty !== undefined) body.frequency_penalty = request.frequency_penalty;

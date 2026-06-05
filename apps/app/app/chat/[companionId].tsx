@@ -39,6 +39,7 @@ import { TopBar } from '@/components/TopBar';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
+import { useAutoVoice } from '@/hooks/use-auto-voice';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
@@ -117,6 +118,7 @@ function ChatScreenInner() {
   const activePersonaId =
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
   const messageActions = useMessageActions(companionId, history, pushError);
+  const autoVoice = useAutoVoice();
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
     onSaved: () => {
@@ -264,6 +266,10 @@ function ChatScreenInner() {
       };
       history.appendMessage(finalMessage);
       shouldScrollOnNextRef.current = true;
+      // Auto-play the new reply when the global voice toggle is on.
+      if (autoVoice.enabled && serverMessageId) {
+        void messageActions.speak(serverMessageId);
+      }
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
     } catch (error) {
@@ -280,7 +286,7 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activePersonaId, activityId, companionId, draft, history, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -434,14 +440,28 @@ function ChatScreenInner() {
         showBack
         title={companion.name}
         right={
-          <Pressable
-            accessibilityLabel="Clear conversation"
-            accessibilityRole="button"
-            onPress={() => setClearConfirmVisible(true)}
-            className="h-10 w-10 items-center justify-center rounded-lg"
-          >
-            <Ionicons color="#11181C" name="trash-outline" size={20} />
-          </Pressable>
+          <View className="flex-row items-center">
+            <Pressable
+              accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
+              accessibilityRole="button"
+              onPress={autoVoice.toggle}
+              className="h-10 w-10 items-center justify-center rounded-lg"
+            >
+              <Ionicons
+                color={autoVoice.enabled ? '#6E59C7' : '#687076'}
+                name={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
+                size={20}
+              />
+            </Pressable>
+            <Pressable
+              accessibilityLabel="Clear conversation"
+              accessibilityRole="button"
+              onPress={() => setClearConfirmVisible(true)}
+              className="h-10 w-10 items-center justify-center rounded-lg"
+            >
+              <Ionicons color="#11181C" name="trash-outline" size={20} />
+            </Pressable>
+          </View>
         }
       />
 
@@ -529,7 +549,6 @@ function ChatScreenInner() {
           <View className="flex-row items-end gap-2">
             <TextInput
               accessibilityLabel="Message input"
-              editable={!stream.isStreaming}
               multiline
               onChangeText={setDraft}
               onKeyPress={handleKeyPress}

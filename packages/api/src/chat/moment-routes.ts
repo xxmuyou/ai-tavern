@@ -43,7 +43,8 @@ export async function handleMomentImageRequest(
       return jsonResponse({ error: "invalid_message_id" }, { status: 400 });
     }
     const user = await requireAuthUser(env, request);
-    return handleGenerate(env, user, messageId);
+    const force = new URL(request.url).searchParams.get("force") === "1";
+    return handleGenerate(env, user, messageId, force);
   }
 
   const jobMatch = pathname.match(/^\/moment-images\/jobs\/([^/]+)$/);
@@ -95,6 +96,7 @@ async function handleGenerate(
   env: Env,
   user: UserRecord,
   messageId: string,
+  force = false,
 ): Promise<Response> {
   const message = await env.DB.prepare(
     `SELECT id, thread_id, role, content, scene_id, activity_id, emotion, created_at
@@ -120,13 +122,16 @@ async function handleGenerate(
     return jsonResponse({ error: "not_companion_message" }, { status: 422 });
   }
 
-  // Dedup: an existing in-flight or succeeded moment is returned as-is so the
-  // user is not charged twice. A failed one may be retried (same row, new job).
+  // Dedup: an in-flight or succeeded moment is returned as-is so the user is not
+  // charged twice. A failed/cancelled one always retries (same row, new job); an
+  // explicit `force` (the "Regenerate image" button) also re-runs a succeeded one.
   const existing = await loadMomentByMessage(env, user.id, messageId);
   if (existing) {
     const job = await loadBaseArtJob(env, existing.job_id);
     const reconciled = job ? await reconcileMomentFromJob(env, existing, job) : existing;
-    if (reconciled.status !== "failed" && reconciled.status !== "cancelled") {
+    const isTerminalFailure = reconciled.status === "failed" || reconciled.status === "cancelled";
+    const shouldRegenerate = isTerminalFailure || (force && reconciled.status === "succeeded");
+    if (!shouldRegenerate) {
       return momentResponse(reconciled);
     }
     const prompt = await composePrompt(env, user, thread, message);

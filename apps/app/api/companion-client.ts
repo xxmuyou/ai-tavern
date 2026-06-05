@@ -699,9 +699,13 @@ export async function getBaseArtJob(jobId: string): Promise<BaseArtJobResponse> 
   );
 }
 
-export async function generateMomentImage(messageId: string): Promise<MomentImageJobResponse> {
+export async function generateMomentImage(
+  messageId: string,
+  force = false,
+): Promise<MomentImageJobResponse> {
+  const query = force ? '?force=1' : '';
   return requestJson<MomentImageJobResponse>(
-    `/chat/messages/${encodeURIComponent(messageId)}/moment-image/generate`,
+    `/chat/messages/${encodeURIComponent(messageId)}/moment-image/generate${query}`,
     { method: 'POST' },
   );
 }

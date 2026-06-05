@@ -11,6 +11,7 @@ import {
   View,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
+  type ViewStyle,
 } from 'react-native';
 
 import { getCompanion, mediaSource } from '@/api/companion-client';
@@ -33,6 +34,7 @@ import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebTag } from '@/components/web/ui';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
+import { useAutoVoice } from '@/hooks/use-auto-voice';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
@@ -74,6 +76,7 @@ export default function WebChatScreen() {
   const activePersonaId =
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
   const messageActions = useMessageActions(companionId, history, pushError);
+  const autoVoice = useAutoVoice();
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
     onSaved: () => {
@@ -236,6 +239,10 @@ export default function WebChatScreen() {
       shouldAutoScrollRef.current = true;
       await history.refresh({ silent: true });
       scrollThreadToEnd(false);
+      // Auto-play the new reply when the global voice toggle is on.
+      if (autoVoice.enabled && serverMessageId) {
+        void messageActions.speak(serverMessageId);
+      }
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
     } catch (error) {
@@ -251,7 +258,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activePersonaId, activityId, companionId, draft, history, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -362,9 +369,13 @@ export default function WebChatScreen() {
         </View>
 
         {/* Twilight conversation workspace */}
-        <View className="overflow-hidden rounded-2xl border border-app-line bg-app-twilight shadow-float">
-          {/* Header strip */}
-          <View className="flex-row items-center justify-between border-b border-white/5 bg-app-twilight-soft px-7 py-4">
+        <View className="rounded-2xl border border-app-line bg-app-twilight shadow-float">
+          {/* Header strip — pinned to the top of the page scroll so the companion
+              name / status / Live tag stay visible while the conversation scrolls. */}
+          <View
+            className="flex-row items-center justify-between rounded-t-2xl border-b border-white/5 bg-app-twilight-soft px-7 py-4"
+            style={twilightStyles.stickyHeader}
+          >
             <View className="flex-row items-center gap-3">
               <View className="h-9 w-9 items-center justify-center rounded-full bg-rose-soft">
                 <Ionicons color="#9A2F4F" name="chatbubbles" size={16} />
@@ -380,11 +391,29 @@ export default function WebChatScreen() {
                 </Text>
               </View>
             </View>
-            <WebTag size="sm" variant="rose">
-              Live
-            </WebTag>
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
+                onPress={autoVoice.toggle}
+                className={`h-9 w-9 items-center justify-center rounded-full ${
+                  autoVoice.enabled ? 'bg-rose shadow-glow' : 'bg-white/10'
+                }`}
+              >
+                <Ionicons
+                  color={autoVoice.enabled ? '#FFFFFF' : 'rgba(255,255,255,0.6)'}
+                  name={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
+                  size={16}
+                />
+              </Pressable>
+              <WebTag size="sm" variant="rose">
+                Live
+              </WebTag>
+            </View>
           </View>
 
+          {/* Everything below the pinned header keeps the card's rounded bottom. */}
+          <View className="overflow-hidden rounded-b-2xl">
           <ActivityContextBanner
             activity={activity}
             isMutating={activityActions.isMutating}
@@ -478,7 +507,6 @@ export default function WebChatScreen() {
             <View className="flex-row items-end gap-3">
               <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
                 <TextInput
-                  editable={!stream.isStreaming}
                   multiline
                   onChangeText={setDraft}
                   onKeyPress={handleKeyPress}
@@ -506,6 +534,7 @@ export default function WebChatScreen() {
                 <Text className="text-caption font-semibold text-ember">{`Slow down — try again in ${remainingSeconds}s`}</Text>
               </View>
             ) : null}
+          </View>
           </View>
         </View>
       </View>
@@ -551,6 +580,13 @@ const chatPortraitStyles = StyleSheet.create({
 });
 
 const twilightStyles = StyleSheet.create({
+  // `position: sticky` is a web-only value react-native-web understands but the
+  // RN style types don't list — pin the header to the top of the page scroll.
+  stickyHeader: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+  } as unknown as ViewStyle,
   thread: {
     backgroundColor: '#0E0B14',
     flexGrow: 1,

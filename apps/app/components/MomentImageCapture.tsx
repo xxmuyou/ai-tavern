@@ -43,6 +43,9 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
   });
   const [outputKey, setOutputKey] = useState<string | null>(initialMoment?.output_key ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Natural width/height ratio of the rendered moment, measured from the file so
+  // the bubble matches the image's real shape instead of a hard-coded crop.
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const activeRef = useRef(true);
   const onMomentReadyRef = useRef(onMomentReady);
   const pollingJobRef = useRef<string | null>(null);
@@ -132,12 +135,39 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMoment?.job_id, initialMoment?.output_key, initialMoment?.status]);
 
-  async function capture() {
+  // Measure the moment's real aspect ratio once it is ready, so the bubble
+  // hugs the image instead of cropping it to a fixed shape.
+  useEffect(() => {
+    if (phase !== 'ready' || !outputKey) {
+      setAspectRatio(null);
+      return;
+    }
+    const source = mediaSource(outputKey);
+    const uri = source && typeof source === 'object' && 'uri' in source ? source.uri : null;
+    if (!uri) return;
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (!cancelled && width > 0 && height > 0) {
+          setAspectRatio(width / height);
+        }
+      },
+      () => {
+        // Keep the contain fallback if the size probe fails.
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, outputKey]);
+
+  async function capture(force = false) {
     pollingJobRef.current = null;
     setErrorMessage(null);
     setPhase('capturing');
     try {
-      const res = await generateMomentImage(messageId);
+      const res = await generateMomentImage(messageId, force);
       if (!activeRef.current) return;
       if (res.status === 'succeeded' && res.output_key) {
         markReady(res.job_id, res.output_key);
@@ -160,15 +190,27 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
     if (!source) return null;
     return (
       <View className="w-full px-4 pb-2 pt-1">
-        <View className="max-w-[80%] self-start overflow-hidden rounded-2xl border border-app-line bg-app-card">
+        <View
+          className="self-start overflow-hidden rounded-2xl border border-app-line bg-app-card"
+          style={styles.imageCard}
+        >
           <Image
             accessibilityLabel="Captured moment"
             onError={() => markError('Captured image could not be loaded from storage.')}
-            resizeMode="cover"
+            resizeMode="contain"
             source={source}
-            style={styles.image}
+            style={[styles.image, aspectRatio ? { aspectRatio } : null]}
           />
         </View>
+        <Pressable
+          accessibilityLabel="Regenerate image"
+          accessibilityRole="button"
+          onPress={() => void capture(true)}
+          className="mt-1.5 flex-row items-center gap-1.5 self-start rounded-full border border-app-brand/25 bg-app-brand-soft px-3 py-1.5"
+        >
+          <Ionicons color="#1E6B52" name="refresh" size={14} />
+          <Text className="text-xs font-medium text-app-primary">Regenerate image</Text>
+        </Pressable>
       </View>
     );
   }
@@ -202,8 +244,15 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
 }
 
 const styles = StyleSheet.create({
+  // The card carries the definite width; the image fills it. A `width:'100%'`
+  // image inside a `self-start` (shrink-to-fit) parent collapses to 0 on
+  // react-native-web — anchoring the width here breaks that circular sizing.
   image: {
     aspectRatio: 1.5,
     width: '100%',
+  },
+  imageCard: {
+    maxWidth: '100%',
+    width: 260,
   },
 });

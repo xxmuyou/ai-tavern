@@ -666,6 +666,34 @@ AI 辅助生成角色卡（用户填部分字段，AI 补全）。
 { "response": "...", "latency_ms": 1230, "cost_usd": 0.0001 }
 ```
 
+### `GET /admin/chat/{thread_id}/prompt-debug/latest` (spec-034, draft)
+
+只读诊断：返回某个 thread 最近一次 prompt 分段快照，用于定位角色身份、格式、记忆注入或 token 裁剪问题。仅 admin/dev 可用，普通用户没有 memory 或 prompt debug 管理端点。
+
+```json
+// Response 200
+{
+  "snapshot": {
+    "id": "snap_1",
+    "thread_id": "thr_1",
+    "companion_id": "maya",
+    "message_id": "msg_123",
+    "token_estimate": 2450,
+    "created_at": 1780675200000,
+    "segments": [
+      { "id": "core_identity", "role": "system", "position": "system_preamble",
+        "priority": 1000, "token_estimate": 42, "included": true, "trim_reason": null },
+      { "id": "thread_memory", "role": "system", "position": "pre_history",
+        "priority": 650, "token_estimate": 220, "included": true, "trim_reason": null },
+      { "id": "recent_history:oldest", "role": "user", "position": "in_history",
+        "priority": 100, "token_estimate": 180, "included": false, "trim_reason": "budget" }
+    ]
+  }
+}
+```
+
+错误：thread 不存在或无 snapshot → 404 `prompt_debug_not_found`；非 admin → 403 `admin_required`。
+
 ### `GET /admin/users?search=<email>` (spec-023)
 
 按邮箱精确或前缀匹配用户，供管理员定位 userId。结果上限 20 条。

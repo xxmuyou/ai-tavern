@@ -36,6 +36,7 @@ v1 集成的供应商列表（admin 可在后台启用 / 禁用 / 切换）：
 | **对话生成**（主要支出） | **MiniMax `MiniMax-M3`** | DeepSeek `deepseek-chat` / Doubao `doubao-1.5-lite-32k` / OpenAI `gpt-4o-mini` |
 | **信号提取**（解析关系变化） | DeepSeek `deepseek-chat`（同次调用，JSON output） | OpenAI `gpt-4o-mini` |
 | **对话历史摘要**（异步） | Cloudflare Workers AI `@cf/meta/llama-3.1-8b-instruct` | DeepSeek `deepseek-chat` |
+| **对话记忆提取**（异步） | DeepSeek `deepseek-chat`（JSON output） | OpenAI `gpt-4o-mini` |
 | **角色卡生成辅助**（用户自创角色时 AI 帮补全） | DeepSeek `deepseek-chat` | OpenAI `gpt-4o-mini` |
 
 **为什么把 MiniMax M3 作为 chat 候选默认：**
@@ -63,9 +64,9 @@ v1 集成的供应商列表（admin 可在后台启用 / 禁用 / 切换）：
 ```typescript
 // packages/api/src/llm/types.ts
 export interface LLMRequest {
-  task: 'chat' | 'signal' | 'summary' | 'character-assist';
+  task: 'chat' | 'signal' | 'summary' | 'memory_extract' | 'character-assist';
   messages: ChatMessage[];
-  schema?: JSONSchema; // structured output（信号提取必填）
+  schema?: JSONSchema; // structured output（信号提取 / memory_extract 必填）
   stream?: boolean;
   maxTokens?: number;
 }
@@ -102,7 +103,8 @@ packages/api/src/llm/
 ├── prompts/            ← prompt 模板
 │   ├── chat.ts
 │   ├── signal.ts
-│   └── summary.ts
+│   ├── summary.ts
+│   └── memory.ts
 ├── cost.ts             ← 成本计算（按 provider/model 维护价目表）
 └── fallback.ts         ← 错误降级逻辑
 ```
@@ -121,7 +123,6 @@ const response = await llm.call({
     ...conversationHistory,
     { role: 'user', content: userInput },
   ],
-  schema: chatResponseSchema, // 同时返回 text + signal tags
   stream: true,
 });
 ```
@@ -190,16 +191,12 @@ regardless of the language used in this prompt or the character description.
 Stay strictly in character; do not break the fourth wall.
 
 # Output format
-Respond in character. Output JSON:
-{
-  "reply": "...",                           // 角色的回应
-  "signals": {                              // 关系数值变化
-    "closeness": +1, "trust": 0, "romance": +1,
-    "friendship": +1, "hostility": 0, "tension": 0, "distance": 0
-  },
-  "emotion": "warm" | "neutral" | "guarded" | "playful" | "tense" | "annoyed"
-}
+Respond in character as prose only. Stream text to the user. Actions, gestures,
+facial expressions, scene description, and inner observations use
+<narration>...</narration>; spoken dialogue stays outside tags.
 ```
+
+当前 chat 主调用只负责**流式文本回复**。关系 `signals` 与 `emotion` 由第二次 `task='signal'` structured-output 调用独立提取；长期 thread memory 由异步 `task='memory_extract'` 提取。不要把 chat 回复重新设计为 JSON，否则会破坏 SSE 文本体验与现有 signal extraction 分工。
 
 ### 5.2 信号值约束
 
@@ -224,6 +221,10 @@ Respond in character. Output JSON:
 - 系统 prompt 包含安全护栏（不生成未成年色情、自残诱导、人身攻击等）
 - 利用供应商内置的 safety filter（OpenAI moderation API、Anthropic safety）
 - 用户输入预过滤（明显违规的提前拒绝，节省 LLM 成本）
+
+### 5.5 Prompt 分层与记忆治理
+
+聊天质量治理见 [`spec-034`](../specs/spec-034-chat-quality-memory-prompt-governance.md)。后续 chat prompt 应先构建 `PromptSegment[]`，再组装为 provider messages；`core_identity`、`character_card`、`relationship_state`、`post_history_guard`、`output_format` 是必保留段。`memory_extract` 只提取当前 thread 内的结构化记忆，不跨角色共享用户画像。
 
 ## 6. 错误降级
 

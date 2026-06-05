@@ -1,6 +1,8 @@
 # spec-006: chat 重写（自由对话 + 两次 LLM 调用编排）
 
-> **类型：** 重写  |  **依赖：** spec-002, spec-003, spec-005, spec-007  |  **估时：** 5-7 天  |  **状态：** ⚪ todo
+> **类型：** 重写  |  **依赖：** spec-002, spec-003, spec-005, spec-007  |  **估时：** 5-7 天  |  **状态：** 🟢 done
+
+> **后续治理口径（2026-06-05）：** 本 spec 只定义 chat 基础端点、流式回复、history、quota、signal extraction 与 summary queue。长聊质量、结构化 thread memory、prompt 分层、post-history guard 与 prompt debug 统一由 [`spec-034`](./spec-034-chat-quality-memory-prompt-governance.md) 承接，不再在本 spec 增补。
 
 ---
 

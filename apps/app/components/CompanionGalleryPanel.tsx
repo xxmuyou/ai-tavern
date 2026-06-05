@@ -133,9 +133,6 @@ function MomentCell({ moment, name }: { moment: CompanionMomentImage; name: stri
           </View>
         )}
       </View>
-      <Text className="mt-2 text-center text-caption font-semibold text-app-ink">
-        {moment.status === 'succeeded' ? 'Moment' : 'Processing'}
-      </Text>
     </View>
   );
 }

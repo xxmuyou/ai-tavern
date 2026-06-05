@@ -64,7 +64,7 @@
 ## 决策记录（已与 product owner 确认，2026-05-29）
 
 1. **范围**：persona 深化（S-δ）+ 解锁系统（S-ε）**一起做**。
-2. **persona 实现**：prompt 强化 **+ 新增核心结构化字段 want / secret / boundary**（**不做**动态 `opinion_of_player`，留待"记忆"功能）。
+2. **persona 实现**：prompt 强化 **+ 新增核心结构化字段 want / secret / boundary**（**不做**动态 `opinion_of_player`；长期记忆与 prompt 治理由 [`spec-034`](./spec-034-chat-quality-memory-prompt-governance.md) 承接）。
 3. **自创角色**：spec-019 创建/编辑流程**也纳入**新 persona 字段。
 4. **解锁目标（全选）**：① 角色秘密/背景片段 ② 新场景 ③ 称呼变化 ④ 新立绘表情。
 5. **解锁触发**：以**关系阶段跃迁**（`deriveStage`：first_contact → … → committed）为准。
@@ -82,7 +82,7 @@
 - 全链路无 credits 介入。
 
 ### 非目标
-- ❌ 动态 `opinion_of_player` / 长期记忆（另开 spec）。
+- ❌ 动态 `opinion_of_player` / 长期记忆（见 [`spec-034`](./spec-034-chat-quality-memory-prompt-governance.md)）。
 - ❌ 剧情骨架 / story beats（阶段 2，另开 spec）。
 - ❌ credits 计费（解锁靠订阅）。
 - ❌ 重做阶段 0 的关系 HUD / 立绘切换 / 每轮反馈（spec-024 已覆盖）。
@@ -202,5 +202,5 @@ CREATE TABLE relationship_unlocks (
 - 前端有庆祝 + 角色页已解锁区；阶段 0 功能回归通过。
 
 ## 后续（不在本 spec）
-- 动态 `opinion_of_player` / 长期记忆。
+- 动态 `opinion_of_player` / 长期记忆与 prompt 分层治理：见 [`spec-034`](./spec-034-chat-quality-memory-prompt-governance.md)。
 - **阶段 2：轻量剧情骨架**（每角色 1 条 3-5 拍，架在 `events` 引擎上）——解锁系统可作为剧情节拍的奖励载体。
