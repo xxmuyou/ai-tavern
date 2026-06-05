@@ -45,7 +45,7 @@
 | 017 | [恋爱偏好 + 加权 spawn（5 男 5 女）](./spec-017-romance-preference.md) | 新建 | 004, 007, 013 | 0.5-1 天 | 🟡 in-progress |
 | 018 | [Web 桌面工作台 UI 独立化](./spec-018-web-ui-workspace.md) | 重做 | 012 | 5-8 天 | 🟡 in-progress |
 | 019 | [User/VIP Companion Creation UI](./spec-019-companion-create-ui.md) | 新建 | 004, 010, 018 | 5-7 天 | 📝 draft |
-| 020 | [Companion 美术生成（文生图创建 + 风格 + 表情变体 + 透明 + 编辑接口）](./spec-020-companion-emotion-art-generation.md) | 新建 | 004, 006, 010, 019, 021 | 5-8 天 | 📝 draft |
+| 020 | [Companion 美术生成（文生图创建 + 风格 + 表情变体 + 透明 + 编辑接口）](./spec-020-companion-emotion-art-generation.md) | 新建 | 004, 006, 010, 019, 021 | 5-8 天 | 🟢 done（文生图底图 + 风格 checkpoint + 编辑接口已落地；**表情变体部分已由 spec-031 退役**，emotion-art 生成返回 410） |
 | 021 | [Credits Ledger and Metering](./spec-021-credits-ledger-and-metering.md) | 新建 | 010 | 5-8 天 | 🟢 done |
 | 022 | [Image Gen Provider: RunningHub（3 workflow + 风格 checkpoint）](./spec-022-image-gen-runninghub-integration.md) | 新建 | 020, 021 | 3-5 天 | 🟡 in-progress（WF-1 create + checkpoint 切换 + WF1 模型目录落地，待回填 workflow id 端到端验证；WF-2/3 待做） |
 | 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 🟡 in-progress（积分端点 + 单测落地；工作台已扩展 Settings/图像模型/表情/LLM，见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)） |
@@ -56,9 +56,9 @@
 | 028 | [剧情引导与行动按钮重构（Web 优先）](./spec-028-guided-story-actions-ui.md) | 前端体验/UI | 024, 025, 026 | 2-3 天 | 🟡 in-progress（统一剧情拍/关系目标/日常状态的下一步引导，重排 Today/Scene/Chat 行动按钮） |
 | 029 | [User-created Story Arcs（自建角色剧情线与剧情包）](./spec-029-user-created-story-arcs.md) | 后端+前端+LLM+内容 | 002, 010, 019, 021, 026, 028 | 5-8 天 | 🟡 in-progress（自建角色剧情包、轻量编辑、Pro-only AI draft、手动完成节点、公开角色可选共享已接线；待端到端 QA） |
 | 030 | [Chat Outfit Images（聊天换衣服图）](./spec-030-chat-outfit-images.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 2-4 天 | 📝 draft（companion 消息下换衣服；推荐穿搭/自定义 prompt；一次性聊天图片，不改角色长期图片） |
-| 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 📝 draft（主形象走干净底图直接展示；新增 wf_cutout/cutout mode 聊天时 AI matting；瞬间图用抠图角色合成保一致；退役 WF2 表情立绘停写保数据；情绪只驱动 UI） |
+| 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 🟢 done（WF2 表情立绘已退役返回 410 保数据；干净底图直接展示；cutout 工作流 + 聊天时 matting + 瞬间图合成已落地，见 commit "Implement companion cutout moment workflow"；情绪只驱动 UI） |
 | 032 | [Web Public Companion Discovery Home（暗色首页 + 公开角色发现 + 风格标签收敛）](./spec-032-web-public-companion-discovery-home.md) | Web UI+API+内容标签 | 017, 018, 019, 022 | 2-4 天 | 🟡 in-progress（未登录首页直接展示真实 companions；用户侧风格只保留 Anime/Realistic，Anime JP/KR 仅保留为 admin/model 名称） |
-| 033 | [Profile Outfit Images and User Image Assets（profile 换装图 + 用户资产收口）](./spec-033-profile-outfit-image-assets.md) | 后端+Web UI+image-gen | 019, 022, 030, 031 | 2-4 天 | 🟡 in-progress（Change outfit 从聊天移到 profile；生成图自动进入 Me 资产；确认后作为用户私有 profile 图覆盖） |
+| 033 | [Profile Outfit Images and User Image Assets（profile 换装图 + 用户资产收口）](./spec-033-profile-outfit-image-assets.md) | 后端+Web UI+image-gen | 019, 022, 030, 031 | 2-4 天 | 🟢 done（Change outfit 从聊天移到 profile；生成图自动进入 Me 资产；确认后作为用户私有 profile 图覆盖；profile-outfit 端点 + /me/image-assets 已落地，见 commit "Implement profile outfit image assets"） |
 
 **估时总计：** 约 60-88 工程日（不含美术、QA、市场准备）
 
