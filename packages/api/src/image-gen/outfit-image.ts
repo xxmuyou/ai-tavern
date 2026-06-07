@@ -309,7 +309,7 @@ export function validateCustomOutfitPrompt(raw: unknown):
 export function buildOutfitPrompt(ctx: OutfitPromptContext, outfitPrompt: string): string {
   const lines: string[] = [
     "Create a single-character outfit variation using the provided companion image as the visual reference.",
-    "Keep the same identity, face structure, hairstyle, body type, age impression, art style, camera angle, and framing.",
+    "Keep the same identity, face structure, hairstyle, body type, age impression, art style, framing, and crop.",
     "Only change the clothing, accessories, and small styling details requested below.",
     `Outfit request: ${outfitPrompt.trim()}.`,
   ];
