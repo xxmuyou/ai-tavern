@@ -267,24 +267,33 @@ function sampleContext(): MomentPromptContext {
 }
 
 describe("buildMomentPrompt", () => {
-  it("includes scene, time slot, companion, emotion and recent action", () => {
+  it("includes scene, time slot, companion, emotion and narration-driven action", () => {
     const prompt = buildMomentPrompt(sampleContext());
     expect(prompt).toContain("Pier Coffee Shop");
     expect(prompt).toContain("morning");
     expect(prompt).toContain("Maya");
     expect(prompt).toContain("warm");
-    expect(prompt).toContain("ordered us two coffees");
     expect(prompt).toContain("Maya wraps her hands around the cup");
     expect(prompt).toContain("familiar");
     expect(prompt).toContain("no text, no UI");
   });
 
-  it("constrains scene moments to the companion only, looking at camera", () => {
+  it("drops free-form user/story text that would summon extra people", () => {
+    const prompt = buildMomentPrompt(sampleContext());
+    // previousUserText and the story objective are intentionally excluded — as
+    // edit instructions they name other people and the editor renders them.
+    expect(prompt).not.toContain("ordered us two coffees");
+    expect(prompt).not.toContain("The Sketchbook");
+    expect(prompt).not.toContain("decide whether to show her sketch");
+  });
+
+  it("constrains scene moments to the companion only, looking at viewer", () => {
     const prompt = buildMomentPrompt(sampleContext());
     expect(prompt).toContain("single-character scene image");
-    expect(prompt).toContain("Only one visible person: the companion");
-    expect(prompt).toContain("Do not show the user, an opponent, a second character");
-    expect(prompt).toContain("eyes looking directly at the viewer");
+    expect(prompt).toContain("Keep exactly one person in the image — this companion only");
+    expect(prompt).toContain("Do not add any other people, a second person, the user, an opponent");
+    expect(prompt).toContain("looks directly at the viewer");
+    expect(prompt).toContain("do not render any camera, phone, or photographic device");
     expect(prompt).toContain("no extra characters");
     expect(prompt).not.toContain("first-person perspective from the user's point of view");
   });

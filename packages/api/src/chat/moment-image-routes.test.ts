@@ -208,7 +208,7 @@ describe("moment image routes", () => {
       task: "chat_moment_image",
       workflow_key: "chat_moment",
     });
-    expect(jobs[0]?.prompt).toContain("Scene: Private chat");
+    expect(jobs[0]?.prompt).toContain("Change the background to: Private chat");
     expect(moments[0]).toMatchObject({
       message_id: "msg_private",
       scene_id: null,

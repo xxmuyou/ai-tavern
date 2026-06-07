@@ -99,16 +99,19 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   const { companion, scene } = ctx;
   const lines: string[] = [];
 
+  // This prompt drives a Qwen-Image-Edit "instruct" pipeline (FireRed-Image-Edit
+  // base + Qwen-Edit Lightning LoRAs) that runs at cfg=1. At cfg=1 the negative
+  // conditioning is mathematically inert — the workflow's negative node does
+  // nothing — so EVERY single-subject / no-extra-people / no-camera guard has to
+  // live here in the positive instruction. The model is a faithful image editor,
+  // not a caption-driven generator: it must read as a short, imperative edit of
+  // the companion's reference image. The old verbose, multi-paragraph form (plus
+  // free-form user/story text) was what summoned background crowds.
   lines.push(
-    "Create a cinematic single-character scene image centered on the companion.",
-    "solo, one person only.",
-    "Only one visible person: the companion. Do not show the user, an opponent, a second character, a crowd, reflections of another person, or duplicate bodies.",
-    // SD and gpt-image both render "camera" as a literal device. Use
-    // "looking at viewer" style eye-contact wording instead of "faces the
-    // camera" so the companion meets the user's gaze without a camera (or
-    // phone/photographic device) appearing in the frame.
-    "Both eyes looking directly at the viewer, making direct eye contact with the viewer; do not render any camera, phone, or photographic device in the frame.",
-    "Use the scene only as an empty background/environment with no other people present.",
+    "Edit the input image into a single-character scene image of the same companion.",
+    "Keep this exact person: same face, facial features, hairstyle, body, and outfit as the input image.",
+    "Keep exactly one person in the image — this companion only. Do not add any other people, a second person, the user, an opponent, a crowd, bystanders, reflections of another person, or duplicate bodies.",
+    "The companion looks directly at the viewer, both eyes meeting the viewer's gaze; do not render any camera, phone, or photographic device.",
   );
 
   const companionBits = [
@@ -125,41 +128,36 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   }
 
   const sceneTags = scene.tags.length ? `, ${scene.tags.join(", ")}` : "";
-  lines.push(`Scene: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}.`);
+  lines.push(
+    `Change the background to: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}. The background is empty of other people.`,
+  );
 
+  // Narration drives the companion's pose/action. previousUserText and the story
+  // objective are intentionally dropped: as edit instructions they frequently
+  // name other people (the user, opponents, plot characters), and this editor
+  // renders whatever the instruction names.
   const action = extractNarration(ctx.sourceReply);
-  if (ctx.previousUserText) {
-    lines.push(`Recent off-screen context: "${truncate(ctx.previousUserText, 160)}".`);
-  }
   if (action) {
-    lines.push(`In this moment: ${truncate(action, 240)}`);
+    lines.push(`The companion's pose and action: ${truncate(action, 160)}`);
   }
 
   if (ctx.emotion) {
-    lines.push(`Emotional state: ${ctx.emotion}.`);
+    lines.push(`Expression: ${ctx.emotion}.`);
   }
 
-  lines.push(
-    `Relationship stage: ${ctx.stage}; keep the body language and intimacy consistent with this stage.`,
-  );
+  lines.push(`Body language fits a ${ctx.stage} relationship.`);
 
   if (ctx.activity) {
     const activityBits = [ctx.activity.activity_type, ctx.activity.activity_hint, ctx.activity.mood]
       .map((b) => b?.trim())
       .filter(Boolean);
     if (activityBits.length) {
-      lines.push(`Activity context: ${activityBits.join(", ")}.`);
+      lines.push(`Context: ${activityBits.join(", ")}.`);
     }
   }
 
-  if (ctx.storyBeat) {
-    lines.push(
-      `Story objective (do not spoil unfinished beats): ${ctx.storyBeat.title} — ${truncate(ctx.storyBeat.objective, 160)}`,
-    );
-  }
-
   lines.push(
-    "Single companion in environment, natural composition, no other people, no crowd, no second person, no text, no UI, no speech bubbles, no extra characters, no visible camera or photographic device.",
+    "Single companion only, natural composition, no other people, no crowd, no second person, no extra characters, no text, no UI, no speech bubbles, no visible camera or photographic device.",
   );
 
   return lines.join("\n");
