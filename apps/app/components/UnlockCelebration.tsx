@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { ChatUnlock } from '@/api/types';
 
@@ -12,9 +12,13 @@ const VISIBLE_MS = 4500;
  */
 export function UnlockCelebration({
   unlocks,
+  onInviteScene,
+  onViewScene,
   token,
 }: {
   unlocks: ChatUnlock[] | null;
+  onInviteScene?: (unlock: ChatUnlock) => void;
+  onViewScene?: (unlock: ChatUnlock) => void;
   token: number;
 }) {
   const [items, setItems] = useState<ChatUnlock[]>([]);
@@ -33,12 +37,13 @@ export function UnlockCelebration({
   if (items.length === 0) {
     return null;
   }
+  const sceneItems = items.filter((item) => item.kind === 'scene' && item.scene_id);
 
   return (
-    <View pointerEvents="none" className="items-center px-4 py-2">
+    <View className="items-center px-4 py-2">
       <View className="w-full max-w-md rounded-2xl border border-app-primary/30 bg-app-primarySoft px-4 py-3">
         <Text className="text-xs font-semibold uppercase tracking-wide text-app-primary">
-          ✦ Unlocked
+          Unlocked
         </Text>
         <View className="mt-1 gap-0.5">
           {items.map((item) => (
@@ -47,6 +52,28 @@ export function UnlockCelebration({
             </Text>
           ))}
         </View>
+        {sceneItems.length > 0 ? (
+          <View className="mt-3 flex-row flex-wrap gap-2">
+            {onInviteScene ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onInviteScene(sceneItems[0])}
+                className="rounded-full bg-app-primary px-3 py-1.5"
+              >
+                <Text className="text-xs font-semibold text-white">Invite now</Text>
+              </Pressable>
+            ) : null}
+            {onViewScene ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => onViewScene(sceneItems[0])}
+                className="rounded-full border border-app-primary/30 px-3 py-1.5"
+              >
+                <Text className="text-xs font-semibold text-app-primary">View scene</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </View>
   );

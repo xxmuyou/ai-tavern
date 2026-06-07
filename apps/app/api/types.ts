@@ -173,6 +173,38 @@ export type ActivityResponse = {
   activity: ActivityContext;
 };
 
+export type EventType = 'invitation' | 'conflict' | 'gift' | 'confession' | 'milestone';
+
+export type EventOption = {
+  id: string;
+  label: string;
+};
+
+export type EventResponseItem = {
+  companion_id: string;
+  created_at: number;
+  event_type: EventType;
+  id: string;
+  payload: {
+    description: string;
+    options: EventOption[];
+  };
+  scene_id: string | null;
+};
+
+export type EventsListResponse = {
+  events: EventResponseItem[];
+};
+
+export type EventResolveResponse = {
+  level_changed: string | null;
+  result: {
+    description: string;
+    signals: Partial<RelationshipDimensions>;
+  };
+  unlocks: ChatUnlock[];
+};
+
 export type Memory = {
   cg_template: string | null;
   cg_url: string | null;
@@ -280,8 +312,10 @@ export type CompanionCreateInput = {
 // spec-025: a single unlock surfaced over the chat SSE `unlocks` event.
 export type ChatUnlock = {
   key: string;
-  kind: 'secret' | 'expression' | 'title';
+  kind: 'secret' | 'expression' | 'title' | 'scene';
   label: string;
+  scene_id?: string;
+  scene_name?: string;
 };
 
 export type RelationshipUnlockItem = {
@@ -590,7 +624,7 @@ export type SceneCompanionPresent = {
 
 export type SceneEnterResponse = {
   companions_present: SceneCompanionPresent[];
-  event: unknown | null;
+  event: EventResponseItem | null;
   scene: SceneEntered;
 };
 
@@ -723,6 +757,7 @@ export type ChatMessageInput = {
   persona_id?: string;
   // spec-036: when set, this turn carries an invitation to go to that scene.
   invite_scene_id?: string;
+  quick_action?: { type: 'gift'; item_id: 'coffee' | 'flowers' };
   text: string;
 };
 
@@ -742,9 +777,18 @@ export type InviteTargetsResponse = {
 // invitation and, if so, the scene to switch to.
 export type ChatInviteResult = {
   accepted: boolean;
+  activity_completed?: boolean;
   reason: string;
   scene_id: string | null;
   scene_art_url: string | null;
+};
+
+export type ChatQuickActionResult = {
+  activity_id: string | null;
+  cooldown_until: number | null;
+  item_id: 'coffee' | 'flowers';
+  memory_id: string | null;
+  ok: boolean;
 };
 
 // A user-authored "who I am" identity injected into the chat prompt so the

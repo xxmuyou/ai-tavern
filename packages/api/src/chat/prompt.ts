@@ -1,5 +1,6 @@
 import type { LLMMessage } from "../llm";
 import type { RelationshipStage } from "../life/types";
+import type { QuickActionForPrompt } from "../life/quick-actions";
 import type { StoryBeatPublic } from "../story-beats";
 
 export type CompanionForPrompt = {
@@ -83,6 +84,7 @@ export type ChatPromptInput = {
   companion: CompanionForPrompt;
   scene: SceneForPrompt;
   activity?: ActivityForPrompt;
+  quickAction?: QuickActionForPrompt | null;
   invite?: InviteForPrompt;
   userPersona?: UserPersonaForPrompt;
   // Sample lines in the character's voice, injected as few-shot voice anchors.
@@ -234,6 +236,15 @@ function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
     position: "pre_history",
     priority: 700,
     required: false,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildQuickAction(input),
+    id: "quick_action",
+    position: "pre_history",
+    priority: 715,
+    required: true,
     role: "system",
   });
 
@@ -464,6 +475,16 @@ function buildInvite(input: ChatPromptInput): string {
     "You are free to say yes, or to decline, deflect, stall, or push back if the invitation feels too forward, too soon, or out of step with where things stand between you. If it's inappropriate for your relationship, treat it as such. Answer naturally in your own voice — do not narrate a scene change yourself; the world will move only if you agree.",
   );
   return lines.join("\n");
+}
+
+function buildQuickAction(input: ChatPromptInput): string {
+  const { quickAction } = input;
+  if (!quickAction) return "";
+  return [
+    "# A concrete gesture just now",
+    quickAction.description,
+    "Acknowledge the gesture naturally in your reply. Let it affect the emotional texture of the moment, but do not mention points, metadata, systems, or rewards.",
+  ].join("\n");
 }
 
 function buildStoryBeat(input: ChatPromptInput): string {

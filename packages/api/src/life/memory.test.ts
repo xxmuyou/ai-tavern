@@ -110,6 +110,7 @@ describe("onActivityMemoryHook", () => {
       activity_type: "hang_out",
       completed_at: 1000,
       daily_state_snapshot: JSON.stringify({ mood: "calm", availability: "available", activity_hint: "reading", scene_id: "moon_bar" }),
+      metadata: null,
     });
 
     expect(memories.map((m) => m.memory_type).sort()).toEqual(["first_hangout", "first_meeting"]);
@@ -124,6 +125,7 @@ describe("onActivityMemoryHook", () => {
       activity_type: "hang_out" as const,
       completed_at: 1000,
       daily_state_snapshot: "{}",
+      metadata: null,
     };
     await onActivityMemoryHook(env, { ...base, id: "a1" });
     await onActivityMemoryHook(env, { ...base, id: "a2" });
@@ -140,6 +142,7 @@ describe("onActivityMemoryHook", () => {
       activity_type: "gift" as const,
       completed_at: 1000,
       daily_state_snapshot: "{}",
+      metadata: null,
     };
     await onActivityMemoryHook(env, { ...base, id: "g1" });
     await onActivityMemoryHook(env, { ...base, id: "g2" });
@@ -158,6 +161,7 @@ describe("onActivityMemoryHook", () => {
       activity_type: "check_in",
       completed_at: 1000,
       daily_state_snapshot: "{}",
+      metadata: null,
     });
     expect(memories.map((m) => m.memory_type)).toEqual(["first_meeting"]);
   });

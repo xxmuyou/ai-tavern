@@ -1,11 +1,8 @@
 // spec-036: in-chat "invite to go somewhere" targets.
 //
-// The candidate destinations for an in-chat invitation are the scenes where
-// THIS companion can appear (its id is in `default_companions`) AND which the
-// user has already unlocked (`unlock_condition` passes). Intimate scenes gated
-// by a high relationship `unlock_condition` simply never show up until earned —
-// that is how "you can't invite her to the hotel when you barely know her" is
-// enforced, for free, by the existing unlock system.
+// The candidate destinations for an in-chat invitation are all active scenes
+// the user has unlocked (`unlock_condition` passes). Intimate scenes gated by a
+// high relationship `unlock_condition` simply never show up until earned.
 
 import { requireAuthUser } from "../auth";
 import { jsonResponse, notFound } from "../http";
@@ -23,42 +20,31 @@ type SceneCandidateRow = {
   name: string;
   mood: string;
   art_url: string | null;
-  default_companions: string | null;
   unlock_condition: string | null;
 };
 
-function parseCompanionIds(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-async function loadCandidateScenes(env: Env, companionId: string): Promise<SceneCandidateRow[]> {
+async function loadCandidateScenes(env: Env): Promise<SceneCandidateRow[]> {
   const { results } = await env.DB.prepare(
-    `SELECT id, name, mood, art_url, default_companions, unlock_condition
+    `SELECT id, name, mood, art_url, unlock_condition
      FROM scenes
      WHERE is_active = 1
      ORDER BY display_order ASC, id ASC`,
   ).all<SceneCandidateRow>();
 
-  return (results ?? []).filter((row) => parseCompanionIds(row.default_companions).includes(companionId));
+  return results ?? [];
 }
 
 /**
- * Scenes this companion appears in that the user has unlocked, minus the scene
- * they are currently in (`fromSceneId`). Used to populate the invite popup.
+ * Scenes the user has unlocked, minus the scene they are currently in
+ * (`fromSceneId`). Used to populate the invite popup.
  */
 export async function loadInviteTargets(
   env: Env,
   userId: string,
-  companionId: string,
+  _companionId: string,
   fromSceneId: string | null,
 ): Promise<InviteTarget[]> {
-  const candidates = await loadCandidateScenes(env, companionId);
+  const candidates = await loadCandidateScenes(env);
   const out: InviteTarget[] = [];
   for (const row of candidates) {
     if (fromSceneId && row.id === fromSceneId) continue;
@@ -71,16 +57,16 @@ export async function loadInviteTargets(
 
 /**
  * Validate that `sceneId` is a legitimate invite target for this companion/user
- * (appears in the scene, scene active, unlocked). Returns the resolved target or
- * null. Used by the chat POST path to gate `invite_scene_id`.
+ * (scene active and unlocked). Returns the resolved target or null. Used by the
+ * chat POST path to gate `invite_scene_id`.
  */
 export async function resolveInviteTarget(
   env: Env,
   userId: string,
-  companionId: string,
+  _companionId: string,
   sceneId: string,
 ): Promise<InviteTarget | null> {
-  const candidates = await loadCandidateScenes(env, companionId);
+  const candidates = await loadCandidateScenes(env);
   const row = candidates.find((c) => c.id === sceneId);
   if (!row) return null;
   const { unlocked } = await evaluateUnlock(env, userId, row.unlock_condition);

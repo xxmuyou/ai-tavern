@@ -15,7 +15,7 @@ import {
   type TextInputKeyPressEventData,
 } from 'react-native';
 
-import { clearChatHistory, getCompanion, getInviteTargets } from '@/api/companion-client';
+import { clearChatHistory, getCompanion, getInviteTargets, getScenes } from '@/api/companion-client';
 import type {
   ChatEmotionKey,
   ChatInviteResult,
@@ -24,6 +24,7 @@ import type {
   ChatUnlock,
   InviteTarget,
   RelationshipDimensions,
+  Scene,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { AuthGuard } from '@/components/AuthGuard';
@@ -31,6 +32,7 @@ import { Button } from '@/components/Button';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { EmptyState } from '@/components/EmptyState';
+import { EventPopup } from '@/components/EventPopup';
 import { InvitePopup } from '@/components/InvitePopup';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MessageBubble } from '@/components/MessageBubble';
@@ -49,6 +51,7 @@ import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
+import { usePendingEvents } from '@/hooks/use-pending-events';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
@@ -119,6 +122,7 @@ function ChatScreenInner() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [pendingInvite, setPendingInvite] = useState<InviteTarget | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  const [scenes, setScenes] = useState<Scene[]>([]);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const shouldScrollOnNextRef = useRef(true);
@@ -143,10 +147,26 @@ function ChatScreenInner() {
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
   const { activity, refresh: refreshActivity, setActivity } = activityState;
+  const activeActivityId = activity?.status === 'active' ? activityId : undefined;
+  const pendingEvents = usePendingEvents(null);
 
   useEffect(() => {
     void refreshActivity();
   }, [refreshActivity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getScenes()
+      .then((payload) => {
+        if (!cancelled) setScenes(payload.scenes);
+      })
+      .catch(() => {
+        if (!cancelled) setScenes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (history.isLoadingInitial) {
@@ -239,12 +259,15 @@ function ChatScreenInner() {
       if (invite.accepted && invite.scene_id) {
         setSceneId(invite.scene_id);
         setSceneArt(invite.scene_art_url ?? null);
+        if (invite.activity_completed) {
+          setActivity(null);
+        }
         showInviteNotice(`You headed to ${target?.name ?? 'a new place'} together.`);
       } else {
         showInviteNotice(`${companion.name} didn't take you up on it.`);
       }
     },
-    [companion.name, showInviteNotice],
+    [companion.name, setActivity, showInviteNotice],
   );
 
   const openInvitePicker = useCallback(async () => {
@@ -264,6 +287,13 @@ function ChatScreenInner() {
     setPendingInvite(target);
     setInvitePickerVisible(false);
   }, []);
+
+  const remainingSeconds = useMemo(() => {
+    if (!rateLimitedUntil) {
+      return 0;
+    }
+    return Math.max(0, Math.ceil((rateLimitedUntil - now) / 1000));
+  }, [now, rateLimitedUntil]);
 
   const handleSend = useCallback(async () => {
     const text = draft.trim();
@@ -288,7 +318,7 @@ function ChatScreenInner() {
     try {
       const invitedTarget = pendingInvite;
       const result = await stream.send(text, {
-        activityId,
+        activityId: activeActivityId,
         inviteSceneId: invitedTarget?.id,
         personaId: activePersonaId ?? undefined,
         onDone: (info) => {
@@ -343,7 +373,65 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+
+  const sendQuickAction = useCallback(async (itemId: 'coffee' | 'flowers') => {
+    if (stream.isStreaming || remainingSeconds > 0) return;
+    const text = itemId === 'coffee' ? 'I ordered coffee for us.' : 'I sent you flowers.';
+    const userMessage: ChatMessage = {
+      companion_id: companionId,
+      content: text,
+      created_at: new Date().toISOString(),
+      id: `local-user-${Date.now()}`,
+      role: 'user',
+    };
+    history.appendMessage(userMessage);
+    shouldScrollOnNextRef.current = true;
+
+    let serverMessageId = '';
+    try {
+      const result = await stream.send(text, {
+        activityId: activeActivityId,
+        personaId: activePersonaId ?? undefined,
+        quickAction: { item_id: itemId, type: 'gift' },
+        sceneId,
+        onDone: (info) => {
+          serverMessageId = info.messageId;
+        },
+        onEmotion: (emotion) => setCurrentEmotion(emotion),
+        onQuickActionResult: (quick) => {
+          showInviteNotice(quick.ok
+            ? (quick.item_id === 'coffee' ? 'Coffee is part of this moment now.' : 'Flowers are part of this moment now.')
+            : 'That gesture could not be recorded.');
+        },
+        onSignals: (signals) => {
+          setLastSignals(signals);
+          setSignalToken((token) => token + 1);
+        },
+        onUnlocks: (unlocks) => {
+          setLastUnlocks(unlocks);
+          setUnlockToken((token) => token + 1);
+        },
+      });
+      history.appendMessage({
+        companion_id: companionId,
+        content: result.text,
+        created_at: new Date().toISOString(),
+        emotion: result.emotion,
+        id: serverMessageId || `local-companion-${Date.now()}`,
+        role: 'companion',
+        scene_id: sceneId ?? null,
+      });
+      shouldScrollOnNextRef.current = true;
+      void relationship.refresh();
+    } catch (error) {
+      if (error instanceof QuotaExceededError) {
+        setQuotaModalVisible(true);
+      } else {
+        pushError(error instanceof Error ? error.message : 'Quick action failed.');
+      }
+    }
+  }, [activeActivityId, activePersonaId, companionId, history, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -460,13 +548,6 @@ function ChatScreenInner() {
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
 
-  const remainingSeconds = useMemo(() => {
-    if (!rateLimitedUntil) {
-      return 0;
-    }
-    return Math.max(0, Math.ceil((rateLimitedUntil - now) / 1000));
-  }, [now, rateLimitedUntil]);
-
   if (!companionId) {
     return (
       <View className="flex-1 bg-app-bg">
@@ -490,7 +571,16 @@ function ChatScreenInner() {
     );
   }
 
+  const currentScene = scenes.find((scene) => scene.id === sceneId) ?? null;
+  const currentSceneText = [
+    currentScene?.id ?? sceneId ?? '',
+    currentScene?.name ?? '',
+    currentScene?.mood ?? '',
+    ...(currentScene?.tags ?? []),
+  ].join(' ').toLowerCase();
+  const canOrderCoffee = Boolean(sceneId) && (currentSceneText.includes('coffee') || currentSceneText.includes('cafe'));
   const sendDisabled = stream.isStreaming || remainingSeconds > 0 || draft.trim().length === 0;
+  const canUseQuickAction = Boolean(sceneId) && !stream.isStreaming && remainingSeconds === 0;
 
   return (
     <View className="flex-1 bg-app-bg">
@@ -537,7 +627,22 @@ function ChatScreenInner() {
 
       <SignalFeedback signals={lastSignals} token={signalToken} />
 
-      <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
+      <UnlockCelebration
+        unlocks={lastUnlocks}
+        token={unlockToken}
+        onInviteScene={(unlock) => {
+          if (!unlock.scene_id) return;
+          setPendingInvite({
+            art_url: null,
+            id: unlock.scene_id,
+            mood: '',
+            name: unlock.scene_name ?? 'the new place',
+          });
+        }}
+        onViewScene={(unlock) => {
+          if (unlock.scene_id) router.push(`/scene/${encodeURIComponent(unlock.scene_id)}` as Href);
+        }}
+      />
 
       <View className="border-b border-app-line bg-app-bg px-3 py-3">
         <CompanionStoryPanel
@@ -629,18 +734,32 @@ function ChatScreenInner() {
         ) : null}
 
         <View className="border-t border-app-line bg-app-card px-3 py-3">
-          <View className="flex-row items-end gap-2">
-            <Pressable
-              accessibilityLabel="Invite to go somewhere"
-              accessibilityRole="button"
+          <View className="mb-2 flex-row flex-wrap gap-2">
+            {canOrderCoffee ? (
+              <QuickActionButton
+                disabled={!canUseQuickAction}
+                icon="cafe-outline"
+                label="Order coffee"
+                onPress={() => void sendQuickAction('coffee')}
+              />
+            ) : null}
+            {sceneId ? (
+              <QuickActionButton
+                disabled={!canUseQuickAction}
+                icon="flower-outline"
+                label="Send flowers"
+                onPress={() => void sendQuickAction('flowers')}
+              />
+            ) : null}
+            <QuickActionButton
               disabled={stream.isStreaming}
+              icon="navigate-outline"
+              label="Invite somewhere"
+              selected={Boolean(pendingInvite)}
               onPress={() => void openInvitePicker()}
-              className={`h-11 w-11 items-center justify-center rounded-full border border-app-line ${
-                pendingInvite ? 'bg-app-primarySoft' : 'bg-app-bg'
-              }`}
-            >
-              <Ionicons color="#6E59C7" name="navigate-outline" size={20} />
-            </Pressable>
+            />
+          </View>
+          <View className="flex-row items-end gap-2">
             <TextInput
               accessibilityLabel="Message input"
               multiline
@@ -677,6 +796,25 @@ function ChatScreenInner() {
         companionName={companion.name}
         onSelect={handleInviteSelect}
         onClose={() => setInvitePickerVisible(false)}
+      />
+
+      <EventPopup
+        event={pendingEvents.current}
+        isResolving={pendingEvents.isResolving}
+        result={pendingEvents.result}
+        visible={pendingEvents.visible}
+        onClose={pendingEvents.close}
+        onResolve={(event, optionId) => {
+          void pendingEvents.resolve(event, optionId)
+            .then((result) => {
+              if (result.unlocks.length > 0) {
+                setLastUnlocks(result.unlocks);
+                setUnlockToken((token) => token + 1);
+              }
+              void relationship.refresh();
+            })
+            .catch((err) => pushError(err instanceof Error ? err.message : 'Event could not be resolved.'));
+        }}
       />
 
       <Modal
@@ -738,5 +876,33 @@ function ChatScreenInner() {
         </View>
       </Modal>
     </View>
+  );
+}
+
+function QuickActionButton({
+  disabled,
+  icon,
+  label,
+  onPress,
+  selected,
+}: {
+  disabled?: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      className={`min-h-9 flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${
+        selected ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-app-bg'
+      } ${disabled ? 'opacity-50' : 'opacity-100'}`}
+    >
+      <Ionicons color="#6E59C7" name={icon} size={15} />
+      <Text className="text-xs font-semibold text-app-text">{label}</Text>
+    </Pressable>
   );
 }

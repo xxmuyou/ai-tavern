@@ -120,6 +120,7 @@ export type ActivityRecord = {
   scene_id: string;
   activity_type: ActivityType;
   status: ActivityStatus;
+  metadata: Record<string, unknown> | null;
   daily_state_snapshot: {
     mood: Mood;
     availability: Availability;

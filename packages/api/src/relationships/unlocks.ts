@@ -15,7 +15,7 @@ import type { RelationshipStage } from "../life/types";
 import type { DimensionValues } from "./level";
 import { deriveStage } from "./stage";
 
-export type UnlockKind = "secret" | "expression" | "title";
+export type UnlockKind = "secret" | "expression" | "title" | "scene";
 
 export type UnlockDef = {
   key: string; // stored in relationship_unlocks.unlock_key
@@ -55,7 +55,7 @@ export function unlockKeysForStage(stage: string): string[] {
   return UNLOCK_DEFS.filter((d) => (STAGE_RANK[d.stage] ?? Infinity) <= rank).map((d) => d.key);
 }
 
-export type UnlockEvent = { key: string; kind: UnlockKind; label: string };
+export type UnlockEvent = { key: string; kind: UnlockKind; label: string; scene_id?: string; scene_name?: string };
 
 const DEF_BY_KEY: ReadonlyMap<string, UnlockDef> = new Map(UNLOCK_DEFS.map((d) => [d.key, d]));
 

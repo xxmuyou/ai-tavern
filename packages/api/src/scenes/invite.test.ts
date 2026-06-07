@@ -90,11 +90,12 @@ const rooftop: SceneRow = {
 };
 
 describe("loadInviteTargets", () => {
-  it("lists unlocked scenes where the companion appears, excluding the current scene and ones she's not in", async () => {
+  it("lists all unlocked scenes, excluding the current scene", async () => {
     const env = createEnv({ relationships: [], scenes: [cafe, tavern, hotel, rooftop] });
     const targets = await loadInviteTargets(env, "user-1", "maya", "cafe");
-    // cafe excluded (current), rooftop excluded (no maya), hotel excluded (locked, romance 0 < 50)
-    expect(targets.map((t) => t.id)).toEqual(["tavern"]);
+    // cafe excluded (current), hotel excluded (locked, romance 0 < 50).
+    // rooftop is allowed even though maya is not in default_companions.
+    expect(targets.map((t) => t.id)).toEqual(["tavern", "rooftop"]);
     expect(targets[0]).toMatchObject({ art_url: "tavern.png", mood: "Warm, noisy", name: "Tavern" });
   });
 
@@ -108,15 +109,15 @@ describe("loadInviteTargets", () => {
 });
 
 describe("resolveInviteTarget", () => {
-  it("returns the target when valid (companion present + unlocked)", async () => {
+  it("returns the target when valid (active + unlocked)", async () => {
     const env = createEnv({ relationships: [], scenes: [cafe, tavern] });
     const target = await resolveInviteTarget(env, "user-1", "maya", "tavern");
     expect(target).toMatchObject({ id: "tavern", name: "Tavern" });
   });
 
-  it("returns null for a scene the companion is not in", async () => {
+  it("allows a scene even when the companion is not in default_companions", async () => {
     const env = createEnv({ relationships: [], scenes: [rooftop] });
-    expect(await resolveInviteTarget(env, "user-1", "maya", "rooftop")).toBeNull();
+    expect(await resolveInviteTarget(env, "user-1", "maya", "rooftop")).toMatchObject({ id: "rooftop" });
   });
 
   it("returns null for a locked scene (cannot invite past the relationship gate)", async () => {

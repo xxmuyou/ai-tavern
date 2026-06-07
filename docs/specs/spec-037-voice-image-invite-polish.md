@@ -1,6 +1,6 @@
-# spec-037: Voice Labels, Image Job Continuity, and Scene Invite QA
+# spec-037: Voice Labels, Image Job Continuity, Scene Invites, Events, and Gifts
 
-> **类型：** 文档 + 前端 + 小幅 API 契约收口 | **依赖：** spec-027, spec-033, spec-036, voice architecture | **估时：** 1-2 天 | **状态：** 📝 draft
+> **类型：** 文档 + 前端 + 后端 API 收口 | **依赖：** spec-008, spec-027, spec-033, spec-036, voice architecture | **估时：** 2-3 天 | **状态：** 🟡 in-progress
 
 ## Context
 
@@ -25,6 +25,22 @@
   - 去掉 API 文档中的 `draft` 标记，明确 spec-036 是“已实现、待端到端验证”。
   - 在 Web 和 mobile chat 中核查邀请按钮是否总能被用户发现；如果 invite targets 为空，弹窗要展示原因和下一步，而不是让用户误以为功能不存在。
   - 验证 accepted 后切 `sceneId` / `sceneArt`，后续消息带新 scene；refused 不切，只展示提示。
+- 聊天内邀请换场景收口：
+  - 邀请入口从纯图标改为清晰的 icon + text action，Web/mobile 都可见。
+  - `GET /companions/:id/invite-targets` 改为列出所有已解锁 active scenes，继续支持 `from_scene_id` 排除当前场景；不再要求 `default_companions` 包含该 companion。
+  - activity chat 中允许带 `invite_scene_id`；若 companion 同意，后端自动 complete 当前 activity，SSE `invite_result` 返回 `activity_completed: true`，前端清掉 active activity 并切场景。
+- 聊天快捷动作（咖啡 / 鲜花）：
+  - 聊天输入区新增 `Order coffee` / `Send flowers`；咖啡仅当前 scene name/mood/tags 含 `cafe` 或 `coffee` 时显示，鲜花任意场景显示。
+  - 点击后一键发送默认消息：`I ordered coffee for us.` / `I sent you flowers.`
+  - `POST /chat/:id/messages` 新增 `quick_action: { type: "gift", item_id: "coffee" | "flowers" }`。后端校验 scene 与 6 小时同 companion/item 冷却，不扣 credits。
+  - 后端创建已完成 `activity_contexts` 记录，`metadata` 写入 `{ "quick_action": true, "item_id": "coffee" | "flowers" }`，触发 memory hook。
+  - 固定关系加成：coffee `{ closeness:+1, trust:+1 }`；flowers `{ romance:+2, closeness:+1, tension:-1 }`。普通聊天 signal extraction 仍照常运行。
+- 场景事件前端闭环：
+  - 补齐前端 `EventResponseItem` / option / resolve result 类型和 client。
+  - Scene/Chat 页面拉取全部 pending events；优先展示本次 `scenes/:id/enter` 返回的新 event，再展示旧 pending events。
+  - 共享 `EventPopup` 展示事件说明与选项，选择后调用 `/events/:id/resolve`，显示结果并刷新关系/解锁。
+- 场景解锁呈现：
+  - 聊天收到 `unlocks` 时，除轻 toast 外，对新解锁场景显示 `Invite now` / `View scene` 可行动入口。
 - 部署核查：
   - dev：运行 `pnpm deploy:dev` 或至少使用脚本里的 `assert_web_entry_matches` 思路验证线上 Pages entry 与本地 dist 一致，并检查 `/api/health`。
   - prod：同样用 `pnpm deploy:prod` 的二次确认流程；部署后抽查 bundle 是否包含 invite/image/voice 新文案。
@@ -34,14 +50,18 @@
 - `pnpm --filter @xtbit/app typecheck`
 - `pnpm --filter @xtbit/app lint`
 - `pnpm --filter @xtbit/api test -- voice moment outfit invite`
+- `pnpm --filter @xtbit/api test -- quick-action invite events activity memory`
 - Web 手测：
   - Companion edit：不同语言 voice 的语言分组和 voice 标签不再全部显示中文。
   - Chat：点击 `Capture this moment` 后切到别页、继续发消息、再回来，任务要继续到成功图或错误。
   - Companion profile：点击 `Change outfit` 后切页再回来，任务继续到成功预览或错误。
   - Chat invite：按钮可见；有目标时能选、发送、收到同意后切场景；无目标时有明确空态。
+  - Chat quick actions：咖啡馆聊天可点咖啡，非咖啡馆隐藏咖啡；任意场景可送花；动作写关系与 memory；6 小时同 item 冷却。
+  - Scene/Chat event：进入场景或打开聊天时 pending event 弹出，选项 resolve 后展示结果并刷新关系。
 
 ## Assumptions
 
 - “voice 是什么语言，就把标签改为那个语言”默认覆盖语言分组和声音名展示；不改 MiniMax `voice_id`。
 - “outfit change”默认指当前可见的 profile `Change outfit`，不是已废弃的 legacy chat outfit 入口。
 - 图片生成不会因为前端离开而取消；目标是恢复轮询、展示最终成功或错误。
+- 咖啡/鲜花不接 credits、不接商品 catalog、不触发生图；本期只做聊天快捷动作、关系、memory。

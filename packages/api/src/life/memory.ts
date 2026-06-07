@@ -117,7 +117,7 @@ function rowToRecord(row: MemoryRow): MemoryRecord {
 
 type ActivityHookInput = Pick<
   ActivityRecord,
-  "id" | "user_id" | "companion_id" | "scene_id" | "activity_type" | "completed_at"
+  "id" | "user_id" | "companion_id" | "scene_id" | "activity_type" | "completed_at" | "metadata"
 > & {
   daily_state_snapshot: string | ActivityRecord["daily_state_snapshot"];
 };
@@ -146,7 +146,7 @@ export async function onActivityMemoryHook(env: Env, activity: ActivityHookInput
     memory_subtype: subtype,
     scene_id: activity.scene_id,
     activity_id: activity.id,
-    title: defaultTitleFor(baseMemoryType),
+    title: titleForActivityMemory(baseMemoryType, activity),
     summary: await generateMemorySummary(env, activity, baseMemoryType),
     key_choice: null,
     relationship_delta: null,
@@ -304,11 +304,16 @@ async function generateMemorySummary(
   const snapshotText = typeof activity.daily_state_snapshot === "string"
     ? activity.daily_state_snapshot
     : JSON.stringify(activity.daily_state_snapshot);
+  const itemId = readQuickActionItemId(activity);
+  const actionText = itemId
+    ? `Specific gift/action: ${itemId === "coffee" ? "the user ordered coffee for both of them" : "the user sent flowers"}.\n`
+    : "";
   const prompt = `Write a one-paragraph (max 60 words) diary-style summary of this moment.\n`
     + `Memory type: ${memoryType}.\n`
     + `Activity type: ${activity.activity_type}.\n`
     + `Scene id: ${activity.scene_id}.\n`
     + `Companion's daily state: ${snapshotText}.\n`
+    + actionText
     + `Use past-tense first-person ("we", "I"). Be specific and warm. No quotes.`;
   try {
     const resp = await llmCall(env, {
@@ -336,6 +341,13 @@ function defaultTitleFor(memoryType: MemoryType): string {
   }
 }
 
+function titleForActivityMemory(memoryType: MemoryType, activity: ActivityHookInput): string {
+  const itemId = readQuickActionItemId(activity);
+  if (memoryType === "gift_received" && itemId === "coffee") return "Coffee together";
+  if (memoryType === "gift_received" && itemId === "flowers") return "Flowers sent";
+  return defaultTitleFor(memoryType);
+}
+
 function defaultSummaryFor(memoryType: MemoryType): string {
   switch (memoryType) {
     case "first_meeting": return "We crossed paths and something started.";
@@ -346,6 +358,11 @@ function defaultSummaryFor(memoryType: MemoryType): string {
     case "repair": return "We talked it out and found each other again.";
     case "anniversary": return "Another quiet milestone, just for us.";
   }
+}
+
+function readQuickActionItemId(activity: ActivityHookInput): "coffee" | "flowers" | null {
+  const itemId = activity.metadata?.item_id;
+  return itemId === "coffee" || itemId === "flowers" ? itemId : null;
 }
 
 function cgTemplateFor(memoryType: MemoryType): string | null {

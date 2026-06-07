@@ -6,6 +6,10 @@
 // this window. Defaults to 24 hours.
 export const GIFT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
+// Chat quick gifts (coffee / flowers) are smaller than a full gift activity,
+// but still need a cooldown so they cannot be spammed for relationship points.
+export const QUICK_GIFT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
 // Activity stage thresholds. Used by life/activity.ts when validating that a
 // player has earned the right to attempt a given activity type.
 export const ACTIVITY_THRESHOLDS = {

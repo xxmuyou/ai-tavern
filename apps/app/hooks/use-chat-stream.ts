@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { clearStoredAuthSession, sendChatMessage } from '@/api/companion-client';
-import type { ChatInviteResult, ChatUnlock, RelationshipDimensions } from '@/api/types';
+import type { ChatInviteResult, ChatQuickActionResult, ChatUnlock, RelationshipDimensions } from '@/api/types';
 import {
   ApiError,
   NetworkError,
@@ -30,6 +30,7 @@ export type ChatStreamCallbacks = {
   onSignals?: (signals: Partial<RelationshipDimensions>) => void;
   onUnlocks?: (unlocks: ChatUnlock[]) => void;
   onInviteResult?: (result: ChatInviteResult) => void;
+  onQuickActionResult?: (result: ChatQuickActionResult) => void;
 };
 
 export type SendOptions = ChatStreamCallbacks & {
@@ -37,6 +38,7 @@ export type SendOptions = ChatStreamCallbacks & {
   sceneId?: string;
   personaId?: string;
   inviteSceneId?: string;
+  quickAction?: { type: 'gift'; item_id: 'coffee' | 'flowers' };
 };
 
 function asEmotion(value: unknown): ChatEmotion | null {
@@ -109,6 +111,7 @@ export function useChatStream(companionId: string): UseChatStreamResult {
           activity_id: options.activityId,
           invite_scene_id: options.inviteSceneId,
           persona_id: options.personaId,
+          quick_action: options.quickAction,
           scene_id: options.sceneId,
           text,
         });
@@ -132,9 +135,20 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             const data = (event.data as Partial<ChatInviteResult> | undefined) ?? {};
             options.onInviteResult?.({
               accepted: data.accepted === true,
+              activity_completed: data.activity_completed === true,
               reason: typeof data.reason === 'string' ? data.reason : '',
               scene_art_url: typeof data.scene_art_url === 'string' ? data.scene_art_url : null,
               scene_id: typeof data.scene_id === 'string' ? data.scene_id : null,
+            });
+          } else if (event.type === 'quick_action_result') {
+            const data = (event.data as Partial<ChatQuickActionResult> | undefined) ?? {};
+            const itemId = data.item_id === 'coffee' || data.item_id === 'flowers' ? data.item_id : 'flowers';
+            options.onQuickActionResult?.({
+              activity_id: typeof data.activity_id === 'string' ? data.activity_id : null,
+              cooldown_until: typeof data.cooldown_until === 'number' ? data.cooldown_until : null,
+              item_id: itemId,
+              memory_id: typeof data.memory_id === 'string' ? data.memory_id : null,
+              ok: data.ok === true,
             });
           } else if (event.type === 'emotion') {
             const rawValue = (event.data as { value?: unknown } | undefined)?.value;

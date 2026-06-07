@@ -6,12 +6,14 @@ import { Image, ScrollView, Text, View } from 'react-native';
 import { mediaSource } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { EventPopup } from '@/components/EventPopup';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SceneCompanionCard } from '@/components/SceneCompanionCard';
 import { SceneDailyCompanion } from '@/components/SceneDailyCompanion';
 import { TopBar } from '@/components/TopBar';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { usePendingEvents } from '@/hooks/use-pending-events';
 import { useSceneEntry } from '@/hooks/use-scenes';
 
 export default function SceneDetailScreen() {
@@ -20,6 +22,7 @@ export default function SceneDetailScreen() {
   const sceneId = Array.isArray(id) ? id[0] : id;
   const { pushError } = useErrorBanner();
   const { data, error, isLoading, refetch } = useSceneEntry(sceneId);
+  const pendingEvents = usePendingEvents(data?.event ?? null);
 
   useEffect(() => {
     const status = (error as Error & { status?: number } | null)?.status;
@@ -145,6 +148,18 @@ export default function SceneDetailScreen() {
           </View>
         </View>
       </ScrollView>
+      <EventPopup
+        event={pendingEvents.current}
+        isResolving={pendingEvents.isResolving}
+        result={pendingEvents.result}
+        visible={pendingEvents.visible}
+        onClose={pendingEvents.close}
+        onResolve={(event, optionId) => {
+          void pendingEvents.resolve(event, optionId).catch((err) => {
+            pushError(err instanceof Error ? err.message : 'Event could not be resolved.');
+          });
+        }}
+      />
     </View>
   );
 }

@@ -3,7 +3,12 @@ import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
 import { maybeCreateConflictEvent } from "../events/conflict";
-import { loadActiveActivityForChat } from "../life/activity";
+import { completeActiveActivityForChat, loadActiveActivityForChat } from "../life/activity";
+import {
+  commitQuickAction,
+  validateQuickAction,
+  type QuickActionContext,
+} from "../life/quick-actions";
 import { applySignals, ensureRelationship, loadRelationship } from "../relationships/engine";
 import type { DimensionValues } from "../relationships/level";
 import { ZERO_DIMENSIONS } from "../relationships/level";
@@ -43,6 +48,7 @@ import {
 import { extractSignals, type Emotion } from "./signal-extract";
 import { resolveInvite } from "./invite-resolve";
 import { resolveInviteTarget, type InviteTarget } from "../scenes/invite";
+import { detectNewSceneUnlocks } from "../scenes/unlock-events";
 import { createSSEStream, type SSEHandle } from "./sse";
 import { maybeEnqueueSummary } from "./summary-queue";
 import { formatDateUtc, recordUsage } from "./usage";
@@ -55,6 +61,7 @@ type PostBody = {
   activity_id?: unknown;
   persona_id?: unknown;
   invite_scene_id?: unknown;
+  quick_action?: unknown;
 };
 
 type HistoryRow = { role: "user" | "companion"; content: string };
@@ -125,13 +132,31 @@ export async function handlePostMessage(
   }
 
   const scene = sceneIdInput ? await loadSceneForChat(env, sceneIdInput) : null;
+  const sceneForContext = scene
+    ? { id: scene.id, mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
+    : null;
+
+  let quickAction: QuickActionContext | null = null;
+  if (body.quick_action !== undefined && body.quick_action !== null) {
+    const validation = await validateQuickAction(env, {
+      companionId,
+      now,
+      raw: body.quick_action,
+      scene: sceneForContext,
+      userId: user.id,
+    });
+    if (!validation.ok) {
+      return validation.response;
+    }
+    quickAction = validation.action;
+  }
 
   // spec-036: an in-chat invitation to go somewhere. Only honoured when it
-  // resolves to a legitimate, unlocked target for this companion; an activity
-  // lock (which pins the scene) suppresses invites so the companion can't
-  // "teleport" out of a committed activity.
+  // resolves to a legitimate, unlocked target. spec-037 allows this even from
+  // an active activity; if the companion accepts, we complete the activity
+  // before switching scenes.
   const inviteSceneIdInput =
-    !activity && typeof body.invite_scene_id === "string" && body.invite_scene_id.length > 0
+    typeof body.invite_scene_id === "string" && body.invite_scene_id.length > 0
       ? body.invite_scene_id
       : null;
   const inviteTarget: InviteTarget | null = inviteSceneIdInput
@@ -187,8 +212,9 @@ export async function handlePostMessage(
     userPersona: userPersonaForPrompt,
     exampleDialogues: parseExampleDialogues(companion.example_dialogues),
     scene: scene
-      ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
+      ? { mood: scene.mood, name: scene.name, tags: sceneForContext?.tags ?? [] }
       : null,
+    quickAction,
     activity: activity
       ? {
           type: activity.activity_type,
@@ -250,6 +276,8 @@ export async function handlePostMessage(
       iterator,
       narrative,
       now,
+      previousDimensions: relationship?.dimensions ?? { ...ZERO_DIMENSIONS },
+      quickAction,
       relationship_role: companion.relationship_role,
       scene_id: sceneIdInput,
       sse,
@@ -275,6 +303,8 @@ type RunChatArgs = {
   scene_id: string | null;
   activity_id: string | null;
   inviteTarget: InviteTarget | null;
+  quickAction: QuickActionContext | null;
+  previousDimensions: DimensionValues;
   narrative: string;
   companionName: string;
   relationship_role: string | null;
@@ -286,7 +316,7 @@ type RunChatArgs = {
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, inviteTarget, narrative, companionName, relationship_role, userText, userPersona, subscriber, now, ctx } =
+  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, now, ctx } =
     args;
 
   let replyBuffer = "";
@@ -294,6 +324,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
   let companionMessageId: string | null = null;
   let conflictSignals: Partial<DimensionValues> | null = null;
   let unlockEvents: UnlockEvent[] = [];
+  let quickActionResult: { activity_id: string; item_id: string } | null = null;
 
   const handleChunk = (chunk: LLMStreamChunk): void => {
     if (chunk.type === "text") {
@@ -371,7 +402,12 @@ async function runChat(args: RunChatArgs): Promise<void> {
           newState.dimensions,
           now,
         );
-        unlockEvents = unlockResult.newlyUnlocked;
+        const sceneUnlocks = await detectNewSceneUnlocks(env, {
+          companionId,
+          next: newState.dimensions,
+          previous: previousDimensions,
+        });
+        unlockEvents = [...unlockResult.newlyUnlocked, ...sceneUnlocks];
       } catch {
         // Unlock detection is best-effort; never break the reply for it.
       }
@@ -386,9 +422,41 @@ async function runChat(args: RunChatArgs): Promise<void> {
     }
   }
 
+  if (quickAction) {
+    try {
+      const committed = await commitQuickAction(env, {
+        action: quickAction,
+        companionId,
+        now,
+        userId: user.id,
+      });
+      quickActionResult = { activity_id: committed.activity_id, item_id: committed.item_id };
+      unlockEvents = mergeUnlockEvents(unlockEvents, committed.unlocks);
+    } catch (err) {
+      console.error(JSON.stringify({ message: "quick_action_commit_failed", error: String(err) }));
+    }
+  }
+
   sse.writeEvent("signals", finalExtract.signals);
   sse.writeEvent("emotion", { value: finalExtract.emotion satisfies Emotion });
   sse.writeEvent("unlocks", unlockEvents);
+  if (quickAction) {
+    sse.writeEvent("quick_action_result", quickActionResult
+      ? {
+          activity_id: quickActionResult.activity_id,
+          cooldown_until: null,
+          item_id: quickActionResult.item_id,
+          memory_id: null,
+          ok: true,
+        }
+      : {
+          activity_id: null,
+          cooldown_until: null,
+          item_id: quickAction.item_id,
+          memory_id: null,
+          ok: false,
+        });
+  }
 
   // spec-036: if this turn carried an invitation, decide whether the character
   // agreed and tell the client. Only `accepted: true` switches the scene; any
@@ -403,8 +471,13 @@ async function runChat(args: RunChatArgs): Promise<void> {
       userId: user.id,
       userText,
     });
+    let activityCompleted = false;
+    if (resolution.accepted && activity_id) {
+      activityCompleted = Boolean(await completeActiveActivityForChat(env, user.id, activity_id));
+    }
     sse.writeEvent("invite_result", {
       accepted: resolution.accepted,
+      activity_completed: activityCompleted,
       reason: resolution.reason,
       scene_art_url: resolution.accepted ? inviteTarget.art_url : null,
       scene_id: resolution.accepted ? inviteTarget.id : null,
@@ -451,6 +524,18 @@ async function runChat(args: RunChatArgs): Promise<void> {
       user_text: userText,
     }),
   );
+}
+
+function mergeUnlockEvents(existing: UnlockEvent[], incoming: UnlockEvent[]): UnlockEvent[] {
+  if (incoming.length === 0) return existing;
+  const seen = new Set(existing.map((event) => event.key));
+  const merged = [...existing];
+  for (const event of incoming) {
+    if (seen.has(event.key)) continue;
+    seen.add(event.key);
+    merged.push(event);
+  }
+  return merged;
 }
 
 type PersistInput = {

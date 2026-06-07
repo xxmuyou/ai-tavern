@@ -42,6 +42,7 @@ type ActivityRow = {
   activity_type: string;
   status: string;
   daily_state_snapshot: string;
+  metadata: string | null;
   started_at: number;
   completed_at: number | null;
   canceled_at: number | null;
@@ -146,8 +147,8 @@ async function createActivity(env: Env, user: UserRecord, raw: unknown): Promise
   await env.DB.prepare(
     `INSERT INTO activity_contexts
        (id, user_id, companion_id, scene_id, activity_type, status,
-        daily_state_snapshot, started_at, completed_at, canceled_at)
-     VALUES (?, ?, ?, ?, ?, 'active', ?, ?, NULL, NULL)`,
+        daily_state_snapshot, metadata, started_at, completed_at, canceled_at)
+     VALUES (?, ?, ?, ?, ?, 'active', ?, NULL, ?, NULL, NULL)`,
   )
     .bind(id, user.id, companionId, sceneId, at, JSON.stringify(snapshot), nowMs)
     .run();
@@ -161,6 +162,7 @@ async function createActivity(env: Env, user: UserRecord, raw: unknown): Promise
       activity_type: at,
       status: "active",
       daily_state_snapshot: JSON.stringify(snapshot),
+      metadata: null,
       started_at: nowMs,
       completed_at: null,
       canceled_at: null,
@@ -192,6 +194,7 @@ async function completeActivity(env: Env, user: UserRecord, id: string): Promise
       activity_type: row.activity_type as ActivityType,
       completed_at: now,
       daily_state_snapshot: row.daily_state_snapshot,
+      metadata: parseActivityMetadata(row.metadata),
     });
   } catch (err) {
     console.error(JSON.stringify({ message: "memory_hook_failed", id, error: String(err) }));
@@ -321,7 +324,7 @@ async function loadRelationship(
 async function loadActivity(env: Env, id: string): Promise<ActivityRow | null> {
   return env.DB.prepare(
     `SELECT id, user_id, companion_id, scene_id, activity_type, status,
-            daily_state_snapshot, started_at, completed_at, canceled_at
+            daily_state_snapshot, metadata, started_at, completed_at, canceled_at
      FROM activity_contexts WHERE id = ?`,
   )
     .bind(id)
@@ -361,6 +364,38 @@ export async function loadActiveActivityForChat(
   return serializeActivityRecord(row);
 }
 
+export async function completeActiveActivityForChat(
+  env: Env,
+  userId: string,
+  activityId: string,
+): Promise<ActivityRecord | null> {
+  const row = await loadActivity(env, activityId);
+  if (!row || row.user_id !== userId || row.status !== "active") return null;
+  const now = Date.now();
+  await env.DB.prepare(
+    `UPDATE activity_contexts SET status = 'completed', completed_at = ? WHERE id = ?`,
+  )
+    .bind(now, activityId)
+    .run();
+
+  try {
+    await onActivityCompleted(env, {
+      id: row.id,
+      user_id: row.user_id,
+      companion_id: row.companion_id,
+      scene_id: row.scene_id,
+      activity_type: row.activity_type as ActivityType,
+      completed_at: now,
+      daily_state_snapshot: row.daily_state_snapshot,
+      metadata: parseActivityMetadata(row.metadata),
+    });
+  } catch (err) {
+    console.error(JSON.stringify({ message: "memory_hook_failed", id: activityId, error: String(err) }));
+  }
+
+  return serializeActivityRecord({ ...row, status: "completed", completed_at: now });
+}
+
 function serializeActivity(row: ActivityRow, init?: ResponseInit): Response {
   return jsonResponse(serializeActivityRecord(row), init);
 }
@@ -380,10 +415,23 @@ function serializeActivityRecord(row: ActivityRow): ActivityRecord {
     activity_type: row.activity_type as ActivityType,
     status: row.status as ActivityStatus,
     daily_state_snapshot: snapshot,
+    metadata: parseActivityMetadata(row.metadata),
     started_at: row.started_at,
     completed_at: row.completed_at,
     canceled_at: row.canceled_at,
   };
+}
+
+function parseActivityMetadata(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 // Make sure callers see the enum sanity (avoids unused-import warnings).

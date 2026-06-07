@@ -60,6 +60,8 @@ import type {
   RelationshipUnlocksResponse,
   RomancePreference,
   EditMessageResponse,
+  EventResolveResponse,
+  EventsListResponse,
   InviteTargetsResponse,
   SceneEnterResponse,
   ScenesListResponse,
@@ -495,6 +497,18 @@ export async function getInviteTargets(
   return requestJson<InviteTargetsResponse>(
     `/companions/${encodeURIComponent(companionId)}/invite-targets${query}`,
   );
+}
+
+export async function listEvents(status: 'pending' | 'resolved' | 'dismissed' = 'pending'): Promise<EventsListResponse> {
+  return requestJson<EventsListResponse>(`/events?status=${encodeURIComponent(status)}`);
+}
+
+export async function resolveEvent(eventId: string, optionId: string): Promise<EventResolveResponse> {
+  return requestJson<EventResolveResponse>(`/events/${encodeURIComponent(eventId)}/resolve`, {
+    body: JSON.stringify({ option_id: optionId }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
 }
 
 export async function listCompanions(

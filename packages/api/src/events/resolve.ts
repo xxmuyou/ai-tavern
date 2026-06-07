@@ -2,6 +2,8 @@ import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { loadRelationship, applySignals } from "../relationships/engine";
 import { detectAndRecordUnlocks, type UnlockEvent } from "../relationships/unlocks";
+import { ZERO_DIMENSIONS } from "../relationships/level";
+import { detectNewSceneUnlocks } from "../scenes/unlock-events";
 import { completeCurrentStoryBeat } from "../story-beats";
 import { loadCompanionForEvent } from "./support";
 import { generateResolutionDescription } from "./generator";
@@ -58,7 +60,12 @@ export async function resolveEvent(
       newState.dimensions,
       now,
     );
-    unlocks = unlockResult.newlyUnlocked;
+    const sceneUnlocks = await detectNewSceneUnlocks(env, {
+      companionId: event.companion_id,
+      next: newState.dimensions,
+      previous: oldState?.dimensions ?? { ...ZERO_DIMENSIONS },
+    });
+    unlocks = [...unlockResult.newlyUnlocked, ...sceneUnlocks];
   } catch {
     unlocks = [];
   }

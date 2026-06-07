@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { getCompanion, getInviteTargets, mediaSource } from '@/api/companion-client';
+import { getCompanion, getInviteTargets, getScenes, mediaSource } from '@/api/companion-client';
 import type {
   ChatInviteResult,
   ChatMessage,
@@ -23,10 +23,12 @@ import type {
   CompanionDetail,
   InviteTarget,
   RelationshipDimensions,
+  Scene,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
+import { EventPopup } from '@/components/EventPopup';
 import { InvitePopup } from '@/components/InvitePopup';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
@@ -44,6 +46,7 @@ import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
+import { usePendingEvents } from '@/hooks/use-pending-events';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
@@ -97,6 +100,8 @@ export default function WebChatScreen() {
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
   const { activity, refresh: refreshActivity, setActivity } = activityState;
+  const activeActivityId = activity?.status === 'active' ? activityId : undefined;
+  const pendingEvents = usePendingEvents(null);
   const [companion, setCompanion] = useState<CompanionDetail | null>(null);
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
@@ -113,6 +118,7 @@ export default function WebChatScreen() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [pendingInvite, setPendingInvite] = useState<InviteTarget | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  const [scenes, setScenes] = useState<Scene[]>([]);
   const threadScrollRef = useRef<ScrollView>(null);
   const shouldAutoScrollRef = useRef(true);
   const didInitialScrollRef = useRef(false);
@@ -120,6 +126,20 @@ export default function WebChatScreen() {
   useEffect(() => {
     void refreshActivity();
   }, [refreshActivity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getScenes()
+      .then((payload) => {
+        if (!cancelled) setScenes(payload.scenes);
+      })
+      .catch(() => {
+        if (!cancelled) setScenes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -222,12 +242,15 @@ export default function WebChatScreen() {
         setSceneId(invite.scene_id);
         setSceneArt(invite.scene_art_url ?? null);
         setSceneName(target?.name ?? null);
+        if (invite.activity_completed) {
+          setActivity(null);
+        }
         showInviteNotice(`You headed to ${target?.name ?? 'a new place'} together.`);
       } else {
         showInviteNotice(`${companion?.name ?? 'They'} didn't take you up on it.`);
       }
     },
-    [companion?.name, showInviteNotice],
+    [companion?.name, setActivity, showInviteNotice],
   );
 
   const openInvitePicker = useCallback(async () => {
@@ -266,7 +289,7 @@ export default function WebChatScreen() {
     try {
       const invitedTarget = pendingInvite;
       const result = await stream.send(text, {
-        activityId,
+        activityId: activeActivityId,
         inviteSceneId: invitedTarget?.id,
         personaId: activePersonaId ?? undefined,
         onDone: (info) => {
@@ -319,7 +342,75 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activePersonaId, activityId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+
+  const sendQuickAction = useCallback(async (itemId: 'coffee' | 'flowers') => {
+    if (stream.isStreaming || remainingSeconds > 0) return;
+    const text = itemId === 'coffee' ? 'I ordered coffee for us.' : 'I sent you flowers.';
+    shouldAutoScrollRef.current = true;
+    history.appendMessage({
+      companion_id: companionId,
+      content: text,
+      created_at: new Date().toISOString(),
+      id: `local-user-${Date.now()}`,
+      role: 'user',
+    });
+
+    let serverMessageId = '';
+    try {
+      const result = await stream.send(text, {
+        activityId: activeActivityId,
+        personaId: activePersonaId ?? undefined,
+        quickAction: { item_id: itemId, type: 'gift' },
+        sceneId,
+        onDone: (info) => {
+          serverMessageId = info.messageId;
+        },
+        onEmotion: (emotion) => setCurrentEmotion(emotion),
+        onQuickActionResult: (quick) => {
+          showInviteNotice(quick.ok
+            ? (quick.item_id === 'coffee' ? 'Coffee is part of this moment now.' : 'Flowers are part of this moment now.')
+            : 'That gesture could not be recorded.');
+        },
+        onSignals: (signals) => {
+          setLastSignals(signals);
+          setSignalToken((token) => token + 1);
+        },
+        onUnlocks: (unlocks) => {
+          setLastUnlocks(unlocks);
+          setUnlockToken((token) => token + 1);
+        },
+      });
+      history.appendMessage({
+        companion_id: companionId,
+        content: result.text,
+        created_at: new Date().toISOString(),
+        emotion: result.emotion,
+        id: serverMessageId || `local-companion-${Date.now()}`,
+        role: 'companion',
+        scene_id: sceneId ?? null,
+      });
+      shouldAutoScrollRef.current = true;
+      await history.refresh({ silent: true });
+      scrollThreadToEnd(false);
+      if (autoVoice.enabled && serverMessageId) {
+        void messageActions.speak(serverMessageId);
+      }
+      void relationship.refresh();
+    } catch (error) {
+      if (error instanceof QuotaExceededError) {
+        setQuotaModalVisible(true);
+      } else if (error instanceof RateLimitedError) {
+        const seconds = error.retryAfter ?? 60;
+        setRateLimitedUntil(Date.now() + seconds * 1000);
+        pushError(`Please wait ${seconds} seconds before sending again.`);
+      } else if (error instanceof ApiError && error.status === 401) {
+        pushError('Your session has expired. Please sign in again.');
+      } else {
+        pushError(error instanceof Error ? error.message : 'Quick action failed.');
+      }
+    }
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, showInviteNotice, stream]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -372,6 +463,15 @@ export default function WebChatScreen() {
   }
 
   const portrait = mediaSource(companion?.art_url ?? null);
+  const currentScene = scenes.find((scene) => scene.id === sceneId) ?? null;
+  const currentSceneText = [
+    currentScene?.id ?? sceneId ?? '',
+    currentScene?.name ?? '',
+    currentScene?.mood ?? '',
+    ...(currentScene?.tags ?? []),
+  ].join(' ').toLowerCase();
+  const canOrderCoffee = Boolean(sceneId) && (currentSceneText.includes('coffee') || currentSceneText.includes('cafe'));
+  const canUseQuickAction = Boolean(sceneId) && !stream.isStreaming && remainingSeconds === 0;
   const canSend = !stream.isStreaming && remainingSeconds === 0 && draft.trim().length > 0;
 
   return (
@@ -504,7 +604,22 @@ export default function WebChatScreen() {
             onComplete={handleCompleteActivity}
           />
           <SignalFeedback signals={lastSignals} token={signalToken} />
-          <UnlockCelebration unlocks={lastUnlocks} token={unlockToken} />
+          <UnlockCelebration
+            unlocks={lastUnlocks}
+            token={unlockToken}
+            onInviteScene={(unlock) => {
+              if (!unlock.scene_id) return;
+              setPendingInvite({
+                art_url: null,
+                id: unlock.scene_id,
+                mood: '',
+                name: unlock.scene_name ?? 'the new place',
+              });
+            }}
+            onViewScene={(unlock) => {
+              if (unlock.scene_id) router.push(`/scene/${encodeURIComponent(unlock.scene_id)}`);
+            }}
+          />
 
           {/* Messages scroll area */}
           <ScrollView
@@ -605,18 +720,32 @@ export default function WebChatScreen() {
                 </Pressable>
               </View>
             ) : null}
-            <View className="flex-row items-end gap-3">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Invite to go somewhere"
+            <View className="mb-3 flex-row flex-wrap gap-2">
+              {canOrderCoffee ? (
+                <QuickActionButton
+                  disabled={!canUseQuickAction}
+                  icon="cafe-outline"
+                  label="Order coffee"
+                  onPress={() => void sendQuickAction('coffee')}
+                />
+              ) : null}
+              {sceneId ? (
+                <QuickActionButton
+                  disabled={!canUseQuickAction}
+                  icon="flower-outline"
+                  label="Send flowers"
+                  onPress={() => void sendQuickAction('flowers')}
+                />
+              ) : null}
+              <QuickActionButton
                 disabled={stream.isStreaming}
+                icon="navigate-outline"
+                label="Invite somewhere"
                 onPress={() => void openInvitePicker()}
-                className={`h-12 w-12 items-center justify-center rounded-2xl border border-white/10 ${
-                  pendingInvite ? 'bg-rose/20' : 'bg-white/5'
-                }`}
-              >
-                <Ionicons color="rgba(255,255,255,0.75)" name="navigate-outline" size={18} />
-              </Pressable>
+                selected={Boolean(pendingInvite)}
+              />
+            </View>
+            <View className="flex-row items-end gap-3">
               <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
                 <TextInput
                   multiline
@@ -660,6 +789,25 @@ export default function WebChatScreen() {
         onClose={() => setInvitePickerVisible(false)}
       />
 
+      <EventPopup
+        event={pendingEvents.current}
+        isResolving={pendingEvents.isResolving}
+        result={pendingEvents.result}
+        visible={pendingEvents.visible}
+        onClose={pendingEvents.close}
+        onResolve={(event, optionId) => {
+          void pendingEvents.resolve(event, optionId)
+            .then((result) => {
+              if (result.unlocks.length > 0) {
+                setLastUnlocks(result.unlocks);
+                setUnlockToken((token) => token + 1);
+              }
+              void relationship.refresh();
+            })
+            .catch((err) => pushError(err instanceof Error ? err.message : 'Event could not be resolved.'));
+        }}
+      />
+
       <WebDialog
         description="You've used today's free messages. Upgrade to Pro to keep the conversation going."
         footer={
@@ -681,6 +829,34 @@ export default function WebChatScreen() {
         title="Daily limit reached"
       />
     </WebAppShell>
+  );
+}
+
+function QuickActionButton({
+  disabled,
+  icon,
+  label,
+  onPress,
+  selected,
+}: {
+  disabled?: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      className={`min-h-9 flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${
+        selected ? 'border-rose/50 bg-rose/20' : 'border-white/10 bg-white/5'
+      } ${disabled ? 'opacity-50' : 'opacity-100'}`}
+    >
+      <Ionicons color="#F6C6D6" name={icon} size={15} />
+      <Text className="text-caption font-semibold text-white">{label}</Text>
+    </Pressable>
   );
 }
 

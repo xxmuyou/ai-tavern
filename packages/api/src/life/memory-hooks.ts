@@ -6,7 +6,7 @@ import type { ActivityRecord, ActivityType, MemoryType } from "./types";
 
 type ActivityCompletedInput = Pick<
   ActivityRecord,
-  "id" | "user_id" | "companion_id" | "scene_id" | "activity_type" | "completed_at"
+  "id" | "user_id" | "companion_id" | "scene_id" | "activity_type" | "completed_at" | "metadata"
 > & {
   daily_state_snapshot: string | ActivityRecord["daily_state_snapshot"];
 };
