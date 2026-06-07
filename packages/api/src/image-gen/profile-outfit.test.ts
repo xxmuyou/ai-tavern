@@ -91,6 +91,18 @@ function createEnv() {
               const jobId = values[0] as string;
               return [...generations.values()].find((row) => row.job_id === jobId) ?? null;
             }
+            if (sql.includes("FROM profile_outfit_images") && sql.includes("status NOT IN")) {
+              const [userId, companionId] = values as [string, string];
+              return [...generations.values()]
+                .filter((row) =>
+                  row.user_id === userId &&
+                  row.companion_id === companionId &&
+                  row.status !== "succeeded" &&
+                  row.status !== "failed" &&
+                  row.status !== "cancelled",
+                )
+                .sort((a, b) => b.created_at - a.created_at)[0] ?? null;
+            }
             if (sql.includes("FROM companions") && sql.includes("WHERE id = ?")) {
               const companion = companions.get(values[0] as string);
               return companion
@@ -265,6 +277,25 @@ describe("profile outfit image pipeline", () => {
       outfit_prompt: "black oversized hoodie",
       prompt_snapshot: expect.stringContaining("Outfit request: black oversized hoodie."),
       prompt_source: "custom",
+    });
+  });
+
+  it("returns the latest unfinished profile outfit job for UI resume", async () => {
+    const { env } = createEnv();
+
+    const response = await handleProfileOutfitRequest(
+      new Request("https://api.test/companions/maya/profile-outfit/latest"),
+      env,
+      "/companions/maya/profile-outfit/latest",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toMatchObject({
+      generation: {
+        generation_id: "gen-1",
+        job_id: "job-1",
+        status: "pending",
+      },
     });
   });
 

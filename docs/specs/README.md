@@ -62,6 +62,7 @@
 | 034 | [Chat Quality, Memory, and Prompt Governance（聊天质量、记忆与 Prompt 治理）](./spec-034-chat-quality-memory-prompt-governance.md) | 后端+LLM+文档治理 | 006, 025, 026, 029 | 4-6 天 | 🟡 in-progress（单线程 memory、PromptSegment 分层、post-history guard、prompt debug；不复刻完整 SillyTavern） |
 | 035 | [关系进度可见化与晋级手感修正](./spec-035-relationship-progress-feel.md) | 后端 | 005, 006, 024 | 1-2 天 | 🟡 in-progress（进度条改综合维度、晋级门槛多路径、trust 在正向闲聊可累积；实现+单测完成，待端到端验手感） |
 | 036 | [聊天内邀约换场景（Invite & Switch Scene from Chat）](./spec-036-in-chat-scene-invitation.md) | 后端+前端+LLM | 006, 007, 005, 035 | 3-5 天 | 🟡 in-progress（聊天内"邀请前往"浮窗→大模型同意才切场景/背景→拒绝不切；越界邀约借打分链路扣分；全栈实现+后端单测完成，待端到端验证） |
+| 037 | [Voice Labels, Image Job Continuity, and Scene Invite QA](./spec-037-voice-image-invite-polish.md) | 文档+前端+QA | 027, 033, 036 | 1-2 天 | 📝 draft（voice 标签按语言展示；moment/profile outfit 切页后继续轮询；scene invite 可见性与部署核查收口） |
 
 **估时总计：** 约 64-94 工程日（不含美术、QA、市场准备）
 
@@ -85,7 +86,7 @@
 - **K 路径（图片动作）：** 027 → 031 → 033。spec-027 先跑通聊天内异步图片生成、job 轮询与回看模式；spec-031 重构出图源和 cutout；spec-033 将换装从聊天动作迁移到 profile 图片管理。spec-030 的聊天换装后端保留为 legacy/deprecated，不再作为新 UI 入口。
 - **L 路径（Web 上线首页）：** 018 → 032。spec-032 是 web 首页收口：未登录也展示公开 companion discovery；mobile 不动；用户侧与 Admin 主分类都收敛为 Anime/Realistic。
 - **M 路径（聊天质量治理）：** 006 → 025 → 026/029 → 034。spec-034 不阻塞 image-gen，但阻塞聊天体验验收；上线前至少要完成 prompt 分层、post-history guard、单线程 memory 注入与 prompt debug。
-- **N 路径（聊天沉浸感手感）：** 024 → 035 → 036。spec-035 修关系进度"看得见、升得上去"（实测卡 Familiar 进度 0% 的手感缺陷）；spec-036 在其修正后的关系引擎上，把"聊天里约去某地"接成真正的场景切换（同意才切、拒绝不切、越界邀约扣分）。两者属玩法手感打磨，不阻塞 image-gen / billing。
+- **N 路径（聊天沉浸感手感）：** 024 → 035 → 036 → 037。spec-035 修关系进度"看得见、升得上去"（实测卡 Familiar 进度 0% 的手感缺陷）；spec-036 在其修正后的关系引擎上，把"聊天里约去某地"接成真正的场景切换（同意才切、拒绝不切、越界邀约扣分）；spec-037 收口 voice 标签、图片 job 持续轮询和场景邀请线上可见性。
 
 ---
 

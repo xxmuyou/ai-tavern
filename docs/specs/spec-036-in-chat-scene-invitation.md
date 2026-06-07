@@ -1,6 +1,6 @@
 # spec-036: 聊天内邀约换场景（Invite & Switch Scene from Chat）
 
-> **类型：** 后端 + 前端 + LLM  |  **依赖：** spec-006(chat), spec-007(scenes), spec-005(relationships), spec-035(关系引擎修正)  |  **估时：** 3-5 天  |  **状态：** 🟡 in-progress（全栈实现 + 后端单测 + 两端 typecheck/lint 完成，待运行端到端验证）
+> **类型：** 后端 + 前端 + LLM  |  **依赖：** spec-006(chat), spec-007(scenes), spec-005(relationships), spec-035(关系引擎修正)  |  **估时：** 3-5 天  |  **状态：** 🟡 in-progress（代码已落地；待运行端到端验证、可见性 QA、部署核查）
 
 ---
 
@@ -17,6 +17,13 @@
 - `app/chat/[companionId].tsx` / `.web.tsx`：`sceneId`/`sceneArt` 提升为 state；组合器旁"邀请前往"按钮 → 浮窗 → 选中挂"待发邀约"小条（用户自行打字，保证按其语言回复）→ send 带 `invite_scene_id`；`onInviteResult` 接受则切 `sceneId`+背景并提示，拒绝仅提示不切。web 在会话区顶部加场景横幅（预设图 + 地名）作为可见的换场景呈现。
 
 验证：`@xtbit/api` 510 测试全绿（含 6 个新 invite 用例：目的地过滤 / 锁定场景排除 / resolveInviteTarget 各分支）；两端 `tsc --noEmit` 通过、`expo lint` 仅既有无关 warning。端到端（同意切场景 / 拒绝不切 / 越界扣分 / 锁定亲密场景不出现在列表）待 dev 人工跑。
+
+### 2026-06-07 现状核查
+
+- 本地代码确实包含前后端实现，不是“只写了文档没写代码”。
+- Dev Web `index.html` 的 entry hash 与本地 `apps/app/dist/index.html` 一致；线上 bundle 中能搜到 `invite-targets` 和 `Invite to go somewhere`。因此 dev 环境看不到入口时，优先排查 UI 可见性、当前角色没有可邀约目标、空态文案、登录/权限或 API 数据，而不是先假设 Web 未部署。
+- API 文档中的 `draft` 标记需要清理；spec 状态保持 in-progress 是因为仍缺端到端验证，不是因为缺核心实现。
+- 下一轮收口见 [spec-037](./spec-037-voice-image-invite-polish.md)。
 
 ---
 

@@ -47,6 +47,8 @@ export type VoiceSpeed = 'slow' | 'medium' | 'fast';
 export type VoiceGenderHint = Gender | 'neutral';
 
 export type VoiceOption = {
+  display_label?: string;
+  display_language_label?: string;
   gender_hint?: VoiceGenderHint;
   id: string;
   label: string;
@@ -697,6 +699,10 @@ export type ProfileOutfitImageJobResponse = {
   output_key?: string;
   error_code?: string;
   error_message?: string;
+};
+
+export type LatestProfileOutfitImageResponse = {
+  generation: ProfileOutfitImageJobResponse | null;
 };
 
 export type ProfileImageResponse = {

@@ -5,6 +5,7 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View 
 import {
   clearCompanionProfileImage,
   generateProfileOutfitImage,
+  getLatestProfileOutfitImage,
   getProfileOutfitImageJob,
   getProfileOutfitRecommendations,
   mediaSource,
@@ -40,7 +41,6 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const [selectedRecommendationId, setSelectedRecommendationId] = useState<string | null>(null);
   const [customPrompt, setCustomPrompt] = useState('');
-  const [jobId, setJobId] = useState<string | null>(null);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [outputKey, setOutputKey] = useState<string | null>(null);
   const activeRef = useRef(true);
@@ -51,6 +51,37 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
       activeRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function resumeLatest() {
+      try {
+        const payload = await getLatestProfileOutfitImage(companionId);
+        const generation = payload.generation;
+        if (cancelled || !activeRef.current || !generation) return;
+        setPhase('generating');
+        setGenerationId(generation.generation_id ?? null);
+        setOutputKey(generation.output_key ?? null);
+        if (generation.status === 'succeeded' && generation.output_key) {
+          markReady(generation.job_id, generation.generation_id ?? null, generation.output_key);
+          return;
+        }
+        if (isTerminalFailure(generation.status)) {
+          setPhase('error');
+          return;
+        }
+        await poll(generation.job_id, generation.generation_id ?? null);
+      } catch {
+        // Resume is best-effort; opening the chooser still works.
+      }
+    }
+    void resumeLatest();
+    return () => {
+      cancelled = true;
+    };
+    // Resume only when the companion changes; poll/markReady use stable state setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companionId]);
 
   async function openChooser() {
     setPhase('choosing');
@@ -69,7 +100,6 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
   }
 
   function markReady(nextJobId: string, nextGenerationId: string | null, nextOutputKey: string) {
-    setJobId(nextJobId);
     if (nextGenerationId) setGenerationId(nextGenerationId);
     setOutputKey(nextOutputKey);
     setPhase('ready');
@@ -113,7 +143,6 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
     try {
       const payload = await generateProfileOutfitImage(companionId, input);
       if (!activeRef.current) return;
-      setJobId(payload.job_id);
       setGenerationId(payload.generation_id ?? null);
       if (payload.status === 'succeeded' && payload.output_key) {
         markReady(payload.job_id, payload.generation_id ?? null, payload.output_key);

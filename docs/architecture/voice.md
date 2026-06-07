@@ -41,6 +41,20 @@ voices. This is not a language detector. The synthesis request keeps
 and labels. It is never a hard product rule: users can pick any voice for any
 companion.
 
+### Display labels
+
+The raw MiniMax catalog may contain Chinese labels even for non-Chinese language
+groups. Product UI should not blindly render every raw label as-is. Companion
+create/edit should display each language group in that language where practical
+(`English`, `日本語`, `한국어`, `Español`, etc.) while keeping Chinese groups in
+Chinese. Voice names should prefer a same-language display label when one exists;
+if the catalog only has an English name for that voice, use that English name
+rather than machine-translating it.
+
+Implementation note: keep `id`, `label`, and `language_label` backward
+compatible, and add or derive UI-facing display fields instead of changing the
+meaning of persisted `voice_id`.
+
 ## Runtime Behavior
 
 Companions persist their voice settings:

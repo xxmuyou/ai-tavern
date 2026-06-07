@@ -15,6 +15,7 @@
 
 - Web profile 图片旁显示 `Change outfit`。
 - 用户可选择推荐穿搭或自定义 prompt，生成、重新生成、预览。
+- 生成开始后即使切换页面或稍后回到 profile，也继续展示最终成功图或明确错误。
 - 用户确认后，把该图设为当前用户私有的 profile 图片覆盖。
 - 官方 companion 的 canonical `companions.art_url` 不被用户操作修改。
 - 成功生成的 profile outfit 图自动保存到 `user_image_assets`。
@@ -45,6 +46,7 @@
 
 - `GET /companions/{id}/profile-outfit/recommendations`
 - `POST /companions/{id}/profile-outfit/generate`
+- `GET /companions/{id}/profile-outfit/latest`
 - `GET /profile-outfit-images/jobs/{job_id}`
 - `PUT /companions/{id}/profile-image`
 - `DELETE /companions/{id}/profile-image`
@@ -58,6 +60,7 @@
 - API：用户不能 apply 其他用户的 generation。
 - API：官方 companion 的 public discovery 图不受用户覆盖影响。
 - API：删除当前 profile asset 后，覆盖被清除。
+- Web：profile outfit job 在离开页面、返回 profile、重新打开 chooser 后继续轮询，直到 succeeded/failed/cancelled。
 - App：`pnpm --filter @xtbit/api test`。
 - App：`pnpm --filter @xtbit/app typecheck`。
 

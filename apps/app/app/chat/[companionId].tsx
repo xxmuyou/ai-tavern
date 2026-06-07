@@ -48,6 +48,7 @@ import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
+import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
@@ -399,6 +400,7 @@ function ChatScreenInner() {
     updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
     shouldScrollOnNextRef.current = true;
   }, [updateHistoryMessage]);
+  usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const renderItem = useCallback(({ item }: { item: ChatListItem }) => {
     if (isStreamingItem(item)) {
       return <StreamingBubble text={item.text} />;

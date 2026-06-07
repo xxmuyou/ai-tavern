@@ -43,7 +43,8 @@
   - 失败后展示 retry 状态和简短错误。
 - 历史消息：
   - 若已有 moment image，直接展示。
-  - 若没有 scene context，不展示生成入口。
+  - 若已有 `queued` / `pending` / `processing` moment image，自动恢复轮询直到成功或失败；切换页面、继续聊天或刷新 history 不应让任务在 UI 上“停下”。
+  - 若没有 scene context，仍允许 private-chat moment fallback（当前后端支持 `scene_id = NULL`）；UI 是否展示入口由产品体验决定，但不能和后端契约冲突。
 - 文案建议：
   - 按钮 tooltip / label：`Capture this moment`
   - pending：`Capturing...`
@@ -142,6 +143,7 @@ CREATE TABLE story_moment_images (
    - 最新 companion message 有 scene context 时显示小相机按钮。
    - queued/processing/succeeded/failed 状态展示正确。
    - 历史已有 moment image 时直接展示。
+   - pending/processing 状态在页面切换、发送新消息、history refresh 后恢复轮询。
 4. 静态检查：
    - `pnpm --filter @xtbit/api test`
    - `pnpm --filter @xtbit/api typecheck`

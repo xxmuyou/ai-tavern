@@ -177,6 +177,11 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         markError(res.error_message ?? res.error_code);
         return;
       }
+      onMomentReadyRef.current?.({
+        job_id: res.job_id,
+        output_key: res.output_key ?? null,
+        status: res.status,
+      });
       await poll(res.job_id);
     } catch (error) {
       if (activeRef.current) {

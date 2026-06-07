@@ -43,6 +43,7 @@ import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
+import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
@@ -204,6 +205,7 @@ export default function WebChatScreen() {
     shouldAutoScrollRef.current = true;
     scrollThreadToEnd(false);
   }, [scrollThreadToEnd, updateHistoryMessage]);
+  usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const remainingSeconds = useMemo(() => {
     if (!rateLimitedUntil) return 0;
     return Math.max(0, Math.ceil((rateLimitedUntil - now) / 1000));

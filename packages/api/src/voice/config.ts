@@ -7,8 +7,10 @@ export type VoiceSpeedId = "slow" | "medium" | "fast";
 export type MiniMaxVoiceOption = {
   id: string;
   label: string;
+  display_label?: string;
   language: string;
   language_label: string;
+  display_language_label?: string;
   gender_hint?: VoiceGenderHint;
 };
 
@@ -45,6 +47,33 @@ const CONFIGS = {
   prod: prodConfig as MiniMaxVoiceConfig,
 };
 
+const LANGUAGE_DISPLAY_LABELS: Record<string, string> = {
+  ar: "العربية",
+  cs: "Čeština",
+  de: "Deutsch",
+  el: "Ελληνικά",
+  en: "English",
+  es: "Español",
+  fi: "Suomi",
+  fr: "Français",
+  hi: "हिन्दी",
+  id: "Bahasa Indonesia",
+  it: "Italiano",
+  ja: "日本語",
+  ko: "한국어",
+  nl: "Nederlands",
+  pl: "Polski",
+  pt: "Português",
+  ro: "Română",
+  ru: "Русский",
+  th: "ไทย",
+  tr: "Türkçe",
+  uk: "Українська",
+  vi: "Tiếng Việt",
+  "zh-cantonese": "中文（粤语）",
+  "zh-mandarin": "中文（普通话）",
+};
+
 export function loadMiniMaxVoiceConfig(env: VoiceConfigEnv): MiniMaxVoiceConfig {
   return env.APP_ENV === "prod" ? CONFIGS.prod : CONFIGS.dev;
 }
@@ -55,7 +84,14 @@ export function publicVoiceOptions(env: VoiceConfigEnv): VoiceOptionsResponse {
     defaults: config.defaults,
     provider: config.provider,
     speed_presets: config.speed_presets,
-    voices: config.voices,
+    voices: config.voices.map((voice) => ({
+      ...voice,
+      display_label: voice.display_label ?? voice.label,
+      display_language_label:
+        voice.display_language_label ??
+        LANGUAGE_DISPLAY_LABELS[voice.language] ??
+        voice.language_label,
+    })),
   };
 }
 

@@ -23,7 +23,7 @@ describe("voice options endpoint", () => {
       group_id?: string;
       provider: string;
       speed_presets: Array<{ id: string; value: number }>;
-      voices: Array<{ id: string }>;
+      voices: Array<{ display_language_label?: string; id: string; language?: string }>;
     };
     expect(body.provider).toBe("minimax");
     expect(body.group_id).toBeUndefined();
@@ -36,6 +36,8 @@ describe("voice options endpoint", () => {
     );
     expect(body.voices.length).toBeGreaterThan(300);
     expect(body.voices.some((voice) => voice.id === "Arrogant_Miss")).toBe(true);
+    expect(body.voices.find((voice) => voice.language === "en")?.display_language_label).toBe("English");
+    expect(body.voices.find((voice) => voice.language === "ja")?.display_language_label).toBe("日本語");
   });
 
   it("rejects an invalid preview voice id", async () => {

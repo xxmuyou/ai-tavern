@@ -374,13 +374,13 @@ function languageForVoice(voices: VoiceOption[], voiceId: string): string | null
   return voices.find((voice) => voice.id === voiceId)?.language ?? null;
 }
 
-function languageChoices(voices: VoiceOption[]): Array<{ id: string; label: string }> {
+function languageChoices(voices: VoiceOption[]): { id: string; label: string }[] {
   const seen = new Set<string>();
-  const choices: Array<{ id: string; label: string }> = [];
+  const choices: { id: string; label: string }[] = [];
   for (const voice of voices) {
     if (seen.has(voice.language)) continue;
     seen.add(voice.language);
-    choices.push({ id: voice.language, label: voice.language_label });
+    choices.push({ id: voice.language, label: voiceLanguageDisplayLabel(voice) });
   }
   return choices;
 }
@@ -391,7 +391,7 @@ function sortedVoices(voices: VoiceOption[], gender: Gender): VoiceOption[] {
     if (voice.gender_hint === 'neutral' || !voice.gender_hint) return 1;
     return 2;
   };
-  return [...voices].sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+  return [...voices].sort((a, b) => rank(a) - rank(b) || voiceDisplayLabel(a).localeCompare(voiceDisplayLabel(b)));
 }
 
 function recommendedVoiceForLanguage(voices: VoiceOption[], language: string, gender: Gender): VoiceOption | undefined {
@@ -399,6 +399,14 @@ function recommendedVoiceForLanguage(voices: VoiceOption[], language: string, ge
     voices.filter((voice) => voice.language === language),
     gender,
   )[0];
+}
+
+function voiceDisplayLabel(voice: VoiceOption): string {
+  return voice.display_label ?? voice.label;
+}
+
+function voiceLanguageDisplayLabel(voice: VoiceOption): string {
+  return voice.display_language_label ?? voice.language_label;
 }
 
 function VoicePicker({
@@ -429,7 +437,7 @@ function VoicePicker({
     options.voices.filter((voice) => voice.language === language),
     gender,
   );
-  const genderOptions: Array<{ label: string; value: Gender }> = [
+  const genderOptions: { label: string; value: Gender }[] = [
     { label: 'Female', value: 'female' },
     { label: 'Male', value: 'male' },
   ];
@@ -479,9 +487,12 @@ function VoicePicker({
           <View className="flex-row items-center gap-2">
             <View className="flex-1">
               <AppDropdown
-                labelForValue={(value) => voiceById.get(value)?.label ?? 'Select voice'}
+                labelForValue={(value) => {
+                  const voice = voiceById.get(value);
+                  return voice ? voiceDisplayLabel(voice) : 'Select voice';
+                }}
                 onChange={onChangeVoice}
-                options={voices.map((voice) => ({ label: voice.label, value: voice.id }))}
+                options={voices.map((voice) => ({ label: voiceDisplayLabel(voice), value: voice.id }))}
                 value={selectedVoiceId}
               />
             </View>
@@ -503,7 +514,7 @@ function VoicePicker({
       <View>
         <Text className="mb-2 text-sm font-semibold text-app-text">Selected voice</Text>
         <Text className="text-xs text-app-muted">
-          {selectedVoice ? `${selectedVoice.id} · ${selectedVoice.language_label}` : 'Choose a voice to enable preview.'}
+          {selectedVoice ? `${selectedVoice.id} · ${voiceLanguageDisplayLabel(selectedVoice)}` : 'Choose a voice to enable preview.'}
         </Text>
         {previewError ? <Text className="mt-1 text-xs font-semibold text-red-600">{previewError}</Text> : null}
       </View>

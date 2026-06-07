@@ -39,6 +39,7 @@ import type {
   OutfitImageGenerateInput,
   OutfitImageJobResponse,
   OutfitRecommendationsResponse,
+  LatestProfileOutfitImageResponse,
   ProfileImageResponse,
   ProfileOutfitImageJobResponse,
   PersonaInput,
@@ -780,6 +781,12 @@ export async function getOutfitImageJob(jobId: string): Promise<OutfitImageJobRe
 export async function getProfileOutfitRecommendations(companionId: string): Promise<OutfitRecommendationsResponse> {
   return requestJson<OutfitRecommendationsResponse>(
     `/companions/${encodeURIComponent(companionId)}/profile-outfit/recommendations`,
+  );
+}
+
+export async function getLatestProfileOutfitImage(companionId: string): Promise<LatestProfileOutfitImageResponse> {
+  return requestJson<LatestProfileOutfitImageResponse>(
+    `/companions/${encodeURIComponent(companionId)}/profile-outfit/latest`,
   );
 }
 

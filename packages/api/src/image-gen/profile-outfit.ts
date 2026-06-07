@@ -86,6 +86,17 @@ export async function handleProfileOutfitRequest(
     return jsonResponse({ recommendations: getOutfitRecommendations(ctx) });
   }
 
+  const latestMatch = pathname.match(/^\/companions\/([^/]+)\/profile-outfit\/latest$/);
+  if (latestMatch) {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const companionId = decodeURIComponent(latestMatch[1] ?? "");
+    if (!companionId) return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    const user = await requireAuthUser(env, request);
+    return getLatestProfileOutfit(env, user, companionId);
+  }
+
   const generateMatch = pathname.match(/^\/companions\/([^/]+)\/profile-outfit\/generate$/);
   if (generateMatch) {
     if (request.method !== "POST") {
@@ -349,6 +360,36 @@ async function getProfileOutfitJob(env: Env, user: UserRecord, jobId: string): P
     job_id: synced.job_id,
     output_key: synced.output_key ?? undefined,
     status: synced.status,
+  });
+}
+
+async function getLatestProfileOutfit(env: Env, user: UserRecord, companionId: string): Promise<Response> {
+  const loaded = await loadVisibleCompanion(env, user, companionId);
+  if (!loaded.ok) return loaded.response;
+
+  const generation = await env.DB.prepare(
+    `SELECT * FROM profile_outfit_images
+     WHERE user_id = ? AND companion_id = ?
+       AND status NOT IN ('succeeded', 'failed', 'cancelled')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+  )
+    .bind(user.id, companionId)
+    .first<CompanionProfileOutfitRow>();
+  if (!generation) return jsonResponse({ generation: null });
+
+  const job = await loadBaseArtJob(env, generation.job_id);
+  const synced = job ? await syncProfileOutfitFromJob(env, generation, job) : generation;
+  const isTerminal = TERMINAL.has(synced.status as ImageGenJobStatus);
+  return jsonResponse({
+    generation: isTerminal
+      ? null
+      : {
+          generation_id: synced.id,
+          job_id: synced.job_id,
+          output_key: synced.output_key ?? undefined,
+          status: synced.status,
+        },
   });
 }
 
