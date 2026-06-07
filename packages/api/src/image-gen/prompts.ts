@@ -22,7 +22,7 @@ const EMOTION_INTENT: Record<NonNeutralEmotion, string> = {
 
 const BASE_CONSTRAINTS = [
   "Create a consistent half-body portrait variation of the same companion using the provided neutral portrait as the visual reference.",
-  "Keep the same identity, face structure, hairstyle, body type, outfit style, color palette, and camera framing.",
+  "Keep the same identity, face structure, hairstyle, body type, outfit style, color palette, framing, and crop.",
   "Use a half-body (waist-up) composition with the hands and arms visible.",
   "Change the facial expression, upper-body posture, and hand/arm gestures to express the requested emotion, while preserving identity.",
   // Anti-deformity guardrail: the emotion intents below ask for new arm/hand
@@ -35,12 +35,22 @@ const BASE_CONSTRAINTS = [
 
 /**
  * Global negative-prompt guardrail injected into RunningHub workflows'
- * negative text node (when the workflow declares one). Suppresses the duplicate
- * limbs / multiple heads that img2img can hallucinate when the prompt asks for a
- * new arm/hand gesture. RunningHub-only — OpenAI image edit has no negative input.
+ * negative text node (when the workflow declares one). Covers three failure
+ * modes seen in production:
+ *   1. Anatomy — duplicate limbs / multiple heads that img2img hallucinates when
+ *      the prompt asks for a new arm/hand gesture.
+ *   2. Multi-person — scene moments (café/park) "populate" themselves with
+ *      extra people; these tags pin the output to a single subject.
+ *   3. Camera device — gaze/scene wording can summon a literal camera, phone, or
+ *      selfie composition; suppress the device itself.
+ * RunningHub-only — OpenAI image edit has no negative input, so the positive
+ * prompt (buildMomentPrompt) must also carry the single-subject / no-camera
+ * constraints for the OpenAI path.
  */
 export const ANATOMY_NEGATIVE =
-  "extra limbs, extra arms, extra hands, extra fingers, duplicate limbs, multiple heads, two heads, deformed hands, malformed, mutated, fused body, disfigured, bad anatomy";
+  "extra limbs, extra arms, extra hands, extra fingers, duplicate limbs, multiple heads, two heads, deformed hands, malformed, mutated, fused body, disfigured, bad anatomy, " +
+  "multiple people, multiple girls, multiple boys, 2girls, 2boys, 3girls, 3boys, crowd, group, couple, duo, trio, several people, background people, bystanders, extra person, another person, second character, " +
+  "camera, holding camera, photographic equipment, dslr, smartphone, selfie";
 
 export function buildEmotionPrompt(
   emotion: NonNeutralEmotion,

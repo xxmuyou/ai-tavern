@@ -101,9 +101,14 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
 
   lines.push(
     "Create a cinematic single-character scene image centered on the companion.",
+    "solo, one person only.",
     "Only one visible person: the companion. Do not show the user, an opponent, a second character, a crowd, reflections of another person, or duplicate bodies.",
-    "The companion faces the camera with both eyes looking directly at the viewer.",
-    "Use the scene as background/environment only.",
+    // SD and gpt-image both render "camera" as a literal device. Use
+    // "looking at viewer" style eye-contact wording instead of "faces the
+    // camera" so the companion meets the user's gaze without a camera (or
+    // phone/photographic device) appearing in the frame.
+    "Both eyes looking directly at the viewer, making direct eye contact with the viewer; do not render any camera, phone, or photographic device in the frame.",
+    "Use the scene only as an empty background/environment with no other people present.",
   );
 
   const companionBits = [
@@ -124,7 +129,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
 
   const action = extractNarration(ctx.sourceReply);
   if (ctx.previousUserText) {
-    lines.push(`Recent off-camera context: "${truncate(ctx.previousUserText, 160)}".`);
+    lines.push(`Recent off-screen context: "${truncate(ctx.previousUserText, 160)}".`);
   }
   if (action) {
     lines.push(`In this moment: ${truncate(action, 240)}`);
@@ -154,7 +159,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   }
 
   lines.push(
-    "Single companion in environment, natural composition, no text, no UI, no speech bubbles, no extra characters.",
+    "Single companion in environment, natural composition, no other people, no crowd, no second person, no text, no UI, no speech bubbles, no extra characters, no visible camera or photographic device.",
   );
 
   return lines.join("\n");
