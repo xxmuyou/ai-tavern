@@ -7,14 +7,14 @@
 ## 实现记录（2026-06-05）
 
 落地文件：
-- `scenes/invite.ts`（新）：`loadInviteTargets`（该角色出现 + `evaluateUnlock` 通过 + 排除当前场景）、`resolveInviteTarget`（校验单个目标，messages 用）、`handleInviteTargetsRequest`（`GET /companions/:id/invite-targets`，含 companion 可见性校验）。
+- `scenes/invite.ts`（新）：`loadInviteTargets`（所有 active 且 `evaluateUnlock` 通过的场景 + 排除当前场景）、`resolveInviteTarget`（校验单个目标，messages 用）、`handleInviteTargetsRequest`（`GET /companions/:id/invite-targets`，含 companion 可见性校验）。
 - `companions/index.ts`：在 idMatch 前挂 `handleInviteTargetsRequest`。
 - `chat/invite-resolve.ts`（新）：`resolveInvite` 分离 JSON 判定（仿 signal-extract，复用 `signal` task），失败一律回退 `accepted:false`。
 - `chat/prompt.ts`：新增 `InviteForPrompt` 与 `# An invitation just now` 指令段（角色可拒绝/婉拒/反感不合适邀约）。
-- `chat/messages.ts`：`PostBody` 加 `invite_scene_id`；activity 锁定时抑制邀约；解析+校验目标 → 注入 prompt → runChat 末尾跑 `resolveInvite` 并写 SSE `invite_result`（accepted 才带 scene_id/scene_art_url）。越界邀约的扣分由本轮既有 `extractSignals` 链路自然产生。
+- `chat/messages.ts`：`PostBody` 加 `invite_scene_id`；activity chat 允许邀约，接受后自动 complete activity；解析+校验目标 → 注入 prompt → runChat 末尾跑 `resolveInvite` 并写 SSE `invite_result`（accepted 才带 scene_id/scene_art_url）。越界邀约的扣分由本轮既有 `extractSignals` 链路自然产生。
 - 前端：`api/types.ts`（`InviteTarget`/`InviteTargetsResponse`/`ChatInviteResult`/`ChatMessageInput.invite_scene_id`）、`companion-client.ts`（`getInviteTargets`）、`hooks/use-chat-stream.ts`（`inviteSceneId` 入参 + `onInviteResult` + 解析 `invite_result`）。
 - `components/InvitePopup.tsx`（新，两端共用）：目的地选择浮窗。
-- `app/chat/[companionId].tsx` / `.web.tsx`：`sceneId`/`sceneArt` 提升为 state；组合器旁"邀请前往"按钮 → 浮窗 → 选中挂"待发邀约"小条（用户自行打字，保证按其语言回复）→ send 带 `invite_scene_id`；`onInviteResult` 接受则切 `sceneId`+背景并提示，拒绝仅提示不切。web 在会话区顶部加场景横幅（预设图 + 地名）作为可见的换场景呈现。
+- `app/chat/[companionId].tsx` / `.web.tsx`：`sceneId`/`sceneArt` 提升为 state；组合器旁"邀请前往"按钮 → 浮窗 → 选中后立即发送默认邀约 `Want to go to {sceneName} with me?` 并带 `invite_scene_id`；`onInviteResult` 接受则切 `sceneId`+背景并提示，拒绝仅提示不切。web 在会话区顶部加场景横幅（预设图 + 地名）作为可见的换场景呈现。
 
 验证：`@xtbit/api` 510 测试全绿（含 6 个新 invite 用例：目的地过滤 / 锁定场景排除 / resolveInviteTarget 各分支）；两端 `tsc --noEmit` 通过、`expo lint` 仅既有无关 warning。端到端（同意切场景 / 拒绝不切 / 越界扣分 / 锁定亲密场景不出现在列表）待 dev 人工跑。
 
@@ -24,6 +24,11 @@
 - Dev Web `index.html` 的 entry hash 与本地 `apps/app/dist/index.html` 一致；线上 bundle 中能搜到 `invite-targets` 和 `Invite to go somewhere`。因此 dev 环境看不到入口时，优先排查 UI 可见性、当前角色没有可邀约目标、空态文案、登录/权限或 API 数据，而不是先假设 Web 未部署。
 - API 文档中的 `draft` 标记需要清理；spec 状态保持 in-progress 是因为仍缺端到端验证，不是因为缺核心实现。
 - 下一轮收口见 [spec-037](./spec-037-voice-image-invite-polish.md)。
+
+### 2026-06-08 行为修正
+
+- spec-037 已覆盖早期“必须在 `default_companions` 中出现”的目的地规则；当前实现列出所有 active 且已解锁 scenes，并排除当前 scene。
+- 修复前端选择地点后只设置 `pendingInvite`、不发送消息的问题：现在选择地点会立即发送默认邀约，并携带 `invite_scene_id`，AI 本轮即可感知邀请。
 
 ---
 
@@ -44,7 +49,7 @@
 **用户期望的体验：** 聊天界面有"邀请前往"选项 → 浮窗"去 xxx" → 大模型能感知并判断 → **同意才**切背景到预设图 + 切 scene；**拒绝则不切**；且**不合适的邀约（关系不熟却约去酒店之类）要扣关系分**。
 
 **用户确认的设计选择：**
-- 目的地来源：**该角色出现的已解锁场景**（`default_companions` 含该角色 **且** `unlock_condition` 通过）。
+- 目的地来源（已被 spec-037 覆盖）：早期为**该角色出现的已解锁场景**；当前实现为**所有 active 且已解锁场景**（排除当前场景），不再要求 `default_companions` 含该角色。
 - 拒绝处理：**拒绝则不切**；不合适场景的邀约还要**扣关系分**（关系不熟、对方不是随便的人，却邀请去酒店之类）。
 
 ---
@@ -52,7 +57,7 @@
 ## 目标 / 非目标
 
 ### 目标
-- 聊天界面内新增"邀请前往"入口 → 浮窗列出**该角色出现的已解锁场景**（排除当前所在场景）。
+- 聊天界面内新增"邀请前往"入口 → 浮窗列出**所有 active 且已解锁场景**（排除当前所在场景）。
 - 选定并确认后，本轮把邀约作为上下文喂给大模型；大模型**在角色身份下自行决定**接受或拒绝。
 - **接受** → 切换聊天背景到目标场景预设图 + 切 `scene_id`，后续对话发生"在新场景里"。
 - **拒绝** → 不切场景，仅展示角色（婉拒的）回复。
@@ -87,7 +92,7 @@
 
 ### 1. 后端：可邀约目的地端点
 - 新增 `GET /companions/:id/invite-targets`（可选 query `from_scene_id` 用于排除当前所在场景）。
-- 逻辑：查 `scenes` 中 `is_active = 1`、`default_companions` 含该角色、且 `evaluateUnlock(user, unlock_condition)` 通过的场景；排除 `from_scene_id`。
+- 逻辑：查 `scenes` 中 `is_active = 1`、且 `evaluateUnlock(user, unlock_condition)` 通过的场景；排除 `from_scene_id`。不再要求 `default_companions` 含该角色。
 - 返回：`{ targets: Array<{ id, name, mood, art_url }> }`。
 - 复用 `evaluateUnlock` 与 scenes 查询模式；放在 `packages/api/src/scenes/` 下（新函数或新文件 `invite.ts`），路由挂到现有 companions 或 scenes 分派。
 - **门禁天然生效**：亲密场景（如酒店）若设了高关系门槛的 `unlock_condition`，关系不到位时根本不出现在列表里。
@@ -108,7 +113,7 @@
 ### 4. 前端：场景提升为 state + 邀约入口 + 浮窗（两端）
 - `chat/[companionId].tsx` 与 `.web.tsx`：把 `sceneId` / `sceneArt` 从路由参数**提升为 state**（路由值作初值）。
 - 新增"邀请前往"入口（组合器附近的小按钮/图标）：点击 → `getInviteTargets(companionId, currentSceneId)` → 浮窗（Modal）列目的地（名称 + mood + 缩略图）。
-- 选中并确认 → 本轮 `stream.send(text, { ..., inviteSceneId })`；`text` 可为用户自填或默认一句邀约文案。
+- 选中并确认 → 立即发送默认邀约 `Want to go to {sceneName} with me?`，本轮 `stream.send(text, { ..., inviteSceneId })`。
 - `use-chat-stream.ts`：新增入参 `inviteSceneId` 与回调 `onInviteResult`；解析 SSE `invite_result` 事件。
 - 收到 `accepted === true` → 更新 state：`sceneId = scene_id`、`sceneArt = scene_art_url`（PortraitBar 背景随之切换），后续轮次自动带新 `scene_id`。
 - `accepted === false` → 不切，仅展示角色回复；可附一行轻提示（复用 `SignalFeedback` 同款 chip："她没有答应"），不打断会话。
@@ -123,11 +128,11 @@
 ## 验证
 
 1. **后端单测：**
-   - invite-targets 过滤：角色不在该场景 `default_companions` / 场景未解锁 → 应排除；当前所在场景 → 排除。
+   - invite-targets 过滤：场景未解锁 → 应排除；当前所在场景 → 排除；角色不在该场景 `default_companions` 仍可返回。
    - `resolveInvite`：解析正常 JSON；调用失败 → 回退 `accepted:false`（不误切）。
    - `pnpm --filter @app/api test` 全绿。
 2. **手测（Web 优先）：** 进角色聊天 → 点"邀请前往"：
-   - 浮窗只列该角色出现的已解锁场景；关系不到位的亲密场景**不出现**；
+   - 浮窗列出所有已解锁 active scenes；关系不到位的亲密场景**不出现**；
    - 角色**同意** → 背景与 `scene_id` 切换，后续消息带新场景上下文；
    - 角色**拒绝** → 不切，展示婉拒回复 + 轻提示；
    - 关系尚浅却邀约私密场所 → 角色拒绝 **且**该轮关系维度向负向变化（distance/tension 上升）。

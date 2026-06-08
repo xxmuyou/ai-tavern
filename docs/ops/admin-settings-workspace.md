@@ -97,7 +97,7 @@ Portrait generation 页面不直接铺开最近 job 列表；只保留 **View lo
 ## 5. 与 env / secret 的关系（SOT 调和）
 
 - `.env.dev` / `.env.prod` 仍是**secret 与环境开关的 SOT**（见 [`secrets.md`](./secrets.md)）：首次部署、CI、Wrangler secret 注入都靠它，工作台为空时也靠它兜底。
-- RunningHub workflow contract、checkpoint/LoRA 默认值、base architecture 和 Anime/Realistic lanes 来自 repo 中按环境区分的配置文件；部署时同步进 D1 catalog。它们不是 secret，也不属于 `.env.*`。
+- RunningHub workflow contract、checkpoint/LoRA 默认值、checkpoint/LoRA base architecture 和 Anime/Realistic membership 来自 repo 中按环境区分的配置文件；部署时同步进 D1 catalog。它们不是 secret，也不属于 `.env.*`。
 - 修改 `config/runninghub-workflows.dev.json` / `config/runninghub-workflows.prod.json` 后，必须执行 `pnpm sync:runninghub:dev` / `pnpm sync:runninghub:prod`，或走完整部署流程。运行时读取 D1 catalog，不直接读取 repo JSON。
 - 工作台是**非敏感运行期覆盖**：应急切 provider、调限流、临时验证 workflow/node 接线，不想等一次完整部署时用。长期接线配置必须回写 repo。
 - **secret 轮换只有一条权威路径**：走 `.env.*` + `pnpm upload:secrets:dev/prod` 或 `wrangler secret put` 注入 Wrangler secret（见 secrets.md §3）。后台不能查看、不能替换、不能临时覆盖 secret。
@@ -106,15 +106,15 @@ Portrait generation 页面不直接铺开最近 job 列表；只保留 **View lo
 
 ## 6. 生图配置：RunningHub semantic workflows + Anime/Realistic asset lanes（2026-06-04 修正）
 
-> **重构背景：** 旧版把 checkpoint 录在多处，还曾把 style 名误当成 RunningHub node fieldName。2026-06-04 起统一改为：**semantic workflow 表达用途，base architecture 表达底模兼容边界，Anime/Realistic lane 表达资产类别，workflow API contract 是 nodeId/fieldName 的唯一事实来源**。不要再使用数字 workflow key，也不要再使用地区标签拆分二次元资产。
+> **重构背景：** 旧版把 checkpoint 录在多处，还曾把 style 名误当成 RunningHub node fieldName。2026-06-08 起统一改为：**semantic workflow 表达用途和节点拓扑，checkpoint/LoRA base architecture 表达底模兼容边界，Anime/Realistic 表达资产类别，workflow API contract 是 nodeId/fieldName 的唯一事实来源**。不要再使用数字 workflow key，也不要再使用地区标签拆分二次元资产。
 
 这一节回答常见疑问：**「我有 N 个基座和 N 个 LoRA，未来要批量出图，怎么管理才不靠记忆、不容易报错？」**
 
 **结论：不要按 SDXL/SD/ILXL/FLUX 这类基座名推断 `prompt` / `text` / LoRA 字段，也不要按地区细分 Anime。** RunningHub 的 `nodeInfoList.fieldName` 必须来自该 workflow API JSON 中对应 `nodeId.inputs` 的真实 key。正确分工是：
 
 - **semantic workflow 负责表达用途。** 例如 `portrait_create`、`chat_moment`、`companion_cutout`、`profile_outfit`。workflow key 必须可读，不能使用数字编号。
-- **base architecture 负责底模兼容。** `sdxl` / `sd15` / `ilxl` / `flux1` 是独立字段，不是自由 tag。workflow、checkpoint、LoRA 必须三者一致；不一致不能保存、同步或入队。workflow 额外允许 `none`，表示 URL 输入型/无基座 workflow，不能绑定 checkpoint 或 LoRA。
-- **Anime/Realistic lane 负责资产分类。** 每条有基座的 workflow 下只有 `Anime` 和 `Realistic` 两个主 lane；同一 architecture + 同一 lane 内的 active checkpoint 与 active LoRA 默认可以组合。`architecture=none` 的 workflow 不配置资产 lane。
+- **base architecture 负责 checkpoint/LoRA 兼容。** `sdxl` / `sd15` / `ilxl` / `flux1` 是 checkpoint 与 LoRA 的独立字段，不是自由 tag，也不是 workflow 字段。LoRA 只能绑定到同 architecture、同 `style_family` 的 checkpoint；不一致不能保存、同步或入队。
+- **Anime/Realistic membership 负责资产分类。** 每条 workflow 可以声明可用 checkpoint 与 LoRA membership；同一 checkpoint architecture + 同一 lane 内的 active checkpoint 与 active LoRA 默认可以组合。URL 输入型 workflow 不配置 checkpoint/LoRA membership。
 - **workflow contract 负责不报节点错误。** 先从 RunningHub 拉取或导出 workflow API JSON，再校验 `nodeId + fieldName` 是否存在。
 - **asset catalog 只保存文件名和展示信息。** checkpoint 文件名来自 `image_models.ckpt_name`；LoRA 文件名来自 `image_loras.lora_name`；它们不决定节点字段名。
 
@@ -128,13 +128,13 @@ Portrait generation 页面不直接铺开最近 job 列表；只保留 **View lo
 
 | 在哪配 | 配什么 | 长期来源 |
 |--------|--------|------|
-| Workflow contract | semantic key、`workflowId`、mode、`architecture`、可注入节点、latent/KSampler 参数映射、每个节点的 `inputs` 字段、contract hash、active/sort | RunningHub `getJsonApiFormat` + config seed + Admin 刷新 |
+| Workflow contract | semantic key、`workflowId`、mode、可注入节点、latent/KSampler 参数映射、每个节点的 `inputs` 字段、contract hash、active/sort | RunningHub `getJsonApiFormat` + config seed + Admin 刷新 |
 | Anime/Realistic lane | 某条 workflow 下的 `anime` / `realistic` 资产池 | config seed + Admin 管理 |
 | Checkpoint catalog | `label`、`ckpt_name`、`architecture`、`style_family`、free tags、active/sort | `image_models`，由 config seed + Admin 管理 |
 | LoRA catalog | `label`、`lora_name`、`architecture`、默认 strength、`style_family`、free tags、active/sort | `image_loras`，由 config seed + Admin 管理 |
 | Lane membership | 某条 workflow 的某个 lane 包含哪些 checkpoint/LoRA | lane membership tables；批量出图前必须命中 |
 
-Admin 的 Portrait generation 页面应围绕 workflow 展开：先选 semantic workflow 和底模架构，再选 `Anime` 或 `Realistic` lane，在 lane 里维护 checkpoint 与 LoRA 资产池。不要让运营人员维护三元组合表。
+Admin 的 Portrait generation 页面应围绕 workflow 展开：先选 semantic workflow，再在该 workflow 下维护可用 checkpoint 与 LoRA 资产池。底模架构只在 checkpoint/LoRA 上配置，不让运营人员维护 workflow/checkpoint/LoRA 三元架构组合表。
 
 用户侧 discovery 和 Admin 资产主分类都只有 `Anime` / `Realistic`。自由 tags 只作补充备注，不能引入新的主分类。
 
@@ -172,11 +172,11 @@ nodeInfoList = [
 2. 把 `workflowId` 加到 repo 对应环境配置，或在 Admin 新增 semantic workflow；key 必须表达用途，例如 `portrait_create`。
 3. 在 Admin 点击刷新 contract，或由 sync 脚本调用 RunningHub `getJsonApiFormat`，缓存 API JSON 里的节点与 inputs。
 4. 从 contract 里选择 prompt、checkpoint、load image、negative prompt、LoRA、latent 宽高/batch、KSampler seed 等要覆盖的节点和字段。
-5. 给有基座的 workflow、checkpoint、LoRA 填同一个底模架构，例如 `sdxl`。URL 输入型无基座 workflow 填 `none`，并保持 checkpoint/LoRA 绑定为空；`style_family` 不能代替 architecture。
+5. 给 checkpoint、LoRA 填底模架构，例如 `sdxl`；workflow 不填底模架构。URL 输入型 workflow 保持 checkpoint/LoRA 绑定为空；`style_family` 不能代替 architecture。
 6. 在该 workflow 下选择 `Anime` 或 `Realistic` lane。
 7. 添加 checkpoint：记录 RunningHub 中的准确 `ckpt_name`，放入对应 lane。
 8. 添加 LoRA：记录 RunningHub 中的准确 `lora_name`，填写默认 strength，放入对应 lane。第一阶段单次生成只支持 0-1 个 LoRA。
-9. 批量出图前，系统先验证 workflow/checkpoint/LoRA architecture 一致，再验证 lane membership 和 contract；`architecture=none` 时拒绝任何 checkpoint/LoRA 绑定；latent/KSampler 参数字段也必须命中 contract，任一失败都拒绝入队。
+9. 批量出图前，系统先验证 workflow membership，再验证 checkpoint/LoRA architecture + lane 兼容和 workflow contract；latent/KSampler 参数字段也必须命中 contract，任一失败都拒绝入队。
 
 ### 6.4 接入「自己上传的 checkpoint」的步骤
 
@@ -192,7 +192,7 @@ nodeInfoList = [
 2. 手动跑通 workflow 一次，确认该 LoRA workflow 可正常执行。
 3. 刷新 workflow contract，确认 LoRA 节点和所有需要覆盖的字段都出现在 API JSON 的 `inputs` 中。
 4. 在目标 workflow 的 `Anime` 或 `Realistic` lane 新增 LoRA：填 `lora_name`、`architecture`、默认 strength、`style_family`。
-5. 同一 workflow + 同一 architecture + 同一 lane 内的 active LoRA 默认可与该 lane 的 active checkpoint 组合；发现个别坏组合时再引入 denylist，不把 denylist 当日常运营入口。
+5. 同一 workflow 中，active LoRA 默认可与同 architecture + 同 lane 的 active checkpoint 组合；发现个别坏组合时再引入 denylist，不把 denylist 当日常运营入口。
 
 ### 6.6 什么时候才真的要新建 workflow
 

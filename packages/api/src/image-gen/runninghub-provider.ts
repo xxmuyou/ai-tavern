@@ -463,7 +463,6 @@ async function readWorkflowConfig(
   const dbWorkflow = await getImageWorkflow(env, workflowKey).catch(() => null);
   const config = dbWorkflow
     ? {
-        architecture: dbWorkflow.architecture || "sdxl",
         checkpointFieldName: dbWorkflow.checkpoint_field_name || "ckpt_name",
         checkpointNodeId: dbWorkflow.checkpoint_node_id ?? undefined,
         key: dbWorkflow.key,

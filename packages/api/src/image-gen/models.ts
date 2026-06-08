@@ -221,11 +221,10 @@ const LORA_COLUMNS =
   "id, label, lora_name, architecture, style_family, purpose, tags, default_model_strength, default_clip_strength, is_active, sort_order, updated_at, updated_by";
 const WORKFLOW_COLUMNS =
   "key, label, architecture, mode, workflow_id, prompt_node_id, prompt_field_name, checkpoint_node_id, checkpoint_field_name, load_image_node_id, load_image_field_name, negative_prompt_node_id, negative_prompt_field_name, contract_json, contract_hash, contract_refreshed_at, lora_node_id, lora_name_field_name, lora_model_strength_field_name, lora_clip_strength_field_name, generation_params_json, is_active, sort_order, updated_at, updated_by";
+const LEGACY_WORKFLOW_ARCHITECTURE = "none";
 const ASSET_LANES = new Set(["anime", "realistic"]);
-export const BASE_ARCHITECTURES = ["sdxl", "sd15", "ilxl", "flux1", "none"] as const;
-const ASSET_BASE_ARCHITECTURES = BASE_ARCHITECTURES.filter((value) => value !== "none");
+export const BASE_ARCHITECTURES = ["sdxl", "sd15", "ilxl", "flux1"] as const;
 const BASE_ARCHITECTURE_SET = new Set<string>(BASE_ARCHITECTURES);
-const ASSET_BASE_ARCHITECTURE_SET = new Set<string>(ASSET_BASE_ARCHITECTURES);
 
 function toImageModel(row: ImageModelRow): ImageModel {
   return {
@@ -252,7 +251,7 @@ function toImageLora(row: ImageLoraRow): ImageLora {
 
 function toImageWorkflow(row: ImageWorkflowRow): ImageWorkflow {
   return {
-    architecture: row.architecture || "sdxl",
+    architecture: row.architecture || LEGACY_WORKFLOW_ARCHITECTURE,
     checkpoint_field_name: row.checkpoint_field_name || "ckpt_name",
     checkpoint_node_id: row.checkpoint_node_id,
     contract_hash: row.contract_hash ?? null,
@@ -310,7 +309,6 @@ export async function listActiveImageModelOptions(env: Env): Promise<ImageModelO
      WHERE wm.is_active = 1
        AND w.is_active = 1
        AND m.is_active = 1
-       AND w.architecture = m.architecture
        AND w.mode = 'create'
      ORDER BY w.sort_order ASC, wm.sort_order ASC, m.sort_order ASC, m.label ASC`,
   ).all<{
@@ -362,7 +360,6 @@ async function listActiveLoraOptionsForModelOptions(env: Env): Promise<Map<strin
        AND m.is_active = 1
        AND l.is_active = 1
        AND w.mode = 'create'
-       AND w.architecture = m.architecture
        AND l.architecture = m.architecture
        AND l.style_family = m.style_family
      ORDER BY wml.workflow_key ASC, wml.model_id ASC, wml.sort_order ASC, l.sort_order ASC, l.label ASC`,
@@ -437,7 +434,6 @@ export async function getImageModelSelection(env: Env, id: string): Promise<Imag
        AND wm.is_active = 1
        AND w.is_active = 1
        AND m.is_active = 1
-       AND w.architecture = m.architecture
        AND w.mode = 'create'
      ORDER BY w.sort_order ASC, wm.sort_order ASC
      LIMIT 1`,
@@ -472,7 +468,6 @@ async function getSelectionByWorkflowAndModel(
        AND wm.is_active = 1
        AND w.is_active = 1
        AND m.is_active = 1
-       AND w.architecture = m.architecture
        AND w.mode = 'create'
      LIMIT 1`,
   )
@@ -712,7 +707,6 @@ export async function upsertImageWorkflow(
 ): Promise<void> {
   const now = Date.now();
   const workflowKey = normalizeWorkflowKey(input.key) || input.key;
-  const architecture = normalizeArchitecture(input.architecture, "workflow architecture", { required: true });
   const checkpointFieldName = input.checkpoint_field_name?.trim() || "ckpt_name";
   const promptFieldName = input.prompt_field_name?.trim() || "text";
   const loadImageFieldName = input.load_image_field_name?.trim() || "image";
@@ -723,7 +717,6 @@ export async function upsertImageWorkflow(
   const generationParamsJson = input.generation_params_json?.trim() || null;
   const loraBindings = normalizeLoraBindings(input.lora_bindings ?? [], input.model_ids);
   await validateWorkflowAssetBindings(env, {
-    architecture,
     loraBindings,
     modelIds: input.model_ids,
     workflowKey,
@@ -765,7 +758,7 @@ export async function upsertImageWorkflow(
     ).bind(
       workflowKey,
       input.label,
-      architecture,
+      LEGACY_WORKFLOW_ARCHITECTURE,
       input.mode,
       input.workflow_id,
       input.prompt_node_id,
@@ -835,7 +828,6 @@ export async function resolveImageLoraSelection(
        AND l.is_active = 1
        AND w.is_active = 1
        AND m.is_active = 1
-       AND w.architecture = m.architecture
        AND l.architecture = m.architecture
        AND l.style_family = m.style_family
      LIMIT 1`,
@@ -873,7 +865,6 @@ type AssetBindingLora = {
 async function validateWorkflowAssetBindings(
   env: Env,
   input: {
-    architecture: string;
     loraBindings: ImageWorkflowLoraBindingInput[];
     modelIds: string[];
     workflowKey: string;
@@ -881,9 +872,6 @@ async function validateWorkflowAssetBindings(
 ): Promise<void> {
   const modelIds = [...new Set(input.modelIds.map((id) => id.trim()).filter(Boolean))];
   const loraIds = [...new Set(input.loraBindings.flatMap((binding) => binding.lora_ids).map((id) => id.trim()).filter(Boolean))];
-  if (input.architecture === "none" && (modelIds.length > 0 || loraIds.length > 0)) {
-    throw new Error(`workflow ${input.workflowKey} architecture none cannot bind checkpoint or LoRA assets.`);
-  }
   const models = await loadAssetsByIds<AssetBindingModel>(
     env,
     "image_models",
@@ -894,11 +882,6 @@ async function validateWorkflowAssetBindings(
     const model = models.get(modelId);
     if (!model) {
       throw new Error(`workflow ${input.workflowKey} references missing checkpoint ${modelId}.`);
-    }
-    if (model.architecture !== input.architecture) {
-      throw new Error(
-        `workflow ${input.workflowKey} architecture ${input.architecture} cannot bind checkpoint ${modelId} architecture ${model.architecture}.`,
-      );
     }
   }
 
@@ -972,16 +955,14 @@ export function normalizeArchitecture(
   options?: { assetOnly?: boolean; required?: boolean },
 ): string {
   const trimmed = value?.trim().toLowerCase() ?? "";
-  const allowed = options?.assetOnly ? ASSET_BASE_ARCHITECTURES : BASE_ARCHITECTURES;
-  const allowedSet = options?.assetOnly ? ASSET_BASE_ARCHITECTURE_SET : BASE_ARCHITECTURE_SET;
   if (!trimmed) {
     if (options?.required) {
-      throw new Error(`${fieldName} must be one of ${allowed.join(", ")}.`);
+      throw new Error(`${fieldName} must be one of ${BASE_ARCHITECTURES.join(", ")}.`);
     }
     return "";
   }
-  if (!allowedSet.has(trimmed)) {
-    throw new Error(`${fieldName} must be one of ${allowed.join(", ")}.`);
+  if (!BASE_ARCHITECTURE_SET.has(trimmed)) {
+    throw new Error(`${fieldName} must be one of ${BASE_ARCHITECTURES.join(", ")}.`);
   }
   return trimmed;
 }

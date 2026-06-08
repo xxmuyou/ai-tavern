@@ -122,7 +122,7 @@ CREATE TABLE story_moment_images (
 ## Workflow / Provider
 
 - RunningHub 可配置 workflow key：`chat_moment`。
-- 当前 RunningHub workflow 是 URL 输入型、无基座 workflow：`architecture = "none"`，`loadImageFieldName = "url"`，不绑定 checkpoint/LoRA。
+- 当前 RunningHub workflow 是 URL 输入型 workflow：`loadImageFieldName = "url"`，不绑定 checkpoint/LoRA；workflow 不声明底模架构。
 - 需要同时配置 load-image node 和 prompt node；业务 prompt 仍注入 prompt node，source image 传短期签名 URL。
 - 旧 `loadImageFieldName = "image"` 会触发 upload/fileName 路径，不适用于当前 URL 输入 workflow。
 - mock provider 返回可预测图片 key，保证 API 和前端测试不依赖外部生图服务。

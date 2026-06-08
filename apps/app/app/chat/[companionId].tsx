@@ -79,6 +79,10 @@ function isStreamingItem(item: ChatListItem): item is StreamingItem {
   return (item as StreamingItem).__streaming === true;
 }
 
+function inviteTextForTarget(target: InviteTarget): string {
+  return `Want to go to ${target.name} with me?`;
+}
+
 export default function ChatScreen() {
   return (
     <AuthGuard>
@@ -283,10 +287,85 @@ function ChatScreenInner() {
     }
   }, [companionId, sceneId]);
 
+  const sendInviteToTarget = useCallback(async (target: InviteTarget) => {
+    if (stream.isStreaming) {
+      return;
+    }
+    if (rateLimitedUntil && Date.now() < rateLimitedUntil) {
+      return;
+    }
+    const text = inviteTextForTarget(target);
+    setPendingInvite(null);
+    const userMessage: ChatMessage = {
+      companion_id: companionId,
+      content: text,
+      created_at: new Date().toISOString(),
+      id: `local-user-${Date.now()}`,
+      role: 'user',
+    };
+    history.appendMessage(userMessage);
+    shouldScrollOnNextRef.current = true;
+
+    let serverMessageId = '';
+    try {
+      const result = await stream.send(text, {
+        activityId: activeActivityId,
+        inviteSceneId: target.id,
+        personaId: activePersonaId ?? undefined,
+        onDone: (info) => {
+          serverMessageId = info.messageId;
+        },
+        onEmotion: (emotion) => {
+          setCurrentEmotion(emotion);
+        },
+        onInviteResult: (invite) => {
+          handleInviteResult(invite, target);
+        },
+        onSignals: (signals) => {
+          setLastSignals(signals);
+          setSignalToken((token) => token + 1);
+        },
+        onUnlocks: (unlocks) => {
+          setLastUnlocks(unlocks);
+          setUnlockToken((token) => token + 1);
+        },
+        sceneId,
+      });
+      const finalMessage: ChatMessage = {
+        companion_id: companionId,
+        content: result.text,
+        created_at: new Date().toISOString(),
+        emotion: result.emotion,
+        id: serverMessageId || `local-companion-${Date.now()}`,
+        role: 'companion',
+        scene_id: sceneId ?? null,
+      };
+      history.appendMessage(finalMessage);
+      shouldScrollOnNextRef.current = true;
+      if (autoVoice.enabled && serverMessageId) {
+        void messageActions.speak(serverMessageId);
+      }
+      void relationship.refresh();
+    } catch (error) {
+      if (error instanceof QuotaExceededError) {
+        setQuotaModalVisible(true);
+      } else if (error instanceof RateLimitedError) {
+        const seconds = error.retryAfter ?? 60;
+        setRateLimitedUntil(Date.now() + seconds * 1000);
+        pushError(`Please wait ${seconds} seconds before sending again.`);
+      } else if (error instanceof ApiError && error.status === 401) {
+        pushError('Your session has expired. Please sign in again.');
+      } else {
+        const message = error instanceof Error ? error.message : 'Failed to send invitation.';
+        pushError(message);
+      }
+    }
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+
   const handleInviteSelect = useCallback((target: InviteTarget) => {
-    setPendingInvite(target);
     setInvitePickerVisible(false);
-  }, []);
+    void sendInviteToTarget(target);
+  }, [sendInviteToTarget]);
 
   const remainingSeconds = useMemo(() => {
     if (!rateLimitedUntil) {

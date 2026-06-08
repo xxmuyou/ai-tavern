@@ -234,10 +234,13 @@ async function handleImageWorkflows(
       env,
       rows.map((r) => r.updated_by).filter((id): id is string => id !== null),
     );
-    const workflows = rows.map((r) => ({
-      ...r,
-      updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
-    }));
+    const workflows = rows.map((r) => {
+      const { architecture: _legacyArchitecture, ...workflow } = r;
+      return {
+        ...workflow,
+        updated_by_email: r.updated_by ? emails.get(r.updated_by) ?? null : null,
+      };
+    });
     return jsonResponse({ workflows });
   }
 
@@ -383,12 +386,6 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
   if (!key || !label || !mode) {
     return { ok: false, error: "invalid_workflow" };
   }
-  const architecture = readOptionalString(raw.architecture);
-  try {
-    normalizeArchitecture(architecture, "workflow architecture", { required: true });
-  } catch {
-    return { ok: false, error: "invalid_workflow_architecture" };
-  }
   const workflowId = typeof raw.workflow_id === "string" ? raw.workflow_id.trim() : "";
   const promptNodeId = typeof raw.prompt_node_id === "string" ? raw.prompt_node_id.trim() : "";
   const promptFieldName =
@@ -413,9 +410,6 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
       : "image";
   if (mode === "cutout" && !loadImageNodeId) {
     return { ok: false, error: "cutout_load_image_node_required" };
-  }
-  if (architecture === "none" && !loadImageNodeId) {
-    return { ok: false, error: "none_workflow_load_image_node_required" };
   }
   const negativePromptNodeId =
     typeof raw.negative_prompt_node_id === "string" && raw.negative_prompt_node_id.trim()
@@ -465,7 +459,6 @@ function parseWorkflowInput(body: unknown): WorkflowParseResult {
   return {
     ok: true,
     value: {
-      architecture,
       checkpoint_field_name: checkpointFieldName,
       checkpoint_node_id: checkpointNodeId,
       is_active: raw.is_active === undefined ? true : Boolean(raw.is_active),

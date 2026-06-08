@@ -109,14 +109,22 @@ describe("RunningHub workflow/model catalog", () => {
     expect(workflow?.checkpoint_node_id).toBe("4");
   });
 
-  it("does not list or resolve workflow/checkpoint architecture mismatches", async () => {
+  it("lists and resolves checkpoint bindings without workflow base metadata", async () => {
     const env = createEnv({ modelArchitecture: "flux1" });
 
-    await expect(listActiveImageModelOptions(env)).resolves.toEqual([]);
-    await expect(getImageModelSelection(env, imageModelOptionId("portrait_create", "anime_default"))).resolves.toBeNull();
+    await expect(listActiveImageModelOptions(env)).resolves.toMatchObject([
+      {
+        id: "portrait_create::anime_default",
+        model_id: "anime_default",
+        workflow_key: "portrait_create",
+      },
+    ]);
+    await expect(getImageModelSelection(env, imageModelOptionId("portrait_create", "anime_default"))).resolves.toMatchObject({
+      model: { architecture: "flux1", id: "anime_default" },
+    });
   });
 
-  it("requires architecture on new checkpoint, LoRA, and workflow rows", async () => {
+  it("requires architecture on new checkpoint and LoRA rows, but not workflow rows", async () => {
     const env = createEnv();
 
     await expect(createImageModel(env, "bad_model", {
@@ -156,56 +164,26 @@ describe("RunningHub workflow/model catalog", () => {
       prompt_node_id: "6",
       sort_order: 1,
       workflow_id: "workflow-1",
-    }, "admin")).rejects.toThrow(/workflow architecture/);
+    }, "admin")).resolves.toBeUndefined();
   });
 
-  it("rejects workflow checkpoint and LoRA bindings with mismatched architecture or lane", async () => {
-    await expect(upsertImageWorkflow(createEnv({ modelArchitecture: "flux1" }), {
-      ...workflowInput(),
-      architecture: "sdxl",
-    }, "admin")).rejects.toThrow(/cannot bind checkpoint/);
-
+  it("rejects LoRA bindings with checkpoint/LoRA architecture or lane mismatches", async () => {
     await expect(upsertImageWorkflow(createEnv({ loraArchitecture: "flux1" }), {
       ...workflowInput(),
-      architecture: "sdxl",
       lora_bindings: [{ lora_ids: ["anime_detail"], model_id: "anime_default" }],
       lora_node_id: "12",
     }, "admin")).rejects.toThrow(/cannot bind LoRA/);
 
     await expect(upsertImageWorkflow(createEnv({ loraStyleFamily: "realistic" }), {
       ...workflowInput(),
-      architecture: "sdxl",
       lora_bindings: [{ lora_ids: ["anime_detail"], model_id: "anime_default" }],
       lora_node_id: "12",
     }, "admin")).rejects.toThrow(/lane anime cannot bind LoRA/);
   });
 
-  it("allows none-architecture workflows only without checkpoint or LoRA bindings", async () => {
-    await expect(upsertImageWorkflow(createEnv(), {
-      ...workflowInput(),
-      architecture: "none",
-      checkpoint_node_id: null,
-      key: "chat_moment",
-      load_image_field_name: "url",
-      load_image_node_id: "1",
-      mode: "create",
-      model_ids: [],
-      prompt_node_id: "13",
-    }, "admin")).resolves.toBeUndefined();
-
-    await expect(upsertImageWorkflow(createEnv(), {
-      ...workflowInput(),
-      architecture: "none",
-      lora_bindings: [{ lora_ids: ["anime_detail"], model_id: "anime_default" }],
-      lora_node_id: "12",
-      model_ids: ["anime_default"],
-    }, "admin")).rejects.toThrow(/architecture none cannot bind checkpoint or LoRA assets/);
-  });
-
   it("resolves matching workflow/checkpoint/LoRA bindings only", async () => {
     await expect(upsertImageWorkflow(createEnv(), {
       ...workflowInput(),
-      architecture: "sdxl",
       lora_bindings: [{ lora_ids: ["anime_detail"], model_id: "anime_default" }],
       lora_node_id: "12",
     }, "admin")).resolves.toBeUndefined();
@@ -264,7 +242,7 @@ function createEnv(options: { loraArchitecture?: string; loraStyleFamily?: strin
     [
       "portrait_create",
       {
-        architecture: "sdxl",
+        architecture: "none",
         checkpoint_field_name: "ckpt_name",
         checkpoint_node_id: "4",
         is_active: 1,
@@ -293,7 +271,7 @@ function createEnv(options: { loraArchitecture?: string; loraStyleFamily?: strin
       .map((binding) => {
         const workflow = workflows.get(binding.workflow_key)!;
         const model = models.get(binding.model_id)!;
-        if (workflow.is_active !== 1 || workflow.mode !== "create" || model.is_active !== 1 || workflow.architecture !== model.architecture) return null;
+        if (workflow.is_active !== 1 || workflow.mode !== "create" || model.is_active !== 1) return null;
         return {
           checkpoint_node_id: workflow.checkpoint_node_id,
           ckpt_name: model.ckpt_name,
@@ -312,7 +290,6 @@ function createEnv(options: { loraArchitecture?: string; loraStyleFamily?: strin
     const workflow = workflows.get(workflowKey);
     const model = models.get(modelId);
     if (!binding || !workflow || !model) return null;
-    if (workflow.architecture !== model.architecture) return null;
     return {
       ...workflow,
       model_architecture: model.architecture,
@@ -334,7 +311,7 @@ function createEnv(options: { loraArchitecture?: string; loraStyleFamily?: strin
       row.workflow_key === workflowKey && row.model_id === modelId && row.lora_id === loraId && row.is_active === 1
     );
     if (!workflow || !model || !lora || !binding || workflow.is_active !== 1 || model.is_active !== 1 || lora.is_active !== 1) return null;
-    if (workflow.architecture !== model.architecture || lora.architecture !== model.architecture || lora.style_family !== model.style_family) return null;
+    if (lora.architecture !== model.architecture || lora.style_family !== model.style_family) return null;
     return {
       default_clip_strength: lora.default_clip_strength,
       default_model_strength: lora.default_model_strength,

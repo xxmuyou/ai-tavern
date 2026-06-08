@@ -110,7 +110,7 @@ const now = Date.now();
 const runningHubApiKey = (process.env.RUNNINGHUB_API_KEY || "").trim();
 const runningHubBaseUrl = (process.env.RUNNINGHUB_BASE_URL || "https://www.runninghub.ai").replace(/\/+$/, "");
 const assetBaseArchitectures = new Set(["sdxl", "sd15", "ilxl", "flux1"]);
-const workflowArchitectures = new Set([...assetBaseArchitectures, "none"]);
+const legacyWorkflowArchitecture = "none";
 
 // RunningHub catalog seed (spec-022): checkpoint catalog + semantic workflow
 // catalog + Anime/Realistic lane memberships. We also write image_gen.workflows
@@ -182,7 +182,7 @@ function normalizeLaneTags(path, value, required = false) {
 }
 
 function normalizeArchitecture(path, value, required = false, options = {}) {
-  const allowed = options.workflow ? workflowArchitectures : assetBaseArchitectures;
+  const allowed = assetBaseArchitectures;
   const text = readString(path, value).toLowerCase();
   if (!text) {
     if (required) throw new Error(`${path} must be one of: ${[...allowed].join(", ")}.`);
@@ -460,7 +460,6 @@ for (const key of Object.keys(workflowsRaw)) {
   if (mode !== "create" && mode !== "variation" && mode !== "cutout") {
     throw new Error(`workflows.${key}.mode must be "create", "variation", or "cutout".`);
   }
-  const architecture = normalizeArchitecture(`workflows.${key}.architecture`, entry.architecture, true, { workflow: true });
   const workflowId = readString(`workflows.${key}.workflowId`, entry.workflowId);
   const promptNodeId = readString(`workflows.${key}.promptNodeId`, entry.promptNodeId);
   const promptFieldName =
@@ -488,18 +487,10 @@ for (const key of Object.keys(workflowsRaw)) {
     ? entry.modelIds.map((id) => readString(`workflows.${key}.modelIds[]`, id)).filter(Boolean)
     : [];
   const modelIdSet = new Set(modelIds);
-  if (architecture === "none" && modelIds.length > 0) {
-    throw new Error(`workflows.${key}.modelIds must be empty when architecture is "none".`);
-  }
   for (const [index, modelId] of modelIds.entries()) {
     const checkpoint = checkpointsById.get(modelId);
     if (!checkpoint) {
       throw new Error(`workflows.${key}.modelIds[${index}] is not in checkpoints[].`);
-    }
-    if (checkpoint.architecture !== architecture) {
-      throw new Error(
-        `workflows.${key}.modelIds[${index}] architecture mismatch: workflow is ${architecture}, checkpoint ${modelId} is ${checkpoint.architecture}.`,
-      );
     }
   }
 
@@ -512,7 +503,7 @@ for (const key of Object.keys(workflowsRaw)) {
           : `workflows.${key} must include workflowId and promptNodeId when configured.`,
       );
     }
-    if ((mode === "variation" || mode === "cutout" || architecture === "none") && !loadImageNodeId) {
+    if ((mode === "variation" || mode === "cutout") && !loadImageNodeId) {
       throw new Error(`workflows.${key} (${mode}) must include loadImageNodeId when configured.`);
     }
   }
@@ -546,9 +537,6 @@ for (const key of Object.keys(workflowsRaw)) {
   }
 
   const workflowLoraBindings = Array.isArray(entry.loraBindings) ? entry.loraBindings : [];
-  if (architecture === "none" && workflowLoraBindings.length > 0) {
-    throw new Error(`workflows.${key}.loraBindings must be empty when architecture is "none".`);
-  }
   for (const [index, binding] of workflowLoraBindings.entries()) {
     if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
       throw new Error(`workflows.${key}.loraBindings[${index}] must be an object.`);
@@ -576,7 +564,6 @@ for (const key of Object.keys(workflowsRaw)) {
   }
 
   workflows[key] = {
-    architecture,
     label,
     mode,
     workflowId,
@@ -597,7 +584,7 @@ for (const key of Object.keys(workflowsRaw)) {
     ...(modelIds.length ? { modelIds } : {}),
   };
   workflowRows.push({
-    architecture,
+    architecture: legacyWorkflowArchitecture,
     checkpointFieldName,
     checkpointNodeId,
     contractHash: contract?.contractHash || null,

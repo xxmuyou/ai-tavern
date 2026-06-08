@@ -16,7 +16,7 @@ Legacy 目标体验：
 
 新行为不再使用聊天消息作为入口。换装图现在属于 profile 图片管理：用户在 companion profile 图片旁生成并确认，确认后成为当前用户私有 profile 图片覆盖，详见 spec-033。
 
-第一版使用 `art_url` 作为源图参考，通过 RunningHub workflow `profile_outfit` 走现有 `variation` 图生图路径。当前 RunningHub workflow 是 URL 输入型、无基座 workflow：输入短期签名 URL + 业务 prompt，不引入正式 `edit` mode，也不接 credits 扣费。
+第一版使用 `art_url` 作为源图参考，通过 RunningHub workflow `profile_outfit` 走现有 `variation` 图生图路径。当前 RunningHub workflow 是 URL 输入型 workflow：输入短期签名 URL + 业务 prompt，不声明底模架构，不引入正式 `edit` mode，也不接 credits 扣费。
 
 ## 目标 / 非目标
 
@@ -192,7 +192,7 @@ type ChatMessage = {
 
 - `config/runninghub-workflows.dev.json` 与 `config/runninghub-workflows.prod.json` 新增 `profile_outfit`。
 - `profile_outfit.mode = "variation"`，不扩展 `image_workflows.mode` CHECK。
-- `profile_outfit.architecture = "none"`，不配置 `modelIds` / `loraBindings`。
+- `profile_outfit` 不配置 `modelIds` / `loraBindings`；workflow 不声明底模架构。
 - `profile_outfit.loadImageFieldName = "url"`，provider 传 source image 的短期签名 URL；旧 `image` 字段会触发 upload/fileName 路径，不适用于当前 workflow。
 - 必填配置：
   - `workflowId`
@@ -245,7 +245,7 @@ Job：
 
 Config：
 
-- `parseWorkflows` 能读取 `profile_outfit`、`architecture=none`、URL load-image 字段和 negative prompt 字段。
+- `parseWorkflows` 能读取 `profile_outfit`、URL load-image 字段和 negative prompt 字段。
 - `scripts/sync-runninghub-workflows.sh dev --dry-run` 输出 `profile_outfit`，且 SQL 包含 negative prompt columns。
 
 前端：

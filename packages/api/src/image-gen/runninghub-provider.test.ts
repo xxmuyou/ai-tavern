@@ -797,10 +797,9 @@ describe("workflowHasCheckpointNode", () => {
 });
 
 describe("parseWorkflows", () => {
-  it("parses none-architecture URL workflows", () => {
+  it("parses URL workflows without architecture metadata", () => {
     expect(parseWorkflows(JSON.stringify({
       chat_moment: {
-        architecture: "none",
         loadImageFieldName: "url",
         loadImageNodeId: "1",
         mode: "create",
@@ -809,7 +808,6 @@ describe("parseWorkflows", () => {
       },
     }))).toMatchObject({
       chat_moment: {
-        architecture: "none",
         loadImageFieldName: "url",
         loadImageNodeId: "1",
         mode: "create",

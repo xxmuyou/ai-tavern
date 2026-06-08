@@ -9,7 +9,7 @@ import { useAdminImageLoras, useAdminImageModels, useAdminImageWorkflows } from 
 import { AdminCollapsible, AdminPanel, AdminPanelHeader } from './AdminPanel';
 
 const INPUT_CLASS = 'min-h-9 rounded-lg border border-app-line bg-app-surface px-3 text-sm text-app-ink';
-const BASE_ARCHITECTURES = ['sdxl', 'sd15', 'ilxl', 'flux1', 'none'] as const;
+const BASE_ARCHITECTURES = ['sdxl', 'sd15', 'ilxl', 'flux1'] as const;
 
 /**
  * RunningHub catalog admin.
@@ -312,7 +312,7 @@ function AssetTagFields<T extends { architecture?: string; purpose?: string; sty
   return (
     <View className="web:grid web:grid-cols-2 web:gap-3">
       <Field label="Architecture">
-        <ArchitecturePicker assetOnly onChange={(architecture) => setDraft({ ...draft, architecture })} value={draft.architecture ?? ''} />
+        <ArchitecturePicker onChange={(architecture) => setDraft({ ...draft, architecture })} value={draft.architecture ?? ''} />
       </Field>
       <Field label="Style family">
         <TextInput className={INPUT_CLASS} onChangeText={(style_family) => setDraft({ ...draft, style_family })} placeholder="anime / realistic" placeholderTextColor="#687076" value={draft.style_family ?? ''} />
@@ -327,8 +327,8 @@ function AssetTagFields<T extends { architecture?: string; purpose?: string; sty
   );
 }
 
-function ArchitecturePicker({ assetOnly = false, onChange, value }: { assetOnly?: boolean; onChange: (value: string) => void; value: string }) {
-  const architectures = assetOnly ? BASE_ARCHITECTURES.filter((architecture) => architecture !== 'none') : BASE_ARCHITECTURES;
+function ArchitecturePicker({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  const architectures = BASE_ARCHITECTURES;
   return (
     <View className="flex-row flex-wrap gap-2">
       {architectures.map((architecture) => {
@@ -471,22 +471,6 @@ function WorkflowFields({
         <Field label="Name">
           <TextInput className={INPUT_CLASS} onChangeText={(label) => setDraft({ ...draft, label })} placeholder="Portrait create" placeholderTextColor="#687076" value={draft.label} />
         </Field>
-        <Field label="Architecture">
-          <ArchitecturePicker
-            onChange={(architecture) =>
-              setDraft({
-                ...draft,
-                architecture,
-                lora_bindings: draft.lora_bindings?.filter((binding) => {
-                  const model = models.find((item) => item.id === binding.model_id);
-                  return model?.architecture === architecture;
-                }),
-                model_ids: draft.model_ids.filter((modelId) => models.find((model) => model.id === modelId)?.architecture === architecture),
-              })
-            }
-            value={draft.architecture ?? ''}
-          />
-        </Field>
       </View>
       <View className="flex-row flex-wrap gap-2">
         {(['create', 'variation', 'cutout'] as const).map((mode) => (
@@ -580,7 +564,7 @@ function LoraAllowlistPicker({
   models: AdminImageModel[];
   setDraft: (next: ImageWorkflowInput) => void;
 }) {
-  const selectedModels = models.filter((model) => draft.model_ids.includes(model.id) && model.architecture === draft.architecture);
+  const selectedModels = models.filter((model) => draft.model_ids.includes(model.id));
   if (selectedModels.length === 0 || loras.length === 0) {
     return null;
   }
@@ -640,7 +624,7 @@ function ModelPicker({ draft, models, setDraft }: { draft: ImageWorkflowInput; m
     <View>
       <Text className="mb-2 text-xs font-semibold text-app-muted">Available checkpoints</Text>
       <View className="flex-row flex-wrap gap-2">
-        {models.filter((model) => model.architecture === draft.architecture).map((model) => {
+        {models.map((model) => {
           const active = draft.model_ids.includes(model.id);
           return (
             <Pressable
@@ -654,7 +638,7 @@ function ModelPicker({ draft, models, setDraft }: { draft: ImageWorkflowInput; m
             </Pressable>
           );
         })}
-        {models.filter((model) => model.architecture === draft.architecture).length === 0 ? <Text className="text-sm text-app-muted">Add matching checkpoints first.</Text> : null}
+        {models.length === 0 ? <Text className="text-sm text-app-muted">Add checkpoints first.</Text> : null}
       </View>
     </View>
   );
@@ -731,7 +715,6 @@ function toLoraDraft(lora: AdminImageLora): ImageLoraInput {
 
 function emptyWorkflowDraft(): ImageWorkflowInput {
   return {
-    architecture: 'sdxl',
     checkpoint_field_name: 'ckpt_name',
     checkpoint_node_id: null,
     is_active: true,
@@ -758,7 +741,6 @@ function emptyWorkflowDraft(): ImageWorkflowInput {
 
 function toWorkflowDraft(workflow: AdminImageWorkflow): ImageWorkflowInput {
   return {
-    architecture: workflow.architecture,
     checkpoint_field_name: workflow.checkpoint_field_name,
     checkpoint_node_id: workflow.checkpoint_node_id,
     is_active: workflow.is_active,
@@ -785,5 +767,5 @@ function toWorkflowDraft(workflow: AdminImageWorkflow): ImageWorkflowInput {
 
 function workflowSubtitle(workflow: AdminImageWorkflow): string {
   const hash = workflow.contract_hash ? ` · contract ${workflow.contract_hash.slice(0, 8)}` : ' · no contract';
-  return `${workflow.mode} · ${workflow.architecture} · ${workflow.key}${hash}`;
+  return `${workflow.mode} · ${workflow.key}${hash}`;
 }

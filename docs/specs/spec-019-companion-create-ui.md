@@ -76,18 +76,19 @@ apps/app/app/companion/[id]/edit.web.tsx   Web 编辑页
 
 点「+ 创建」弹浮窗（未达配额时；达上限走 QuotaModal）：
 
-1. **选择生成模型**：从 `/image-models` 拉取 admin 配置的 active workflow-model options（返回 `{id, label, tag, workflow_key, model_id, loras?, generation_controls?}`）。后端由 option 解析 workflow、checkpoint 文件名和 workflow 的 checkpoint fieldName；前端只展示 label，不硬编码风格枚举。
+1. **选择基础风格（默认简化模式）**：从 `/image-models` 拉取 `style_presets` 与 advanced `models`。普通用户只看到 `Realistic` / `Anime` 两个风格按钮、图片尺寸和 prompt 输入框；不展示 workflow、checkpoint、LoRA、batch size 或 seed。每个风格按钮背后绑定后端返回的默认 workflow-model option（例如 `portrait_create::realistic_firstup`），前端不自行猜 checkpoint 或 workflow。
 2. **二选一拿基础图**：
    - **上传本地图片**：`POST /companions/upload-art` 拿到原图 key，直接作为最终 `art_url` / neutral 图；不调用 RunningHub，不做 img2img 重画，不消耗生图流程。
-   - **文生图**：填外貌描述 prompt，可选 LoRA、比例模板、batch size、seed → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `model` + 可选 `lora_id` / `size_preset` / `batch_size` / `seed`）。
-3. **Prompt assistant**：生图输入旁增加小栏，英文提示文案固定为 `Not sure what kind of portrait you want? Ask me.`。用户在小对话框里描述需求后，后端返回一段可编辑的英文生图 prompt；该接口只生成 prompt，不直接触发生图，不保存资产。
-4. **异步预览 / 重抽**：文生图的 `base-art/generate` 返回 `job_id`，前端轮询 `GET /companions/base-art/jobs/{jobId}`：
+   - **文生图（简化模式）**：填外貌描述 prompt、选择风格和比例模板 → 调 `POST /companions/base-art/generate`（`source:"text"` + `prompt` + `model` + `size_preset`）。`model` 使用当前风格的 `default_model`。
+3. **高级选项（默认折叠）**：愿意调参的用户可以展开 `Advanced options`，此时显示完整 workflow-model picker、该 option 允许的 0-1 个 LoRA、batch size、seed。高级区选择会覆盖当前风格默认 model；再次切换 `Realistic` / `Anime` 时回到该风格默认 model，并清空 LoRA、seed，batch size 回到 workflow 默认值。
+4. **Prompt assistant**：生图输入旁增加小栏，英文提示文案固定为 `Not sure what kind of portrait you want? Ask me.`。用户在小对话框里描述需求后，后端返回一段可编辑的英文生图 prompt；该接口只生成 prompt，不直接触发生图，不保存资产。
+5. **异步预览 / 重抽**：文生图的 `base-art/generate` 返回 `job_id`，前端轮询 `GET /companions/base-art/jobs/{jobId}`：
    - `processing` → 显示「生成中」spinner。
    - `succeeded` → 预览基础图；满意则「下一步」，不满意可「重新生成」。
    - `failed` → toast 错误，可重试。
-5. **预览尺寸**：基础图预览和空状态占位都用较小的居中画幅，默认 `3:5`，并随用户选择的比例模板调整。Web/tablet 最大宽度约 `320px`，窄屏约 `240px`；图片不再 `width:100%` 撑满整块面板。
-6. **手动保存资产**：文生图成功后显示 `Save to My assets`。只有用户点击后才写入个人资产库；未保存的废稿仍可继续用于本次创建，但不出现在 Me。
-7. 拿到满意的基础图后，把 `art_key` / `art_url` 暂存到创建表单 state，进入第 2 步。
+6. **预览尺寸**：基础图预览和空状态占位都用较小的居中画幅，默认 `3:5`，并随用户选择的比例模板调整。Web/tablet 最大宽度约 `320px`，窄屏约 `240px`；图片不再 `width:100%` 撑满整块面板。
+7. **手动保存资产**：文生图成功后显示 `Save to My assets`。只有用户点击后才写入个人资产库；未保存的废稿仍可继续用于本次创建，但不出现在 Me。
+8. 拿到满意的基础图后，把 `art_key` / `art_url` 暂存到创建表单 state，进入第 2 步。
 
 ### 第 2 步：属性表单
 

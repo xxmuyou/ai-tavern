@@ -870,11 +870,14 @@ export async function deleteImageAsset(id: string): Promise<{ ok: boolean }> {
   });
 }
 
-export type { ImageModelOption } from './types';
+export type { ImageModelOption, ImageModelsResponse } from './types';
 
-export async function fetchImageModels(): Promise<ImageModelOption[]> {
+export async function fetchImageModels(): Promise<ImageModelsResponse> {
   const data = await requestJson<ImageModelsResponse>('/image-models');
-  return data.models ?? [];
+  return {
+    models: data.models ?? [],
+    style_presets: data.style_presets ?? [],
+  };
 }
 
 export async function updateCompanion(

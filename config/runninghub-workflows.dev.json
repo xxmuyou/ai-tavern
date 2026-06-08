@@ -186,7 +186,6 @@
   "workflows": {
     "portrait_create": {
       "label": "Portrait create",
-      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "2060270467856035841",
       "promptNodeId": "2",
@@ -220,7 +219,6 @@
     },
     "portrait_create_lora": {
       "label": "Portrait create + LoRA",
-      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "2062457572615081986",
       "checkpointNodeId": "1",
@@ -265,7 +263,6 @@
     },
     "chat_moment": {
       "label": "Chat moment image",
-      "architecture": "none",
       "mode": "create",
       "workflowId": "2062743172710752257",
       "promptNodeId": "13",
@@ -279,7 +276,6 @@
     },
     "companion_cutout": {
       "label": "Companion cutout",
-      "architecture": "none",
       "mode": "cutout",
       "workflowId": "2062732456842846209",
       "loadImageNodeId": "1",
@@ -291,7 +287,6 @@
     },
     "profile_outfit": {
       "label": "Profile outfit image",
-      "architecture": "none",
       "mode": "variation",
       "workflowId": "2062743172710752257",
       "loadImageNodeId": "1",

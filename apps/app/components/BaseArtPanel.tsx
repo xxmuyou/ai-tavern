@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { assistBaseArtPrompt, generateBaseArt, getBaseArtJob, mediaSource, saveImageAsset } from '@/api/companion-client';
 import { useImageModels } from '@/hooks/use-image-models';
 import { Button } from '@/components/Button';
+import type { ImageModelOption, ImageStylePreset } from '@/api/types';
 
 type Phase = 'idle' | 'generating' | 'preview' | 'error';
 type ArtSource = 'generated' | 'upload';
@@ -23,8 +24,9 @@ type BaseArtPanelProps = {
  * own style tag. Shared by the web and native create screens.
  */
 export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
-  const { models, isLoading: modelsLoading } = useImageModels();
+  const { models, stylePresets, isLoading: modelsLoading } = useImageModels();
   const [phase, setPhase] = useState<Phase>('idle');
+  const [styleId, setStyleId] = useState<ImageStylePreset['id'] | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [loraId, setLoraId] = useState<string | null>(null);
   const [sizePresetId, setSizePresetId] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   const [isAssisting, setIsAssisting] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [assetSaved, setAssetSaved] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -50,11 +53,21 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     };
   }, []);
 
+  const simpleStylePresets = useMemo(
+    () => (stylePresets.length > 0 ? stylePresets : fallbackStylePresets(models)),
+    [models, stylePresets],
+  );
+
   useEffect(() => {
-    if (!model && models.length > 0) {
+    if (model) return;
+    const initialStyle = simpleStylePresets[0];
+    if (initialStyle) {
+      setStyleId(initialStyle.id);
+      setModel(initialStyle.default_model);
+    } else if (models.length > 0) {
       setModel(models[0].id);
     }
-  }, [model, models]);
+  }, [model, models, simpleStylePresets]);
 
   const selectedModel = models.find((item) => item.id === model) ?? null;
   const generationControls = selectedModel?.generation_controls ?? null;
@@ -78,6 +91,18 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     }
     setSeed('');
   }, [model, defaultSizePresetId, defaultBatchSize]);
+
+  function selectStyle(preset: ImageStylePreset) {
+    setStyleId(preset.id);
+    setModel(preset.default_model);
+    setLoraId(null);
+    setSeed('');
+  }
+
+  function selectAdvancedModel(modelId: string) {
+    setStyleId(styleForModel(simpleStylePresets, modelId));
+    setModel(modelId);
+  }
 
   async function pollJob(jobId: string) {
     for (let i = 0; i < MAX_POLLS; i += 1) {
@@ -130,14 +155,18 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     setArtSource(null);
     setAssetSaved(false);
     try {
-      const seedValue = seed.trim() ? Number(seed.trim()) : null;
-      const batchValue = Number(batchSize);
+      const seedText = seed.trim();
+      const seedValue = seedText ? Number(seedText) : null;
+      const batchValue = batchSize.trim() ? Number(batchSize.trim()) : null;
+      const normalizedBatchSize = batchValue !== null && Number.isFinite(batchValue) ? Math.trunc(batchValue) : null;
+      const normalizedSeed = seedValue !== null && Number.isFinite(seedValue) ? Math.trunc(seedValue) : null;
       const { job_id } = await generateBaseArt({
-        batch_size: Number.isFinite(batchValue) ? Math.trunc(batchValue) : undefined,
+        batch_size:
+          normalizedBatchSize !== null && normalizedBatchSize !== defaultBatchSize ? normalizedBatchSize : undefined,
         lora_id: loraId || undefined,
         model,
         prompt: trimmed,
-        seed: seedValue === null ? null : Number.isFinite(seedValue) ? Math.trunc(seedValue) : null,
+        seed: seedText ? normalizedSeed : undefined,
         size_preset: sizePresetId ?? undefined,
         source: 'text',
       });
@@ -234,65 +263,32 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     <View className="mx-auto w-full max-w-5xl gap-5 px-4 py-6">
       <View className="gap-5 web:grid web:grid-cols-[minmax(0,1fr)_280px]">
         <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
-          <Text className="text-lg font-semibold text-app-text">1. Choose a model</Text>
+          <Text className="text-lg font-semibold text-app-text">1. Choose a style</Text>
           <View className="flex-row flex-wrap gap-2">
             {modelsLoading ? <Text className="text-sm text-app-muted">Loading models…</Text> : null}
             {!modelsLoading && models.length === 0 ? (
               <Text className="text-sm text-app-danger">No models configured.</Text>
             ) : null}
-            {models.map((item) => (
+            {simpleStylePresets.map((preset) => (
               <Pressable
-                key={item.id}
+                key={preset.id}
                 accessibilityRole="button"
                 disabled={isBusy}
-                onPress={() => setModel(item.id)}
+                onPress={() => selectStyle(preset)}
                 className={`rounded-full border px-3 py-2 ${
-                  model === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                  styleId === preset.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
                 }`}
               >
-                <Text className={`text-sm font-semibold ${model === item.id ? 'text-white' : 'text-app-muted'}`}>
-                  {item.label}
+                <Text className={`text-sm font-semibold ${styleId === preset.id ? 'text-white' : 'text-app-muted'}`}>
+                  {preset.label}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          {loraOptions.length > 0 ? (
-            <>
-              <Text className="mt-2 text-lg font-semibold text-app-text">LoRA</Text>
-              <View className="flex-row flex-wrap gap-2">
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={isBusy}
-                  onPress={() => setLoraId(null)}
-                  className={`rounded-full border px-3 py-2 ${
-                    !loraId ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
-                  }`}
-                >
-                  <Text className={`text-sm font-semibold ${!loraId ? 'text-white' : 'text-app-muted'}`}>No LoRA</Text>
-                </Pressable>
-                {loraOptions.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    accessibilityRole="button"
-                    disabled={isBusy}
-                    onPress={() => setLoraId(item.id)}
-                    className={`rounded-full border px-3 py-2 ${
-                      loraId === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
-                    }`}
-                  >
-                    <Text className={`text-sm font-semibold ${loraId === item.id ? 'text-white' : 'text-app-muted'}`}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </>
-          ) : null}
-
           {generationControls ? (
             <>
-              <Text className="mt-2 text-lg font-semibold text-app-text">Image settings</Text>
+              <Text className="mt-2 text-lg font-semibold text-app-text">Image size</Text>
               <View className="flex-row flex-wrap gap-2">
                 {generationControls.sizePresets.map((preset) => (
                   <Pressable
@@ -316,34 +312,108 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                   </Pressable>
                 ))}
               </View>
-              <View className="gap-3 web:flex-row">
-                <View className="web:flex-1">
-                  <Text className="mb-1 text-xs font-semibold text-app-muted">Batch size</Text>
-                  <TextInput
-                    className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
-                    editable={!isBusy}
-                    keyboardType="number-pad"
-                    onChangeText={setBatchSize}
-                    placeholder={`${generationControls.batchSizeDefault}`}
-                    placeholderTextColor="#687076"
-                    value={batchSize}
-                  />
-                </View>
-                <View className="web:flex-1">
-                  <Text className="mb-1 text-xs font-semibold text-app-muted">Seed</Text>
-                  <TextInput
-                    className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
-                    editable={!isBusy}
-                    keyboardType="number-pad"
-                    onChangeText={setSeed}
-                    placeholder="Random"
-                    placeholderTextColor="#687076"
-                    value={seed}
-                  />
-                </View>
-              </View>
             </>
           ) : null}
+
+          <View className="mt-2 gap-3 border-t border-app-line pt-4">
+            <Pressable
+              accessibilityRole="button"
+              disabled={isBusy}
+              onPress={() => setAdvancedOpen((value) => !value)}
+            >
+              <View className="flex-row items-center justify-between gap-3">
+                <Text className="text-sm font-semibold text-app-text">Advanced options</Text>
+                <Text className="text-sm font-semibold text-app-primary">{advancedOpen ? 'Hide' : 'Show'}</Text>
+              </View>
+            </Pressable>
+
+            {advancedOpen ? (
+              <View className="gap-4">
+                <View className="gap-2">
+                  <Text className="text-xs font-semibold text-app-muted">Model and workflow</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {models.map((item) => (
+                      <Pressable
+                        key={item.id}
+                        accessibilityRole="button"
+                        disabled={isBusy}
+                        onPress={() => selectAdvancedModel(item.id)}
+                        className={`rounded-full border px-3 py-2 ${
+                          model === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                        }`}
+                      >
+                        <Text className={`text-sm font-semibold ${model === item.id ? 'text-white' : 'text-app-muted'}`}>
+                          {item.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                {loraOptions.length > 0 ? (
+                  <View className="gap-2">
+                    <Text className="text-xs font-semibold text-app-muted">LoRA</Text>
+                    <View className="flex-row flex-wrap gap-2">
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={isBusy}
+                        onPress={() => setLoraId(null)}
+                        className={`rounded-full border px-3 py-2 ${
+                          !loraId ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                        }`}
+                      >
+                        <Text className={`text-sm font-semibold ${!loraId ? 'text-white' : 'text-app-muted'}`}>No LoRA</Text>
+                      </Pressable>
+                      {loraOptions.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          accessibilityRole="button"
+                          disabled={isBusy}
+                          onPress={() => setLoraId(item.id)}
+                          className={`rounded-full border px-3 py-2 ${
+                            loraId === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                          }`}
+                        >
+                          <Text className={`text-sm font-semibold ${loraId === item.id ? 'text-white' : 'text-app-muted'}`}>
+                            {item.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                {generationControls ? (
+                  <View className="gap-3 web:flex-row">
+                    <View className="web:flex-1">
+                      <Text className="mb-1 text-xs font-semibold text-app-muted">Batch size</Text>
+                      <TextInput
+                        className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
+                        editable={!isBusy}
+                        keyboardType="number-pad"
+                        onChangeText={setBatchSize}
+                        placeholder={`${generationControls.batchSizeDefault}`}
+                        placeholderTextColor="#687076"
+                        value={batchSize}
+                      />
+                    </View>
+                    <View className="web:flex-1">
+                      <Text className="mb-1 text-xs font-semibold text-app-muted">Seed</Text>
+                      <TextInput
+                        className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
+                        editable={!isBusy}
+                        keyboardType="number-pad"
+                        onChangeText={setSeed}
+                        placeholder="Random"
+                        placeholderTextColor="#687076"
+                        value={seed}
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
 
           <Text className="mt-2 text-lg font-semibold text-app-text">2. Describe the portrait</Text>
           <TextInput
@@ -471,6 +541,30 @@ function errorLabel(code: string | null): string {
     default:
       return 'Generation failed. Please try again.';
   }
+}
+
+function fallbackStylePresets(models: ImageModelOption[]): ImageStylePreset[] {
+  return (['realistic', 'anime'] as const).flatMap((style) => {
+    const candidates = models.filter((item) => optionMatchesStyle(item, style));
+    const preferred =
+      candidates.find((item) => item.workflow_key === 'portrait_create' && (item.loras?.length ?? 0) === 0) ??
+      candidates.find((item) => item.workflow_key === 'portrait_create') ??
+      candidates[0];
+    return preferred
+      ? [{ default_model: preferred.id, id: style, label: style === 'realistic' ? 'Realistic' : 'Anime' }]
+      : [];
+  });
+}
+
+function optionMatchesStyle(model: ImageModelOption, style: ImageStylePreset['id']): boolean {
+  return [model.tag, model.label, model.model_id ?? ''].join(' ').toLowerCase().includes(style);
+}
+
+function styleForModel(
+  presets: ImageStylePreset[],
+  modelId: string,
+): ImageStylePreset['id'] | null {
+  return presets.find((preset) => preset.default_model === modelId)?.id ?? null;
 }
 
 function delay(ms: number): Promise<void> {

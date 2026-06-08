@@ -16,14 +16,13 @@ import { normalizeWorkflowKey } from "./workflow-keys";
  * Shape:
  *   {
  *     "portrait_create":   { "mode": "create",    "workflowId", "promptNodeId", "checkpointNodeId" },
- *     "profile_outfit":    { "mode": "variation", "architecture": "none", "workflowId", "promptNodeId", "loadImageNodeId", "loadImageFieldName": "image" },
+ *     "profile_outfit":    { "mode": "variation", "workflowId", "promptNodeId", "loadImageNodeId", "loadImageFieldName": "image" },
  *     "companion_cutout":  { "mode": "cutout",    "workflowId", "loadImageNodeId", "loadImageFieldName" }
  *   }
  */
 export type WorkflowConfig = {
   key: string;
   label?: string;
-  architecture?: string;
   mode: ImageGenMode;
   workflowId: string;
   promptNodeId: string;
@@ -85,7 +84,6 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
     if (!workflowId || (mode !== "cutout" && !promptNodeId)) continue;
     out[workflowKey] = {
       key: workflowKey,
-      architecture: str(entry.architecture) || "sdxl",
       label: str(entry.label) || undefined,
       mode,
       workflowId,

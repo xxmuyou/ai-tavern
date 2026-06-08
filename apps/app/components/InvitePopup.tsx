@@ -13,9 +13,9 @@ type InvitePopupProps = {
 };
 
 /**
- * spec-036: the "invite to go somewhere" picker. Lists the scenes this companion
- * appears in that the user has unlocked. Picking one attaches the invitation to
- * the user's next message; the companion then decides whether to actually go.
+ * spec-036/037: the "invite to go somewhere" picker. Lists active scenes the
+ * user has unlocked. Picking one immediately sends a default invitation; the
+ * companion then decides whether to actually go.
  */
 export function InvitePopup({
   visible,
@@ -34,7 +34,7 @@ export function InvitePopup({
         >
           <Text className="text-lg font-semibold text-app-text">Invite {companionName} somewhere</Text>
           <Text className="mt-1 text-sm text-app-muted">
-            Pick a place, then send your message. They might say yes — or not.
+            Pick a place to send an invitation now. They might say yes — or not.
           </Text>
 
           <View className="mt-4">

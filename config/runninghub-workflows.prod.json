@@ -34,7 +34,6 @@
   "workflows": {
     "portrait_create": {
       "label": "Portrait create",
-      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "",
       "promptNodeId": "",
@@ -47,7 +46,6 @@
     },
     "chat_moment": {
       "label": "Chat moment image",
-      "architecture": "sdxl",
       "mode": "create",
       "workflowId": "",
       "promptNodeId": "",
@@ -59,7 +57,6 @@
     },
     "companion_cutout": {
       "label": "Companion cutout",
-      "architecture": "sdxl",
       "mode": "cutout",
       "workflowId": "",
       "loadImageNodeId": "",
@@ -71,7 +68,6 @@
     },
     "profile_outfit": {
       "label": "Profile outfit image",
-      "architecture": "sdxl",
       "mode": "variation",
       "workflowId": "",
       "loadImageNodeId": "",

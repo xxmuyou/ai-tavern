@@ -976,7 +976,7 @@ D1 连通性诊断（仅 admin / 内部）。
 
 ### 11.7 Companion 底图 / 出图（spec-020 / 022 / 027 / 030 / 031 / 033）
 
-- `GET /image-models` — 可选出图模型（用户侧）。
+- `GET /image-models` — 用户侧出图入口。返回 `style_presets`（普通创建页的 `Realistic` / `Anime` 默认 model）和完整 `models`（Advanced 选择 workflow-model / LoRA）。
 - `POST /companions/base-art/generate` — 生成角色底图。
 - `POST /companions/base-art/prompt-assist` — 出图 prompt 辅助。
 - `GET /companions/base-art/jobs/{id}` — 底图 job 轮询。

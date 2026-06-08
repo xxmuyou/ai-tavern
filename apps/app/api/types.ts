@@ -399,8 +399,15 @@ export type ImageModelOption = {
   workflow_label?: string;
 };
 
+export type ImageStylePreset = {
+  default_model: string;
+  id: 'realistic' | 'anime';
+  label: string;
+};
+
 export type ImageModelsResponse = {
   models: ImageModelOption[];
+  style_presets?: ImageStylePreset[];
 };
 
 export type BaseArtGenerateResponse = {
@@ -1082,7 +1089,6 @@ export type ImageWorkflowLoraBinding = {
 };
 
 export type AdminImageWorkflow = {
-  architecture: string;
   checkpoint_field_name: string;
   checkpoint_node_id: string | null;
   contract_hash: string | null;
@@ -1161,7 +1167,6 @@ export type ImageLoraInput = {
 };
 
 export type ImageWorkflowInput = {
-  architecture?: string;
   checkpoint_field_name: string | null;
   checkpoint_node_id: string | null;
   is_active: boolean;

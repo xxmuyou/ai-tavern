@@ -1,7 +1,12 @@
 import { requireAuthUser } from "../auth";
 import { jsonResponse } from "../http";
 import type { UserRecord } from "../identity";
-import { getImageModelSelection, ImageGenError, listActiveImageModels } from "../image-gen";
+import {
+  getImageModelSelection,
+  ImageGenError,
+  listActiveImageModels,
+  type ImageModelOption,
+} from "../image-gen";
 import {
   buildGenerationParamValues,
   parseWorkflowGenerationParams,
@@ -32,6 +37,7 @@ export async function handleBaseArtRequest(
     await requireAuthUser(env, request);
     const models = await listActiveImageModels(env);
     return jsonResponse({
+      style_presets: buildStylePresets(models),
       models: models.map((m) => ({
         checkpoint_applies: m.checkpoint_applies,
         ckpt_name: m.ckpt_name,
@@ -79,6 +85,31 @@ export async function handleBaseArtRequest(
   }
 
   return null;
+}
+
+type BaseArtStyle = "realistic" | "anime";
+
+function buildStylePresets(
+  models: ImageModelOption[],
+): Array<{ default_model: string; id: BaseArtStyle; label: string }> {
+  const styles: Array<{ id: BaseArtStyle; label: string }> = [
+    { id: "realistic", label: "Realistic" },
+    { id: "anime", label: "Anime" },
+  ];
+
+  return styles.flatMap((style) => {
+    const candidates = models.filter((model) => optionMatchesStyle(model, style.id));
+    const preferred =
+      candidates.find((model) => model.workflow_key === "portrait_create" && model.loras.length === 0) ??
+      candidates.find((model) => model.workflow_key === "portrait_create") ??
+      candidates[0];
+    return preferred ? [{ default_model: preferred.id, id: style.id, label: style.label }] : [];
+  });
+}
+
+function optionMatchesStyle(model: ImageModelOption, style: BaseArtStyle): boolean {
+  const haystack = [model.tag, model.label, model.model_id].join(" ").toLowerCase();
+  return haystack.includes(style);
 }
 
 async function handlePromptAssist(
