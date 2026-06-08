@@ -24,7 +24,9 @@ import {
 } from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type HistoryMessage, type UserPersonaForPrompt } from "./prompt";
-import { checkQuota, checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
+import { checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
+import { commitReservation, releaseReservation } from "../credits";
+import { reserveChatCredits } from "./messages";
 import { createSSEStream, type SSEHandle } from "./sse";
 import { formatDateUtc, recordUsage } from "./usage";
 import { loadMessageRow, parseVariants } from "./variants";
@@ -77,14 +79,18 @@ export async function handleRegenerateMessage(
   }
 
   const subscriber = isAdmin || (await isSubscriberActive(env, user.id, now));
+  // Pure-credits model (spec-021): a regeneration is a new LLM call, charged
+  // like a message. Admins exempt; commit after persist, release on failure.
+  let chatReservationId: string | null = null;
   if (!isAdmin) {
-    const quotaCheck = await checkQuota(env, user.id, now, subscriber);
-    if (!quotaCheck.ok) {
+    const reservation = await reserveChatCredits(env, user.id);
+    if (!reservation.ok) {
       return jsonResponse(
-        { error: "quota_exceeded", message: "Daily message limit reached." },
+        { error: "credits_insufficient", message: "Not enough credits." },
         { status: 402 },
       );
     }
+    chatReservationId = reservation.reservationId;
   }
 
   // Reconstruct the context this reply answered: everything before it, with the
@@ -173,6 +179,9 @@ export async function handleRegenerateMessage(
   try {
     firstResult = await iterator.next();
   } catch (err) {
+    if (chatReservationId) {
+      await releaseReservation(env, chatReservationId, "llm_unavailable");
+    }
     if (err instanceof LLMError) {
       return jsonResponse(
         { code: err.code, error: "llm_unavailable", message: err.message },
@@ -189,6 +198,7 @@ export async function handleRegenerateMessage(
   const sse = createSSEStream();
   ctx.waitUntil(
     runRegenerate({
+      chatReservationId,
       env,
       existingVariants,
       firstResult,
@@ -212,11 +222,12 @@ type RunRegenerateArgs = {
   messageId: string;
   existingVariants: string[];
   subscriber: boolean;
+  chatReservationId: string | null;
   now: number;
 };
 
 async function runRegenerate(args: RunRegenerateArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, messageId, existingVariants, subscriber, now } = args;
+  const { env, sse, iterator, firstResult, user, messageId, existingVariants, subscriber, chatReservationId, now } = args;
 
   let replyBuffer = "";
   let usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
@@ -238,6 +249,9 @@ async function runRegenerate(args: RunRegenerateArgs): Promise<void> {
       if (!result.done) handleChunk(result.value);
     }
   } catch (err) {
+    if (chatReservationId) {
+      await releaseReservation(env, chatReservationId, "llm_stream_failed");
+    }
     const message = err instanceof Error ? err.message : String(err);
     sse.writeEvent("error", { code: "LLM_UNAVAILABLE", message });
     sse.close();
@@ -257,10 +271,18 @@ async function runRegenerate(args: RunRegenerateArgs): Promise<void> {
       .run();
     void incrementQuota(env, user.id, now, subscriber);
   } catch (err) {
+    if (chatReservationId) {
+      await releaseReservation(env, chatReservationId, "persist_failed");
+    }
     const message = err instanceof Error ? err.message : String(err);
     sse.writeEvent("error", { code: "INTERNAL", message });
     sse.close();
     return;
+  }
+
+  // Regeneration persisted — commit the chat credit reservation.
+  if (chatReservationId) {
+    await commitReservation(env, chatReservationId);
   }
 
   sse.writeEvent("done", {

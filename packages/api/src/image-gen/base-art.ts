@@ -11,6 +11,13 @@ import {
   PORTRAIT_CREATE_WORKFLOW_KEY,
   normalizeWorkflowKey,
 } from "./workflow-keys";
+import {
+  CreditsError,
+  TASK_CREDIT_COST,
+  commitReservation,
+  releaseReservation,
+  reserveCredits,
+} from "../credits";
 
 /**
  * Companion base-art draft pipeline (spec-022 portrait_create).
@@ -92,7 +99,37 @@ export type CreateBaseArtJobInput = {
   checkpointFieldName?: string | null;
   loraId?: string | null;
   generationParams?: ImageGenerationParamValues | null;
+  /** Credit reservation id to settle when the job reaches a terminal state (spec-021 §F). */
+  billingRef?: string | null;
 };
+
+/**
+ * Reserves credits for one image generation (spec-021 §F). Returns the
+ * reservation id to store on the job's `billing_ref`; callers surface a 402 when
+ * funds are insufficient and skip job creation. Settlement (commit on success /
+ * release on failure) happens at the job's terminal state in
+ * completeImageJobWithImage / failImageJob, keyed by `billing_ref`.
+ */
+export async function reserveImageGenerationCredits(
+  env: Env,
+  userId: string,
+): Promise<{ ok: true; reservationId: string } | { ok: false }> {
+  try {
+    const reservation = await reserveCredits(env, {
+      amount: TASK_CREDIT_COST.image_generation,
+      referenceId: crypto.randomUUID(),
+      referenceType: "image_job",
+      taskType: "image_generation",
+      userId,
+    });
+    return { ok: true, reservationId: reservation.reservation_id };
+  } catch (err) {
+    if (err instanceof CreditsError && err.code === "credits_insufficient") {
+      return { ok: false };
+    }
+    throw err;
+  }
+}
 
 export async function createBaseArtJob(
   env: Env,
@@ -115,8 +152,8 @@ export async function createBaseArtJob(
     `INSERT INTO image_generation_jobs
        (id, user_id, task, mode, status, workflow_key, prompt, ckpt_name, checkpoint_field_name,
         lora_id, lora_name, lora_model_strength, lora_clip_strength,
-        generation_params_json, input_keys, output_prefix, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        generation_params_json, input_keys, output_prefix, billing_ref, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -134,6 +171,7 @@ export async function createBaseArtJob(
       input.generationParams ? JSON.stringify(input.generationParams) : null,
       inputKeys,
       OUTPUT_PREFIX,
+      input.billingRef ?? null,
       now,
       now,
     )
@@ -268,6 +306,11 @@ export async function failImageJob(
     error_message: errorMessage.slice(0, 1000),
     status: "failed",
   });
+  // Release the credit reservation so the user isn't charged for a failed image.
+  // releaseReservation is idempotent, so duplicate terminal paths are safe.
+  if (job.billing_ref) {
+    await releaseReservation(env, job.billing_ref, errorCode);
+  }
 }
 
 export async function completeImageJobWithImage(
@@ -311,6 +354,12 @@ export async function completeImageJobWithImage(
     provider: input.provider,
     status: "succeeded",
   });
+
+  // Commit the credit reservation now that the image was produced.
+  // commitReservation is idempotent against the same reservation id.
+  if (job.billing_ref) {
+    await commitReservation(env, job.billing_ref);
+  }
 
   return outputKey;
 }

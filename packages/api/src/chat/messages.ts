@@ -40,11 +40,17 @@ import { buildChatPromptArtifacts, type UserPersonaForPrompt } from "./prompt";
 import { resolveThreadPersona } from "../personas";
 import { applyHostilityOverride, assessHostileInput } from "./hostility";
 import {
-  checkQuota,
   checkRateLimit,
   incrementQuota,
   isSubscriberActive,
 } from "./quota";
+import {
+  CreditsError,
+  TASK_CREDIT_COST,
+  commitReservation,
+  releaseReservation,
+  reserveCredits,
+} from "../credits";
 import { extractSignals, type Emotion } from "./signal-extract";
 import { resolveInvite } from "./invite-resolve";
 import { resolveInviteTarget, type InviteTarget } from "../scenes/invite";
@@ -65,6 +71,32 @@ type PostBody = {
 };
 
 type HistoryRow = { role: "user" | "companion"; content: string };
+
+/**
+ * Reserves chat_message credits before an LLM call (spec-021, pure-credits
+ * model). Returns the reservation id to commit after the reply persists, or
+ * { ok: false } when the balance is insufficient (caller returns 402).
+ */
+export async function reserveChatCredits(
+  env: Env,
+  userId: string,
+): Promise<{ ok: true; reservationId: string } | { ok: false }> {
+  try {
+    const reservation = await reserveCredits(env, {
+      amount: TASK_CREDIT_COST.chat_message,
+      referenceId: crypto.randomUUID(),
+      referenceType: "chat_message",
+      taskType: "chat_message",
+      userId,
+    });
+    return { ok: true, reservationId: reservation.reservation_id };
+  } catch (err) {
+    if (err instanceof CreditsError && err.code === "credits_insufficient") {
+      return { ok: false };
+    }
+    throw err;
+  }
+}
 
 export async function handlePostMessage(
   request: Request,
@@ -121,14 +153,19 @@ export async function handlePostMessage(
   }
 
   const subscriber = isAdmin || (await isSubscriberActive(env, user.id, now));
+  // Pure-credits model (spec-021): each message costs chat_message credits;
+  // admins are exempt. Reserve up front so an empty balance is a clean 402
+  // before any LLM call; commit after the reply persists, release on failure.
+  let chatReservationId: string | null = null;
   if (!isAdmin) {
-    const quotaCheck = await checkQuota(env, user.id, now, subscriber);
-    if (!quotaCheck.ok) {
+    const reservation = await reserveChatCredits(env, user.id);
+    if (!reservation.ok) {
       return jsonResponse(
-        { error: "quota_exceeded", message: "Daily message limit reached." },
+        { error: "credits_insufficient", message: "Not enough credits." },
         { status: 402 },
       );
     }
+    chatReservationId = reservation.reservationId;
   }
 
   const scene = sceneIdInput ? await loadSceneForChat(env, sceneIdInput) : null;
@@ -261,6 +298,9 @@ export async function handlePostMessage(
   try {
     firstResult = await iterator.next();
   } catch (err) {
+    if (chatReservationId) {
+      await releaseReservation(env, chatReservationId, "llm_unavailable");
+    }
     return llmFailureResponse(err);
   }
 
@@ -268,6 +308,7 @@ export async function handlePostMessage(
   ctx.waitUntil(
     runChat({
       activity_id: activityIdInput,
+      chatReservationId,
       companionId,
       ctx,
       env,
@@ -311,12 +352,13 @@ type RunChatArgs = {
   userText: string;
   userPersona: UserPersonaForPrompt;
   subscriber: boolean;
+  chatReservationId: string | null;
   now: number;
   ctx: ExecutionContext;
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, now, ctx } =
+  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, chatReservationId, now, ctx } =
     args;
 
   let replyBuffer = "";
@@ -345,6 +387,9 @@ async function runChat(args: RunChatArgs): Promise<void> {
       if (!result.done) handleChunk(result.value);
     }
   } catch (err) {
+    if (chatReservationId) {
+      await releaseReservation(env, chatReservationId, "llm_stream_failed");
+    }
     const message = err instanceof Error ? err.message : String(err);
     sse.writeEvent("error", { code: "LLM_UNAVAILABLE", message });
     sse.close();
@@ -368,10 +413,18 @@ async function runChat(args: RunChatArgs): Promise<void> {
     companionMessageId = persistResult.companionMessageId;
     void incrementQuota(env, user.id, now, subscriber);
   } catch (err) {
+    if (chatReservationId) {
+      await releaseReservation(env, chatReservationId, "persist_failed");
+    }
     const message = err instanceof Error ? err.message : String(err);
     sse.writeEvent("error", { code: "INTERNAL", message });
     sse.close();
     return;
+  }
+
+  // Reply persisted successfully — commit the chat credit reservation.
+  if (chatReservationId) {
+    await commitReservation(env, chatReservationId);
   }
 
   const extract = await extractSignals(env, {

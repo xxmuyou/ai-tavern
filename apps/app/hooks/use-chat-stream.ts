@@ -58,9 +58,9 @@ function categorizeStreamError(rawError: unknown): Error {
   }
   if (status === 402) {
     return new QuotaExceededError(
-      'You have reached your daily message limit.',
+      "You don't have enough credits to send this message.",
       402,
-      'quota_exceeded',
+      'credits_insufficient',
     );
   }
   if (status === 429) {

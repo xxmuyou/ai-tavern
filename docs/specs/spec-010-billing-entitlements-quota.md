@@ -1,6 +1,8 @@
 # spec-010: Stripe Billing + Entitlements + Quota 计量
 
 > **类型：** 新建  |  **依赖：** spec-003, spec-009  |  **估时：** 5-7 天  |  **状态：** 🟢 done
+>
+> ⚠️ **2026-06-08 修订（产品转向纯积分制）**：每日**消息条数配额已下线**，聊天改为按积分扣费（见 [`spec-021`](./spec-021-credits-ledger-and-metering.md)）。本 spec 的订阅 / Stripe / customer 映射 / **自创角色上限 entitlement** 仍然有效——自创角色上限（Free 3 / Pro 不限）是少数保留的订阅 gating；rate-limit 也保留防滥用。下文涉及"每日消息 quota / 软阈值"的部分作为历史保留，已不再生效。
 
 ---
 
@@ -315,11 +317,13 @@ Pro 判定：
 
 配额：
 
-| 资源 | free | pro |
-|---|---:|---:|
-| 用户消息 | 30 / UTC day | unlimited |
-| 自创角色 | 3 active | unlimited |
-| 订阅软阈值 | n/a | 1000 / UTC day，不阻断 |
+| 资源 | free | pro | 现状 |
+|---|---:|---:|---|
+| 用户消息 | ~~30 / UTC day~~ | ~~unlimited~~ | ⚠️ 已下线，改按积分扣费（spec-021） |
+| 自创角色 | 3 active | unlimited | ✅ 仍生效（保留的订阅 gating） |
+| 订阅软阈值 | ~~n/a~~ | ~~1000 / UTC day~~ | ⚠️ 随消息配额一并下线 |
+
+> 下方 KV 消息计数、消息计量时机等内容仅作历史保留；聊天计费现走 spec-021 的 reserve→commit/release。rate-limit（10/分）仍保留防滥用。
 
 KV key：
 

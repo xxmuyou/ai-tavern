@@ -7,8 +7,9 @@ import { loadRelationship } from "../relationships/engine";
 import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
 import { loadStoryBeatForScene } from "../story-beats";
-import { loadBaseArtJob } from "../image-gen/base-art";
+import { loadBaseArtJob, reserveImageGenerationCredits } from "../image-gen/base-art";
 import { pollStaleRunningHubArtJobs } from "../image-gen/runninghub-results";
+import { releaseReservation } from "../credits";
 import {
   buildMomentPrompt,
   createMomentImageJob,
@@ -135,31 +136,50 @@ async function handleGenerate(
       return momentResponse(reconciled);
     }
     const prompt = await composePrompt(env, user, thread, message);
-    const { momentId } = await regenerateMomentImageJob(env, reconciled, prompt);
-    const next = await loadMomentByMessage(env, user.id, messageId);
-    return momentResponse(next ?? { ...reconciled, id: momentId, status: "queued", output_key: null });
+    const reservation = await reserveImageGenerationCredits(env, user.id);
+    if (!reservation.ok) {
+      return jsonResponse({ error: "credits_insufficient" }, { status: 402 });
+    }
+    try {
+      const { momentId } = await regenerateMomentImageJob(env, reconciled, prompt, reservation.reservationId);
+      const next = await loadMomentByMessage(env, user.id, messageId);
+      return momentResponse(next ?? { ...reconciled, id: momentId, status: "queued", output_key: null });
+    } catch (err) {
+      await releaseReservation(env, reservation.reservationId, "create_failed");
+      throw err;
+    }
   }
 
   const storyBeat = message.scene_id
     ? await loadStoryBeatForScene(env, user.id, thread.companion_id, message.scene_id)
     : null;
   const prompt = await composePrompt(env, user, thread, message);
-  const { jobId, momentId } = await createMomentImageJob(env, {
-    activityId: message.activity_id,
-    companionId: thread.companion_id,
-    emotion: message.emotion,
-    messageId,
-    promptSnapshot: prompt,
-    sceneId: message.scene_id,
-    storyBeatId: storyBeat?.status === "active" ? storyBeat.id : null,
-    threadId: thread.id,
-    userId: user.id,
-  });
+  const reservation = await reserveImageGenerationCredits(env, user.id);
+  if (!reservation.ok) {
+    return jsonResponse({ error: "credits_insufficient" }, { status: 402 });
+  }
+  try {
+    const { jobId, momentId } = await createMomentImageJob(env, {
+      activityId: message.activity_id,
+      companionId: thread.companion_id,
+      emotion: message.emotion,
+      messageId,
+      promptSnapshot: prompt,
+      sceneId: message.scene_id,
+      storyBeatId: storyBeat?.status === "active" ? storyBeat.id : null,
+      threadId: thread.id,
+      userId: user.id,
+      billingRef: reservation.reservationId,
+    });
 
-  return jsonResponse(
-    { job_id: jobId, moment_id: momentId, status: "queued" },
-    { status: 202 },
-  );
+    return jsonResponse(
+      { job_id: jobId, moment_id: momentId, status: "queued" },
+      { status: 202 },
+    );
+  } catch (err) {
+    await releaseReservation(env, reservation.reservationId, "create_failed");
+    throw err;
+  }
 }
 
 async function composePrompt(

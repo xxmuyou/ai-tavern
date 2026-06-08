@@ -1,6 +1,6 @@
 import type { BillingTier } from "../billing/types";
 import { grantCredits } from "./ledger";
-import { MONTHLY_GRANT } from "./pricing";
+import { MONTHLY_GRANT, SIGNUP_GRANT } from "./pricing";
 import type { MonthlyGrantDto } from "./types";
 
 /** UTC month key, e.g. "2026-05". */
@@ -32,4 +32,25 @@ export async function ensureMonthlyGrant(
   });
 
   return { amount, granted: true, period, tier };
+}
+
+/**
+ * Idempotently grants the one-time signup bonus on a user's first balance read.
+ * The unique reference (`{userId}:signup`) guarantees it is granted only once,
+ * and never expires (v1). Returns true if this call created the grant.
+ * See spec-021 §E / §关键决策 7.
+ */
+export async function ensureSignupGrant(
+  env: Env,
+  userId: string,
+  now: number = Date.now(),
+): Promise<boolean> {
+  return grantCredits(env, {
+    amount: SIGNUP_GRANT,
+    expiresAt: null,
+    now,
+    referenceId: `${userId}:signup`,
+    referenceType: "signup_grant",
+    userId,
+  });
 }

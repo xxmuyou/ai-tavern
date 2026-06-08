@@ -1,7 +1,35 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { UserRecord } from "../identity";
 import { handlePostMessage } from "./messages";
+
+const { reserveCreditsMock, MockCreditsError } = vi.hoisted(() => {
+  class MockCreditsError extends Error {
+    code: string;
+    status: number;
+    constructor(code: string, status: number) {
+      super(code);
+      this.code = code;
+      this.status = status;
+    }
+  }
+  return { MockCreditsError, reserveCreditsMock: vi.fn() };
+});
+
+// Credits are covered in credits/ledger.test.ts; stub them here so chat-flow
+// tests don't touch a real ledger DB. Default: reserve succeeds.
+vi.mock("../credits", () => ({
+  CreditsError: MockCreditsError,
+  TASK_CREDIT_COST: { admin_prewarm: 0, chat_message: 1, image_generation: 50, signal_extract: 0, summary: 0 },
+  commitReservation: async () => {},
+  releaseReservation: async () => {},
+  reserveCredits: reserveCreditsMock,
+}));
+
+beforeEach(() => {
+  reserveCreditsMock.mockReset();
+  reserveCreditsMock.mockResolvedValue({ available_credits: 1000, reservation_id: "res_1", reserved_credits: 1 });
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -405,9 +433,10 @@ describe("handlePostMessage", () => {
     expect(response.headers.get("retry-after")).toBe("60");
   });
 
-  it("returns 402 when daily quota exceeded", async () => {
+  it("returns 402 when credits are insufficient", async () => {
     pendingSignal(false);
-    const { env } = createEnv({ companion: COMPANION, quotaCount: 30 });
+    reserveCreditsMock.mockRejectedValueOnce(new MockCreditsError("credits_insufficient", 402));
+    const { env } = createEnv({ companion: COMPANION });
     vi.stubGlobal("fetch", buildStreamFetch());
     const response = await handlePostMessage(
       buildPost({ text: "hi" }),

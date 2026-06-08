@@ -38,6 +38,9 @@
 | `llm_logs` | LLM 调用日志（调试 / 计费 / 报警） |
 | `llm_config` | admin 配置：task ↔ provider/model 映射 |
 | `admin_users` | admin 邮箱白名单（继承 `admin@aiappsbox.com` 设计） |
+| `credit_accounts` | 积分余额缓存（available / reserved） |
+| `credit_ledger_entries` | 积分流水不可变账本（发放 / 购买 / 预占 / 结算 / 退款 / 调整） |
+| `image_generation_jobs` | 通用生图任务（未绑定 companion 的生图，如创建前 base-art 草稿） |
 
 ---
 
@@ -462,6 +465,85 @@ CREATE TABLE admin_users (
 ```
 
 **初始数据：** 在第一次 `admin@aiappsbox.com` 注册时 migration 自动插入。
+
+### 3.16 `credit_accounts`
+
+```sql
+CREATE TABLE credit_accounts (
+  user_id              TEXT PRIMARY KEY REFERENCES users(id),
+  available_credits    INTEGER NOT NULL DEFAULT 0,   -- 可用积分
+  reserved_credits     INTEGER NOT NULL DEFAULT 0,   -- 已预占（reserve 未结算）
+  updated_at           INTEGER NOT NULL
+);
+```
+
+当前积分余额缓存（spec-021，migration `0017`）。真相来源是 `credit_ledger_entries`；所有变更通过 ledger helper 的**原子条件 UPDATE**（`... WHERE available_credits >= :n`）+ 同批 ledger 写入完成，禁止业务代码直接写本表。
+
+### 3.17 `credit_ledger_entries`
+
+```sql
+CREATE TABLE credit_ledger_entries (
+  id                   TEXT PRIMARY KEY,
+  user_id              TEXT NOT NULL REFERENCES users(id),
+  type                 TEXT NOT NULL,           -- grant_monthly / purchase / reserve / commit / release / refund / expire / adjustment
+  amount               INTEGER NOT NULL,        -- 有符号：正=增加可用/释放预占，负=减少可用/确认消费
+  balance_after        INTEGER,
+  reserved_after       INTEGER,
+  task_type            TEXT,                    -- chat_message / image_generation / ...
+  reference_type       TEXT,                    -- monthly_grant / signup_grant / stripe_session / reservation / ...
+  reference_id         TEXT,
+  stripe_session_id    TEXT,
+  stripe_payment_id    TEXT,
+  expires_at           INTEGER,                 -- v1 恒为 NULL（赠送不过期，见 spec-021 §关键决策 1）
+  metadata             TEXT,                    -- JSON
+  created_at           INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_credit_ledger_reference
+  ON credit_ledger_entries(type, reference_type, reference_id)
+  WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
+
+CREATE INDEX idx_credit_ledger_user_time ON credit_ledger_entries(user_id, created_at);
+CREATE INDEX idx_credit_ledger_expiry ON credit_ledger_entries(expires_at);
+```
+
+不可变流水账本（spec-021，migration `0017`）。`idx_credit_ledger_reference` 唯一索引保证**幂等**：同一 `(type, reference_type, reference_id)` 重复写入返回已存在条目而非二次入账（月度/注册赠送、Stripe 购买、reserve 都依赖它去重）。reserve→commit/release 模型：`reserve` 把 available 转入 reserved，`commit` 确认扣除，`release`/`refund` 退回 available。
+
+### 3.18 `image_generation_jobs`
+
+```sql
+CREATE TABLE image_generation_jobs (
+  id                    TEXT PRIMARY KEY,
+  user_id               TEXT REFERENCES users(id),
+  task                  TEXT NOT NULL,          -- e.g. companion_base_art
+  mode                  TEXT NOT NULL,          -- text_to_image / image_to_image / edit
+  status                TEXT NOT NULL,          -- pending / processing / succeeded / failed / cancelled
+  style                 TEXT,
+  provider              TEXT,
+  model                 TEXT,
+  prompt                TEXT NOT NULL,
+  negative_prompt       TEXT,
+  input_keys            TEXT,                   -- JSON array of R2 keys/URLs
+  mask_key              TEXT,
+  output_prefix         TEXT NOT NULL,
+  output_key            TEXT,
+  output_content_type   TEXT,
+  provider_task_id      TEXT,
+  error_code            TEXT,
+  error_message         TEXT,
+  retry_count           INTEGER NOT NULL DEFAULT 0,
+  billing_ref           TEXT,                   -- 积分预占引用：记录该 job 的 reserve reservation_id（spec-021 接线用）
+  created_at            INTEGER NOT NULL,
+  updated_at            INTEGER NOT NULL,
+  completed_at          INTEGER
+);
+
+CREATE INDEX idx_image_generation_jobs_user ON image_generation_jobs(user_id, created_at);
+CREATE INDEX idx_image_generation_jobs_task_status ON image_generation_jobs(task, status, updated_at);
+CREATE INDEX idx_image_generation_jobs_provider_task ON image_generation_jobs(provider_task_id);
+```
+
+通用生图任务表（spec-020 §C / spec-022，migration `0018`），承载未绑定 companion 的生图（首个消费者是创建前的 base-art 草稿）。**积分接线**：创建 job 前 `reserveCredits(image_generation=50)`，把返回的 `reservation_id` 写入 `billing_ref`；job 落终态时由统一收敛点按 `billing_ref` 做 commit（succeeded）/ release（failed/cancelled），见 spec-021 §F。
 
 ---
 

@@ -4,6 +4,16 @@ vi.mock("../auth", () => ({
   requireAuthUser: async () => ({ email: "user@example.com", id: "usr_1" }),
 }));
 
+// Credits are exercised in credits/ledger.test.ts; here we stub reserve/commit/
+// release so the moment route's billing wrapper doesn't touch a real ledger DB.
+vi.mock("../credits", () => ({
+  reserveCredits: async () => ({ available_credits: 0, reservation_id: "res_1", reserved_credits: 0 }),
+  commitReservation: async () => {},
+  releaseReservation: async () => {},
+  TASK_CREDIT_COST: { admin_prewarm: 0, chat_message: 1, image_generation: 50, signal_extract: 0, summary: 0 },
+  CreditsError: class CreditsError extends Error {},
+}));
+
 import { handleMomentImageRequest } from "./moment-routes";
 
 type Row = Record<string, unknown>;
@@ -79,8 +89,9 @@ function createEnv(): { env: Env; jobs: Row[]; moments: Row[]; queue: unknown[] 
     }
 
     if (sql.startsWith("INSERT INTO image_generation_jobs")) {
-      const [id, user_id, task, mode_, workflow_key, prompt, output_prefix, created_at, updated_at] =
-        values as [string, string, string, string, string, string, string, number, number];
+      const [id, user_id, task, mode_, workflow_key, prompt, output_prefix, billing_ref, created_at, updated_at] =
+        values as [string, string, string, string, string, string, string, string | null, number, number];
+      void billing_ref;
       jobs.push({
         created_at,
         error_code: null,

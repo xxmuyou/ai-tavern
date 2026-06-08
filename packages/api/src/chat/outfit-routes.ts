@@ -6,7 +6,8 @@ import { computeTimeSlot } from "../life/time-slot";
 import { loadRelationship } from "../relationships/engine";
 import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
-import { loadBaseArtJob } from "../image-gen/base-art";
+import { loadBaseArtJob, reserveImageGenerationCredits } from "../image-gen/base-art";
+import { releaseReservation } from "../credits";
 import {
   buildOutfitPrompt,
   createOutfitImageJob,
@@ -152,36 +153,53 @@ async function handleGenerate(
   const parsed = await parseOutfitPrompt(env, user, loaded.thread, loaded.message, body);
   if (!parsed.ok) return parsed.response;
 
+  const reservation = await reserveImageGenerationCredits(env, user.id);
+  if (!reservation.ok) {
+    return jsonResponse({ error: "credits_insufficient" }, { status: 402 });
+  }
+
   if (existing) {
-    const { jobId, outfitId } = await regenerateOutfitImageJob(env, existing, {
+    try {
+      const { jobId, outfitId } = await regenerateOutfitImageJob(env, existing, {
+        outfitPrompt: parsed.outfitPrompt,
+        promptSnapshot: parsed.promptSnapshot,
+        promptSource: parsed.promptSource,
+        billingRef: reservation.reservationId,
+      });
+      const next = await loadOutfitByMessage(env, user.id, messageId);
+      return outfitResponse(next ?? {
+        ...existing,
+        id: outfitId,
+        job_id: jobId,
+        output_key: null,
+        status: "queued",
+      });
+    } catch (err) {
+      await releaseReservation(env, reservation.reservationId, "create_failed");
+      throw err;
+    }
+  }
+
+  try {
+    const { jobId, outfitId } = await createOutfitImageJob(env, {
+      companionId: loaded.thread.companion_id,
+      messageId,
       outfitPrompt: parsed.outfitPrompt,
       promptSnapshot: parsed.promptSnapshot,
       promptSource: parsed.promptSource,
+      threadId: loaded.thread.id,
+      userId: user.id,
+      billingRef: reservation.reservationId,
     });
-    const next = await loadOutfitByMessage(env, user.id, messageId);
-    return outfitResponse(next ?? {
-      ...existing,
-      id: outfitId,
-      job_id: jobId,
-      output_key: null,
-      status: "queued",
-    });
+
+    return jsonResponse(
+      { job_id: jobId, outfit_id: outfitId, status: "queued" },
+      { status: 202 },
+    );
+  } catch (err) {
+    await releaseReservation(env, reservation.reservationId, "create_failed");
+    throw err;
   }
-
-  const { jobId, outfitId } = await createOutfitImageJob(env, {
-    companionId: loaded.thread.companion_id,
-    messageId,
-    outfitPrompt: parsed.outfitPrompt,
-    promptSnapshot: parsed.promptSnapshot,
-    promptSource: parsed.promptSource,
-    threadId: loaded.thread.id,
-    userId: user.id,
-  });
-
-  return jsonResponse(
-    { job_id: jobId, outfit_id: outfitId, status: "queued" },
-    { status: 202 },
-  );
 }
 
 async function parseOutfitPrompt(

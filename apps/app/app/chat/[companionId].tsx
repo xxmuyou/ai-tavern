@@ -904,13 +904,13 @@ function ChatScreenInner() {
       >
         <View className="flex-1 items-center justify-center bg-black/40 px-6">
           <View className="w-full max-w-sm rounded-2xl bg-app-card p-6">
-            <Text className="text-xl font-semibold text-app-text">Daily limit reached</Text>
+            <Text className="text-xl font-semibold text-app-text">Out of credits</Text>
             <Text className="mt-3 text-sm leading-5 text-app-muted">
-              You have used all of today&apos;s free messages. Upgrade to Pro for unlimited conversations.
+              You don&apos;t have enough credits. Top up or upgrade to Pro to keep chatting.
             </Text>
             <View className="mt-5 gap-2">
               <Button
-                label="Upgrade to Pro"
+                label="Get credits"
                 onPress={() => {
                   setQuotaModalVisible(false);
                   router.push(BILLING_ROUTE);

@@ -880,12 +880,12 @@ export default function WebChatScreen() {
       />
 
       <WebDialog
-        description="You've used today's free messages. Upgrade to Pro to keep the conversation going."
+        description="You don't have enough credits. Top up or upgrade to Pro to keep chatting."
         footer={
           <View className="flex-row items-center justify-end gap-3">
             <WebButton label="Not now" onPress={() => setQuotaModalVisible(false)} variant="ghost" />
             <WebButton
-              label="Upgrade to Pro"
+              label="Get credits"
               onPress={() => {
                 setQuotaModalVisible(false);
                 router.push('/billing');
@@ -897,7 +897,7 @@ export default function WebChatScreen() {
         onClose={() => setQuotaModalVisible(false)}
         open={quotaModalVisible}
         size="sm"
-        title="Daily limit reached"
+        title="Out of credits"
       />
     </WebAppShell>
   );

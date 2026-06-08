@@ -34,7 +34,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       throw new ApiError('Your session has expired. Please sign in again.', 401, 'unauthorized');
     }
     if (status === 402) {
-      throw new QuotaExceededError('You have reached your daily limit.', 402, 'quota_exceeded');
+      throw new QuotaExceededError("You don't have enough credits.", 402, 'credits_insufficient');
     }
     if (status === 429) {
       throw new RateLimitedError(message || 'Too many requests. Please try again later.', retryAfter);

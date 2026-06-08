@@ -69,6 +69,8 @@ export type CreateOutfitImageInput = {
   promptSource: OutfitPromptSource;
   outfitPrompt: string;
   promptSnapshot: string;
+  /** Credit reservation id to settle when the job reaches a terminal state (spec-021 §F). */
+  billingRef?: string | null;
 };
 
 const GENERAL_RECOMMENDATIONS: readonly OutfitRecommendation[] = [
@@ -399,13 +401,14 @@ async function insertImageJob(
   userId: string,
   prompt: string,
   now: number,
+  billingRef: string | null,
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO image_generation_jobs
-       (id, user_id, task, mode, status, workflow_key, prompt, output_prefix, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+       (id, user_id, task, mode, status, workflow_key, prompt, output_prefix, billing_ref, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(jobId, userId, TASK_OUTFIT_IMAGE, MODE_COLUMN, OUTFIT_WORKFLOW_KEY, prompt, OUTPUT_PREFIX, now, now)
+    .bind(jobId, userId, TASK_OUTFIT_IMAGE, MODE_COLUMN, OUTFIT_WORKFLOW_KEY, prompt, OUTPUT_PREFIX, billingRef, now, now)
     .run();
 }
 
@@ -425,7 +428,7 @@ export async function createOutfitImageJob(
   const jobId = crypto.randomUUID();
   const outfitId = crypto.randomUUID();
 
-  await insertImageJob(env, jobId, input.userId, input.promptSnapshot, now);
+  await insertImageJob(env, jobId, input.userId, input.promptSnapshot, now, input.billingRef ?? null);
 
   try {
     await env.DB.prepare(
@@ -470,12 +473,13 @@ export async function regenerateOutfitImageJob(
     outfitPrompt: string;
     promptSnapshot: string;
     promptSource: OutfitPromptSource;
+    billingRef?: string | null;
   },
 ): Promise<{ jobId: string; outfitId: string }> {
   const now = Date.now();
   const jobId = crypto.randomUUID();
 
-  await insertImageJob(env, jobId, outfit.user_id, input.promptSnapshot, now);
+  await insertImageJob(env, jobId, outfit.user_id, input.promptSnapshot, now, input.billingRef ?? null);
   await env.DB.prepare(
     `UPDATE chat_outfit_images
         SET job_id = ?, prompt_source = ?, outfit_prompt = ?, prompt_snapshot = ?,

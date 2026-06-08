@@ -3,7 +3,7 @@ import { isProUser } from "../billing/entitlements";
 import type { BillingTier } from "../billing/types";
 import { jsonResponse, readJson } from "../http";
 import { createCreditsCheckout } from "./checkout";
-import { ensureMonthlyGrant } from "./grants";
+import { ensureMonthlyGrant, ensureSignupGrant } from "./grants";
 import { getCreditBalance, listLedger } from "./ledger";
 import { CreditsError, type CreditLedgerRow, type CreditsEnv } from "./types";
 
@@ -35,6 +35,7 @@ async function handleBalance(request: Request, env: Env): Promise<Response> {
   }
   const user = await requireAuthUser(env, request);
   const tier: BillingTier = (await isProUser(env, user.id)) ? "pro" : "free";
+  await ensureSignupGrant(env, user.id);
   const monthlyGrant = await ensureMonthlyGrant(env, user.id, tier);
   const balance = await getCreditBalance(env, user.id);
 

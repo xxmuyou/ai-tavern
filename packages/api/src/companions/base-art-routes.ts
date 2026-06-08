@@ -17,7 +17,9 @@ import {
   type BaseArtSource,
   createBaseArtJob,
   loadBaseArtJob,
+  reserveImageGenerationCredits,
 } from "../image-gen/base-art";
+import { releaseReservation } from "../credits";
 
 /**
  * spec-022 portrait_create — companion base-art draft, generated BEFORE the
@@ -203,6 +205,13 @@ async function handleGenerate(
     return jsonResponse({ error: "upload_key_required" }, { status: 400 });
   }
 
+  // Reserve image-generation credits before creating the job (spec-021 §F);
+  // insufficient balance returns 402 and no job is created.
+  const reservation = await reserveImageGenerationCredits(env, user.id);
+  if (!reservation.ok) {
+    return jsonResponse({ error: "credits_insufficient" }, { status: 402 });
+  }
+
   let jobId: string;
   try {
     jobId = await createBaseArtJob(env, {
@@ -216,8 +225,10 @@ async function handleGenerate(
       generationParams: parsedParams.value,
       uploadKey: uploadKey || undefined,
       userId: user.id,
+      billingRef: reservation.reservationId,
     });
   } catch (err) {
+    await releaseReservation(env, reservation.reservationId, "create_failed");
     if (err instanceof ImageGenError && err.code === "invalid_model_lora_combination") {
       return jsonResponse({ error: err.code }, { status: 400 });
     }

@@ -170,10 +170,10 @@ describe("credits ledger", () => {
     const now = Date.UTC(2026, 4, 15);
     await ensureMonthlyGrant(env, USER, "free", now);
     await ensureMonthlyGrant(env, USER, "free", now);
-    expect((await getCreditBalance(env, USER)).available_credits).toBe(50);
+    expect((await getCreditBalance(env, USER)).available_credits).toBe(1000);
 
     await ensureMonthlyGrant(env, USER, "pro", now); // upgrade same month grants pro on top
-    expect((await getCreditBalance(env, USER)).available_credits).toBe(1050);
+    expect((await getCreditBalance(env, USER)).available_credits).toBe(31000);
   });
 
   it("purchase credits idempotently by stripe session", async () => {
