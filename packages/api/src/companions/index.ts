@@ -247,7 +247,7 @@ export async function handleCompanionsRequest(
     return getDailyState(env, user, companionId, includeFlavor);
   }
 
-  const storyMatch = pathname.match(/^\/companions\/([^/]+)(\/story-(?:arcs|beats).*)$/);
+  const storyMatch = pathname.match(/^\/companions\/([^/]+)(\/story-(?:arcs|beats|moment|choices).*)$/);
   if (storyMatch) {
     const companionId = decodeURIComponent(storyMatch[1] ?? "");
     const suffix = storyMatch[2] ?? "";

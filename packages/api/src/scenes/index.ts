@@ -11,7 +11,7 @@ import { pickOpener } from "../events/openers";
 import type { EventResponseItem } from "../events/types";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
-import { loadStoryBeatForScene, type StoryBeatPublic } from "../story-beats";
+import { buildStoryMoment, loadStoryBeatForScene, type StoryBeatPublic, type StoryMomentPublic } from "../story-beats";
 import { evaluateUnlock } from "./unlock";
 
 type SceneRow = {
@@ -76,6 +76,7 @@ type EnterSceneResponse = {
     name: string;
     opener: string;
     art_url: string | null;
+    story_moment: StoryMomentPublic | null;
   }>;
   event: EventResponseItem | null;
 };
@@ -186,6 +187,9 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
         id,
         name,
         opener: activeStoryBeat?.status === "active" ? activeStoryBeat.opener : fallbackOpener,
+        story_moment: activeStoryBeat?.status === "active"
+          ? await buildStoryMoment(env, user.id, id, row.id)
+          : null,
       };
     }),
   );

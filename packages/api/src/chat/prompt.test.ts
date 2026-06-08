@@ -37,6 +37,8 @@ describe("buildChatPrompt", () => {
     expect(system).toContain("Maya");
     expect(system).toContain("friend");
     expect(system).toContain("Pier Coffee Shop");
+    expect(system).toContain("currently physically at Pier Coffee Shop");
+    expect(system).toContain("Ground your reply in this place");
     expect(system).toContain("rainy afternoon");
     expect(system).toContain("You trust them.");
     expect(system).toContain("Stay strictly in character");
@@ -234,6 +236,29 @@ describe("buildChatPrompt", () => {
     const guardIndex = artifacts.messages.findIndex((message) => message.content.includes("Final guard before replying"));
     expect(guardIndex).toBe(2);
     expect(artifacts.messages.at(-1)).toEqual({ content: "你还记得吗？", role: "user" });
+  });
+
+  it("treats quick actions as visible conversation gestures", () => {
+    const messages = buildChatPrompt({
+      companion,
+      narrative: "Friend.",
+      quickAction: {
+        description: "The user sent flowers to you.",
+        item_id: "flowers",
+        label: "Send flowers",
+      },
+      recentMessages: [],
+      scene,
+      secretToReveal: null,
+      stage: "trusted",
+      threadSummary: null,
+      userText: "<narration>I offer you a small bouquet.</narration>These are for you.",
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("# A concrete gesture just now");
+    expect(system).toContain("The user's visible message is the primary source of truth");
+    expect(system).toContain("The user sent flowers to you.");
   });
 
   it("keeps required identity and output format segments when budget trims history", () => {

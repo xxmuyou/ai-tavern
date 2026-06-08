@@ -10,6 +10,7 @@ import { ZERO_DIMENSIONS } from "../relationships/level";
 import { loadRelationship } from "../relationships/engine";
 import { deriveStage } from "../relationships/stage";
 import { STAGE_RANK } from "../relationships/unlocks";
+import { evaluateUnlock } from "../scenes/unlock";
 
 export type StoryBeatStatus = "active" | "waiting_stage" | "completed";
 export type StoryArcSourceType = "official_seed" | "template" | "user_written" | "ai_assisted";
@@ -29,6 +30,43 @@ export type StoryBeatPublic = {
   completion_mode?: StoryBeatCompletionMode;
   is_user_editable?: boolean;
   source_type?: StoryArcSourceType;
+};
+
+export type StoryTransitionMode = "stay" | "offstage" | "scene";
+
+export type StorySceneTargetPublic = {
+  id: string;
+  name: string;
+  mood: string;
+  art_url: string | null;
+};
+
+export type StoryChoicePublic = {
+  id: string;
+  label: string;
+  intent: string;
+  user_narration: string;
+  result_narration: string;
+  scene_hint: string | null;
+  target_scene_id: string | null;
+  transition_mode: StoryTransitionMode;
+  completes_beat: boolean;
+};
+
+export type StoryMomentPublic = {
+  beat_id: string;
+  title: string;
+  arrival_narration: string;
+  objective: string;
+  choices: StoryChoicePublic[];
+};
+
+export type StoryChoiceResolveResponse = {
+  result_narration: string;
+  transition_mode: StoryTransitionMode;
+  target_scene: StorySceneTargetPublic | null;
+  completed_beat: StoryBeatPublic | null;
+  unlocks: unknown[];
 };
 
 export type StoryArcPublic = {
@@ -122,6 +160,16 @@ type StoryTemplateRow = {
   relationship_role: string | null;
   description: string;
   beat_blueprint: string;
+};
+
+type StorySceneRow = {
+  id: string;
+  name: string;
+  mood: string;
+  tags: string | null;
+  art_url: string | null;
+  unlock_condition: string | null;
+  display_order: number;
 };
 
 const TEXT_MAX = 220;
@@ -225,6 +273,267 @@ export async function markStoryBeatComplete(
   return toPublicBeat(beat, "completed");
 }
 
+export async function buildStoryMoment(
+  env: Env,
+  userId: string,
+  companionId: string,
+  sceneId: string | null,
+): Promise<StoryMomentPublic | null> {
+  const beat = await loadStoryBeatForScene(env, userId, companionId, sceneId);
+  if (!beat || beat.status !== "active") {
+    return null;
+  }
+  const scene = sceneId ? await loadStorySceneById(env, sceneId) : null;
+  if (!scene) {
+    return null;
+  }
+  const unlockedScenes = await loadUnlockedStoryScenes(env, userId);
+  return buildMomentFromBeat(beat, scene, unlockedScenes);
+}
+
+async function resolveStoryChoice(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+  choiceId: string,
+  body: unknown,
+): Promise<Response> {
+  const companion = await loadCompanionStoryContext(env, companionId);
+  if (!companion || !canReadCompanion(companion, user)) return notFound();
+  const sceneId = readBodyString(body, "scene_id");
+  if (!sceneId) {
+    return jsonResponse({ error: "invalid_request", field: "scene_id" }, { status: 400 });
+  }
+
+  const moment = await buildStoryMoment(env, user.id, companionId, sceneId);
+  if (!moment) {
+    return jsonResponse({ error: "story_moment_unavailable" }, { status: 404 });
+  }
+  const choice = moment.choices.find((item) => item.id === choiceId);
+  if (!choice) {
+    return jsonResponse({ error: "story_choice_unavailable" }, { status: 404 });
+  }
+
+  const targetScene = choice.target_scene_id
+    ? await loadStorySceneTarget(env, choice.target_scene_id)
+    : null;
+  const completedBeat = choice.completes_beat
+    ? await markStoryBeatComplete(env, user.id, companionId, moment.beat_id, Date.now())
+    : null;
+
+  const response: StoryChoiceResolveResponse = {
+    completed_beat: completedBeat,
+    result_narration: choice.result_narration,
+    target_scene: choice.transition_mode === "scene" ? targetScene : null,
+    transition_mode: choice.transition_mode,
+    unlocks: [],
+  };
+  return jsonResponse(response);
+}
+
+function buildMomentFromBeat(
+  beat: StoryBeatPublic,
+  scene: StorySceneRow,
+  unlockedScenes: StorySceneRow[],
+): StoryMomentPublic {
+  const travel = buildTravelChoice(beat, scene, unlockedScenes);
+  return {
+    arrival_narration: toNarration(beat.opener),
+    beat_id: beat.id,
+    choices: [
+      {
+        completes_beat: false,
+        id: `${beat.id}:stay`,
+        intent: "stay_listen",
+        label: "Stay and listen",
+        result_narration: `<narration>The moment stays grounded in ${scene.name}, close enough to keep talking.</narration>`,
+        scene_hint: null,
+        target_scene_id: null,
+        transition_mode: "stay",
+        user_narration: `<narration>I stay with you in ${scene.name}, giving the moment room.</narration>Tell me what you need.`,
+      },
+      {
+        completes_beat: true,
+        id: `${beat.id}:share`,
+        intent: "share_moment",
+        label: "Share this moment",
+        result_narration: `<narration>The moment settles between you in ${scene.name}, clear enough to become part of your story.</narration>`,
+        scene_hint: null,
+        target_scene_id: null,
+        transition_mode: "stay",
+        user_narration: `<narration>I step into the moment with you instead of letting it pass.</narration>I'm here.`,
+      },
+      travel,
+    ],
+    objective: beat.objective,
+    title: beat.title,
+  };
+}
+
+function buildTravelChoice(
+  beat: StoryBeatPublic,
+  scene: StorySceneRow,
+  unlockedScenes: StorySceneRow[],
+): StoryChoicePublic {
+  const intent = inferTravelIntent(beat);
+  const sceneHint = sceneHintForIntent(intent);
+  const target = sceneHint ? matchStoryScene(sceneHint, intent, scene.id, unlockedScenes) : null;
+  if (target) {
+    return {
+      completes_beat: true,
+      id: `${beat.id}:go`,
+      intent,
+      label: "Go together",
+      result_narration: `<narration>You leave ${scene.name} together, the moment carrying you toward ${target.name}.</narration>`,
+      scene_hint: sceneHint,
+      target_scene_id: target.id,
+      transition_mode: "scene",
+      user_narration: "<narration>I offer to go with you instead of leaving this as words.</narration>Let's do this together.",
+    };
+  }
+  return {
+    completes_beat: true,
+    id: `${beat.id}:go`,
+    intent,
+    label: "Go together",
+    result_narration: `<narration>You step away from ${scene.name} together long enough for the moment to reach its quiet end.</narration>`,
+    scene_hint: sceneHint,
+    target_scene_id: null,
+    transition_mode: "offstage",
+    user_narration: "<narration>I offer to go with you instead of leaving this as words.</narration>Let's do this together.",
+  };
+}
+
+function inferTravelIntent(beat: StoryBeatPublic): string {
+  const text = `${beat.title} ${beat.opener} ${beat.objective}`.toLowerCase();
+  if (/\b(home|apartment|door|building)\b/.test(text)) return "walk_home";
+  if (/\b(coffee|cafe|café)\b/.test(text)) return "go_for_coffee";
+  if (/\b(outside|street|walk|park|riverside|river|rain)\b/.test(text)) return "walk_outside";
+  return "step_away";
+}
+
+function sceneHintForIntent(intent: string): string | null {
+  switch (intent) {
+    case "walk_home":
+      return "apartment door home night street residential";
+    case "go_for_coffee":
+      return "cafe coffee shop";
+    case "walk_outside":
+    case "step_away":
+      return "street park riverside outside";
+    default:
+      return null;
+  }
+}
+
+function matchStoryScene(
+  sceneHint: string,
+  intent: string,
+  currentSceneId: string,
+  scenes: StorySceneRow[],
+): StorySceneRow | null {
+  const hintTokens = tokenize(sceneHint);
+  const preferredIds = preferredSceneIdsForIntent(intent);
+  let best: { scene: StorySceneRow; score: number } | null = null;
+  for (const scene of scenes) {
+    if (scene.id === currentSceneId) continue;
+    const sceneText = `${scene.id} ${scene.name} ${scene.mood} ${parseJsonStringArray(scene.tags).join(" ")}`;
+    const sceneTokens = tokenize(sceneText);
+    let score = 0;
+    if (preferredIds.some((id) => normalizeKey(scene.id).includes(normalizeKey(id)))) score += 10;
+    if (preferredIds.some((id) => normalizeKey(scene.name).includes(normalizeKey(id)))) score += 8;
+    for (const token of hintTokens) {
+      if (sceneTokens.has(token)) score += 2;
+    }
+    if (score <= 0) continue;
+    if (!best || score > best.score || (score === best.score && scene.display_order < best.scene.display_order)) {
+      best = { scene, score };
+    }
+  }
+  return best?.scene ?? null;
+}
+
+function preferredSceneIdsForIntent(intent: string): string[] {
+  switch (intent) {
+    case "walk_home":
+      return ["apartment_door", "night_street", "residential_street", "home"];
+    case "go_for_coffee":
+      return ["cafe", "coffee_shop", "pier_coffee_shop"];
+    case "walk_outside":
+    case "step_away":
+      return ["street", "park", "riverside", "night_street"];
+    default:
+      return [];
+  }
+}
+
+async function loadStorySceneById(env: Env, sceneId: string): Promise<StorySceneRow | null> {
+  return await env.DB.prepare(
+    `SELECT id, name, mood, tags, art_url, unlock_condition, display_order
+     FROM scenes
+     WHERE id = ? AND is_active = 1`,
+  )
+    .bind(sceneId)
+    .first<StorySceneRow>();
+}
+
+async function loadStorySceneTarget(env: Env, sceneId: string): Promise<StorySceneTargetPublic | null> {
+  const scene = await loadStorySceneById(env, sceneId);
+  return scene ? { art_url: scene.art_url, id: scene.id, mood: scene.mood, name: scene.name } : null;
+}
+
+async function loadUnlockedStoryScenes(env: Env, userId: string): Promise<StorySceneRow[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, name, mood, tags, art_url, unlock_condition, display_order
+     FROM scenes
+     WHERE is_active = 1
+     ORDER BY display_order ASC, id ASC`,
+  ).all<StorySceneRow>();
+  const out: StorySceneRow[] = [];
+  for (const scene of results ?? []) {
+    const { unlocked } = await evaluateUnlock(env, userId, scene.unlock_condition);
+    if (unlocked) out.push(scene);
+  }
+  return out;
+}
+
+function readBodyString(body: unknown, key: string): string | null {
+  if (!body || typeof body !== "object") return null;
+  const value = (body as Record<string, unknown>)[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function toNarration(text: string): string {
+  if (text.includes("<narration>")) return text;
+  return `<narration>${text}</narration>`;
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[_-]/g, " ")
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 3),
+  );
+}
+
+function normalizeKey(value: string): string {
+  return value.toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function parseJsonStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function reopenStoryBeat(
   env: Env,
   userId: string,
@@ -305,6 +614,31 @@ export async function handleCompanionStoryRequest(
     }
     const body = await request.json().catch(() => null);
     return assistStoryArcDraft(env, user, companionId, body);
+  }
+
+  if (suffix === "/story-moment") {
+    if (request.method !== "GET") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const companion = await loadCompanionStoryContext(env, companionId);
+    if (!companion || !canReadCompanion(companion, user)) return notFound();
+    const url = new URL(request.url);
+    const sceneId = url.searchParams.get("scene_id");
+    const moment = sceneId ? await buildStoryMoment(env, user.id, companionId, sceneId) : null;
+    return jsonResponse({ story_moment: moment });
+  }
+
+  const choiceMatch = suffix.match(/^\/story-choices\/([^/]+)\/resolve$/);
+  if (choiceMatch) {
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
+    }
+    const choiceId = decodeURIComponent(choiceMatch[1] ?? "");
+    if (!choiceId) {
+      return jsonResponse({ error: "invalid_choice_id" }, { status: 400 });
+    }
+    const body = await request.json().catch(() => null);
+    return resolveStoryChoice(env, user, companionId, choiceId, body);
   }
 
   const beatMatch = suffix.match(/^\/story-beats\/([^/]+)$/);

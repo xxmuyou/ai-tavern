@@ -289,6 +289,11 @@ describe("scenes module", () => {
       companions_present: Array<{
         active_story_beat: { id: string; objective: string; status: string; title: string } | null;
         opener: string;
+        story_moment: {
+          beat_id: string;
+          choices: Array<{ id: string; transition_mode: string }>;
+          objective: string;
+        } | null;
       }>;
     };
 
@@ -299,6 +304,11 @@ describe("scenes module", () => {
       status: "active",
       title: "The Unfinished Sketch",
     });
+    expect(body.companions_present[0]?.story_moment).toMatchObject({
+      beat_id: "maya-b1",
+      objective: "Ask about the sketch without pushing.",
+    });
+    expect(body.companions_present[0]?.story_moment?.choices.map((choice) => choice.id)).toContain("maya-b1:stay");
   });
 });
 

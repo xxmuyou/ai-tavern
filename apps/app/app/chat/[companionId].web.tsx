@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { getCompanion, getInviteTargets, getScenes, mediaSource } from '@/api/companion-client';
+import { getCompanion, getInviteTargets, getScenes, getStoryMoment, mediaSource, resolveStoryChoice } from '@/api/companion-client';
 import type {
   ChatInviteResult,
   ChatMessage,
@@ -24,6 +24,8 @@ import type {
   InviteTarget,
   RelationshipDimensions,
   Scene,
+  StoryChoice,
+  StoryMoment,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
@@ -33,6 +35,7 @@ import { InvitePopup } from '@/components/InvitePopup';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
+import { StoryActionBar } from '@/components/StoryActionBar';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { WebAppShell } from '@/components/web/WebAppShell';
@@ -52,6 +55,7 @@ import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
 import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
+import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
 
 const STREAMING_ID = '__streaming__';
 
@@ -65,10 +69,6 @@ type ChatListItem = ChatMessage | StreamingItem;
 
 function isStreamingItem(item: ChatListItem): item is StreamingItem {
   return (item as StreamingItem).__streaming === true;
-}
-
-function inviteTextForTarget(target: InviteTarget): string {
-  return `Want to go to ${target.name} with me?`;
 }
 
 export default function WebChatScreen() {
@@ -120,9 +120,10 @@ export default function WebChatScreen() {
   const [invitePickerVisible, setInvitePickerVisible] = useState(false);
   const [inviteTargets, setInviteTargets] = useState<InviteTarget[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [pendingInvite, setPendingInvite] = useState<InviteTarget | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
+  const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
+  const [isResolvingStory, setIsResolvingStory] = useState(false);
   const threadScrollRef = useRef<ScrollView>(null);
   const shouldAutoScrollRef = useRef(true);
   const didInitialScrollRef = useRef(false);
@@ -130,6 +131,24 @@ export default function WebChatScreen() {
   useEffect(() => {
     void refreshActivity();
   }, [refreshActivity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!sceneId) {
+      setStoryMoment(null);
+      return;
+    }
+    getStoryMoment(companionId, sceneId)
+      .then((payload) => {
+        if (!cancelled) setStoryMoment(payload.story_moment);
+      })
+      .catch(() => {
+        if (!cancelled) setStoryMoment(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companionId, sceneId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -273,7 +292,6 @@ export default function WebChatScreen() {
   const sendInviteToTarget = useCallback(async (target: InviteTarget) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
     const text = inviteTextForTarget(target);
-    setPendingInvite(null);
     shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
@@ -284,6 +302,7 @@ export default function WebChatScreen() {
     });
 
     let serverMessageId = '';
+    let acceptedSceneId: string | null = null;
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
@@ -294,6 +313,7 @@ export default function WebChatScreen() {
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onInviteResult: (invite) => {
+          acceptedSceneId = invite.accepted ? invite.scene_id : null;
           handleInviteResult(invite, target);
         },
         onSignals: (signals) => {
@@ -317,6 +337,17 @@ export default function WebChatScreen() {
       });
       shouldAutoScrollRef.current = true;
       await history.refresh({ silent: true });
+      if (acceptedSceneId) {
+        history.appendMessage({
+          companion_id: companionId,
+          content: sceneTransitionText(target.name),
+          created_at: new Date().toISOString(),
+          id: `local-scene-transition-${Date.now()}`,
+          role: 'companion',
+          scene_id: acceptedSceneId,
+        });
+        shouldAutoScrollRef.current = true;
+      }
       scrollThreadToEnd(false);
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -358,18 +389,13 @@ export default function WebChatScreen() {
 
     let serverMessageId = '';
     try {
-      const invitedTarget = pendingInvite;
       const result = await stream.send(text, {
         activityId: activeActivityId,
-        inviteSceneId: invitedTarget?.id,
         personaId: activePersonaId ?? undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
-        onInviteResult: (invite) => {
-          handleInviteResult(invite, invitedTarget);
-        },
         onSignals: (signals) => {
           setLastSignals(signals);
           setSignalToken((token) => token + 1);
@@ -380,8 +406,6 @@ export default function WebChatScreen() {
         },
         sceneId,
       });
-      // The invitation only applies to this turn; clear it once sent.
-      setPendingInvite(null);
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -413,11 +437,11 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
 
-  const sendQuickAction = useCallback(async (itemId: 'coffee' | 'flowers') => {
+  const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
-    const text = itemId === 'coffee' ? 'I ordered coffee for us.' : 'I sent you flowers.';
+    const text = quickActionTextForItem(itemId);
     shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
@@ -482,6 +506,59 @@ export default function WebChatScreen() {
       }
     }
   }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, showInviteNotice, stream]);
+
+  const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
+    if (!sceneId || stream.isStreaming || isResolvingStory) return;
+    setIsResolvingStory(true);
+    shouldAutoScrollRef.current = true;
+    history.appendMessage({
+      companion_id: companionId,
+      content: choice.user_narration,
+      created_at: new Date().toISOString(),
+      id: `local-story-user-${Date.now()}`,
+      role: 'user',
+      scene_id: sceneId,
+    });
+    try {
+      const result = await resolveStoryChoice(companionId, choice.id, {
+        activity_id: activeActivityId ?? null,
+        scene_id: sceneId,
+      });
+      history.appendMessage({
+        companion_id: companionId,
+        content: result.result_narration,
+        created_at: new Date().toISOString(),
+        id: `local-story-result-${Date.now()}`,
+        role: 'companion',
+        scene_id: sceneId,
+      });
+      if (result.transition_mode === 'scene' && result.target_scene) {
+        setSceneId(result.target_scene.id);
+        setSceneArt(result.target_scene.art_url);
+        setSceneName(result.target_scene.name);
+        history.appendMessage({
+          companion_id: companionId,
+          content: sceneTransitionText(result.target_scene.name),
+          created_at: new Date().toISOString(),
+          id: `local-story-transition-${Date.now()}`,
+          role: 'companion',
+          scene_id: result.target_scene.id,
+        });
+      }
+      if (result.unlocks.length > 0) {
+        setLastUnlocks(result.unlocks);
+        setUnlockToken((token) => token + 1);
+      }
+      setStoryMoment(null);
+      shouldAutoScrollRef.current = true;
+      scrollThreadToEnd(false);
+      void relationship.refresh();
+    } catch (error) {
+      pushError(error instanceof Error ? error.message : 'Story moment could not be resolved.');
+    } finally {
+      setIsResolvingStory(false);
+    }
+  }, [activeActivityId, companionId, history, isResolvingStory, pushError, relationship, sceneId, scrollThreadToEnd, stream.isStreaming]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -663,12 +740,19 @@ export default function WebChatScreen() {
               ) : null}
             </View>
           ) : null}
-          {inviteNotice ? (
-            <View className="border-b border-white/5 bg-rose/15 px-5 py-2">
-              <Text className="text-center text-caption font-semibold text-rose-soft">{inviteNotice}</Text>
-            </View>
-          ) : null}
-          <ActivityContextBanner
+            {inviteNotice ? (
+              <View className="border-b border-white/5 bg-rose/15 px-5 py-2">
+                <Text className="text-center text-caption font-semibold text-rose-soft">{inviteNotice}</Text>
+              </View>
+            ) : null}
+            <StoryActionBar
+              disabled={stream.isStreaming || isResolvingStory}
+              moment={storyMoment}
+              onSelect={(choice) => {
+                void handleStoryChoice(choice);
+              }}
+            />
+            <ActivityContextBanner
             activity={activity}
             isMutating={activityActions.isMutating}
             onCancel={handleCancelActivity}
@@ -680,7 +764,7 @@ export default function WebChatScreen() {
             token={unlockToken}
             onInviteScene={(unlock) => {
               if (!unlock.scene_id) return;
-              setPendingInvite({
+              void sendInviteToTarget({
                 art_url: null,
                 id: unlock.scene_id,
                 mood: '',
@@ -773,24 +857,6 @@ export default function WebChatScreen() {
 
           {/* Composer */}
           <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
-            {pendingInvite ? (
-              <View className="mb-3 flex-row items-center justify-between rounded-2xl border border-rose/30 bg-rose/10 px-3 py-2">
-                <View className="flex-1 flex-row items-center gap-2">
-                  <Ionicons color="#F6C6D6" name="navigate" size={14} />
-                  <Text numberOfLines={1} className="flex-1 text-caption font-semibold text-rose-soft">
-                    {`Inviting to ${pendingInvite.name} — send your message`}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel invitation"
-                  onPress={() => setPendingInvite(null)}
-                  className="ml-2 h-6 w-6 items-center justify-center rounded-full bg-white/10"
-                >
-                  <Ionicons color="rgba(255,255,255,0.7)" name="close" size={13} />
-                </Pressable>
-              </View>
-            ) : null}
             <View className="mb-3 flex-row flex-wrap gap-2">
               {canOrderCoffee ? (
                 <QuickActionButton
@@ -813,7 +879,6 @@ export default function WebChatScreen() {
                 icon="navigate-outline"
                 label="Invite somewhere"
                 onPress={() => void openInvitePicker()}
-                selected={Boolean(pendingInvite)}
               />
             </View>
             <View className="flex-row items-end gap-3">
@@ -822,7 +887,7 @@ export default function WebChatScreen() {
                   multiline
                   onChangeText={setDraft}
                   onKeyPress={handleKeyPress}
-                  placeholder={pendingInvite ? `Invite ${companion?.name ?? 'them'} to ${pendingInvite.name}...` : 'Write a message...'}
+                  placeholder="Write a message..."
                   placeholderTextColor="rgba(255,255,255,0.40)"
                   value={draft}
                   className="max-h-32 min-h-10 flex-1 py-1 text-body text-white"

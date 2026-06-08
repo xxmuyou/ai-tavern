@@ -549,6 +549,47 @@ export type StoryBeat = {
   title: string;
 };
 
+export type StoryTransitionMode = 'stay' | 'offstage' | 'scene';
+
+export type StorySceneTarget = {
+  art_url: string | null;
+  id: string;
+  mood: string;
+  name: string;
+};
+
+export type StoryChoice = {
+  id: string;
+  label: string;
+  intent: string;
+  user_narration: string;
+  result_narration: string;
+  scene_hint: string | null;
+  target_scene_id: string | null;
+  transition_mode: StoryTransitionMode;
+  completes_beat: boolean;
+};
+
+export type StoryMoment = {
+  beat_id: string;
+  title: string;
+  arrival_narration: string;
+  objective: string;
+  choices: StoryChoice[];
+};
+
+export type StoryMomentResponse = {
+  story_moment: StoryMoment | null;
+};
+
+export type StoryChoiceResolveResponse = {
+  completed_beat: StoryBeat | null;
+  result_narration: string;
+  target_scene: StorySceneTarget | null;
+  transition_mode: StoryTransitionMode;
+  unlocks: ChatUnlock[];
+};
+
 export type StoryBeatDraft = {
   objective: string;
   opener: string;
@@ -627,6 +668,7 @@ export type SceneCompanionPresent = {
   id: string;
   name: string;
   opener: string;
+  story_moment?: StoryMoment | null;
 };
 
 export type SceneEnterResponse = {

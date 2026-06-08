@@ -440,11 +440,12 @@ function buildCurrentScene(input: ChatPromptInput): string {
   const lines: string[] = [];
   if (scene) {
     lines.push("# Current Scene");
-    lines.push(`Location: ${scene.name}`);
+    lines.push(`You are currently physically at ${scene.name}. Treat this as the real place where this turn is happening.`);
     lines.push(`Mood: ${scene.mood}`);
     if (scene.tags.length > 0) {
       lines.push(`Tags: ${scene.tags.join(", ")}`);
     }
+    lines.push("Ground your reply in this place with at least one light <narration> detail from the location or mood. Do not ignore the scene unless the user is explicitly speaking from outside it.");
   }
 
   if (activity) {
@@ -483,7 +484,7 @@ function buildQuickAction(input: ChatPromptInput): string {
   return [
     "# A concrete gesture just now",
     quickAction.description,
-    "Acknowledge the gesture naturally in your reply. Let it affect the emotional texture of the moment, but do not mention points, metadata, systems, or rewards.",
+    "The user's visible message is the primary source of truth for how this gesture happened. Acknowledge it naturally in your reply. Let it affect the emotional texture of the moment, but do not mention points, metadata, systems, or rewards.",
   ].join("\n");
 }
 
@@ -498,6 +499,9 @@ function buildStoryBeat(input: ChatPromptInput): string {
     lines.push(`Current objective: ${storyBeat.objective}`);
     lines.push(
       "Let this beat color the scene. You may bring it up, dodge around it, or invite the user into it, but do not force the user's choice or narrate their actions.",
+    );
+    lines.push(
+      "Do not claim that you and the user have already moved to another location, arrived somewhere else, or completed a physical transition. If the beat needs movement, propose it or react to the user's choice; the system will handle scene changes.",
     );
   }
   return lines.join("\n");

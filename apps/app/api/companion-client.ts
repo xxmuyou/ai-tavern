@@ -74,6 +74,8 @@ import type {
   StoryArcTemplatesResponse,
   StoryBeatResponse,
   StoryBeatUpdateInput,
+  StoryChoiceResolveResponse,
+  StoryMomentResponse,
   TodayResponse,
   UserImageAsset,
   UserImageAssetCreateInput,
@@ -487,8 +489,29 @@ export async function enterScene(sceneId: string): Promise<SceneEnterResponse> {
   });
 }
 
-// spec-036: scenes this companion appears in that the user has unlocked, for the
-// in-chat "invite to go somewhere" popup. `fromSceneId` excludes the current scene.
+export async function getStoryMoment(companionId: string, sceneId: string): Promise<StoryMomentResponse> {
+  return requestJson<StoryMomentResponse>(
+    `/companions/${encodeURIComponent(companionId)}/story-moment?scene_id=${encodeURIComponent(sceneId)}`,
+  );
+}
+
+export async function resolveStoryChoice(
+  companionId: string,
+  choiceId: string,
+  input: { activity_id?: string | null; scene_id: string },
+): Promise<StoryChoiceResolveResponse> {
+  return requestJson<StoryChoiceResolveResponse>(
+    `/companions/${encodeURIComponent(companionId)}/story-choices/${encodeURIComponent(choiceId)}/resolve`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+// spec-036/037: active scenes the user has unlocked, for the in-chat "invite to
+// go somewhere" popup. `fromSceneId` excludes the current scene.
 export async function getInviteTargets(
   companionId: string,
   fromSceneId?: string | null,

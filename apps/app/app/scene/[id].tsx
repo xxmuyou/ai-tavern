@@ -1,15 +1,17 @@
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, ScrollView, Text, View } from 'react-native';
 
-import { mediaSource } from '@/api/companion-client';
+import { mediaSource, resolveStoryChoice } from '@/api/companion-client';
+import type { StoryChoice, StoryChoiceResolveResponse } from '@/api/types';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { EventPopup } from '@/components/EventPopup';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { SceneCompanionCard } from '@/components/SceneCompanionCard';
 import { SceneDailyCompanion } from '@/components/SceneDailyCompanion';
+import { StoryMomentPopup } from '@/components/StoryMomentPopup';
 import { TopBar } from '@/components/TopBar';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -23,6 +25,9 @@ export default function SceneDetailScreen() {
   const { pushError } = useErrorBanner();
   const { data, error, isLoading, refetch } = useSceneEntry(sceneId);
   const pendingEvents = usePendingEvents(data?.event ?? null);
+  const [storyResult, setStoryResult] = useState<StoryChoiceResolveResponse | null>(null);
+  const [isResolvingStory, setIsResolvingStory] = useState(false);
+  const [storyClosed, setStoryClosed] = useState(false);
 
   useEffect(() => {
     const status = (error as Error & { status?: number } | null)?.status;
@@ -31,6 +36,11 @@ export default function SceneDetailScreen() {
       router.replace(SCENES_ROUTE);
     }
   }, [error, pushError, router]);
+
+  useEffect(() => {
+    setStoryClosed(false);
+    setStoryResult(null);
+  }, [sceneId]);
 
   if (isLoading) {
     return <LoadingScreen label="Entering scene..." />;
@@ -53,6 +63,31 @@ export default function SceneDetailScreen() {
   const scene = data.scene;
   const imageSource = mediaSource(scene.art_url);
   const companions = data.companions_present;
+  const storyCompanion = companions.find((companion) => companion.story_moment) ?? null;
+  const storyMoment = storyCompanion?.story_moment ?? null;
+  const storyVisible = Boolean(storyMoment) && !storyClosed && !pendingEvents.visible;
+
+  async function handleStoryChoice(choice: StoryChoice) {
+    if (!storyCompanion) return;
+    setIsResolvingStory(true);
+    try {
+      const result = await resolveStoryChoice(storyCompanion.id, choice.id, { scene_id: scene.id });
+      setStoryResult(result);
+    } catch (err) {
+      pushError(err instanceof Error ? err.message : 'Story moment could not be resolved.');
+    } finally {
+      setIsResolvingStory(false);
+    }
+  }
+
+  function closeStoryMoment() {
+    const target = storyResult?.transition_mode === 'scene' ? storyResult.target_scene : null;
+    setStoryClosed(true);
+    setStoryResult(null);
+    if (target) {
+      router.replace(`/scene/${encodeURIComponent(target.id)}` as Href);
+    }
+  }
 
   function openChat(companionId: string) {
     const params = new URLSearchParams({ sceneId: scene.id });
@@ -158,6 +193,17 @@ export default function SceneDetailScreen() {
           void pendingEvents.resolve(event, optionId).catch((err) => {
             pushError(err instanceof Error ? err.message : 'Event could not be resolved.');
           });
+        }}
+      />
+      <StoryMomentPopup
+        isResolving={isResolvingStory}
+        moment={storyMoment}
+        result={storyResult}
+        sceneName={scene.name}
+        visible={storyVisible}
+        onClose={closeStoryMoment}
+        onResolve={(choice) => {
+          void handleStoryChoice(choice);
         }}
       />
     </View>

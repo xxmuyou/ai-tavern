@@ -14,7 +14,7 @@
 - `chat/messages.ts`：`PostBody` 加 `invite_scene_id`；activity chat 允许邀约，接受后自动 complete activity；解析+校验目标 → 注入 prompt → runChat 末尾跑 `resolveInvite` 并写 SSE `invite_result`（accepted 才带 scene_id/scene_art_url）。越界邀约的扣分由本轮既有 `extractSignals` 链路自然产生。
 - 前端：`api/types.ts`（`InviteTarget`/`InviteTargetsResponse`/`ChatInviteResult`/`ChatMessageInput.invite_scene_id`）、`companion-client.ts`（`getInviteTargets`）、`hooks/use-chat-stream.ts`（`inviteSceneId` 入参 + `onInviteResult` + 解析 `invite_result`）。
 - `components/InvitePopup.tsx`（新，两端共用）：目的地选择浮窗。
-- `app/chat/[companionId].tsx` / `.web.tsx`：`sceneId`/`sceneArt` 提升为 state；组合器旁"邀请前往"按钮 → 浮窗 → 选中后立即发送默认邀约 `Want to go to {sceneName} with me?` 并带 `invite_scene_id`；`onInviteResult` 接受则切 `sceneId`+背景并提示，拒绝仅提示不切。web 在会话区顶部加场景横幅（预设图 + 地名）作为可见的换场景呈现。
+- `app/chat/[companionId].tsx` / `.web.tsx`：`sceneId`/`sceneArt` 提升为 state；组合器旁"邀请前往"按钮 → 浮窗 → 选中后立即发送可见邀约动作 `<narration>I glance toward the way out, then back at you.</narration>Would you come with me to {sceneName}?` 并带 `invite_scene_id`；`onInviteResult` 接受则切 `sceneId`+背景、追加本地抵达 narration，拒绝仅提示不切。web 在会话区顶部加场景横幅（预设图 + 地名）作为可见的换场景呈现。
 
 验证：`@xtbit/api` 510 测试全绿（含 6 个新 invite 用例：目的地过滤 / 锁定场景排除 / resolveInviteTarget 各分支）；两端 `tsc --noEmit` 通过、`expo lint` 仅既有无关 warning。端到端（同意切场景 / 拒绝不切 / 越界扣分 / 锁定亲密场景不出现在列表）待 dev 人工跑。
 
@@ -28,7 +28,7 @@
 ### 2026-06-08 行为修正
 
 - spec-037 已覆盖早期“必须在 `default_companions` 中出现”的目的地规则；当前实现列出所有 active 且已解锁 scenes，并排除当前 scene。
-- 修复前端选择地点后只设置 `pendingInvite`、不发送消息的问题：现在选择地点会立即发送默认邀约，并携带 `invite_scene_id`，AI 本轮即可感知邀请。
+- 修复前端选择地点后只设置 `pendingInvite`、不发送消息的问题：现在选择地点会立即发送可见邀约动作，并携带 `invite_scene_id`，AI 本轮即可感知邀请。
 
 ---
 
@@ -113,7 +113,7 @@
 ### 4. 前端：场景提升为 state + 邀约入口 + 浮窗（两端）
 - `chat/[companionId].tsx` 与 `.web.tsx`：把 `sceneId` / `sceneArt` 从路由参数**提升为 state**（路由值作初值）。
 - 新增"邀请前往"入口（组合器附近的小按钮/图标）：点击 → `getInviteTargets(companionId, currentSceneId)` → 浮窗（Modal）列目的地（名称 + mood + 缩略图）。
-- 选中并确认 → 立即发送默认邀约 `Want to go to {sceneName} with me?`，本轮 `stream.send(text, { ..., inviteSceneId })`。
+- 选中并确认 → 立即发送可见邀约动作 `<narration>I glance toward the way out, then back at you.</narration>Would you come with me to {sceneName}?`，本轮 `stream.send(text, { ..., inviteSceneId })`。
 - `use-chat-stream.ts`：新增入参 `inviteSceneId` 与回调 `onInviteResult`；解析 SSE `invite_result` 事件。
 - 收到 `accepted === true` → 更新 state：`sceneId = scene_id`、`sceneArt = scene_art_url`（PortraitBar 背景随之切换），后续轮次自动带新 `scene_id`。
 - `accepted === false` → 不切，仅展示角色回复；可附一行轻提示（复用 `SignalFeedback` 同款 chip："她没有答应"），不打断会话。

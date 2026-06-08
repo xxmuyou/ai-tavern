@@ -116,7 +116,7 @@ switch response is emitted.
 
 ```jsonc
 {
-  "text": "I ordered coffee for us.",
+  "text": "<narration>I set a coffee down near you.</narration>I got this for us.",
   "activity_id": "act_xxx", // optional
   "invite_scene_id": "moon_bar", // optional
   "quick_action": { "type": "gift", "item_id": "coffee" } // optional

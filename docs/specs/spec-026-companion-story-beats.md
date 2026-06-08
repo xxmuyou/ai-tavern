@@ -21,6 +21,7 @@
 - [`spec-027: Chat Moment Images`](./spec-027-chat-moment-images.md) 是本框架的后续视觉奖励层：story beat 负责“当前 companion 正在推进什么剧情目标”，Chat Moment Image 负责把某一轮有场景上下文的聊天捕捉成图片记忆。
 - spec-026 不直接实现生图按钮、prompt snapshot 或图片 job；只保证 scene/chat 能提供足够稳定的 companion、scene、activity、stage、story beat 上下文，供 spec-027 后续复用。
 - [`spec-028: 剧情引导与行动按钮重构`](./spec-028-guided-story-actions-ui.md) 消费本 spec 的 active beat，把“下一步做什么”呈现在 Today / Scene / Chat。
+- `spec-028` 的 2026-06-08 addendum 进一步修正本 spec 早期“prompt 注入 + 自动完成”的割裂体验：剧情推进必须落到可见 scene event / story action，而不是只让 AI 在一句回复里完成物理转场。
 - [`spec-029: User-created Story Arcs`](./spec-029-user-created-story-arcs.md) 承接自建角色剧情包、用户轻量编辑、AI 辅助草稿和手动完成。它修正本 spec 早期切片里“自创角色可无 beat”的产品假设。
 
 ## 目标 / 非目标

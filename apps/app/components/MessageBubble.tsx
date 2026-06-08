@@ -9,23 +9,42 @@ type MessageBubbleProps = {
 
 export function MessageBubble({ content, role }: MessageBubbleProps) {
   const isUser = role === 'user';
-
-  if (isUser) {
-    return (
-      <View className="w-full flex-row justify-end px-4 py-1.5">
-        <View className="max-w-[80%] rounded-2xl rounded-tr-md bg-app-primary px-4 py-2.5">
-          <Text selectable className="text-base leading-6 text-white">
-            {content}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   const segments = parseNarration(content);
 
   if (segments.length === 0) {
     return null;
+  }
+
+  if (isUser) {
+    return (
+      <View className="w-full flex-row justify-end px-4 py-1.5">
+        <View className="max-w-[80%] items-end">
+          {segments.map((segment, idx) => {
+            if (segment.type === 'narration') {
+              return (
+                <Text
+                  key={idx}
+                  selectable
+                  className="mb-1 px-1 text-right text-sm italic leading-5 text-app-muted"
+                >
+                  {segment.text}
+                </Text>
+              );
+            }
+            return (
+              <View
+                key={idx}
+                className="mb-1 rounded-2xl rounded-tr-md bg-app-primary px-4 py-2.5"
+              >
+                <Text selectable className="text-base leading-6 text-white">
+                  {segment.text}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
   }
 
   return (

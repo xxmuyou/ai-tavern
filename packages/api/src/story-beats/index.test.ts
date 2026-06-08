@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildStoryMoment,
   completeCurrentStoryBeat,
   loadStoryBeatForScene,
   markStoryBeatComplete,
@@ -32,6 +33,17 @@ type RelationshipFixture = {
   trust?: number;
   romance?: number;
   friendship?: number;
+};
+
+type SceneFixture = {
+  id: string;
+  name: string;
+  mood: string;
+  tags?: string | null;
+  art_url?: string | null;
+  unlock_condition?: string | null;
+  display_order?: number;
+  is_active?: number;
 };
 
 describe("story beats", () => {
@@ -132,6 +144,59 @@ describe("story beats", () => {
     expect(completed).toMatchObject({ id: "b1", status: "completed" });
     expect(reopened).toMatchObject({ id: "b1", status: "active" });
   });
+
+  it("builds a story moment with a checked scene transition when a target scene exists", async () => {
+    const env = createEnv({
+      beats: [
+        beat({
+          id: "b1",
+          objective: "Walk Maya home without making it too heavy.",
+          opener: "Maya lingers near the cafe door.",
+          scene_id: "cafe",
+        }),
+      ],
+      relationships: [{ companion_id: "maya", user_id: "u1" }],
+      scenes: [
+        scene({ id: "cafe", name: "Cafe", tags: '["cafe"]' }),
+        scene({ id: "night_street", name: "Night Street", tags: '["street"]' }),
+      ],
+    });
+
+    const moment = await buildStoryMoment(env, "u1", "maya", "cafe");
+    const travel = moment?.choices.find((choice) => choice.id === "b1:go");
+
+    expect(moment).toMatchObject({
+      beat_id: "b1",
+      title: "Beat",
+    });
+    expect(travel).toMatchObject({
+      target_scene_id: "night_street",
+      transition_mode: "scene",
+    });
+  });
+
+  it("downgrades travel choices to offstage when no preset scene matches", async () => {
+    const env = createEnv({
+      beats: [
+        beat({
+          id: "b1",
+          objective: "Walk Maya home without making it too heavy.",
+          opener: "Maya lingers near the cafe door.",
+          scene_id: "cafe",
+        }),
+      ],
+      relationships: [{ companion_id: "maya", user_id: "u1" }],
+      scenes: [scene({ id: "cafe", name: "Cafe", tags: '["cafe"]' })],
+    });
+
+    const moment = await buildStoryMoment(env, "u1", "maya", "cafe");
+    const travel = moment?.choices.find((choice) => choice.id === "b1:go");
+
+    expect(travel).toMatchObject({
+      target_scene_id: null,
+      transition_mode: "offstage",
+    });
+  });
 });
 
 function beat(partial: Partial<BeatFixture>): BeatFixture {
@@ -155,9 +220,24 @@ function beat(partial: Partial<BeatFixture>): BeatFixture {
   };
 }
 
+function scene(partial: Partial<SceneFixture>): SceneFixture {
+  return {
+    art_url: null,
+    display_order: 1,
+    id: "cafe",
+    is_active: 1,
+    mood: "Calm",
+    name: "Cafe",
+    tags: null,
+    unlock_condition: null,
+    ...partial,
+  };
+}
+
 function createEnv(input: {
   beats: BeatFixture[];
   relationships: RelationshipFixture[];
+  scenes?: SceneFixture[];
 }): Env {
   const completed = new Set<string>();
 
@@ -174,9 +254,21 @@ function createEnv(input: {
                   .sort((a, b) => a.beat_order - b.beat_order || a.id.localeCompare(b.id)) as T[],
               };
             }
+            if (sql.includes("FROM scenes")) {
+              return {
+                results: (input.scenes ?? [])
+                  .filter((item) => (item.is_active ?? 1) === 1)
+                  .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.id.localeCompare(b.id)) as T[],
+              };
+            }
             return { results: [] as T[] };
           },
           async first<T>() {
+            if (sql.includes("FROM scenes") && sql.includes("WHERE id = ?")) {
+              return ((input.scenes ?? []).find(
+                (item) => item.id === values[0] && (item.is_active ?? 1) === 1,
+              ) ?? null) as T | null;
+            }
             if (sql.includes("FROM companion_story_beats")) {
               const [beatId, companionId] = values;
               return (input.beats.find(

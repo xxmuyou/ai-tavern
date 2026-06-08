@@ -15,7 +15,7 @@ import {
   type TextInputKeyPressEventData,
 } from 'react-native';
 
-import { clearChatHistory, getCompanion, getInviteTargets, getScenes } from '@/api/companion-client';
+import { clearChatHistory, getCompanion, getInviteTargets, getScenes, getStoryMoment, resolveStoryChoice } from '@/api/companion-client';
 import type {
   ChatEmotionKey,
   ChatInviteResult,
@@ -25,6 +25,8 @@ import type {
   InviteTarget,
   RelationshipDimensions,
   Scene,
+  StoryChoice,
+  StoryMoment,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { AuthGuard } from '@/components/AuthGuard';
@@ -39,6 +41,7 @@ import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { PortraitBar } from '@/components/PortraitBar';
 import { SignalFeedback } from '@/components/SignalFeedback';
+import { StoryActionBar } from '@/components/StoryActionBar';
 import { StreamingBubble } from '@/components/StreamingBubble';
 import { TopBar } from '@/components/TopBar';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
@@ -57,6 +60,7 @@ import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
 import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
+import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
 
 const BILLING_ROUTE = '/billing' as Href;
 const STREAMING_ID = '__streaming__';
@@ -77,10 +81,6 @@ type ChatListItem = ChatMessage | StreamingItem;
 
 function isStreamingItem(item: ChatListItem): item is StreamingItem {
   return (item as StreamingItem).__streaming === true;
-}
-
-function inviteTextForTarget(target: InviteTarget): string {
-  return `Want to go to ${target.name} with me?`;
 }
 
 export default function ChatScreen() {
@@ -124,9 +124,10 @@ function ChatScreenInner() {
   const [invitePickerVisible, setInvitePickerVisible] = useState(false);
   const [inviteTargets, setInviteTargets] = useState<InviteTarget[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [pendingInvite, setPendingInvite] = useState<InviteTarget | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
+  const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
+  const [isResolvingStory, setIsResolvingStory] = useState(false);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
   const shouldScrollOnNextRef = useRef(true);
@@ -157,6 +158,24 @@ function ChatScreenInner() {
   useEffect(() => {
     void refreshActivity();
   }, [refreshActivity]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!sceneId) {
+      setStoryMoment(null);
+      return;
+    }
+    getStoryMoment(companionId, sceneId)
+      .then((payload) => {
+        if (!cancelled) setStoryMoment(payload.story_moment);
+      })
+      .catch(() => {
+        if (!cancelled) setStoryMoment(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companionId, sceneId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -295,7 +314,6 @@ function ChatScreenInner() {
       return;
     }
     const text = inviteTextForTarget(target);
-    setPendingInvite(null);
     const userMessage: ChatMessage = {
       companion_id: companionId,
       content: text,
@@ -307,6 +325,7 @@ function ChatScreenInner() {
     shouldScrollOnNextRef.current = true;
 
     let serverMessageId = '';
+    let acceptedSceneId: string | null = null;
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
@@ -319,6 +338,7 @@ function ChatScreenInner() {
           setCurrentEmotion(emotion);
         },
         onInviteResult: (invite) => {
+          acceptedSceneId = invite.accepted ? invite.scene_id : null;
           handleInviteResult(invite, target);
         },
         onSignals: (signals) => {
@@ -341,6 +361,16 @@ function ChatScreenInner() {
         scene_id: sceneId ?? null,
       };
       history.appendMessage(finalMessage);
+      if (acceptedSceneId) {
+        history.appendMessage({
+          companion_id: companionId,
+          content: sceneTransitionText(target.name),
+          created_at: new Date().toISOString(),
+          id: `local-scene-transition-${Date.now()}`,
+          role: 'companion',
+          scene_id: acceptedSceneId,
+        });
+      }
       shouldScrollOnNextRef.current = true;
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -395,19 +425,14 @@ function ChatScreenInner() {
 
     let serverMessageId = '';
     try {
-      const invitedTarget = pendingInvite;
       const result = await stream.send(text, {
         activityId: activeActivityId,
-        inviteSceneId: invitedTarget?.id,
         personaId: activePersonaId ?? undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
-        },
-        onInviteResult: (invite) => {
-          handleInviteResult(invite, invitedTarget);
         },
         onSignals: (signals) => {
           setLastSignals(signals);
@@ -419,8 +444,6 @@ function ChatScreenInner() {
         },
         sceneId,
       });
-      // The invitation only applies to this turn; clear it once sent.
-      setPendingInvite(null);
       const finalMessage: ChatMessage = {
         companion_id: companionId,
         content: result.text,
@@ -452,11 +475,11 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, handleInviteResult, history, messageActions, pendingInvite, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
-  const sendQuickAction = useCallback(async (itemId: 'coffee' | 'flowers') => {
+  const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
-    const text = itemId === 'coffee' ? 'I ordered coffee for us.' : 'I sent you flowers.';
+    const text = quickActionTextForItem(itemId);
     const userMessage: ChatMessage = {
       companion_id: companionId,
       content: text,
@@ -511,6 +534,57 @@ function ChatScreenInner() {
       }
     }
   }, [activeActivityId, activePersonaId, companionId, history, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+
+  const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
+    if (!sceneId || stream.isStreaming || isResolvingStory) return;
+    setIsResolvingStory(true);
+    history.appendMessage({
+      companion_id: companionId,
+      content: choice.user_narration,
+      created_at: new Date().toISOString(),
+      id: `local-story-user-${Date.now()}`,
+      role: 'user',
+      scene_id: sceneId,
+    });
+    shouldScrollOnNextRef.current = true;
+    try {
+      const result = await resolveStoryChoice(companionId, choice.id, {
+        activity_id: activeActivityId ?? null,
+        scene_id: sceneId,
+      });
+      history.appendMessage({
+        companion_id: companionId,
+        content: result.result_narration,
+        created_at: new Date().toISOString(),
+        id: `local-story-result-${Date.now()}`,
+        role: 'companion',
+        scene_id: sceneId,
+      });
+      if (result.transition_mode === 'scene' && result.target_scene) {
+        setSceneId(result.target_scene.id);
+        setSceneArt(result.target_scene.art_url);
+        history.appendMessage({
+          companion_id: companionId,
+          content: sceneTransitionText(result.target_scene.name),
+          created_at: new Date().toISOString(),
+          id: `local-story-transition-${Date.now()}`,
+          role: 'companion',
+          scene_id: result.target_scene.id,
+        });
+      }
+      if (result.unlocks.length > 0) {
+        setLastUnlocks(result.unlocks);
+        setUnlockToken((token) => token + 1);
+      }
+      setStoryMoment(null);
+      shouldScrollOnNextRef.current = true;
+      void relationship.refresh();
+    } catch (error) {
+      pushError(error instanceof Error ? error.message : 'Story moment could not be resolved.');
+    } finally {
+      setIsResolvingStory(false);
+    }
+  }, [activeActivityId, companionId, history, isResolvingStory, pushError, relationship, sceneId, stream.isStreaming]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -711,7 +785,7 @@ function ChatScreenInner() {
         token={unlockToken}
         onInviteScene={(unlock) => {
           if (!unlock.scene_id) return;
-          setPendingInvite({
+          void sendInviteToTarget({
             art_url: null,
             id: unlock.scene_id,
             mood: '',
@@ -793,24 +867,13 @@ function ChatScreenInner() {
           </View>
         ) : null}
 
-        {pendingInvite ? (
-          <View className="flex-row items-center justify-between border-t border-app-line bg-app-bg px-4 py-2">
-            <View className="flex-1 flex-row items-center gap-2">
-              <Ionicons color="#6E59C7" name="navigate-outline" size={16} />
-              <Text numberOfLines={1} className="flex-1 text-sm text-app-text">
-                {`Inviting to ${pendingInvite.name} — send your message`}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityLabel="Cancel invitation"
-              accessibilityRole="button"
-              onPress={() => setPendingInvite(null)}
-              className="ml-2 h-7 w-7 items-center justify-center rounded-full"
-            >
-              <Ionicons color="#687076" name="close" size={16} />
-            </Pressable>
-          </View>
-        ) : null}
+        <StoryActionBar
+          disabled={stream.isStreaming || isResolvingStory}
+          moment={storyMoment}
+          onSelect={(choice) => {
+            void handleStoryChoice(choice);
+          }}
+        />
 
         <View className="border-t border-app-line bg-app-card px-3 py-3">
           <View className="mb-2 flex-row flex-wrap gap-2">
@@ -834,7 +897,6 @@ function ChatScreenInner() {
               disabled={stream.isStreaming}
               icon="navigate-outline"
               label="Invite somewhere"
-              selected={Boolean(pendingInvite)}
               onPress={() => void openInvitePicker()}
             />
           </View>
@@ -844,7 +906,7 @@ function ChatScreenInner() {
               multiline
               onChangeText={setDraft}
               onKeyPress={handleKeyPress}
-              placeholder={pendingInvite ? `Invite ${companion.name} to ${pendingInvite.name}...` : 'Type your message...'}
+              placeholder="Type your message..."
               placeholderTextColor="#687076"
               value={draft}
               className="max-h-32 min-h-11 flex-1 rounded-2xl border border-app-line bg-app-bg px-4 py-2 text-base text-app-text"

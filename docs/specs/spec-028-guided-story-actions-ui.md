@@ -2,6 +2,8 @@
 
 > **类型：** 前端体验/UI 重构 | **依赖：** spec-024/025/026 | **估时：** 2-3 天 | **状态：** 🟡 in-progress
 
+> **2026-06-08 addendum：** 当前实现把 story beat 主要作为 prompt 目标，并可能在普通 chat turn 后自动完成，用户缺少“剧情在场景中发生”的体感。本 addendum 扩展 spec-028 的范围：引入 scene-driven story moment，把剧情推进落到可见事件、选择、narration 和受校验的 scene transition。下面新增内容覆盖本 spec 早期“后端 API 不改 / 不重写推进规则”的非目标，仅限本 addendum 范围。
+
 ---
 
 ## Context
@@ -102,3 +104,181 @@
 
 - Helper 和 UI 组件均为前端本地改动；若出现问题，可恢复旧 `ActivityButtons` 与 Scene Web 的双区域布局。
 - API 新字段没有新增，旧客户端兼容性不受影响。
+
+---
+
+## 2026-06-08 Addendum：Scene-driven Story Moments
+
+### 背景
+
+当前产品在剧情推进上有明显割裂：AI 可能在聊天里说“我送她回家了 / 我们去了某处”，但前端没有 scene transition、没有可见事件、没有玩家选择，用户不知道自己究竟在哪里。现有 `active_story_beat` 只把 `opener/objective` 注入 prompt，并在 chat/event 后 best-effort 完成；这更像“聊天目标”，不像游戏里的“场景剧情”。
+
+本 addendum 的目标是把 story beat 变成可玩的 scene moment：
+
+- 进入场景或打开聊天时，active beat 能自动呈现为一个可见剧情事件。
+- 玩家通过按钮选择动作，系统插入 narration、写进度/记忆/关系，并在合法时切换 scene。
+- AI 可以写剧情意图和 `scene_hint`，但最终 `scene_id` 必须由系统从预设 scene 表中匹配和校验。
+
+### 产品规则
+
+1. **只有预设 scene 才能成为可持续聊天地点。**
+   - 如果 choice 解析出合法且已解锁的 `target_scene_id`，点击后可以切换 scene，后续聊天带新 `scene_id`。
+   - 如果没有匹配 scene，不能假装进入不存在的地点。
+
+2. **没有目标 scene 时只能 stay 或 offstage。**
+   - `stay`：动作发生在当前 scene，例如 `Offer to walk her home`、`Ask if she wants company`。
+   - `offstage`：剧情可以一次性发生并完成，例如 `<narration>You walk her home through the quiet street...</narration>`，但不进入新聊天地点。
+
+3. **AI 不能直接落地结构化 ID。**
+   - AI/AI-assisted arc 只能生成 `intent`、`scene_hint`、按钮文案和 narration。
+   - 系统根据 `scene_hint` 匹配 active/unlocked scenes，填充最终 `target_scene_id` 和 `transition_mode`。
+   - AI 写出的疑似 scene id 只能当 hint，不能直接信任。
+
+4. **AI 不能私自完成物理剧情推进。**
+   - Chat prompt 要禁止 companion 自己宣称“我们已经到了 / 我已经送你回家了 / 我们换到某处了”。
+   - AI 可以提出、接受、拒绝或情绪化回应行动；真正的移动和完成由 story action / event resolve 承载。
+
+### 数据与接口计划
+
+扩展 story beat 的可玩内容，优先作为后端派生字段返回，后续再决定是否落 DB 字段：
+
+```ts
+type StoryMoment = {
+  beat_id: string;
+  title: string;
+  arrival_narration: string;
+  objective: string;
+  choices: StoryChoice[];
+};
+
+type StoryChoice = {
+  id: string;
+  label: string;
+  intent: string;
+  user_narration: string;
+  result_narration: string;
+  scene_hint: string | null;
+  target_scene_id: string | null; // 系统解析后填；AI 不可直接落地
+  transition_mode: "stay" | "offstage" | "scene";
+  completes_beat: boolean;
+};
+```
+
+API 增量：
+
+- `POST /scenes/{id}/enter`
+  - 在 `companions_present[].active_story_beat` 旁返回可选 `story_moment`。
+  - 当 active beat 与当前 scene 匹配且 stage 已满足时生成。
+- `GET /chat/{companionId}/story-moment?scene_id=...`
+  - 聊天页刷新/进入时读取当前可触发 moment，避免只依赖 scene enter。
+- `POST /companions/{companionId}/story-choices/{choiceId}/resolve`
+  - 请求带当前 `scene_id`、可选 `activity_id`。
+  - 后端重新校验 beat 是否 active、choice 是否属于该 beat、target scene 是否 active/unlocked。
+  - 返回 `{ result_narration, transition_mode, target_scene, completed_beat, unlocks }`。
+
+兼容策略：
+
+- 不删除现有 `active_story_beat` 字段；旧客户端继续只看到目标/CTA。
+- v1 可先从 `opener/objective` 派生 2-3 个通用 choices；AI-assisted/user-written arc 后续可保存更精细 choices。
+- 若无法解析或目标 scene 不合法，choice 自动降级为 `stay` 或 `offstage`，不报错、不切 scene。
+
+### Scene 匹配规则
+
+系统匹配 `scene_hint` 时按保守顺序：
+
+1. exact id/name match（忽略大小写和空格/短横线差异）。
+2. scene tags / mood 包含 hint 关键词。
+3. intent 白名单映射，例如：
+   - `walk_home` → 优先 `apartment_door` / `night_street` / `residential_street`
+   - `go_for_coffee` → `cafe` / `coffee_shop`
+   - `walk_outside` → `park` / `street` / `riverside`
+4. 多个候选时选 display_order 最小且 unlocked 的 scene。
+5. 无候选或未解锁时不切 scene，降级为：
+   - `stay`，如果 choice 是询问/提出行动。
+   - `offstage`，如果 choice 是一次性完成行动。
+
+### 前端体验计划
+
+- **Scene enter：** 如果返回 `story_moment`，优先显示 `EventPopup` 风格的剧情弹窗。
+  - 顶部显示当前 scene 名和 beat title。
+  - 正文显示 `arrival_narration`。
+  - 按钮显示 `choices[].label`。
+
+- **Chat：** 在输入框上方显示 `Story Action Bar`。
+  - 文案：当前 objective。
+  - 主按钮：第一个推荐 choice。
+  - 次级按钮：展开全部 choices。
+  - 用户点击 choice 后，聊天中插入 `user_narration`，resolve 成功后插入 `result_narration`。
+
+- **Scene transition：**
+  - `transition_mode === "scene"`：前端切 `scene_id` / `scene_art`，再插入 `<narration>You arrive at {sceneName} together.</narration>`。
+  - `transition_mode === "offstage"`：不切 scene，只插入 result narration 并提示 `Story moment completed`。
+  - `transition_mode === "stay"`：不切 scene，继续当前聊天。
+
+- **可见性：**
+  - 没有 choices 时不显示空按钮。
+  - 目标 scene 未解锁时不显示“Go there”式按钮，只显示 `Ask / Offer / Stay` 这类当前场景动作。
+  - 已完成 beat 不再反复弹出；只在 timeline/memory 中保留结果。
+
+### Prompt 约束
+
+Chat prompt 增加规则：
+
+- 当前 scene 是物理现实；不能自行切换地点。
+- 如果剧情需要离开当前 scene，只能提出邀请/请求/选择，不要直接叙述已经抵达。
+- 如果系统提供了 `story_moment` 或用户点击了 story choice，AI 要承认这个事件，但不要重复宣称系统状态、choice id、points 或 metadata。
+
+AI-assisted story arc prompt 增加规则：
+
+- 生成 `intent` 和 `scene_hint`，不要生成可信 `target_scene_id`。
+- 每个 choice 必须能在 `stay/offstage/scene` 三种模式之一里成立。
+- 不确定目标 scene 是否存在时，优先写成 `offer/ask/stay` 类型 choice。
+
+### 实现步骤
+
+1. **后端 story moment 派生**
+   - 新增 helper：从 active story beat、当前 scene、companion、可用 scenes 派生 `StoryMoment`。
+   - 先用 deterministic 模板生成 2-3 个 choices；AI-assisted choices 后续接入。
+   - 实现 scene hint 解析与 transition_mode 降级。
+
+2. **Resolve 端点**
+   - 新增 story choice resolve route。
+   - 插入/返回 narration，不直接调用 chat LLM。
+   - 根据 choice 更新 story progress、relationship unlocks、memory hook；scene transition 只返回目标，由前端切。
+
+3. **前端 scene/chat 呈现**
+   - Scene 页面复用 `EventPopup` 或新增 `StoryMomentPopup`。
+   - Chat 页面增加 `StoryActionBar`。
+   - resolve 后向本地 history append user/result narration；scene transition 时更新背景和 scene state。
+
+4. **关闭旧自动完成坑**
+   - 对 UI-managed / user-owned arcs，普通 chat turn 不再自动完成 beat。
+   - legacy official `completion_mode: auto` 可短期保留，但 prompt 要禁止物理转场由 AI 私自完成。
+   - 新增测试覆盖“普通聊天不会把 manual/story-choice beat 标记完成”。
+
+5. **文档与内容治理**
+   - 更新 story authoring 说明：所有“去某地”的 choice 必须有 `scene_hint`，且必须能在无 scene 时降级。
+   - 官方 seed 内容避免写无法落地的固定地点；若写“home”，必须提供可替代的 `street/building door/offstage` 方案。
+
+### Test Plan
+
+- API tests：
+  - 有 active beat 时 scene enter 返回 `story_moment`。
+  - choice resolve with unlocked target scene 返回 `transition_mode: "scene"` 和 target scene。
+  - choice resolve with missing/locked target scene 降级为 `stay` 或 `offstage`。
+  - AI/choice 伪造不存在 scene id 不会被信任。
+  - manual/story-choice beat 不会因普通 chat turn 自动完成。
+
+- App typecheck/lint：
+  - `pnpm --filter @xtbit/app typecheck`
+  - `pnpm --filter @xtbit/app lint`
+
+- API suite：
+  - `pnpm --filter @xtbit/api test -- src/story-beats src/scenes src/chat`
+
+- Manual QA：
+  - 进入含 active beat 的 scene，弹出剧情 moment。
+  - 点击 stay choice，聊天里出现用户动作和结果 narration，scene 不变。
+  - 点击 offstage choice，beat 完成但 scene 不变。
+  - 点击 scene choice，scene/background 切换，后续 AI 知道新 scene。
+  - 缺少目标 scene 时不显示假“去那里”按钮。

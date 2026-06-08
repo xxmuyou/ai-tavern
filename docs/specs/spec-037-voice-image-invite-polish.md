@@ -29,12 +29,14 @@
   - 邀请入口从纯图标改为清晰的 icon + text action，Web/mobile 都可见。
   - `GET /companions/:id/invite-targets` 改为列出所有已解锁 active scenes，继续支持 `from_scene_id` 排除当前场景；不再要求 `default_companions` 包含该 companion。
   - activity chat 中允许带 `invite_scene_id`；若 companion 同意，后端自动 complete 当前 activity，SSE `invite_result` 返回 `activity_completed: true`，前端清掉 active activity 并切场景。
+  - 选择地点后发送可见的对话动作：`<narration>I glance toward the way out, then back at you.</narration>Would you come with me to {sceneName}?`。AI 先在当前 scene 中决定同意/拒绝；若同意，前端切 scene 后追加本地转场 narration：`<narration>You arrive at {sceneName} together.</narration>`。
 - 聊天快捷动作（咖啡 / 鲜花）：
   - 聊天输入区新增 `Order coffee` / `Send flowers`；咖啡仅当前 scene name/mood/tags 含 `cafe` 或 `coffee` 时显示，鲜花任意场景显示。
-  - 点击后一键发送默认消息：`I ordered coffee for us.` / `I sent you flowers.`
+  - 点击后一键发送可见的对话动作：咖啡为 `<narration>I set a coffee down near you.</narration>I got this for us.`；鲜花为 `<narration>I offer you a small bouquet, a little nervous.</narration>These are for you.`
   - `POST /chat/:id/messages` 新增 `quick_action: { type: "gift", item_id: "coffee" | "flowers" }`。后端校验 scene 与 6 小时同 companion/item 冷却，不扣 credits。
-  - 后端创建已完成 `activity_contexts` 记录，`metadata` 写入 `{ "quick_action": true, "item_id": "coffee" | "flowers" }`，触发 memory hook。
+  - `quick_action` 只负责结构化记录：后端创建已完成 `activity_contexts` 记录，`metadata` 写入 `{ "quick_action": true, "item_id": "coffee" | "flowers" }`，触发 memory hook；AI 主要从用户可见消息接住动作。
   - 固定关系加成：coffee `{ closeness:+1, trust:+1 }`；flowers `{ romance:+2, closeness:+1, tension:-1 }`。普通聊天 signal extraction 仍照常运行。
+  - 有当前 scene 时，prompt 明确角色“physically at”该地点，并要求本轮至少用一个轻量 `<narration>` 细节自然落地场景。
 - 场景事件前端闭环：
   - 补齐前端 `EventResponseItem` / option / resolve result 类型和 client。
   - Scene/Chat 页面拉取全部 pending events；优先展示本次 `scenes/:id/enter` 返回的新 event，再展示旧 pending events。
