@@ -3,12 +3,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
+  FlatList,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ListRenderItemInfo,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
   type ViewStyle,
@@ -124,7 +125,7 @@ export default function WebChatScreen() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
-  const threadScrollRef = useRef<ScrollView>(null);
+  const threadScrollRef = useRef<FlatList<ChatListItem>>(null);
   const shouldAutoScrollRef = useRef(true);
   const didInitialScrollRef = useRef(false);
 
@@ -248,6 +249,64 @@ export default function WebChatScreen() {
     shouldAutoScrollRef.current = true;
     scrollThreadToEnd(false);
   }, [scrollThreadToEnd, updateHistoryMessage]);
+
+  const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
+
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<ChatListItem>) => {
+    if (isStreamingItem(item)) {
+      return <StreamingBubble text={item.text} />;
+    }
+    const role = item.role === 'assistant' ? 'companion' : item.role;
+    const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
+    const isServerUser = role === 'user' && !item.id.startsWith('local-');
+    if (isServerUser && editMessage.editingId === item.id) {
+      return (
+        <UserMessageEditor
+          text={editMessage.editingText}
+          isSaving={editMessage.isSaving}
+          onChangeText={editMessage.setEditingText}
+          onSave={editMessage.saveEdit}
+          onCancel={editMessage.cancelEdit}
+        />
+      );
+    }
+    return (
+      <View>
+        <MessageBubble content={item.content} role={role} />
+        {isServerUser ? (
+          <View className="w-full flex-row justify-end px-5 pb-1">
+            <Pressable
+              accessibilityRole="button"
+              disabled={editMessage.isSaving}
+              onPress={() => editMessage.beginEdit(item.id, item.content)}
+            >
+              <Text className="text-xs font-semibold text-app-muted">Edit</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {isServerCompanion ? (
+          <MessageActions
+            variants={item.variants}
+            selectedVariant={item.selected_variant}
+            isRegenerating={messageActions.regeneratingId === item.id}
+            isSpeaking={messageActions.speakingId === item.id}
+            disabled={messageActions.regeneratingId !== null && messageActions.regeneratingId !== item.id}
+            onRegenerate={() => messageActions.regenerate(item.id)}
+            onSelectVariant={(index) => messageActions.selectVariant(item.id, index)}
+            onSpeak={() => messageActions.speak(item.id)}
+          />
+        ) : null}
+        {isServerCompanion ? (
+          <MomentImageCapture
+            messageId={item.id}
+            initialMoment={item.moment_image ?? null}
+            onMomentReady={(moment) => handleMomentReady(item.id, moment)}
+          />
+        ) : null}
+      </View>
+    );
+  }, [editMessage, handleMomentReady, messageActions]);
+
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const remainingSeconds = useMemo(() => {
     if (!rateLimitedUntil) return 0;
@@ -777,83 +836,30 @@ export default function WebChatScreen() {
           />
 
           {/* Messages scroll area */}
-          <ScrollView
+          <FlatList
             ref={threadScrollRef}
+            data={items}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
             contentContainerStyle={twilightStyles.threadContent}
+            ListHeaderComponent={
+              history.hasMore ? (
+                <View className="items-center pb-4 pt-2">
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => void handleLoadMore()}
+                    className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
+                  >
+                    <Text className="text-caption font-semibold text-app-rose-deep">
+                      {history.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null
+            }
             onContentSizeChange={handleThreadContentSizeChange}
             style={twilightStyles.thread}
-          >
-            {history.hasMore ? (
-              <View className="items-center pb-4 pt-2">
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => void handleLoadMore()}
-                  className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
-                >
-                  <Text className="text-caption font-semibold text-app-rose-deep">
-                    {history.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
-            <View className="gap-3 px-3 pb-6">
-              {items.map((item) => {
-                if (isStreamingItem(item)) {
-                  return <StreamingBubble key={item.id} text={item.text} />;
-                }
-                const role = item.role === 'assistant' ? 'companion' : item.role;
-                const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
-                const isServerUser = role === 'user' && !item.id.startsWith('local-');
-                if (isServerUser && editMessage.editingId === item.id) {
-                  return (
-                    <UserMessageEditor
-                      key={item.id}
-                      text={editMessage.editingText}
-                      isSaving={editMessage.isSaving}
-                      onChangeText={editMessage.setEditingText}
-                      onSave={editMessage.saveEdit}
-                      onCancel={editMessage.cancelEdit}
-                    />
-                  );
-                }
-                return (
-                  <View key={item.id}>
-                    <MessageBubble content={item.content} role={role} />
-                    {isServerUser ? (
-                      <View className="w-full flex-row justify-end px-5 pb-1">
-                        <Pressable
-                          accessibilityRole="button"
-                          disabled={editMessage.isSaving}
-                          onPress={() => editMessage.beginEdit(item.id, item.content)}
-                        >
-                          <Text className="text-xs font-semibold text-app-muted">Edit</Text>
-                        </Pressable>
-                      </View>
-                    ) : null}
-                    {isServerCompanion ? (
-                      <MessageActions
-                        variants={item.variants}
-                        selectedVariant={item.selected_variant}
-                        isRegenerating={messageActions.regeneratingId === item.id}
-                        isSpeaking={messageActions.speakingId === item.id}
-                        disabled={messageActions.regeneratingId !== null && messageActions.regeneratingId !== item.id}
-                        onRegenerate={() => messageActions.regenerate(item.id)}
-                        onSelectVariant={(index) => messageActions.selectVariant(item.id, index)}
-                        onSpeak={() => messageActions.speak(item.id)}
-                      />
-                    ) : null}
-                    {isServerCompanion ? (
-                      <MomentImageCapture
-                        messageId={item.id}
-                        initialMoment={item.moment_image ?? null}
-                        onMomentReady={(moment) => handleMomentReady(item.id, moment)}
-                      />
-                    ) : null}
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
+          />
 
           {/* Composer */}
           <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
@@ -1035,6 +1041,9 @@ const twilightStyles = StyleSheet.create({
     minHeight: 420,
   },
   threadContent: {
+    gap: 12,
+    paddingBottom: 24,
+    paddingHorizontal: 12,
     paddingTop: 8,
   },
 });
