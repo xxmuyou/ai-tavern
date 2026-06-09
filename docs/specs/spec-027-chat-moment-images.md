@@ -52,11 +52,11 @@
 
 ## Prompt Context
 
-v1.1 使用受控 `visual action extractor` 提炼动作，再由后端规则拼接最终生图 prompt。这个 extractor 不是聊天总结器；它只把当前这一轮转译成“companion 一个人在画面中可见的动作”。最终 RunningHub prompt 仍由代码生成，并继续承担角色一致性、场景、单人约束和无 UI/文字等硬规则。
+v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由后端规则拼接最终生图 prompt。这个 extractor 不是聊天总结器；它只把当前这一轮转译成“companion 一个人在画面中可见的姿态和反应”。最终 RunningHub prompt 仍由代码生成，并继续承担角色一致性、场景、单人约束和无 UI/文字等硬规则。
 
 后端从来源 message 和上下文加载：
 
-- `source_message`：最新 companion reply，优先提取 `<narration>...</narration>` 中的动作、表情、场景描述；没有 narration 时使用回复摘要片段。
+- `source_message`：最新 companion reply，只作为 pose planner 的上下文输入；不得把 `<narration>...</narration>` 或回复片段原样回退进最终图片 prompt。
 - `previous_user_message`：同一 thread 中来源 message 前一条 user message，用来判断用户刚刚做了什么；该内容不能原样进入最终图片 prompt，必须转译成 companion 的单人可见反应。
 - `scene`：`name / mood / tags / art_url`；prompt 使用 name、mood、tags，不依赖 art_url 合成。
 - `time`：用户本地 `time_slot`，如 `morning / afternoon / evening / night`。
@@ -74,28 +74,32 @@ v1.1 使用受控 `visual action extractor` 提炼动作，再由后端规则拼
 
 ```ts
 type MomentVisualAction = {
-  visible_action: string;
-  pose?: string;
-  hands?: string;
+  body_pose: string;
+  hand_action?: string;
   gaze?: string;
   expression?: string;
-  props?: string;
+  held_or_nearby_props?: string;
+  scene_position?: string;
 };
 ```
 
 提取规则：
 
-- 输出必须只描述 companion 一个人；禁止出现 `user`、`another person`、`two people`、`couple`、`crowd`、`with someone`、`holding hands with someone` 等会引入第二人的描述。
+- 输出必须只描述 companion 一个人；禁止出现 `user`、`another person`、`two people`、`couple`、`crowd`、`together`、`lap`、`embrace`、`kiss`、`held by`、`holding hands`、`reflection`、`duplicate body` 等会引入第二人、亲密身体接触或重复肢体的描述。
 - 用户动作要转译成 companion 的单人反应：用户送花 → `she holds a small bouquet close to her chest`；用户点咖啡 → `she sits with a coffee cup near her hands`；用户邀请去某处 → `she stands near the doorway, turning back toward the viewer`。
-- 亲密互动不画第二个人：牵手、拥抱、靠近等动作转译成 viewer 视角的单人动作，例如 `she reaches one hand slightly toward the viewer`、`she leans a little closer while looking at the viewer`。
-- companion narration 有明确动作时优先保留；用户消息只补足 props、触发动作和可见反应。
-- extractor 失败、超时、JSON 不合法，或输出含多人风险词时，回退到现有 narration 抽取；图片生成不能因为动作提取失败而失败。
+- 亲密互动不画第二个人，也不逐字保留身体接触：牵手、拥抱、靠近、从某人腿上起身等动作转译成 viewer 视角的单人姿态，例如 `she reaches one hand slightly toward the viewer`、`she leans a little closer while looking at the viewer`、`she sits alone near the bed edge, adjusting fabric with one hand`。
+- companion narration 只作为上下文，不允许原样复制；用户消息只补足 props、触发动作和可见反应。
+- extractor 失败、超时、JSON 不合法，或输出含风险词时，最终 prompt 使用安全单人姿态 fallback；图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
 
 最终 prompt 示例结构：
 
 ```text
 Edit the input image into a single-character scene image of the same companion.
-Render this exact visible moment: Maya sits at the cafe table with one hand around a coffee cup, looking directly at the viewer with a shy warm smile.
+Moment pose: Maya sits alone at the cafe table.
+Hands/props: one hand near a coffee cup, coffee cup.
+Gaze: eyes toward the viewer.
+Expression: shy warm smile.
+Position in scene: near the cafe window.
 Exactly one person: Maya only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.
 Companion: Maya, [appearance], [personality].
 Scene: Pier Coffee Shop, morning, warm cafe light, quiet harbor atmosphere.
@@ -161,8 +165,8 @@ CREATE TABLE story_moment_images (
    - companion message 无 `scene_id` 时返回 422。
    - message 不属于当前用户时返回 404/403。
    - 同一 message 重复点击返回已有 pending/succeeded 记录。
-   - `prompt_snapshot` 包含 scene、time slot、companion、emotion 和净化后的单人动作，不直接包含会引入第二人的 user action 原文。
-   - DeepSeek / `image_prompt_assist` 不可用或返回非法 JSON 时仍能创建 job，并回退旧 narration 抽取。
+   - `prompt_snapshot` 包含 scene、time slot、companion、emotion 和净化后的单人姿态，不直接包含会引入第二人的 user action 原文。
+   - DeepSeek / `image_prompt_assist` 不可用或返回非法 JSON 时仍能创建 job，并使用安全单人姿态 fallback，不回退旧 narration 抽取。
 2. Job：
    - `chat_moment_image` job 入队并调用 image-gen provider，RunningHub 请求包含 signed URL 和 prompt。
    - job succeeded 后更新 `story_moment_images.output_key/status`。

@@ -29,35 +29,61 @@ function sampleInput() {
 describe("parseMomentVisualAction", () => {
   it("keeps a safe companion-only action", () => {
     const action = parseMomentVisualAction({
+      body_pose: "seated alone at the cafe table",
       expression: "warm shy smile",
       gaze: "looking directly at the viewer",
-      hands: "both hands around the coffee cup",
-      pose: "seated at the cafe table",
-      props: "coffee cup",
-      visible_action: "Maya holds a coffee cup close to her hands",
+      hand_action: "both hands around the coffee cup",
+      held_or_nearby_props: "coffee cup",
+      scene_position: "near the window",
     });
 
     expect(action).toEqual({
+      body_pose: "seated alone at the cafe table",
       expression: "warm shy smile",
       gaze: "looking directly at the viewer",
-      hands: "both hands around the coffee cup",
-      pose: "seated at the cafe table",
-      props: "coffee cup",
-      visible_action: "Maya holds a coffee cup close to her hands",
+      hand_action: "both hands around the coffee cup",
+      held_or_nearby_props: "coffee cup",
+      scene_position: "near the window",
+    });
+  });
+
+  it("cleans empty optional fields", () => {
+    expect(
+      parseMomentVisualAction({
+        body_pose: "standing alone near the doorway",
+        expression: "",
+        gaze: "  ",
+        hand_action: "",
+      }),
+    ).toEqual({
+      body_pose: "standing alone near the doorway",
     });
   });
 
   it("rejects output that would summon a second person", () => {
     expect(
       parseMomentVisualAction({
-        visible_action: "Maya smiles as the user gives her flowers",
+        body_pose: "Maya smiles as the user gives her flowers",
       }),
     ).toBeNull();
     expect(
       parseMomentVisualAction({
-        visible_action: "a couple holding hands together",
+        body_pose: "a couple holding hands together",
       }),
     ).toBeNull();
+  });
+
+  it("rejects unsafe intimate or duplicate-body wording", () => {
+    for (const body_pose of [
+      "Maya slides off the viewer's lap",
+      "Maya leans into an embrace",
+      "Maya prepares for a kiss",
+      "Maya is held by someone",
+      "Maya is visible in a reflection of another person",
+      "Maya has a duplicate body behind her",
+    ]) {
+      expect(parseMomentVisualAction({ body_pose })).toBeNull();
+    }
   });
 });
 
@@ -73,8 +99,8 @@ describe("extractMomentVisualAction", () => {
       model: "deepseek-chat",
       provider: "deepseek",
       structured: {
-        hands: "both hands around a coffee cup",
-        visible_action: "Maya sits with a coffee cup near her hands",
+        body_pose: "Maya sits alone at the cafe table",
+        hand_action: "both hands around a coffee cup",
       },
       text: "",
       usage: { input_tokens: 100, output_tokens: 20 },
@@ -83,18 +109,35 @@ describe("extractMomentVisualAction", () => {
     const action = await extractMomentVisualAction({} as Env, sampleInput());
 
     expect(action).toMatchObject({
-      hands: "both hands around a coffee cup",
-      visible_action: "Maya sits with a coffee cup near her hands",
+      body_pose: "Maya sits alone at the cafe table",
+      hand_action: "both hands around a coffee cup",
     });
     expect(mockLlmCall).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         max_tokens: 200,
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining("pose planner"),
+            role: "system",
+          }),
+          expect.objectContaining({
+            content: expect.stringContaining("Plan a safe solo pose for the companion"),
+            role: "user",
+          }),
+        ]),
         task: "image_prompt_assist",
         temperature: 0,
       }),
       { user_id: "usr_1" },
     );
+
+    const request = mockLlmCall.mock.calls[0]?.[1] as {
+      messages: Array<{ content: string; role: string }>;
+    };
+    expect(request.messages[0]?.content).toContain("receiving flowers becomes");
+    expect(request.messages[0]?.content).toContain("receiving coffee becomes");
+    expect(request.messages[0]?.content).toContain("leaving someone's lap or bed contact becomes");
   });
 
   it("falls back silently when the LLM route is unavailable", async () => {

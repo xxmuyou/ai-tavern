@@ -79,37 +79,32 @@ export type MomentPromptContext = {
   storyBeat: { title: string; objective: string } | null;
 };
 
-/** Extract scene/action description from a companion reply. */
-export function extractNarration(content: string): string {
-  const tagged = [...content.matchAll(/<narration>([\s\S]*?)<\/narration>/gi)]
-    .map((m) => m[1]?.trim() ?? "")
-    .filter(Boolean);
-  if (tagged.length > 0) return tagged.join(" ");
-  const italic = [...content.matchAll(/\*([^*]+)\*/g)]
-    .map((m) => m[1]?.trim() ?? "")
-    .filter(Boolean);
-  if (italic.length > 0) return italic.join(" ");
-  // No explicit narration — fall back to a short slice of the reply.
-  return content.replace(/<\/?[a-z]+>/gi, "").trim().slice(0, 240);
+function fallbackMomentPose(ctx: MomentPromptContext): MomentVisualAction {
+  return {
+    body_pose: "standing or seated alone in the scene, posture matching the emotional tone",
+    expression: `${ctx.emotion ?? "neutral"} expression`,
+    gaze: "eyes toward the viewer",
+  };
 }
 
-function truncate(text: string, max: number): string {
-  const t = text.trim();
-  return t.length > max ? `${t.slice(0, max)}…` : t;
-}
+function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void {
+  lines.push(`Moment pose: ${action.body_pose}.`);
 
-function formatVisualAction(action: MomentVisualAction): string {
-  const parts = [
-    action.visible_action,
-    action.pose,
-    action.hands,
-    action.gaze,
-    action.expression,
-    action.props,
-  ]
+  const handsAndProps = [action.hand_action, action.held_or_nearby_props]
     .map((part) => part?.trim())
     .filter(Boolean);
-  return parts.join(", ");
+  if (handsAndProps.length > 0) {
+    lines.push(`Hands/props: ${handsAndProps.join(", ")}.`);
+  }
+  if (action.gaze?.trim()) {
+    lines.push(`Gaze: ${action.gaze.trim()}.`);
+  }
+  if (action.expression?.trim()) {
+    lines.push(`Expression: ${action.expression.trim()}.`);
+  }
+  if (action.scene_position?.trim()) {
+    lines.push(`Position in scene: ${action.scene_position.trim()}.`);
+  }
 }
 
 export function buildMomentPrompt(ctx: MomentPromptContext): string {
@@ -131,12 +126,11 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     "The companion looks directly at the viewer, both eyes meeting the viewer's gaze; do not render any camera, phone, or photographic device.",
   );
 
-  if (ctx.visualAction) {
-    lines.push(
-      `Render this exact visible moment: ${truncate(formatVisualAction(ctx.visualAction), 240)}.`,
-      `Exactly one person: ${companion.name} only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.`,
-    );
-  }
+  const momentPose = ctx.visualAction ?? fallbackMomentPose(ctx);
+  pushMomentPoseLines(lines, momentPose);
+  lines.push(
+    `Exactly one person: ${companion.name} only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.`,
+  );
 
   const companionBits = [
     companion.appearance?.trim(),
@@ -156,17 +150,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     `Change the background to: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}. The background is empty of other people.`,
   );
 
-  // Prefer the sanitized visual-action extractor. Fall back to raw narration
-  // when extraction is unavailable; previousUserText and story objectives stay
-  // out of the final prompt because they often name extra people.
-  if (!ctx.visualAction) {
-    const action = extractNarration(ctx.sourceReply);
-    if (action) {
-      lines.push(`The companion's pose and action: ${truncate(action, 160)}`);
-    }
-  }
-
-  if (ctx.emotion) {
+  if (ctx.emotion && !momentPose.expression?.trim()) {
     lines.push(`Expression: ${ctx.emotion}.`);
   }
 

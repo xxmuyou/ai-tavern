@@ -267,13 +267,16 @@ function sampleContext(): MomentPromptContext {
 }
 
 describe("buildMomentPrompt", () => {
-  it("includes scene, time slot, companion, emotion and narration-driven action", () => {
+  it("includes scene, time slot, companion, emotion and a safe fallback pose", () => {
     const prompt = buildMomentPrompt(sampleContext());
     expect(prompt).toContain("Pier Coffee Shop");
     expect(prompt).toContain("morning");
     expect(prompt).toContain("Maya");
     expect(prompt).toContain("warm");
-    expect(prompt).toContain("Maya wraps her hands around the cup");
+    expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
+    expect(prompt).toContain("Gaze: eyes toward the viewer");
+    expect(prompt).toContain("Expression: warm expression");
+    expect(prompt).not.toContain("Maya wraps her hands around the cup");
     expect(prompt).toContain("familiar");
     expect(prompt).toContain("no text, no UI");
   });
@@ -309,21 +312,37 @@ describe("buildMomentPrompt", () => {
       previousUserText: "<narration>I offer you a small bouquet.</narration>These are for you.",
       sourceReply: "<narration>Maya blushes.</narration>Thank you.",
       visualAction: {
+        body_pose: "standing slightly turned toward the viewer",
         expression: "warm shy smile",
         gaze: "looking directly at the viewer",
-        hands: "both hands gently around the bouquet",
-        pose: "standing slightly turned toward the viewer",
-        props: "small bouquet",
-        visible_action: "Maya holds a small bouquet close to her chest",
+        hand_action: "both hands gently around the bouquet",
+        held_or_nearby_props: "small bouquet",
+        scene_position: "near the cafe table",
       },
     });
 
-    expect(prompt).toContain("Render this exact visible moment");
-    expect(prompt).toContain("Maya holds a small bouquet close to her chest");
-    expect(prompt).toContain("small bouquet");
+    expect(prompt).toContain("Moment pose: standing slightly turned toward the viewer");
+    expect(prompt).toContain("Hands/props: both hands gently around the bouquet, small bouquet");
+    expect(prompt).toContain("Position in scene: near the cafe table");
     expect(prompt).toContain("The viewer/user is not visible");
+    expect(prompt).not.toContain("Render this exact visible moment");
     expect(prompt).not.toContain("I offer you a small bouquet");
     expect(prompt).not.toContain("Maya blushes");
+  });
+
+  it("never falls back to raw narration for risky intimate body actions", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      sourceReply:
+        "<narration>Maya slid off your lap, pulling the sheet ar</narration>I'm fine.",
+      visualAction: null,
+    });
+
+    expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
+    expect(prompt).not.toContain("slid off");
+    expect(prompt).not.toContain("lap");
+    expect(prompt).not.toContain("sheet ar");
+    expect(prompt).not.toContain("The companion's pose and action");
   });
 });
 
