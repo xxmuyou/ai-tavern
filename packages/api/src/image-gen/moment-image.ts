@@ -18,6 +18,7 @@ import {
   loadCompanionCutoutSource,
 } from "./cutout";
 import { CHAT_MOMENT_WORKFLOW_KEY } from "./workflow-keys";
+import type { MomentVisualAction } from "./moment-action";
 
 /**
  * Chat moment image pipeline (spec-027).
@@ -53,7 +54,7 @@ export type StoryMomentImageRow = {
 };
 
 // -----------------------------------------------------------------------------
-// Prompt building (rule-based, no extra LLM call)
+// Prompt building
 // -----------------------------------------------------------------------------
 
 export type MomentPromptContext = {
@@ -72,6 +73,8 @@ export type MomentPromptContext = {
   sourceReply: string;
   /** Text the user said just before the companion reply. */
   previousUserText: string | null;
+  /** Sanitized single-companion visual action from the current turn. */
+  visualAction?: MomentVisualAction | null;
   activity: { activity_type: string; activity_hint: string; mood: string } | null;
   storyBeat: { title: string; objective: string } | null;
 };
@@ -95,6 +98,20 @@ function truncate(text: string, max: number): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+function formatVisualAction(action: MomentVisualAction): string {
+  const parts = [
+    action.visible_action,
+    action.pose,
+    action.hands,
+    action.gaze,
+    action.expression,
+    action.props,
+  ]
+    .map((part) => part?.trim())
+    .filter(Boolean);
+  return parts.join(", ");
+}
+
 export function buildMomentPrompt(ctx: MomentPromptContext): string {
   const { companion, scene } = ctx;
   const lines: string[] = [];
@@ -114,6 +131,13 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     "The companion looks directly at the viewer, both eyes meeting the viewer's gaze; do not render any camera, phone, or photographic device.",
   );
 
+  if (ctx.visualAction) {
+    lines.push(
+      `Render this exact visible moment: ${truncate(formatVisualAction(ctx.visualAction), 240)}.`,
+      `Exactly one person: ${companion.name} only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.`,
+    );
+  }
+
   const companionBits = [
     companion.appearance?.trim(),
     companion.personality?.trim(),
@@ -132,13 +156,14 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     `Change the background to: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}. The background is empty of other people.`,
   );
 
-  // Narration drives the companion's pose/action. previousUserText and the story
-  // objective are intentionally dropped: as edit instructions they frequently
-  // name other people (the user, opponents, plot characters), and this editor
-  // renders whatever the instruction names.
-  const action = extractNarration(ctx.sourceReply);
-  if (action) {
-    lines.push(`The companion's pose and action: ${truncate(action, 160)}`);
+  // Prefer the sanitized visual-action extractor. Fall back to raw narration
+  // when extraction is unavailable; previousUserText and story objectives stay
+  // out of the final prompt because they often name extra people.
+  if (!ctx.visualAction) {
+    const action = extractNarration(ctx.sourceReply);
+    if (action) {
+      lines.push(`The companion's pose and action: ${truncate(action, 160)}`);
+    }
   }
 
   if (ctx.emotion) {

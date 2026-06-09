@@ -19,6 +19,7 @@
   - Voice 下拉优先显示对应语言声音名；已有英文 catalog 的非中文 voice 可直接复用原英文名，中文 voice 保持中文。若某语言只有英文名，先显示英文名，不做机器翻译。
 - 图片任务不停下：
   - `Capture this moment`：保持后端 job 逻辑不变，前端在 chat history refresh / 新消息发送后继续读取 `moment_image`，对 `queued` / `pending` / `processing` 自动恢复轮询；轮询结果写回 `useChatHistory`。
+  - `Capture this moment` 的动作质量优化以 [`spec-027`](./spec-027-chat-moment-images.md) 的 `visual action extractor` 为准：它只把本轮上下文转成 companion 单人可见动作，不做聊天总结，也不直接生成最终 RunningHub prompt。
   - Profile `Change outfit`：生成开始后把 active job id 挂在 profile 页状态可恢复的位置；重新进入 companion profile 时加载最近未完成的 profile outfit job，继续轮询直到 succeeded/failed/cancelled。
   - 当前新 UI 不恢复 legacy chat outfit 入口；旧 API 继续保留给历史兼容。
 - 场景邀请 QA/可见性：

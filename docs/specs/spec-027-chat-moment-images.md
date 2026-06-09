@@ -52,10 +52,12 @@
 
 ## Prompt Context
 
-v1 使用规则拼接，不额外调用 LLM 提炼 prompt。后端从来源 message 和上下文加载：
+v1.1 使用受控 `visual action extractor` 提炼动作，再由后端规则拼接最终生图 prompt。这个 extractor 不是聊天总结器；它只把当前这一轮转译成“companion 一个人在画面中可见的动作”。最终 RunningHub prompt 仍由代码生成，并继续承担角色一致性、场景、单人约束和无 UI/文字等硬规则。
+
+后端从来源 message 和上下文加载：
 
 - `source_message`：最新 companion reply，优先提取 `<narration>...</narration>` 中的动作、表情、场景描述；没有 narration 时使用回复摘要片段。
-- `previous_user_message`：同一 thread 中来源 message 前一条 user message，提取用户刚刚做了什么或说了什么。
+- `previous_user_message`：同一 thread 中来源 message 前一条 user message，用来判断用户刚刚做了什么；该内容不能原样进入最终图片 prompt，必须转译成 companion 的单人可见反应。
 - `scene`：`name / mood / tags / art_url`；prompt 使用 name、mood、tags，不依赖 art_url 合成。
 - `time`：用户本地 `time_slot`，如 `morning / afternoon / evening / night`。
 - `companion`：`name / appearance / personality / relationship_role / gender`。
@@ -64,17 +66,42 @@ v1 使用规则拼接，不额外调用 LLM 提炼 prompt。后端从来源 mess
 - `activity`：若聊天来自 activity，加入 `activity_type`、`activity_hint`、daily mood/availability。
 - `story_beat`：若当前 scene 有 active story beat，加入 `title / objective`，但不强行剧透未完成内容。
 
-示例 prompt 结构：
+### Visual Action Extraction
+
+`visual action extractor` 优先复用现有 `image_prompt_assist` LLM task。默认模型配置为最低成本 DeepSeek 路径：`deepseek / deepseek-chat`；调用参数使用 `temperature: 0`，`max_tokens` 控制在 160-220 左右，并要求结构化 JSON 输出。若 dev/prod 环境缺少 `image_prompt_assist` 的 `llm_config`，实现阶段补 seed/migration；当前迁移已包含默认 DeepSeek 配置。
+
+内部输出形状：
+
+```ts
+type MomentVisualAction = {
+  visible_action: string;
+  pose?: string;
+  hands?: string;
+  gaze?: string;
+  expression?: string;
+  props?: string;
+};
+```
+
+提取规则：
+
+- 输出必须只描述 companion 一个人；禁止出现 `user`、`another person`、`two people`、`couple`、`crowd`、`with someone`、`holding hands with someone` 等会引入第二人的描述。
+- 用户动作要转译成 companion 的单人反应：用户送花 → `she holds a small bouquet close to her chest`；用户点咖啡 → `she sits with a coffee cup near her hands`；用户邀请去某处 → `she stands near the doorway, turning back toward the viewer`。
+- 亲密互动不画第二个人：牵手、拥抱、靠近等动作转译成 viewer 视角的单人动作，例如 `she reaches one hand slightly toward the viewer`、`she leans a little closer while looking at the viewer`。
+- companion narration 有明确动作时优先保留；用户消息只补足 props、触发动作和可见反应。
+- extractor 失败、超时、JSON 不合法，或输出含多人风险词时，回退到现有 narration 抽取；图片生成不能因为动作提取失败而失败。
+
+最终 prompt 示例结构：
 
 ```text
-Create a cinematic in-scene moment, first-person perspective from across the table.
+Edit the input image into a single-character scene image of the same companion.
+Render this exact visible moment: Maya sits at the cafe table with one hand around a coffee cup, looking directly at the viewer with a shy warm smile.
+Exactly one person: Maya only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.
 Companion: Maya, [appearance], [personality].
 Scene: Pier Coffee Shop, morning, warm cafe light, quiet harbor atmosphere.
-Recent action: the user just ordered coffee; Maya sits opposite them with a cup in her hands.
 Emotional state: shy but warm.
 Relationship stage: familiar; keep the body language gentle and not overly intimate.
-Story objective: Maya is trying to decide whether to share what she was sketching.
-Full environment image, natural composition, no text, no UI, no speech bubbles.
+Full environment image, natural composition, no text, no UI, no speech bubbles, no visible camera.
 ```
 
 ## API / Data Model
@@ -134,11 +161,16 @@ CREATE TABLE story_moment_images (
    - companion message 无 `scene_id` 时返回 422。
    - message 不属于当前用户时返回 404/403。
    - 同一 message 重复点击返回已有 pending/succeeded 记录。
-   - `prompt_snapshot` 包含 scene、time slot、companion、emotion、最近聊天内容。
+   - `prompt_snapshot` 包含 scene、time slot、companion、emotion 和净化后的单人动作，不直接包含会引入第二人的 user action 原文。
+   - DeepSeek / `image_prompt_assist` 不可用或返回非法 JSON 时仍能创建 job，并回退旧 narration 抽取。
 2. Job：
    - `chat_moment_image` job 入队并调用 image-gen provider，RunningHub 请求包含 signed URL 和 prompt。
    - job succeeded 后更新 `story_moment_images.output_key/status`。
    - job failed 后保留错误码，前端可 retry。
+   - 送花场景最终 prompt 只描述 companion 拿花，不出现第二个人。
+   - 咖啡场景最终 prompt 捕捉杯子、手部、桌前姿态。
+   - 邀请换场景最终 prompt 捕捉 companion 的单人转身、门口或回望动作。
+   - LLM 输出多人风险词时 validator 拦截并 fallback。
 3. 前端：
    - 最新 companion message 有 scene context 时显示小相机按钮。
    - queued/processing/succeeded/failed 状态展示正确。

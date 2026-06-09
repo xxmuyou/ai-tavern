@@ -302,6 +302,29 @@ describe("buildMomentPrompt", () => {
     const prompt = buildMomentPrompt(sampleContext());
     expect(prompt).toContain("Relationship context: friend");
   });
+
+  it("prioritizes a sanitized visual action without including the user's raw action", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      previousUserText: "<narration>I offer you a small bouquet.</narration>These are for you.",
+      sourceReply: "<narration>Maya blushes.</narration>Thank you.",
+      visualAction: {
+        expression: "warm shy smile",
+        gaze: "looking directly at the viewer",
+        hands: "both hands gently around the bouquet",
+        pose: "standing slightly turned toward the viewer",
+        props: "small bouquet",
+        visible_action: "Maya holds a small bouquet close to her chest",
+      },
+    });
+
+    expect(prompt).toContain("Render this exact visible moment");
+    expect(prompt).toContain("Maya holds a small bouquet close to her chest");
+    expect(prompt).toContain("small bouquet");
+    expect(prompt).toContain("The viewer/user is not visible");
+    expect(prompt).not.toContain("I offer you a small bouquet");
+    expect(prompt).not.toContain("Maya blushes");
+  });
 });
 
 describe("moment image job pipeline", () => {

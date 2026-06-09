@@ -20,6 +20,7 @@ import {
   type MomentPromptContext,
   type StoryMomentImageRow,
 } from "../image-gen/moment-image";
+import { extractMomentVisualAction } from "../image-gen/moment-action";
 import { loadCompanionForChat, loadSceneForChat, parseSceneTags } from "./loaders";
 
 /**
@@ -135,12 +136,12 @@ async function handleGenerate(
     if (!shouldRegenerate) {
       return momentResponse(reconciled);
     }
-    const prompt = await composePrompt(env, user, thread, message);
     const reservation = await reserveImageGenerationCredits(env, user.id);
     if (!reservation.ok) {
       return jsonResponse({ error: "credits_insufficient" }, { status: 402 });
     }
     try {
+      const prompt = await composePrompt(env, user, thread, message);
       const { momentId } = await regenerateMomentImageJob(env, reconciled, prompt, reservation.reservationId);
       const next = await loadMomentByMessage(env, user.id, messageId);
       return momentResponse(next ?? { ...reconciled, id: momentId, status: "queued", output_key: null });
@@ -153,12 +154,12 @@ async function handleGenerate(
   const storyBeat = message.scene_id
     ? await loadStoryBeatForScene(env, user.id, thread.companion_id, message.scene_id)
     : null;
-  const prompt = await composePrompt(env, user, thread, message);
   const reservation = await reserveImageGenerationCredits(env, user.id);
   if (!reservation.ok) {
     return jsonResponse({ error: "credits_insufficient" }, { status: 402 });
   }
   try {
+    const prompt = await composePrompt(env, user, thread, message);
     const { jobId, momentId } = await createMomentImageJob(env, {
       activityId: message.activity_id,
       companionId: thread.companion_id,
@@ -231,7 +232,19 @@ async function composePrompt(
     timeSlot: computeTimeSlot(new Date(), tz),
   };
 
-  return buildMomentPrompt(ctx);
+  const visualAction = await extractMomentVisualAction(env, {
+    activity: ctx.activity,
+    companionName: ctx.companion.name,
+    emotion: ctx.emotion,
+    previousUserText: ctx.previousUserText,
+    sceneMood: ctx.scene.mood,
+    sceneName: ctx.scene.name,
+    sourceReply: ctx.sourceReply,
+    stage: ctx.stage,
+    userId: user.id,
+  });
+
+  return buildMomentPrompt({ ...ctx, visualAction });
 }
 
 async function loadPreviousUserText(
