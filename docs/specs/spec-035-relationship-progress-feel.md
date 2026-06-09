@@ -15,6 +15,8 @@
 验证：`@xtbit/api` 510 测试全绿、typecheck 通过。手感（连续友好对话进度条可见上涨 + 能真正晋级）待 dev 端到端跑。
 
 > 可调旋钮（产品平衡）：trusted 的 trust 门槛 30、替代路径 closeness40/friendship30、trust 闲聊 +1 力度——若升级太快/太慢按体感调整。
+>
+> 补充（2026-06-09）：**开局初始种子表**（`relationships/seed.ts` 的 `relationship_role` 默认兜底表，见 [`gameplay.md` §8.1](../product/gameplay.md)）也是一组平衡旋钮——它决定预设关系角色的开局起点（保守·临门一脚：closeness 抬过 Stranger 线、其余压低）。开局过近/过远同样在此调。
 
 ---
 

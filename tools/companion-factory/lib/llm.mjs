@@ -12,7 +12,7 @@ const PERSONA_SYSTEM = `You design original AI roleplay companions for a relatio
   "personality": string (1-2 sentences),
   "background": string (1-2 sentences),
   "speech_style": string (short),
-  "relationship_role": string (e.g. "love interest", "best friend", "rival", "mentor"),
+  "relationship_role": one of "stranger" | "neighbor" | "colleague" | "friend" | "family" | "crush" (their starting relationship to the player),
   "want": string (what they desire),
   "secret": string (a hidden truth),
   "boundary": string (a hard limit),

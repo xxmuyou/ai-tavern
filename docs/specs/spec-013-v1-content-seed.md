@@ -28,7 +28,7 @@
 - ❌ 用户自创角色样例数据（`source = 'user'` 留空）
 - ❌ 完整的解锁矩阵（v1 只在 `skyline_rooftop` 留一条 `min_relationship` 条件作演示，其余默认解锁）
 - ❌ 事件模板新增（`event_templates` 已由 `0005_event_templates_seed.sql` 备好 5 个 default）
-- ❌ 关系初始化（用户首次进入对话时由 `ensureRelationship` 用 companion 的 `initial_dims` 写入 `relationships` 表，无需 seed）
+- ❌ 关系初始化（用户首次进入对话时由 `ensureRelationship` 用 companion 的 `initial_dims` 写入 `relationships` 表，无需 seed）⚠️ 见文末「修正记录 2026-06-09」：此处假设的 `ensureRelationship` 消费 `initial_dims` 的逻辑当时**从未实现**，已在后续补齐。
 - ❌ 内容中文化（v1 走 English-first）
 
 ---
@@ -137,3 +137,17 @@ prod 暂不应用本 migration——v1 上线时统一走 production migration a
 - 完整解锁矩阵（content.md §5）—— 由 spec-008 events 模块扩展
 - prod migration apply —— v1 上线 checklist
 - 内容中文化 / 多语言（v2+）
+
+---
+
+## 修正记录（2026-06-09）
+
+本 spec 当初把「关系初始化由 `ensureRelationship` 用 `initial_dims` 写入」列为非目标、视作已有逻辑。
+但事后排查发现：[`relationships/engine.ts`](../../packages/api/src/relationships/engine.ts) 的
+`ensureRelationship`（spec-005）**从第一天起就写死全 0 + `'Stranger'`，从没读过 `initial_dims`**——
+这根线一直没接。结果是所有角色（含官方 crush/friend）开局都是全 0 的 Stranger，预设关系角色对开局
+毫无影响，体验违和。
+
+现已补齐为一条**优先级链**：`companion.initial_dims`（有效则用）→ `seedDimensionsForRole(relationship_role)`
+默认兜底表 → 全 0。同时用一条 UPDATE 迁移把官方 10 角色的 `initial_dims` 抬过 Stranger 线。详见
+[`gameplay.md` §8.1 初始值](../product/gameplay.md) 与 `relationships/seed.ts`。

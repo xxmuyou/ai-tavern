@@ -260,10 +260,26 @@ LLM 流式生成回应
 - 7 个维度足够呈现复杂关系（包括"亲密但有距离"或"是朋友却有紧张"这种真实关系）
 - 维度互相不互斥
 - **正负维度不是简单反向**：closeness 是"熟悉度"，distance 是"心理距离"——一个家人可以亲密但有距离感
-- 每个角色对每个维度有**初始值**（性格决定起点）：
-  - "暧昧对象"角色：romance 20、friendship 10、其他 0
-  - "已经讨厌你的同事"：hostility 30、distance 40、其他低
-  - "陌生人"：全部 0
+- 每个角色对每个维度有**初始值**（首次进入对话时由 `ensureRelationship` 写入 `relationships` 表）。
+  开局种子走一条**优先级链**（单一来源、不重复）：
+  1. `companion.initial_dims`（每角色一份手写 7 维 JSON，官方角色精调起点；有效则用）
+  2. 为空 → 按 `relationship_role` 查**默认兜底表**（用户自建/工厂角色 `initial_dims` 恒空，走这里）
+  3. 仍无 → 全 0（Stranger）
+
+  **relationship_role 默认兜底表**（保守·临门一脚：只把 closeness 抬过 Stranger 线，其余压低，距下一
+  里程碑留 15+ 点，升级要真聊；未列维度=0）：
+
+  | role | closeness | trust | romance | friendship | → 等级 |
+  |---|---|---|---|---|---|
+  | stranger | 0 | 0 | 0 | 0 | Stranger |
+  | neighbor | 21 | 3 | 0 | 5 | Acquaintance |
+  | colleague | 22 | 6 | 0 | 8 | Acquaintance |
+  | friend | 24 | 10 | 0 | 14 | Acquaintance |
+  | family | 25 | 12 | 0 | 12 | Acquaintance |
+  | crush | 22 | 4 | 14 | 5 | Acquaintance |
+
+  数字为平衡旋钮，按试玩手感微调。校验：全部 `closeness<40`（不误升 Friend）、`trust<30 且
+  closeness<40`（不进 trusted/不预解锁秘密）、`romance<30`（crush 不进 romantic_tension）。
 - 这些维度在 UI 上**不直接展示数字**（见 §8.4），通过"关系等级"间接反映
 
 #### 关系等级表（v1 初稿） *(暂定)*

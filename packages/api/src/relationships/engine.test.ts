@@ -14,12 +14,15 @@ type RelationshipFixture = {
   tension: number;
   distance: number;
   level_label: string;
+  last_stage?: string;
   first_met_at: number;
   last_interaction_at: number;
 };
 
+type CompanionRow = { relationship_role: string | null; initial_dims: string | null };
+
 describe("relationship engine", () => {
-  it("ensureRelationship inserts a zero row on first call", async () => {
+  it("ensureRelationship inserts a zero row when companion has no role/initial_dims", async () => {
     const env = createEnv();
     await ensureRelationship(env, "user-1", "maya", 1747700000000);
     const state = await loadRelationship(env, "user-1", "maya");
@@ -35,6 +38,50 @@ describe("relationship engine", () => {
     await ensureRelationship(env, "user-1", "maya", 9999);
     const state = await loadRelationship(env, "user-1", "maya");
     expect(state?.first_met_at).toBe(1000);
+  });
+
+  it("ensureRelationship seeds from companion.initial_dims (precedence over role)", async () => {
+    const env = createEnv(
+      new Map([
+        [
+          "maya",
+          {
+            relationship_role: "crush", // would seed romance 14; initial_dims must win
+            initial_dims:
+              '{"closeness":30,"trust":0,"romance":35,"friendship":0,"hostility":0,"tension":0,"distance":0}',
+          },
+        ],
+      ]),
+    );
+    await ensureRelationship(env, "user-1", "maya", 1000);
+    const state = await loadRelationship(env, "user-1", "maya");
+    expect(state?.dimensions.closeness).toBe(30);
+    expect(state?.dimensions.romance).toBe(35);
+    expect(state?.level).toBe("Romantic Interest"); // romance>30
+  });
+
+  it("ensureRelationship falls back to relationship_role default when initial_dims is null", async () => {
+    const env = createEnv(new Map([["maya", { relationship_role: "crush", initial_dims: null }]]));
+    await ensureRelationship(env, "user-1", "maya", 1000);
+    const state = await loadRelationship(env, "user-1", "maya");
+    // crush default: closeness 22, romance 14 -> Acquaintance / familiar, not Stranger
+    expect(state?.dimensions.closeness).toBe(22);
+    expect(state?.dimensions.romance).toBe(14);
+    expect(state?.level).toBe("Acquaintance");
+  });
+
+  it("ensureRelationship silently pre-grants the familiar milestone for a seeded non-stranger role", async () => {
+    const env = createEnv(new Map([["maya", { relationship_role: "friend", initial_dims: null }]]));
+    await ensureRelationship(env, "user-1", "maya", 1000);
+    expect(env.__unlocks.has("user-1|maya|title:familiar")).toBe(true);
+    // but NOT the higher milestones (friend stays in familiar stage)
+    expect(env.__unlocks.has("user-1|maya|secret")).toBe(false);
+  });
+
+  it("ensureRelationship grants no milestones for a stranger seed", async () => {
+    const env = createEnv(new Map([["maya", { relationship_role: "stranger", initial_dims: null }]]));
+    await ensureRelationship(env, "user-1", "maya", 1000);
+    expect(env.__unlocks.size).toBe(0);
   });
 
   it("applySignals creates relationship + updates dimensions", async () => {
@@ -96,25 +143,39 @@ describe("relationship engine", () => {
 // In-memory mock D1
 // -----------------------------------------------------------------------------
 
-function createEnv(): Env {
-  const relationships = new Map<string, RelationshipFixture>();
+type MockEnv = Env & { __unlocks: Set<string> };
 
-  return {
-    DB: {
-      prepare(sql: string) {
-        return buildStatement(sql, relationships);
-      },
+function createEnv(companions: Map<string, CompanionRow> = new Map()): MockEnv {
+  const relationships = new Map<string, RelationshipFixture>();
+  const unlocks = new Set<string>();
+
+  const DB = {
+    prepare(sql: string) {
+      return buildStatement(sql, relationships, companions, unlocks);
     },
-  } as unknown as Env;
+    async batch(statements: Array<{ run(): Promise<unknown> }>) {
+      for (const stmt of statements) await stmt.run();
+    },
+  };
+
+  return { DB, __unlocks: unlocks } as unknown as MockEnv;
 }
 
 function key(userId: string, companionId: string): string {
   return `${userId}|${companionId}`;
 }
 
-function buildStatement(sql: string, relationships: Map<string, RelationshipFixture>) {
+function buildStatement(
+  sql: string,
+  relationships: Map<string, RelationshipFixture>,
+  companions: Map<string, CompanionRow>,
+  unlocks: Set<string>,
+) {
   const exec = (values: unknown[]) => ({
     async first<T>(): Promise<T | null> {
+      if (sql.includes("FROM companions") && sql.includes("WHERE id = ?")) {
+        return (companions.get(values[0] as string) ?? null) as T | null;
+      }
       if (sql.includes("FROM relationships") && sql.includes("WHERE user_id = ? AND companion_id = ?")) {
         const k = key(values[0] as string, values[1] as string);
         return (relationships.get(k) ?? null) as T | null;
@@ -126,29 +187,42 @@ function buildStatement(sql: string, relationships: Map<string, RelationshipFixt
     },
     async run() {
       if (sql.includes("INSERT OR IGNORE INTO relationships")) {
-        const [userId, companionId, firstMet, lastInteraction] = values as [
-          string,
-          string,
-          number,
-          number,
-        ];
+        const [
+          userId,
+          companionId,
+          closeness,
+          trust,
+          romance,
+          friendship,
+          hostility,
+          tension,
+          distance,
+          level_label,
+          firstMet,
+          lastInteraction,
+        ] = values as [string, string, number, number, number, number, number, number, number, string, number, number];
         const k = key(userId, companionId);
         if (!relationships.has(k)) {
           relationships.set(k, {
-            closeness: 0,
+            closeness,
             companion_id: companionId,
-            distance: 0,
+            distance,
             first_met_at: firstMet,
-            friendship: 0,
-            hostility: 0,
+            friendship,
+            hostility,
             last_interaction_at: lastInteraction,
-            level_label: "Stranger",
-            romance: 0,
-            tension: 0,
-            trust: 0,
+            level_label,
+            romance,
+            tension,
+            trust,
             user_id: userId,
           });
         }
+        return { meta: { changes: 1 } };
+      }
+      if (sql.includes("INSERT OR IGNORE INTO relationship_unlocks")) {
+        const [userId, companionId, unlockKey] = values as [string, string, string, number];
+        unlocks.add(`${userId}|${companionId}|${unlockKey}`);
         return { meta: { changes: 1 } };
       }
       if (sql.startsWith("UPDATE relationships") && sql.includes("SET closeness = ?")) {
@@ -164,19 +238,7 @@ function buildStatement(sql: string, relationships: Map<string, RelationshipFixt
           lastInteraction,
           userId,
           companionId,
-        ] = values as [
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          number,
-          string,
-          number,
-          string,
-          string,
-        ];
+        ] = values as [number, number, number, number, number, number, number, string, number, string, string];
         const k = key(userId, companionId);
         const existing = relationships.get(k);
         if (existing) {

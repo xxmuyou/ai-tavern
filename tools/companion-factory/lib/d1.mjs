@@ -25,6 +25,26 @@ function sqlJson(value) {
   return sqlStr(JSON.stringify(value));
 }
 
+// Canonical relationship_role enum + synonym map, mirroring
+// packages/api/src/relationships/seed.ts. The product only seeds initial
+// dimensions for these 6 enums, so write canonical values (or NULL) — never raw
+// free-text like "rival"/"love interest" that the engine can't map.
+const RELATIONSHIP_ROLE_ENUM = new Set(['stranger', 'neighbor', 'colleague', 'friend', 'family', 'crush']);
+const RELATIONSHIP_ROLE_SYNONYMS = {
+  'best friend': 'friend', bestie: 'friend', bff: 'friend',
+  'love interest': 'crush', lover: 'crush', partner: 'crush',
+  mentor: 'colleague', coworker: 'colleague', 'co-worker': 'colleague', classmate: 'colleague',
+  roommate: 'neighbor', acquaintance: 'neighbor',
+  relative: 'family', sibling: 'family',
+};
+function normalizeRole(role) {
+  if (typeof role !== 'string') return null;
+  const key = role.trim().toLowerCase();
+  if (key.length === 0) return null;
+  if (RELATIONSHIP_ROLE_ENUM.has(key)) return key;
+  return RELATIONSHIP_ROLE_SYNONYMS[key] ?? null;
+}
+
 /** Run one or more SQL statements against the configured D1 database. */
 export function runSql(cfg, sql) {
   const dir = mkdtempSync(join(tmpdir(), 'factory-d1-'));
@@ -83,7 +103,7 @@ export function insertCompanion(cfg, draft, artKey) {
    VALUES (
      ${sqlStr(id)}, 'official', NULL, 1, ${sqlStr(draft.name)}, ${sqlStr(draft.appearance)},
      ${sqlStr(draft.personality)}, ${sqlStr(draft.background)}, ${sqlStr(draft.speech_style)},
-     ${sqlStr(draft.relationship_role)}, ${sqlStr(draft.want)}, ${sqlStr(draft.secret)}, ${sqlStr(draft.boundary)},
+     ${sqlStr(normalizeRole(draft.relationship_role))}, ${sqlStr(draft.want)}, ${sqlStr(draft.secret)}, ${sqlStr(draft.boundary)},
      ${sqlStr(draft.greeting)}, ${sqlJson(draft.example_dialogues ?? null)}, ${sqlJson(draft.tags ?? [])},
      ${sqlJson(draft.preferred_scenes ?? [])}, ${sqlStr(artKey)}, ${sqlJson(artEmotions)},
      ${sqlStr(draft.gender)}, NULL, 1, 0, ${sqlNum(now)}, ${sqlNum(now)}
