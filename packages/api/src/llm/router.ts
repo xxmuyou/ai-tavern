@@ -147,16 +147,54 @@ export async function* llmStream(
 ): AsyncIterable<LLMStreamChunk> {
   const route = await resolveRoute(env, request.task);
   const userId = options.user_id ?? null;
-  const start = Date.now();
-  const target = await pickStreamingTarget(env, route, request);
 
-  let primaryFailed = false;
-  if ("error" in target) {
-    primaryFailed = true;
+  let primaryYielded = false;
+  const primaryStart = Date.now();
+  try {
+    const iterator = await openStream(env, request, route.primary);
+    for await (const chunk of iterator) {
+      primaryYielded = true;
+      if (chunk.type === "done") {
+        void writeLLMLog(env, {
+          cost_usd: estimateUsageCost(route.primary, chunk.usage),
+          error_code: null,
+          error_message: null,
+          latency_ms: Date.now() - primaryStart,
+          model: route.primary.model,
+          provider: route.primary.provider,
+          status: "success",
+          task: request.task,
+          token_input: chunk.usage.input_tokens,
+          token_output: chunk.usage.output_tokens,
+          user_id: userId,
+        });
+      }
+      yield chunk;
+    }
+    return;
+  } catch (primaryErr) {
+    const llmErr = toLLMError(primaryErr);
+    if (!route.fallback || !llmErr.retryable || primaryYielded) {
+      void writeLLMLog(env, {
+        cost_usd: null,
+        error_code: llmErr.code,
+        error_message: llmErr.message,
+        latency_ms: null,
+        model: route.primary.model,
+        provider: route.primary.provider,
+        status: "error",
+        task: request.task,
+        token_input: null,
+        token_output: null,
+        user_id: userId,
+      });
+      throw llmErr;
+    }
+
     void writeLLMLog(env, {
       cost_usd: null,
-      error_code: target.error.code,
-      error_message: target.error.message,
+      error_code: llmErr.code,
+      error_message: llmErr.message,
       latency_ms: null,
       model: route.primary.model,
       provider: route.primary.provider,
@@ -168,27 +206,23 @@ export async function* llmStream(
     });
   }
 
-  const active =
-    "error" in target
-      ? (route.fallback ?? route.primary)
-      : route.primary;
-
-  const iterator = "iterator" in target ? target.iterator : (await openStream(env, request, active));
-  if (iterator === null) {
+  const fallback = route.fallback;
+  if (!fallback) {
     throw new LLMError("server_error", "no provider stream available");
   }
-
+  const fallbackStart = Date.now();
   try {
+    const iterator = await openStream(env, request, fallback);
     for await (const chunk of iterator) {
       if (chunk.type === "done") {
         void writeLLMLog(env, {
-          cost_usd: estimateUsageCost(active, chunk.usage),
+          cost_usd: estimateUsageCost(fallback, chunk.usage),
           error_code: null,
           error_message: null,
-          latency_ms: Date.now() - start,
-          model: active.model,
-          provider: active.provider,
-          status: primaryFailed ? "fallback" : "success",
+          latency_ms: Date.now() - fallbackStart,
+          model: fallback.model,
+          provider: fallback.provider,
+          status: "fallback",
           task: request.task,
           token_input: chunk.usage.input_tokens,
           token_output: chunk.usage.output_tokens,
@@ -203,9 +237,9 @@ export async function* llmStream(
       cost_usd: null,
       error_code: llmErr.code,
       error_message: llmErr.message,
-      latency_ms: Date.now() - start,
-      model: active.model,
-      provider: active.provider,
+      latency_ms: Date.now() - fallbackStart,
+      model: fallback.model,
+      provider: fallback.provider,
       status: "error",
       task: request.task,
       token_input: null,
@@ -271,26 +305,6 @@ async function openStream(
   }
   const config = await buildProviderConfig(env, target.provider, target.model);
   return provider.stream(config, request);
-}
-
-async function pickStreamingTarget(
-  env: Env,
-  route: RouteResolution,
-  request: LLMRequest,
-): Promise<
-  | { iterator: AsyncIterable<LLMStreamChunk> }
-  | { error: LLMError }
-> {
-  try {
-    const iterator = await openStream(env, request, route.primary);
-    return { iterator };
-  } catch (err) {
-    const llmErr = toLLMError(err);
-    if (route.fallback && llmErr.retryable) {
-      return { error: llmErr };
-    }
-    throw llmErr;
-  }
 }
 
 async function buildProviderConfig(

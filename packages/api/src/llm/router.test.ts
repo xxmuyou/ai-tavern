@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { llmCall, LLMRouterError } from "./router";
+import { llmCall, llmStream, LLMRouterError } from "./router";
 import type { LLMTask } from "./types";
 
 type LLMConfigFixture = {
@@ -247,6 +247,58 @@ describe("llmCall router", () => {
   });
 });
 
+describe("llmStream router", () => {
+  it("falls back when the primary provider fails before the first streamed chunk", async () => {
+    const env = createEnv({
+      config: [
+        {
+          fallback_model: "deepseek-chat",
+          fallback_provider: "deepseek",
+          model: "MiniMax-M3",
+          provider: "minimax",
+          task: "chat",
+        },
+      ],
+    });
+
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url);
+      if (target.includes("api.minimaxi.com")) {
+        return new Response("upstream overloaded", { status: 503 });
+      }
+      if (target.includes("api.deepseek.com")) {
+        return sseResponse([
+          { choices: [{ delta: { content: "fallback" } }] },
+          {
+            choices: [{ finish_reason: "stop" }],
+            usage: { completion_tokens: 2, prompt_tokens: 8 },
+          },
+          "[DONE]",
+        ]);
+      }
+      throw new Error(`unexpected fetch to ${target}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const chunks = [];
+    for await (const chunk of llmStream(env.env, {
+      max_tokens: 80,
+      messages: [{ content: "Hi", role: "user" }],
+      task: "chat",
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      { text: "fallback", type: "text" },
+      { structured: undefined, type: "done", usage: { input_tokens: 8, output_tokens: 2 } },
+    ]);
+    expect(env.logs).toHaveLength(2);
+    expect(env.logs[0]).toMatchObject({ provider: "minimax", status: "fallback", error_code: "server_error" });
+    expect(env.logs[1]).toMatchObject({ provider: "deepseek", status: "fallback", error_code: null });
+  });
+});
+
 // -----------------------------------------------------------------------------
 // In-memory mock env / DB
 // -----------------------------------------------------------------------------
@@ -256,6 +308,22 @@ type CreatedEnv = {
   logs: LLMLogEntry[];
   logUserIds: Array<string | null>;
 };
+
+function sseResponse(events: Array<Record<string, unknown> | string>): Response {
+  const encoder = new TextEncoder();
+  const body = events
+    .map((event) => `data: ${typeof event === "string" ? event : JSON.stringify(event)}\n\n`)
+    .join("");
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(body));
+        controller.close();
+      },
+    }),
+    { headers: { "content-type": "text/event-stream" }, status: 200 },
+  );
+}
 
 function createEnv({ config }: { config: LLMConfigFixture[] }): CreatedEnv {
   const logs: LLMLogEntry[] = [];

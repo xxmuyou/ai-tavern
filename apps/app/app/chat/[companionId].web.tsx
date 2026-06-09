@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
   type ListRenderItemInfo,
+  type NativeScrollEvent,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
   type ViewStyle,
@@ -59,6 +60,7 @@ import { UserMessageEditor } from '@/components/UserMessageEditor';
 import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
 
 const STREAMING_ID = '__streaming__';
+const AUTO_SCROLL_BOTTOM_THRESHOLD = 72;
 
 type StreamingItem = {
   __streaming: true;
@@ -70,6 +72,11 @@ type ChatListItem = ChatMessage | StreamingItem;
 
 function isStreamingItem(item: ChatListItem): item is StreamingItem {
   return (item as StreamingItem).__streaming === true;
+}
+
+function isNearThreadBottom(event: NativeScrollEvent): boolean {
+  const visibleBottom = event.contentOffset.y + event.layoutMeasurement.height;
+  return event.contentSize.height - visibleBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD;
 }
 
 export default function WebChatScreen() {
@@ -98,7 +105,6 @@ export default function WebChatScreen() {
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
     onSaved: () => {
-      shouldAutoScrollRef.current = true;
       void relationship.refresh();
     },
   });
@@ -211,6 +217,10 @@ export default function WebChatScreen() {
     }
   }, [scrollThreadToEnd]);
 
+  const handleThreadScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    shouldAutoScrollRef.current = isNearThreadBottom(event.nativeEvent);
+  }, []);
+
   const handleLoadMore = useCallback(async () => {
     shouldAutoScrollRef.current = false;
     await history.loadMore();
@@ -234,8 +244,9 @@ export default function WebChatScreen() {
     if (!stream.isStreaming) {
       return;
     }
-    shouldAutoScrollRef.current = true;
-    scrollThreadToEnd(false);
+    if (shouldAutoScrollRef.current) {
+      scrollThreadToEnd(false);
+    }
   }, [scrollThreadToEnd, stream.isStreaming, stream.streamingText]);
 
   const items = useMemo<ChatListItem[]>(() => {
@@ -245,9 +256,11 @@ export default function WebChatScreen() {
 
   const updateHistoryMessage = history.updateMessage;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
+    const shouldFollow = shouldAutoScrollRef.current;
     updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
-    shouldAutoScrollRef.current = true;
-    scrollThreadToEnd(false);
+    if (shouldFollow) {
+      scrollThreadToEnd(false);
+    }
   }, [scrollThreadToEnd, updateHistoryMessage]);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
@@ -385,6 +398,7 @@ export default function WebChatScreen() {
         },
         sceneId,
       });
+      const shouldFollow = shouldAutoScrollRef.current;
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -394,7 +408,6 @@ export default function WebChatScreen() {
         role: 'companion',
         scene_id: sceneId ?? null,
       });
-      shouldAutoScrollRef.current = true;
       await history.refresh({ silent: true });
       if (acceptedSceneId) {
         history.appendMessage({
@@ -405,9 +418,10 @@ export default function WebChatScreen() {
           role: 'companion',
           scene_id: acceptedSceneId,
         });
-        shouldAutoScrollRef.current = true;
       }
-      scrollThreadToEnd(false);
+      if (shouldFollow) {
+        scrollThreadToEnd(false);
+      }
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
       }
@@ -465,6 +479,7 @@ export default function WebChatScreen() {
         },
         sceneId,
       });
+      const shouldFollow = shouldAutoScrollRef.current;
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -474,9 +489,10 @@ export default function WebChatScreen() {
         role: 'companion',
         scene_id: sceneId ?? null,
       });
-      shouldAutoScrollRef.current = true;
       await history.refresh({ silent: true });
-      scrollThreadToEnd(false);
+      if (shouldFollow) {
+        scrollThreadToEnd(false);
+      }
       // Auto-play the new reply when the global voice toggle is on.
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -535,6 +551,7 @@ export default function WebChatScreen() {
           setUnlockToken((token) => token + 1);
         },
       });
+      const shouldFollow = shouldAutoScrollRef.current;
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -544,9 +561,10 @@ export default function WebChatScreen() {
         role: 'companion',
         scene_id: sceneId ?? null,
       });
-      shouldAutoScrollRef.current = true;
       await history.refresh({ silent: true });
-      scrollThreadToEnd(false);
+      if (shouldFollow) {
+        scrollThreadToEnd(false);
+      }
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
       }
@@ -858,6 +876,8 @@ export default function WebChatScreen() {
               ) : null
             }
             onContentSizeChange={handleThreadContentSizeChange}
+            onScroll={handleThreadScroll}
+            scrollEventThrottle={16}
             style={twilightStyles.thread}
           />
 
