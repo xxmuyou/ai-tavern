@@ -61,6 +61,9 @@ import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type 
 
 const STREAMING_ID = '__streaming__';
 const AUTO_SCROLL_BOTTOM_THRESHOLD = 72;
+// How far the user must scroll up (px) before we treat it as "detach from
+// bottom". Programmatic scrollToEnd only moves down, so it never trips this.
+const SCROLL_UP_EPSILON = 12;
 
 type StreamingItem = {
   __streaming: true;
@@ -133,6 +136,7 @@ export default function WebChatScreen() {
   const [isResolvingStory, setIsResolvingStory] = useState(false);
   const threadScrollRef = useRef<FlatList<ChatListItem>>(null);
   const shouldAutoScrollRef = useRef(true);
+  const lastThreadOffsetYRef = useRef(0);
   const didInitialScrollRef = useRef(false);
 
   useEffect(() => {
@@ -218,7 +222,16 @@ export default function WebChatScreen() {
   }, [scrollThreadToEnd]);
 
   const handleThreadScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    shouldAutoScrollRef.current = isNearThreadBottom(event.nativeEvent);
+    // Detach by scroll DIRECTION, not by position: any upward drag detaches.
+    // A programmatic scrollToEnd only increases offset, so it can never detach
+    // us — this kills the streaming "yank back to bottom" fight.
+    const y = event.nativeEvent.contentOffset.y;
+    if (isNearThreadBottom(event.nativeEvent)) {
+      shouldAutoScrollRef.current = true;
+    } else if (y < lastThreadOffsetYRef.current - SCROLL_UP_EPSILON) {
+      shouldAutoScrollRef.current = false;
+    }
+    lastThreadOffsetYRef.current = y;
   }, []);
 
   const handleLoadMore = useCallback(async () => {
@@ -239,15 +252,6 @@ export default function WebChatScreen() {
     shouldAutoScrollRef.current = true;
     scrollThreadToEnd(false);
   }, [history.isLoadingInitial, scrollThreadToEnd]);
-
-  useEffect(() => {
-    if (!stream.isStreaming) {
-      return;
-    }
-    if (shouldAutoScrollRef.current) {
-      scrollThreadToEnd(false);
-    }
-  }, [scrollThreadToEnd, stream.isStreaming, stream.streamingText]);
 
   const items = useMemo<ChatListItem[]>(() => {
     if (!stream.isStreaming) return history.messages;

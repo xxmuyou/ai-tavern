@@ -21,6 +21,9 @@ type UsePendingMomentImagesInput = {
 export function usePendingMomentImages({ messages, onUpdate }: UsePendingMomentImagesInput) {
   const onUpdateRef = useRef(onUpdate);
   const inFlightRef = useRef(new Set<string>());
+  // Last status|output_key we surfaced per job, so an unchanged poll result does
+  // not re-fire onUpdate every 2.5s (which would re-render and yank the scroll).
+  const lastSeenRef = useRef(new Map<string, string>());
 
   useEffect(() => {
     onUpdateRef.current = onUpdate;
@@ -49,11 +52,15 @@ export function usePendingMomentImages({ messages, onUpdate }: UsePendingMomentI
           try {
             const res = await getMomentImageJob(jobId);
             if (!cancelled) {
-              onUpdateRef.current(messageId, {
-                job_id: res.job_id || jobId,
-                output_key: res.output_key ?? null,
-                status: res.status,
-              });
+              const signature = `${res.status}|${res.output_key ?? ''}`;
+              if (lastSeenRef.current.get(jobId) !== signature) {
+                lastSeenRef.current.set(jobId, signature);
+                onUpdateRef.current(messageId, {
+                  job_id: res.job_id || jobId,
+                  output_key: res.output_key ?? null,
+                  status: res.status,
+                });
+              }
             }
           } catch {
             // The per-message component still owns user-facing errors. This

@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  type NativeScrollEvent,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
@@ -64,6 +65,15 @@ import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type 
 
 const BILLING_ROUTE = '/billing' as Href;
 const STREAMING_ID = '__streaming__';
+const AUTO_SCROLL_BOTTOM_THRESHOLD = 72;
+// How far the user must scroll up (px) before we treat it as "detach from
+// bottom". Programmatic scrollToEnd only moves down, so it never trips this.
+const SCROLL_UP_EPSILON = 12;
+
+function isNearBottom(event: NativeScrollEvent): boolean {
+  const visibleBottom = event.contentOffset.y + event.layoutMeasurement.height;
+  return event.contentSize.height - visibleBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD;
+}
 
 type StreamingItem = {
   __streaming: true;
@@ -130,7 +140,10 @@ function ChatScreenInner() {
   const [isResolvingStory, setIsResolvingStory] = useState(false);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
-  const shouldScrollOnNextRef = useRef(true);
+  // Sticky "follow the bottom" flag. Detaches on an upward scroll, re-attaches
+  // when the user returns to the bottom (see handleScroll).
+  const shouldAutoScrollRef = useRef(true);
+  const lastOffsetYRef = useRef(0);
 
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
@@ -145,7 +158,7 @@ function ChatScreenInner() {
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
     onSaved: () => {
-      shouldScrollOnNextRef.current = true;
+      shouldAutoScrollRef.current = true;
       void relationship.refresh();
     },
   });
@@ -247,12 +260,6 @@ function ChatScreenInner() {
     }
   }, [now, rateLimitedUntil]);
 
-  useEffect(() => {
-    if (!history.isLoadingInitial && history.messages.length > 0) {
-      shouldScrollOnNextRef.current = true;
-    }
-  }, [history.isLoadingInitial, history.messages.length]);
-
   const items = useMemo<ChatListItem[]>(() => {
     if (!stream.isStreaming) {
       return history.messages;
@@ -266,11 +273,28 @@ function ChatScreenInner() {
   }, [history.messages, stream.isStreaming, stream.streamingText]);
 
   const handleContentSizeChange = useCallback(() => {
-    if (shouldScrollOnNextRef.current && listRef.current) {
-      listRef.current.scrollToEnd({ animated: false });
-      shouldScrollOnNextRef.current = false;
+    if (shouldAutoScrollRef.current) {
+      listRef.current?.scrollToEnd({ animated: false });
     }
   }, []);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // Detach by scroll DIRECTION, not by position: any upward drag detaches.
+    // A programmatic scrollToEnd only increases offset, so it can never detach
+    // us — this keeps streaming/moment-image updates from yanking the view.
+    const y = event.nativeEvent.contentOffset.y;
+    if (isNearBottom(event.nativeEvent)) {
+      shouldAutoScrollRef.current = true;
+    } else if (y < lastOffsetYRef.current - SCROLL_UP_EPSILON) {
+      shouldAutoScrollRef.current = false;
+    }
+    lastOffsetYRef.current = y;
+  }, []);
+
+  const handleLoadMore = useCallback(() => {
+    shouldAutoScrollRef.current = false;
+    void history.loadMore();
+  }, [history]);
 
   const showInviteNotice = useCallback((message: string) => {
     setInviteNotice(message);
@@ -322,7 +346,7 @@ function ChatScreenInner() {
       role: 'user',
     };
     history.appendMessage(userMessage);
-    shouldScrollOnNextRef.current = true;
+    shouldAutoScrollRef.current = true;
 
     let serverMessageId = '';
     let acceptedSceneId: string | null = null;
@@ -371,7 +395,7 @@ function ChatScreenInner() {
           scene_id: acceptedSceneId,
         });
       }
-      shouldScrollOnNextRef.current = true;
+      shouldAutoScrollRef.current = true;
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
       }
@@ -421,7 +445,7 @@ function ChatScreenInner() {
     };
     history.appendMessage(userMessage);
     setDraft('');
-    shouldScrollOnNextRef.current = true;
+    shouldAutoScrollRef.current = true;
 
     let serverMessageId = '';
     try {
@@ -454,7 +478,7 @@ function ChatScreenInner() {
         scene_id: sceneId ?? null,
       };
       history.appendMessage(finalMessage);
-      shouldScrollOnNextRef.current = true;
+      shouldAutoScrollRef.current = true;
       // Auto-play the new reply when the global voice toggle is on.
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -488,7 +512,7 @@ function ChatScreenInner() {
       role: 'user',
     };
     history.appendMessage(userMessage);
-    shouldScrollOnNextRef.current = true;
+    shouldAutoScrollRef.current = true;
 
     let serverMessageId = '';
     try {
@@ -524,7 +548,7 @@ function ChatScreenInner() {
         role: 'companion',
         scene_id: sceneId ?? null,
       });
-      shouldScrollOnNextRef.current = true;
+      shouldAutoScrollRef.current = true;
       void relationship.refresh();
     } catch (error) {
       if (error instanceof QuotaExceededError) {
@@ -546,7 +570,7 @@ function ChatScreenInner() {
       role: 'user',
       scene_id: sceneId,
     });
-    shouldScrollOnNextRef.current = true;
+    shouldAutoScrollRef.current = true;
     try {
       const result = await resolveStoryChoice(companionId, choice.id, {
         activity_id: activeActivityId ?? null,
@@ -577,7 +601,7 @@ function ChatScreenInner() {
         setUnlockToken((token) => token + 1);
       }
       setStoryMoment(null);
-      shouldScrollOnNextRef.current = true;
+      shouldAutoScrollRef.current = true;
       void relationship.refresh();
     } catch (error) {
       pushError(error instanceof Error ? error.message : 'Story moment could not be resolved.');
@@ -639,7 +663,6 @@ function ChatScreenInner() {
   const updateHistoryMessage = history.updateMessage;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
     updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
-    shouldScrollOnNextRef.current = true;
   }, [updateHistoryMessage]);
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const renderItem = useCallback(({ item }: { item: ChatListItem }) => {
@@ -830,13 +853,15 @@ function ChatScreenInner() {
             renderItem={renderItem}
             contentContainerStyle={{ paddingVertical: 12 }}
             onContentSizeChange={handleContentSizeChange}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
             ListHeaderComponent={
               history.hasMore ? (
                 <View className="items-center px-4 py-3">
                   <Pressable
                     accessibilityRole="button"
                     disabled={history.isLoadingMore}
-                    onPress={() => void history.loadMore()}
+                    onPress={handleLoadMore}
                     className={`rounded-full border border-app-line bg-app-card px-4 py-2 ${
                       history.isLoadingMore ? 'opacity-50' : 'opacity-100'
                     }`}
