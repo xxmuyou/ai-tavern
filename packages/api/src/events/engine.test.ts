@@ -33,7 +33,7 @@ describe("events engine", () => {
     const candidate = await evaluateTriggersForScene(
       env,
       "u-1",
-      { id: "cafe", mood: "Calm", name: "Cafe", possible_events: '["gift"]' },
+      { id: "pier_cafe", mood: "Calm", name: "Pier Cafe", possible_events: '["gift"]' },
       [{ id: "maya" }],
       1_000_000,
     );
@@ -52,7 +52,7 @@ describe("events engine", () => {
     const candidate = await evaluateTriggersForScene(
       env,
       "u-1",
-      { id: "cafe", mood: "Calm", name: "Cafe", possible_events: '["invitation"]' },
+      { id: "pier_cafe", mood: "Calm", name: "Pier Cafe", possible_events: '["invitation"]' },
       [{ id: "maya" }],
       1_000_000,
     );

@@ -21,7 +21,7 @@ Auth required. Does **not** consume message quota and does **not** call an LLM.
   "recommendations": [
     {
       "companion": { "id": "maya", "name": "Maya", "art_url": "...", "gender": "female" },
-      "scene": { "id": "moon_bar", "name": "Moon Bar", "mood": "warm" },
+      "scene": { "id": "underground_livehouse", "name": "Underground Livehouse", "mood": "warm" },
       "mood": "playful",
       "availability": "available",
       "activity_hint": "reading alone",
@@ -48,7 +48,7 @@ only when `include_flavor=1` and is generated lazily (cached per user/day/slot).
   "companion_id": "maya",
   "date_local": "2026-05-26",
   "time_slot": "afternoon",
-  "scene_id": "moon_bar",
+  "scene_id": "underground_livehouse",
   "mood": "playful",
   "availability": "available",
   "activity_hint": "reading alone",
@@ -66,7 +66,7 @@ Request:
 ```jsonc
 {
   "companion_id": "maya",
-  "scene_id": "moon_bar",
+  "scene_id": "underground_livehouse",
   "activity_type": "hang_out"
 }
 ```
@@ -77,14 +77,14 @@ Success 201:
   "id": "act_xxx",
   "user_id": "...",
   "companion_id": "maya",
-  "scene_id": "moon_bar",
+  "scene_id": "underground_livehouse",
   "activity_type": "hang_out",
   "status": "active",
   "daily_state_snapshot": {
     "mood": "playful",
     "availability": "available",
     "activity_hint": "reading alone",
-    "scene_id": "moon_bar"
+    "scene_id": "underground_livehouse"
   },
   "started_at": 1748275200000,
   "completed_at": null,
@@ -118,7 +118,7 @@ switch response is emitted.
 {
   "text": "<narration>I set a coffee down near you.</narration>I got this for us.",
   "activity_id": "act_xxx", // optional
-  "invite_scene_id": "moon_bar", // optional
+  "invite_scene_id": "underground_livehouse", // optional
   "quick_action": { "type": "gift", "item_id": "coffee" } // optional
 }
 ```
@@ -146,9 +146,9 @@ in the response (oldest fade out). Pro users have no cap.
       "companion_id": "maya",
       "memory_type": "first_hangout",
       "memory_subtype": "",
-      "scene_id": "moon_bar",
+      "scene_id": "underground_livehouse",
       "activity_id": "act_xxx",
-      "title": "First time at Moon Bar",
+      "title": "First time at Underground Livehouse",
       "summary": "...",
       "key_choice": "...",
       "relationship_delta": { "closeness": 3, "trust": 2 },

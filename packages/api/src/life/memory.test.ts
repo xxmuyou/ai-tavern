@@ -106,10 +106,10 @@ describe("onActivityMemoryHook", () => {
       id: "act1",
       user_id: "u1",
       companion_id: "maya",
-      scene_id: "moon_bar",
+      scene_id: "underground_livehouse",
       activity_type: "hang_out",
       completed_at: 1000,
-      daily_state_snapshot: JSON.stringify({ mood: "calm", availability: "available", activity_hint: "reading", scene_id: "moon_bar" }),
+      daily_state_snapshot: JSON.stringify({ mood: "calm", availability: "available", activity_hint: "reading", scene_id: "underground_livehouse" }),
       metadata: null,
     });
 
@@ -121,7 +121,7 @@ describe("onActivityMemoryHook", () => {
     const base = {
       user_id: "u1",
       companion_id: "maya",
-      scene_id: "moon_bar",
+      scene_id: "underground_livehouse",
       activity_type: "hang_out" as const,
       completed_at: 1000,
       daily_state_snapshot: "{}",
@@ -138,7 +138,7 @@ describe("onActivityMemoryHook", () => {
     const base = {
       user_id: "u1",
       companion_id: "maya",
-      scene_id: "moon_bar",
+      scene_id: "underground_livehouse",
       activity_type: "gift" as const,
       completed_at: 1000,
       daily_state_snapshot: "{}",
@@ -157,7 +157,7 @@ describe("onActivityMemoryHook", () => {
       id: "c1",
       user_id: "u1",
       companion_id: "maya",
-      scene_id: "moon_bar",
+      scene_id: "underground_livehouse",
       activity_type: "check_in",
       completed_at: 1000,
       daily_state_snapshot: "{}",

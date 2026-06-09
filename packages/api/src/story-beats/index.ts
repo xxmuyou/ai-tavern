@@ -456,12 +456,12 @@ function matchStoryScene(
 function preferredSceneIdsForIntent(intent: string): string[] {
   switch (intent) {
     case "walk_home":
-      return ["apartment_door", "night_street", "residential_street", "home"];
+      return ["apartment_lobby", "private_apartment_bedroom", "night_street", "residential_street", "home"];
     case "go_for_coffee":
-      return ["cafe", "coffee_shop", "pier_coffee_shop"];
+      return ["pier_cafe", "cafe", "coffee_shop"];
     case "walk_outside":
     case "step_away":
-      return ["street", "park", "riverside", "night_street"];
+      return ["riverside_walk", "neighborhood_park", "central_station_plaza", "street", "park", "riverside", "night_street"];
     default:
       return [];
   }

@@ -78,7 +78,7 @@ Query:
       "gender": "female",
       "relationship_role": "crush",
       "art_url": "portraits/maya/neutral.webp",
-      "preferred_scenes": ["pier_coffee_shop"],
+      "preferred_scenes": ["pier_cafe"],
       "tags": ["style:anime"],
       "play_count": 12
     }

@@ -517,7 +517,7 @@ describe("companions module", () => {
         gender: "female",
         personality: "Loyal and direct",
         relationship_role: "friend",
-        preferred_scenes: ["cafe", "park"],
+        preferred_scenes: ["pier_cafe", "neighborhood_park"],
       }),
       env,
       "/companions",
@@ -536,7 +536,7 @@ describe("companions module", () => {
     expect(body.source).toBe("user");
     expect(body.name).toBe("Echo");
     expect(body.gender).toBe("female");
-    expect(body.preferred_scenes).toEqual(["cafe", "park"]);
+    expect(body.preferred_scenes).toEqual(["pier_cafe", "neighborhood_park"]);
     expect(body.voice_id).toBe("Arrogant_Miss");
     expect(body.voice_speed).toBe("medium");
     expect(body.id.length).toBeGreaterThan(0);

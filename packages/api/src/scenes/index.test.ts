@@ -90,9 +90,9 @@ describe("scenes module", () => {
           art_url: null,
           default_companions: '["maya","ryan"]',
           display_order: 1,
-          id: "cafe",
+          id: "pier_cafe",
           mood: "Calm",
-          name: "Cafe",
+          name: "Pier Cafe",
           tags: '["cafe"]',
           unlock_condition: null,
         },
@@ -130,7 +130,7 @@ describe("scenes module", () => {
 
     expect(body.scenes).toHaveLength(2);
 
-    const cafe = body.scenes.find((s) => s.id === "cafe");
+    const cafe = body.scenes.find((s) => s.id === "pier_cafe");
     expect(cafe?.unlocked).toBe(true);
     expect(cafe?.unlock_hint).toBeNull();
     expect(cafe?.tags).toEqual(["cafe"]);
@@ -255,9 +255,9 @@ describe("scenes module", () => {
           art_url: null,
           default_companions: '["maya"]',
           display_order: 1,
-          id: "cafe",
+          id: "pier_cafe",
           mood: "Golden hour",
-          name: "Cafe",
+          name: "Pier Cafe",
           tags: '["cafe"]',
           unlock_condition: null,
         },
@@ -270,7 +270,7 @@ describe("scenes module", () => {
           objective: "Ask about the sketch without pushing.",
           opener: "Maya hides the sketchbook half a second too late.",
           reward_unlock_key: null,
-          scene_id: "cafe",
+          scene_id: "pier_cafe",
           stage_gate: "first_contact",
           title: "The Unfinished Sketch",
         },
@@ -279,9 +279,9 @@ describe("scenes module", () => {
 
     const token = await issueDevToken(env, "player@example.com");
     const response = await handleScenesRequest(
-      authedRequest("http://localhost/scenes/cafe/enter", token, "POST"),
+      authedRequest("http://localhost/scenes/pier_cafe/enter", token, "POST"),
       env,
-      "/scenes/cafe/enter",
+      "/scenes/pier_cafe/enter",
     );
 
     expect(response?.status).toBe(200);
