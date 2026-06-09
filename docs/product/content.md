@@ -1,10 +1,10 @@
-# v1 内容清单
+# 内容清单
 
-> 本文档列出 v1 上线的具体内容：虚构都市设定、10 个场景、10 个官方角色。所有内容是**初稿** —— 等产品所有者敲定后，作为 D1 migration seed（见 [`architecture/data-model.md`](../architecture/data-model.md) §7）落地。
+> 本文档保留 Aurelia City 世界观、官方角色和 V1 legacy 内容记录。当前官方场景权威来源是 [`scene-catalog-v2.md`](./scene-catalog-v2.md)：24 个按关系阶段组织的 scene。
 >
 > **关于"暂定"标注：** 整份文档都是 *(暂定)*，等用户审阅、内容创作打磨后定稿。
 >
-> **重要边界：** 日常生活模拟玩法只读取本文档里的场景和角色设定，不改变 companion 的性格、属性、初始关系维度，也不改变 scene 的 mood、tags、possible_events、default_companions、unlock_condition。
+> **重要边界：** 日常生活模拟玩法读取当前 scene catalog 和角色设定，不改变 companion 的性格、属性、初始关系维度，也不改变 scene 的 mood、tags、possible_events、default_companions、unlock_condition。
 
 ---
 
@@ -37,9 +37,9 @@
 
 ---
 
-## 2. 场景清单（10 个）
+## 2. 场景清单（V2 current）
 
-每个场景的最终字段对应 `scenes` 表（[data-model.md §3.4](../architecture/data-model.md#34-scenes)）。下表展示核心信息，完整 prompt-ready mood 描述在内容打磨阶段补全。
+每个场景的最终字段对应 `scenes` 表（[data-model.md §3.4](../architecture/data-model.md#34-scenes)）。V2 起，当前官方场景清单改为 24 个，完整字段、prompt、视觉边界以 [`scene-catalog-v2.md`](./scene-catalog-v2.md) 为准。
 
 这些场景同时是日常生活系统的活动容器：
 - daily state 只能从已解锁且适配的 scene 中选择 companion 今日位置
@@ -47,83 +47,20 @@
 - 场景的 `tags` 与 `possible_events` 决定哪些活动和事件更自然
 - 不为了日常系统修改场景基础属性；如需扩展，只新增玩法映射表
 
-### 场景总览
+### V2 场景总览
 
-| ID | Name | Tags | 氛围 | 默认偏好角色 | 解锁条件 |
-|----|------|------|------|------------|---------|
-| `pier_coffee_shop` | Pier Coffee Shop | cafe, waterfront | 海边咖啡馆，下午黄金时光 | Maya, Theo | 默认解锁 |
-| `sky_office` | Sky Office | office, day | 高层办公室，工作日 | Ryan, Aiko | 默认解锁 |
-| `twin_pines_park` | Twin Pines Park | park, outdoor | 中央公园，傍晚跑步时段 | Ethan, Iris | 默认解锁 |
-| `moon_bar` | Moon Bar | bar, night | 都市酒吧，深夜慵懒 | Lila | 默认解锁 |
-| `sunrise_apartment` | Sunrise Apartment | home, intimate | 公寓楼层走廊 / 自家公寓 | Iris | 默认解锁（自家） |
-| `brookside_bookshop` | Brookside Bookshop | indoor, quiet | 老书店，雨天午后 | Sora, Aiko, Theo | 默认解锁 |
-| `skyline_rooftop` | Skyline Rooftop | outdoor, night | 屋顶花园，深夜星空 | Sora, Marcus | 与 Sora 或 Marcus closeness > 30 |
-| `iron_forge_gym` | Iron Forge Gym | indoor, energetic | 健身房，清晨 | Ethan | 默认解锁 |
-| `crescent_library` | Crescent Library | indoor, quiet | 大学图书馆 | Marcus, Aiko | 默认解锁 |
-| `harbor_market` | Harbor Market | outdoor, daytime | 周末街市，海港边 | Jordan, Lila | 默认解锁 |
+| Tier | Scene IDs |
+|---|---|
+| public | `central_station_plaza`, `pier_cafe`, `midnight_convenience_store`, `rainlit_bookshop` |
+| familiar | `apartment_lobby`, `shared_laundry_room`, `neighborhood_park`, `creative_studio` |
+| casual_date | `indie_cinema`, `dessert_parlor`, `vinyl_record_shop`, `riverside_walk` |
+| emotional | `skyline_roof_garden`, `last_bus_stop`, `crescent_reading_room`, `rain_arcade` |
+| active | `iron_forge_gym`, `harbor_weekend_market`, `underground_livehouse`, `neon_game_arcade` |
+| intimate | `midnight_hotel_suite`, `private_apartment_bedroom`, `rainfall_window_lounge`, `dawn_balcony` |
 
-### 场景细节
+V2 image direction: Japanese visual novel background / anime dating sim BG, no people, no text, no watermark, non-photorealistic, non-3D, 16:9, strong center-lower foreground space for character sprites.
 
-#### `pier_coffee_shop` — Pier Coffee Shop
-- **Mood prompt：** "A small, warmly lit coffee shop at the end of the pier. Late afternoon sun streams through the windows, casting long golden shadows. The hiss of the espresso machine and the smell of fresh pastries fill the air. Always quiet enough to talk, never empty."
-- **Possible events：** `daily_encounter`, `invitation`, `gift`
-- **典型情境：** 偶遇某人在角落读书 / 写作 / 看海
-- **适配活动：** `check_in`, `hang_out`, `invite`, `date`, `gift`
-
-#### `sky_office` — Sky Office
-- **Mood prompt：** "The 27th floor of an open-plan office. Floor-to-ceiling windows, hum of conversation, the constant rustle of keyboards. Late-week energy: a mix of deadlines and casual banter."
-- **Possible events：** `daily_encounter`, `conflict`, `invitation`
-- **典型情境：** 同事茶水间偶遇、加班相遇
-- **适配活动：** `check_in`, `hang_out`, `invite`, `repair`
-
-#### `twin_pines_park` — Twin Pines Park
-- **Mood prompt：** "A wide central park bordered by twin rows of pine trees. Joggers in the morning, families in the afternoon, soft golden light in the evening. The sound of distant traffic mixes with birdsong."
-- **Possible events：** `daily_encounter`, `invitation`, `milestone`
-- **典型情境：** 跑步偶遇、傍晚散步、周末野餐
-- **适配活动：** `check_in`, `hang_out`, `invite`, `date`, `repair`
-
-#### `moon_bar` — Moon Bar
-- **Mood prompt：** "A dimly lit cocktail bar on a backstreet, with neon moon decor and warm wooden counters. Soft jazz plays in the background. Quiet enough for real conversation, busy enough not to feel alone."
-- **Possible events：** `daily_encounter`, `confession`, `gift`
-- **典型情境：** 一杯酒后的深夜对话
-- **适配活动：** `check_in`, `hang_out`, `date`, `gift`, `repair`
-
-#### `sunrise_apartment` — Sunrise Apartment
-- **Mood prompt：** "Your apartment building, mostly the shared landing or your own front door. Mornings bring the smell of fresh bread from downstairs. Quiet, familiar, the closest thing to home."
-- **Possible events：** `daily_encounter`, `gift`, `milestone`
-- **典型情境：** 邻居偶遇、收快递时碰面
-- **适配活动：** `check_in`, `hang_out`, `gift`, `repair`
-
-#### `brookside_bookshop` — Brookside Bookshop
-- **Mood prompt：** "A two-floor old bookshop tucked beside a small stream. The smell of paper and dust. Reading nooks scattered between the shelves. On rainy days, the windows fog up and the shop feels like a secret."
-- **Possible events：** `daily_encounter`, `gift`, `invitation`
-- **典型情境：** 推荐书、偶遇正在读同一本书的人
-- **适配活动：** `check_in`, `hang_out`, `invite`, `date`, `gift`
-
-#### `skyline_rooftop` — Skyline Rooftop
-- **Mood prompt：** "A rooftop garden on a residential tower. City lights stretch to the horizon. Cool wind, distant traffic hum. A place people come to think, to escape, or to be honest."
-- **Possible events：** `confession`, `milestone`, `invitation`
-- **典型情境：** 深夜畅谈、表白时刻
-- **解锁逻辑：** v1 设为 closeness > 30 才解锁（让玩家有"探索新地方"的感觉）
-- **适配活动：** `hang_out`, `date`, `repair`
-
-#### `iron_forge_gym` — Iron Forge Gym
-- **Mood prompt：** "An old-school gym with iron weights, the smell of chalk and rubber. Early-morning regulars: each on their own routine, occasional nods of recognition."
-- **Possible events：** `daily_encounter`, `invitation`
-- **典型情境：** 健身器材相邻、教练指导
-- **适配活动：** `check_in`, `hang_out`, `invite`
-
-#### `crescent_library` — Crescent Library
-- **Mood prompt：** "A grand old library with high vaulted ceilings and reading rooms shaped like a crescent. Whispered conversations, the soft scratch of pens. A place for serious study or unexpected encounters."
-- **Possible events：** `daily_encounter`, `gift`, `invitation`
-- **典型情境：** 借同一本书、长桌对坐
-- **适配活动：** `check_in`, `hang_out`, `invite`, `date`
-
-#### `harbor_market` — Harbor Market
-- **Mood prompt：** "A weekend market along the harbor: stalls of street food, vintage trinkets, art prints. Crowded but lively. The smell of grilled fish and fresh bread."
-- **Possible events：** `daily_encounter`, `gift`, `invitation`
-- **典型情境：** 摊位偶遇、一起逛市集
-- **适配活动：** `check_in`, `hang_out`, `invite`, `date`, `gift`
+V1 的 10 个旧 scene 已由 V2 catalog 取代。新 migration 会把旧结构化 `scene_id` 映射到 V2 scene，并将旧 scene 从运行时列表中移除。
 
 ---
 
@@ -135,16 +72,16 @@
 
 | ID | Name | Gender | Age | Role | 偏好场景 | 一句话定位 |
 |----|------|--------|-----|------|---------|-----------|
-| `maya` | Maya Chen | F | 26 | crush | pier_coffee_shop, brookside_bookshop | 文艺敏感的平面设计师，安静的暧昧 |
-| `ryan` | Ryan Park | M | 28 | colleague | sky_office, twin_pines_park | 理性温柔的同事工程师 |
-| `lila` | Lila Marchetti | F | 30 | stranger | moon_bar, harbor_market | 冷艳神秘的调酒师 |
-| `ethan` | Ethan Williams | M | 27 | friend | iron_forge_gym, twin_pines_park | 阳光开朗的健身教练 |
-| `sora` | Sora Aizawa | F | 24 | crush | skyline_rooftop, brookside_bookshop | 自由灵魂的独立音乐人 |
-| `marcus` | Marcus Reid | M | 32 | friend | crescent_library, skyline_rooftop | 沉静睿智的记者 |
-| `aiko` | Aiko Tanaka | F | 29 | colleague | sky_office, brookside_bookshop, crescent_library | 知性内敛的建筑师 |
-| `jordan` | Jordan Lopez | M | 26 | stranger | harbor_market, moon_bar | 浪荡不羁的街头摄影师 |
-| `iris` | Iris Bennett | F | 31 | neighbor | sunrise_apartment, twin_pines_park | 温暖包容的单亲妈妈邻居 |
-| `theo` | Theo Nakamura | M | 28 | crush | pier_coffee_shop, brookside_bookshop | 温和文艺的咖啡师 |
+| `maya` | Maya Chen | F | 26 | crush | pier_cafe, rainlit_bookshop, creative_studio | 文艺敏感的平面设计师，安静的暧昧 |
+| `ryan` | Ryan Park | M | 28 | colleague | central_station_plaza, creative_studio, riverside_walk | 理性温柔的同事工程师 |
+| `lila` | Lila Marchetti | F | 30 | stranger | midnight_convenience_store, underground_livehouse, last_bus_stop | 冷艳神秘的调酒师 |
+| `ethan` | Ethan Williams | M | 27 | friend | iron_forge_gym, neighborhood_park, neon_game_arcade | 阳光开朗的健身教练 |
+| `sora` | Sora Aizawa | F | 24 | crush | vinyl_record_shop, skyline_roof_garden, underground_livehouse | 自由灵魂的独立音乐人 |
+| `marcus` | Marcus Reid | M | 32 | friend | crescent_reading_room, skyline_roof_garden, last_bus_stop | 沉静睿智的记者 |
+| `aiko` | Aiko Tanaka | F | 29 | colleague | creative_studio, rainlit_bookshop, crescent_reading_room | 知性内敛的建筑师 |
+| `jordan` | Jordan Lopez | M | 26 | stranger | harbor_weekend_market, rain_arcade, neon_game_arcade | 浪荡不羁的街头摄影师 |
+| `iris` | Iris Bennett | F | 31 | neighbor | apartment_lobby, shared_laundry_room, neighborhood_park | 温暖包容的单亲妈妈邻居 |
+| `theo` | Theo Nakamura | M | 28 | crush | pier_cafe, rainlit_bookshop, indie_cinema | 温和文艺的咖啡师 |
 
 **关系定位分布：** crush ×4 / friend ×2 / colleague ×2 / stranger ×2 / neighbor ×1
 **性别分布：** 女 ×5 / 男 ×5
@@ -272,7 +209,7 @@
 | 触发 | 解锁 |
 |------|------|
 | Maya closeness > 50 | 解锁 invitation 事件类型："Maya invites you to a small art exhibition" |
-| Sora closeness > 30 | 解锁场景 `skyline_rooftop`（Sora 的常去地） |
+| Sora closeness > 30 | 解锁场景 `skyline_roof_garden`（Sora 的常去地） |
 | Marcus trust > 40 | 解锁 invitation："Marcus invites you to dinner at his place" |
 | Lila romance > 30 | 解锁 confession 事件（Lila 不轻易表白） |
 | 任意角色 hostility > 50 | 该角色拒绝你进入其偏好场景一段时间（冷战机制） |

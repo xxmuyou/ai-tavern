@@ -49,7 +49,7 @@ type SceneFixture = {
 describe("story beats", () => {
   it("returns null when a companion has no beats", async () => {
     const env = createEnv({ beats: [], relationships: [] });
-    await expect(loadStoryBeatForScene(env, "u1", "maya", "cafe")).resolves.toBeNull();
+    await expect(loadStoryBeatForScene(env, "u1", "maya", "pier_cafe")).resolves.toBeNull();
   });
 
   it("returns active beat when the stage gate and scene match", async () => {
@@ -57,14 +57,14 @@ describe("story beats", () => {
       beats: [
         beat({
           id: "b1",
-          scene_id: "cafe",
+          scene_id: "pier_cafe",
           stage_gate: "first_contact",
         }),
       ],
       relationships: [{ companion_id: "maya", user_id: "u1" }],
     });
 
-    const result = await loadStoryBeatForScene(env, "u1", "maya", "cafe");
+    const result = await loadStoryBeatForScene(env, "u1", "maya", "pier_cafe");
 
     expect(result).toMatchObject({
       id: "b1",
@@ -76,11 +76,11 @@ describe("story beats", () => {
 
   it("returns waiting_stage when the next beat is not reachable yet", async () => {
     const env = createEnv({
-      beats: [beat({ id: "b1", scene_id: "cafe", stage_gate: "trusted" })],
+      beats: [beat({ id: "b1", scene_id: "pier_cafe", stage_gate: "trusted" })],
       relationships: [{ closeness: 20, companion_id: "maya", user_id: "u1" }],
     });
 
-    const result = await loadStoryBeatForScene(env, "u1", "maya", "cafe");
+    const result = await loadStoryBeatForScene(env, "u1", "maya", "pier_cafe");
 
     expect(result).toMatchObject({
       id: "b1",
@@ -92,14 +92,14 @@ describe("story beats", () => {
   it("completes the active beat and returns the next one afterward", async () => {
     const env = createEnv({
       beats: [
-        beat({ beat_order: 1, id: "b1", scene_id: "cafe", stage_gate: "first_contact" }),
-        beat({ beat_order: 2, id: "b2", scene_id: "cafe", stage_gate: "first_contact" }),
+        beat({ beat_order: 1, id: "b1", scene_id: "pier_cafe", stage_gate: "first_contact" }),
+        beat({ beat_order: 2, id: "b2", scene_id: "pier_cafe", stage_gate: "first_contact" }),
       ],
       relationships: [{ companion_id: "maya", user_id: "u1" }],
     });
 
-    const completed = await completeCurrentStoryBeat(env, "u1", "maya", "cafe", 1000);
-    const next = await loadStoryBeatForScene(env, "u1", "maya", "cafe");
+    const completed = await completeCurrentStoryBeat(env, "u1", "maya", "pier_cafe", 1000);
+    const next = await loadStoryBeatForScene(env, "u1", "maya", "pier_cafe");
 
     expect(completed).toMatchObject({ id: "b1", status: "completed" });
     expect(next).toMatchObject({ id: "b2", status: "active" });
@@ -111,15 +111,15 @@ describe("story beats", () => {
         beat({
           completion_mode: "manual",
           id: "b1",
-          scene_id: "cafe",
+          scene_id: "pier_cafe",
           stage_gate: "first_contact",
         }),
       ],
       relationships: [{ companion_id: "maya", user_id: "u1" }],
     });
 
-    const completed = await completeCurrentStoryBeat(env, "u1", "maya", "cafe", 1000);
-    const current = await loadStoryBeatForScene(env, "u1", "maya", "cafe");
+    const completed = await completeCurrentStoryBeat(env, "u1", "maya", "pier_cafe", 1000);
+    const current = await loadStoryBeatForScene(env, "u1", "maya", "pier_cafe");
 
     expect(completed).toBeNull();
     expect(current).toMatchObject({ id: "b1", status: "active" });
@@ -131,7 +131,7 @@ describe("story beats", () => {
         beat({
           completion_mode: "manual",
           id: "b1",
-          scene_id: "cafe",
+          scene_id: "pier_cafe",
           stage_gate: "first_contact",
         }),
       ],
@@ -151,18 +151,18 @@ describe("story beats", () => {
         beat({
           id: "b1",
           objective: "Walk Maya home without making it too heavy.",
-          opener: "Maya lingers near the cafe door.",
-          scene_id: "cafe",
+          opener: "Maya lingers near the Pier Cafe door.",
+          scene_id: "pier_cafe",
         }),
       ],
       relationships: [{ companion_id: "maya", user_id: "u1" }],
       scenes: [
-        scene({ id: "cafe", name: "Cafe", tags: '["cafe"]' }),
+        scene({ id: "pier_cafe", name: "Pier Cafe", tags: '["cafe"]' }),
         scene({ id: "night_street", name: "Night Street", tags: '["street"]' }),
       ],
     });
 
-    const moment = await buildStoryMoment(env, "u1", "maya", "cafe");
+    const moment = await buildStoryMoment(env, "u1", "maya", "pier_cafe");
     const travel = moment?.choices.find((choice) => choice.id === "b1:go");
 
     expect(moment).toMatchObject({
@@ -181,15 +181,15 @@ describe("story beats", () => {
         beat({
           id: "b1",
           objective: "Walk Maya home without making it too heavy.",
-          opener: "Maya lingers near the cafe door.",
-          scene_id: "cafe",
+          opener: "Maya lingers near the Pier Cafe door.",
+          scene_id: "pier_cafe",
         }),
       ],
       relationships: [{ companion_id: "maya", user_id: "u1" }],
-      scenes: [scene({ id: "cafe", name: "Cafe", tags: '["cafe"]' })],
+      scenes: [scene({ id: "pier_cafe", name: "Pier Cafe", tags: '["cafe"]' })],
     });
 
-    const moment = await buildStoryMoment(env, "u1", "maya", "cafe");
+    const moment = await buildStoryMoment(env, "u1", "maya", "pier_cafe");
     const travel = moment?.choices.find((choice) => choice.id === "b1:go");
 
     expect(travel).toMatchObject({
@@ -212,7 +212,7 @@ function beat(partial: Partial<BeatFixture>): BeatFixture {
     objective: "objective",
     opener: "hook",
     reward_unlock_key: null,
-    scene_id: "cafe",
+    scene_id: "pier_cafe",
     source_type: "official_seed",
     stage_gate: "first_contact",
     title: "Beat",
@@ -224,10 +224,10 @@ function scene(partial: Partial<SceneFixture>): SceneFixture {
   return {
     art_url: null,
     display_order: 1,
-    id: "cafe",
+    id: "pier_cafe",
     is_active: 1,
     mood: "Calm",
-    name: "Cafe",
+    name: "Pier Cafe",
     tags: null,
     unlock_condition: null,
     ...partial,

@@ -545,7 +545,7 @@ export async function handleEventsRequest(
   "event": {
     "id": "...",
     "companion_id": "maya",
-    "scene_id": "pier_coffee_shop",
+    "scene_id": "pier_cafe",
     "event_type": "invitation",
     "payload": { "description": "...", "options": [] },
     "created_at": 1740000000000

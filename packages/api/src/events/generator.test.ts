@@ -74,7 +74,7 @@ describe("generateEventPayload", () => {
       companion: { id: "maya", name: "Maya", personality: null, speech_style: null },
       metadata: null,
       narrative: "",
-      scene: { id: "cafe", mood: "Calm", name: "Cafe" },
+      scene: { id: "pier_cafe", mood: "Calm", name: "Pier Cafe" },
       template: TEMPLATE,
       userId: "u-1",
     });

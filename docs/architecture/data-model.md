@@ -142,8 +142,8 @@ CREATE INDEX idx_companions_active ON companions(is_active);
 
 ```sql
 CREATE TABLE scenes (
-  id                TEXT PRIMARY KEY,           -- 如 'pier_coffee_shop'
-  name              TEXT NOT NULL,              -- 'Pier Coffee Shop'
+  id                TEXT PRIMARY KEY,           -- 如 'pier_cafe'
+  name              TEXT NOT NULL,              -- 'Pier Cafe'
   mood              TEXT NOT NULL,              -- 注入 prompt 的氛围描述
   tags              TEXT,                       -- JSON array (cafe/office/...)
   possible_events   TEXT,                       -- JSON array of event_type_id

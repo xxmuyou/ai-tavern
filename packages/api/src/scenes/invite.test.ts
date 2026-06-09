@@ -55,9 +55,9 @@ const cafe: SceneRow = {
   art_url: "cafe.png",
   default_companions: '["maya","ryan"]',
   display_order: 1,
-  id: "cafe",
+  id: "pier_cafe",
   mood: "Calm",
-  name: "Cafe",
+  name: "Pier Cafe",
   unlock_condition: null,
 };
 const tavern: SceneRow = {
@@ -92,7 +92,7 @@ const rooftop: SceneRow = {
 describe("loadInviteTargets", () => {
   it("lists all unlocked scenes, excluding the current scene", async () => {
     const env = createEnv({ relationships: [], scenes: [cafe, tavern, hotel, rooftop] });
-    const targets = await loadInviteTargets(env, "user-1", "maya", "cafe");
+    const targets = await loadInviteTargets(env, "user-1", "maya", "pier_cafe");
     // cafe excluded (current), hotel excluded (locked, romance 0 < 50).
     // rooftop is allowed even though maya is not in default_companions.
     expect(targets.map((t) => t.id)).toEqual(["tavern", "rooftop"]);

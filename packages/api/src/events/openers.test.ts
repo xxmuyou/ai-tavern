@@ -8,8 +8,8 @@ describe("pickOpener", () => {
       companionId: "maya",
       companionName: "Maya",
       now: 1_700_000_000_000,
-      sceneId: "cafe",
-      sceneName: "Cafe",
+      sceneId: "pier_cafe",
+      sceneName: "Pier Cafe",
       userId: "u-1",
     };
 
@@ -22,8 +22,8 @@ describe("pickOpener", () => {
       companionId: "maya",
       companionName: "Maya",
       now: 1,
-      sceneId: "cafe",
-      sceneName: "Cafe",
+      sceneId: "pier_cafe",
+      sceneName: "Pier Cafe",
       userId: "u-1",
     })).toContain("Maya");
   });

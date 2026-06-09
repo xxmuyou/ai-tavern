@@ -61,10 +61,10 @@ function createEnv(rows: CooldownRow[] = [], inserts: unknown[][] = []): Env {
 }
 
 const cafeScene = {
-  id: "cafe",
+  id: "pier_cafe",
   mood: "Warm coffee aroma",
-  name: "Corner Cafe",
-  tags: ["cozy"],
+  name: "Pier Cafe",
+  tags: ["cafe", "cozy"],
 };
 
 const gardenScene = {
@@ -117,7 +117,7 @@ describe("validateQuickAction", () => {
       userId: "u1",
     });
 
-    expect(result).toMatchObject({ action: { item_id: "coffee", scene_id: "cafe" }, ok: true });
+    expect(result).toMatchObject({ action: { item_id: "coffee", scene_id: "pier_cafe" }, ok: true });
   });
 
   it("allows flowers in any current scene", async () => {
@@ -179,7 +179,7 @@ describe("commitQuickAction", () => {
       stage: "familiar",
     });
     quickMocks.detectNewSceneUnlocks.mockResolvedValue([
-      { key: "scene:rooftop", kind: "scene", label: "New place unlocked: Rooftop", scene_id: "rooftop", scene_name: "Rooftop" },
+      { key: "scene:skyline_roof_garden", kind: "scene", label: "New place unlocked: Skyline Roof Garden", scene_id: "skyline_roof_garden", scene_name: "Skyline Roof Garden" },
     ]);
 
     const result = await commitQuickAction(env, {
@@ -187,9 +187,9 @@ describe("commitQuickAction", () => {
         description: "The user ordered coffee for both of you.",
         item_id: "coffee",
         label: "Order coffee",
-        scene_id: "cafe",
+        scene_id: "pier_cafe",
         scene_mood: "Warm",
-        scene_name: "Corner Cafe",
+        scene_name: "Pier Cafe",
         scene_tags: ["coffee"],
       },
       companionId: "maya",
@@ -200,7 +200,7 @@ describe("commitQuickAction", () => {
     expect(inserts).toHaveLength(1);
     expect(inserts[0]?.[1]).toBe("u1");
     expect(inserts[0]?.[2]).toBe("maya");
-    expect(inserts[0]?.[3]).toBe("cafe");
+    expect(inserts[0]?.[3]).toBe("pier_cafe");
     expect(JSON.parse(String(inserts[0]?.[5]))).toMatchObject({ item_id: "coffee", quick_action: true });
     expect(quickMocks.onActivityCompleted).toHaveBeenCalledWith(env, expect.objectContaining({
       activity_type: "gift",
@@ -210,6 +210,6 @@ describe("commitQuickAction", () => {
     }));
     expect(quickMocks.applySignals).toHaveBeenCalledWith(env, "u1", "maya", { closeness: 1, trust: 1 }, now);
     expect(result).toMatchObject({ item_id: "coffee" });
-    expect(result.unlocks.map((unlock) => unlock.key)).toEqual(["title:familiar", "scene:rooftop"]);
+    expect(result.unlocks.map((unlock) => unlock.key)).toEqual(["title:familiar", "scene:skyline_roof_garden"]);
   });
 });

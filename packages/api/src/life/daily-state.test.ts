@@ -110,7 +110,7 @@ const OFFICIAL_MAYA: CompanionRow = {
   id: "maya",
   source: "official",
   name: "Maya",
-  preferred_scenes: JSON.stringify(["moon_bar", "old_bookstore"]),
+  preferred_scenes: JSON.stringify(["underground_livehouse", "rainlit_bookshop"]),
   is_active: 1,
 };
 
@@ -118,7 +118,7 @@ const USER_ALEX: CompanionRow = {
   id: "alex",
   source: "user",
   name: "Alex",
-  preferred_scenes: JSON.stringify(["rooftop", "park"]),
+  preferred_scenes: JSON.stringify(["skyline_roof_garden", "neighborhood_park"]),
   is_active: 1,
 };
 
@@ -131,11 +131,11 @@ const USER_NO_SCENES: CompanionRow = {
 };
 
 const SCENES: SceneRow[] = [
-  { id: "moon_bar", default_companions: JSON.stringify(["maya"]), display_order: 1, is_active: 1 },
-  { id: "old_bookstore", default_companions: null, display_order: 2, is_active: 1 },
-  { id: "rooftop", default_companions: null, display_order: 3, is_active: 1 },
-  { id: "park", default_companions: null, display_order: 4, is_active: 1 },
-  { id: "cafe", default_companions: null, display_order: 5, is_active: 1 },
+  { id: "underground_livehouse", default_companions: JSON.stringify(["maya"]), display_order: 1, is_active: 1 },
+  { id: "rainlit_bookshop", default_companions: null, display_order: 2, is_active: 1 },
+  { id: "skyline_roof_garden", default_companions: null, display_order: 3, is_active: 1 },
+  { id: "neighborhood_park", default_companions: null, display_order: 4, is_active: 1 },
+  { id: "pier_cafe", default_companions: null, display_order: 5, is_active: 1 },
 ];
 
 describe("getOrComputeDailyState", () => {
@@ -173,16 +173,16 @@ describe("getOrComputeDailyState", () => {
     const env = buildEnv({ companions: [USER_ALEX], scenes: SCENES });
     const morning = await getOrComputeDailyState(env, "alex", "2026-05-26", "morning");
     const afternoon = await getOrComputeDailyState(env, "alex", "2026-05-26", "afternoon");
-    expect(morning?.scene_id).toBe("rooftop");
-    expect(afternoon?.scene_id).toBe("park");
+    expect(morning?.scene_id).toBe("skyline_roof_garden");
+    expect(afternoon?.scene_id).toBe("neighborhood_park");
   });
 
   it("user companion with no preferred_scenes pins to fallback scene", async () => {
     const env = buildEnv({ companions: [USER_NO_SCENES], scenes: SCENES });
     const morning = await getOrComputeDailyState(env, "no_pref", "2026-05-26", "morning");
     const night = await getOrComputeDailyState(env, "no_pref", "2026-05-26", "night");
-    expect(morning?.scene_id).toBe("moon_bar"); // lowest display_order
-    expect(night?.scene_id).toBe("moon_bar");
+    expect(morning?.scene_id).toBe("underground_livehouse"); // lowest display_order
+    expect(night?.scene_id).toBe("underground_livehouse");
   });
 
   it("inactive companion returns null", async () => {

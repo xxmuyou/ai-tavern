@@ -202,7 +202,7 @@ nodeInfoList = [
 
 ### 6.7 官方素材与 R2
 
-官方 seed companion / scene 的 `art_url` 保持稳定 key，例如 `portraits/aiko/neutral.webp`、`scenes/pier_coffee_shop.png`。这些 key 有两种消费者：
+官方 seed companion / scene 的 `art_url` 保持稳定 key，例如 `portraits/aiko/neutral.webp`、`scenes/pier_cafe.png`。这些 key 有两种消费者：
 
 - 前端 `mediaSource()` 可把它们映射到 app bundle 里的本地静态资源。
 - 后端 image-gen 只能读取 R2 object key、`/objects/...` URL 或外部 `https://...` URL。

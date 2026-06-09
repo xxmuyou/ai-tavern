@@ -8,22 +8,38 @@
 
 ---
 
-## 1. 场景图（10 张，建议比例 16:9，至少 1600×900）
+## 1. 场景图（V2：24 张，建议比例 16:9，至少 1600×900）
 
 | # | 文件名 | 场景 ID | 中文名 | 氛围关键词 | 时间/光线 | 备注 |
 |---|---|---|---|---|---|---|
-| 1 | `scene_pier_coffee_shop.png` | `pier_coffee_shop` | 码头咖啡馆 | 木质柜台、咖啡机蒸汽、空荡却温暖、海风 | 傍晚金色阳光斜射 | 海边木栈道末端，落地窗 |
-| 2 | `scene_sky_office.png` | `sky_office` | 高空办公室 | 27 楼开放工位、玻璃幕墙、键盘声、城市远景 | 午后白光 | 现代写字楼俯瞰城市 |
-| 3 | `scene_twin_pines_park.png` | `twin_pines_park` | 双松公园 | 两排松树小径、长椅、慢跑者、家庭 | 傍晚柔金 | 中央公园式开阔绿地 |
-| 4 | `scene_moon_bar.png` | `moon_bar` | 月亮酒吧 | 月牙霓虹、木吧台、低饱和爵士夜店感 | 深夜暖黄+霓虹 | 后街小巷氛围 |
-| 5 | `scene_sunrise_apartment.png` | `sunrise_apartment` | 朝阳公寓 | 公共走廊、晨光、楼下面包香 | 清晨柔黄 | 居民楼楼道+门口 |
-| 6 | `scene_brookside_bookshop.png` | `brookside_bookshop` | 溪边书店 | 两层旧书店、阅读角、雨天玻璃雾气 | 阴天/雨天 | 木质书架、灯泡昏黄 |
-| 7 | `scene_skyline_rooftop.png` | `skyline_rooftop` | 天际线屋顶 | 屋顶花园、城市灯海、夜风 | 深夜 | 高视角，星点灯火 |
-| 8 | `scene_iron_forge_gym.png` | `iron_forge_gym` | 铁炉健身房 | 老派铁片+杠铃、橡胶垫、汗与粉笔味 | 清晨冷白光 | 工业风、深色调 |
-| 9 | `scene_crescent_library.png` | `crescent_library` | 弦月图书馆 | 高穹顶、弧形阅览室、长桌台灯 | 室内暖白 | 古典学术氛围 |
-| 10 | `scene_harbor_market.png` | `harbor_market` | 港口集市 | 摊位、街头小吃、复古杂货、热闹人群 | 白天明亮 | 港口边露天市场 |
+| 1 | `central_station_plaza.png` | `central_station_plaza` | 中央车站广场 | 车站广场、玻璃雨棚、城市通勤、偶遇 | 清晨柔光 | 公共初遇场景，中心留白 |
+| 2 | `pier_cafe.png` | `pier_cafe` | 码头咖啡馆 | 海边咖啡馆、木质柜台、窗外海面、温暖 | 傍晚金色阳光 | 旧码头咖啡馆的 V2 版本 |
+| 3 | `midnight_convenience_store.png` | `midnight_convenience_store` | 深夜便利店 | 雨夜、便利店灯光、自动贩卖机、湿路面 | 深夜荧光 | 不要真实品牌或可读招牌 |
+| 4 | `rainlit_bookshop.png` | `rainlit_bookshop` | 雨光书店 | 雨天玻璃、旧书架、阅读灯、安静 | 雨天下午 | 旧书店的 V2 版本 |
+| 5 | `apartment_lobby.png` | `apartment_lobby` | 公寓大厅 | 信箱、电梯、绿植、住宅熟悉感 | 傍晚暖光 | 邻居/熟悉阶段 |
+| 6 | `shared_laundry_room.png` | `shared_laundry_room` | 公共洗衣房 | 洗衣机、夜晚、生活琐事、低风险坦白 | 夜间冷白 | 机器靠边，不挡角色 |
+| 7 | `neighborhood_park.png` | `neighborhood_park` | 社区公园 | 小公园、长椅、树、住宅天际线 | 傍晚柔光 | 无人，避免家庭/跑者 |
+| 8 | `creative_studio.png` | `creative_studio` | 创意工作室 | 草图、模型、共享工作台、晚光 | 下午暖光 | 抽象草图不能有可读文字 |
+| 9 | `indie_cinema.png` | `indie_cinema` | 独立影院 | 小影院大厅、软灯、红地毯、约会前奏 | 夜晚暖光 | 海报用抽象色块 |
+| 10 | `dessert_parlor.png` | `dessert_parlor` | 甜品店 | 蛋糕柜、粉彩、明亮、轻约会 | 下午明亮 | 柜台在后方或侧边 |
+| 11 | `vinyl_record_shop.png` | `vinyl_record_shop` | 黑胶唱片店 | 黑胶、试听角、暖灯、雨窗 | 傍晚/雨天 | 唱片封面不可读、不可像真实版权 |
+| 12 | `riverside_walk.png` | `riverside_walk` | 河岸步道 | 蓝调时刻、栏杆、桥灯、水面反射 | 傍晚蓝调 | 步道中心留白 |
+| 13 | `skyline_roof_garden.png` | `skyline_roof_garden` | 天际线屋顶花园 | 夜景、玻璃栏杆、绿植、坦白氛围 | 深夜冷暖混合 | 旧天台的 V2 版本，眼平视角 |
+| 14 | `last_bus_stop.png` | `last_bus_stop` | 末班巴士站 | 雨后、路灯、空站台、将要离开 | 深夜 | 站牌和路线图不可读 |
+| 15 | `crescent_reading_room.png` | `crescent_reading_room` | 弦月阅览室 | 图书馆、弧形阅览室、长桌灯、安静 | 室内暖白 | 旧图书馆的 V2 版本 |
+| 16 | `rain_arcade.png` | `rain_arcade` | 雨后拱廊 | 商店街拱廊、雨后反光、怀旧、半空 | 夜晚 | 招牌全部抽象化 |
+| 17 | `iron_forge_gym.png` | `iron_forge_gym` | 铁炉健身房 | 老派器械、橡胶地、晨光、努力 | 清晨冷光 | 旧健身房的 V2 版本 |
+| 18 | `harbor_weekend_market.png` | `harbor_weekend_market` | 港口周末市集 | 摊位、海港、彩色遮阳棚、活力 | 白天明亮 | 旧港口市集的 V2 版本，无人群 |
+| 19 | `underground_livehouse.png` | `underground_livehouse` | 地下 Livehouse | 小舞台、彩灯、乐器、空场后劲 | 夜晚舞台光 | 舞台在后方，前景空地 |
+| 20 | `neon_game_arcade.png` | `neon_game_arcade` | 霓虹游戏厅 | 街机、柔和霓虹、玩笑、竞争感 | 夜晚霓虹 | 避免过饱和和拥挤机器 |
+| 21 | `midnight_hotel_suite.png` | `midnight_hotel_suite` | 午夜酒店套房 | 套房卧室、雨窗、城市灯、成熟私密 | 深夜暖灯 | 可见整洁床，无人、无露骨 |
+| 22 | `private_apartment_bedroom.png` | `private_apartment_bedroom` | 私人公寓卧室 | 整洁床、台灯、书、信任感 | 夜晚暖光 | 生活化私密，不要凌乱床铺 |
+| 23 | `rainfall_window_lounge.png` | `rainfall_window_lounge` | 雨窗休息区 | 高层窗、雨、低沙发、成熟安静 | 深夜暖光 | 沙发靠边，不做暗示性构图 |
+| 24 | `dawn_balcony.png` | `dawn_balcony` | 黎明阳台 | 雨后清晨、阳台、城市苏醒、长夜之后 | 黎明金光 | 阳台地面留白 |
 
-**风格统一建议**：现代日漫/CG 写实混合，色温对应表中"时间/光线"列，不出现角色——纯环境图。
+**风格统一要求**：Japanese visual novel background / anime dating sim BG。不要照片感、不要 3D 渲染、不要真实品牌或可读文字、不要人物；强中下部留白，稳定眼平透视，避免桌椅/器械/前景物件遮挡角色立绘。
+
+**私密场景边界**：允许卧室、酒店套房、床、深夜室内等空间元素；必须无人、无裸露、无性行为、无露骨道具、无凌乱床铺，只保留成熟浪漫氛围。
 
 ---
 
@@ -190,7 +206,7 @@ companions/v1/milestones/milestone_anniversary.png
 1. 把图片传到 R2 `companions/v1/scenes/...` 和 `companions/v1/portraits/<id>/...`。
 2. 跑一次 update：
    ```sql
-   UPDATE scenes SET art_url = 'scenes/scene_pier_coffee_shop.png' WHERE id = 'pier_coffee_shop';
+   UPDATE scenes SET art_url = 'scenes/pier_cafe.png' WHERE id = 'pier_cafe';
    -- ...
    UPDATE companions
      SET art_url     = 'portraits/maya/maya.png',
@@ -198,4 +214,5 @@ companions/v1/milestones/milestone_anniversary.png
    WHERE id = 'maya';
    ```
 3. App 端 `mediaUrl()` 会自动把相对路径补成 R2 完整 URL，不用改代码。
-4. 4 套装饰层上传到 R2 `companions/v1/milestones/`，前端按 milestone 类型加载叠图；缺装饰层时 memory album 显示纯日记卡。
+4. App 本地 `LOCAL_MEDIA` 映射只在 24 张 V2 scene 图片实际落到 `apps/app/assets/ai-companion/scenes/` 后更新，不要提前引用不存在的文件。
+5. 4 套装饰层上传到 R2 `companions/v1/milestones/`，前端按 milestone 类型加载叠图；缺装饰层时 memory album 显示纯日记卡。
