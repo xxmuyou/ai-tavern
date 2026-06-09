@@ -30,12 +30,12 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
 
-const PRO_FEATURES = ['Unlimited conversations', 'Unlimited custom companions', 'Priority access to new scenes'];
+const PRO_FEATURES = ['30,000 credits every month', 'Unlimited custom companions', 'Priority access to new scenes'];
 
 const CREDIT_PACKAGES: { id: CreditPackageId; label: string; credits: number; price: string }[] = [
-  { id: 'small', label: 'Small', credits: 500, price: '$4.99' },
-  { id: 'medium', label: 'Medium', credits: 1200, price: '$9.99' },
-  { id: 'large', label: 'Large', credits: 3000, price: '$19.99' },
+  { id: 'small', label: 'Small', credits: 5000, price: '$4.99' },
+  { id: 'medium', label: 'Medium', credits: 15000, price: '$9.99' },
+  { id: 'large', label: 'Large', credits: 40000, price: '$19.99' },
 ];
 
 const LEDGER_LABELS: Record<CreditLedgerType, string> = {
@@ -147,121 +147,115 @@ export default function WebBillingScreen() {
             title="Billing unavailable"
           />
         ) : (
-          <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-            <WebPriceCard
-              className="xl:col-span-2"
-              cta={
-                isPro ? (
-                  <WebButton
-                    iconLeft={<Ionicons color="#9A2F4F" name="settings-outline" size={16} />}
-                    isLoading={isOpeningPortal}
-                    label="Manage subscription"
-                    onPress={handlePortal}
-                    variant="primary"
-                  />
-                ) : (
-                  <WebButton
-                    iconLeft={<Ionicons color="#9A2F4F" name="sparkles-outline" size={16} />}
-                    isLoading={isCheckingOut}
-                    label="Upgrade to Pro"
-                    onPress={handleCheckout}
-                    variant="primary"
-                  />
-                )
-              }
-              description="Keep conversations flowing and create more companions as your story grows."
-              features={PRO_FEATURES}
-              highlight={!isPro}
-              price="$9.99"
-              priceUnit="/ month"
-              title="Pro Monthly"
-            />
+          <>
+            <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+              <WebSection
+                className="xl:col-span-2"
+                description="Credits power every chat and image. Spend them as you go—top up or upgrade to Pro for more each month."
+                eyebrow="Balance"
+                title="Credits"
+              >
+                <WebCard padding="md">
+                  {credits.data ? (
+                    <View>
+                      <WebFieldRow label="Available" value={credits.data.available_credits.toLocaleString()} />
+                      <WebFieldRow label="Reserved" value={credits.data.reserved_credits.toLocaleString()} />
+                      <WebFieldRow
+                        label="Monthly grant"
+                        value={
+                          credits.data.monthly_grant
+                            ? `${credits.data.monthly_grant.amount.toLocaleString()} credits (${credits.data.monthly_grant.tier === 'pro' ? 'Pro' : 'Free'})`
+                            : 'No grant yet'
+                        }
+                      />
+                    </View>
+                  ) : credits.isLoading ? (
+                    <WebLoading fullscreen={false} label="Loading credits..." />
+                  ) : (
+                    <Text className="text-body-sm text-app-muted">Credits are unavailable right now.</Text>
+                  )}
 
-            {data ? (
-              <WebCard padding="md">
-                <View className="mb-3 flex-row items-center justify-between gap-3">
-                  <Text className="font-serif text-title text-app-ink">Current plan</Text>
-                  <WebTag size="sm" variant={isPro ? 'rose' : 'neutral'}>
-                    {isPro ? 'Pro' : 'Free'}
-                  </WebTag>
-                </View>
-                <WebFieldRow label="Tier" value={isPro ? 'Pro' : 'Free'} />
-                <WebFieldRow label="Status" value={data.subscription.status} />
-                <WebFieldRow
-                  label="Messages today"
-                  value={formatUsage(data.usage.messages_used_today, data.usage.message_limit_daily)}
-                />
-                <WebFieldRow label="Next billing date" value={formatDateTime(data.subscription.current_period_end)} />
-              </WebCard>
-            ) : null}
-          </View>
-        )}
-
-        <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <WebSection
-            className="xl:col-span-2"
-            description="Credits are reserved and spent by generated image workflows."
-            eyebrow="Balance"
-            title="Credits"
-          >
-            <WebCard padding="md">
-              {credits.data ? (
-                <View>
-                  <WebFieldRow label="Available" value={String(credits.data.available_credits)} />
-                  <WebFieldRow label="Reserved" value={String(credits.data.reserved_credits)} />
-                  <WebFieldRow
-                    label="Monthly grant"
-                    value={
-                      credits.data.monthly_grant
-                        ? `${credits.data.monthly_grant.amount} credits (${credits.data.monthly_grant.tier === 'pro' ? 'Pro' : 'Free'})`
-                        : 'No grant yet'
-                    }
-                  />
-                </View>
-              ) : credits.isLoading ? (
-                <WebLoading fullscreen={false} label="Loading credits..." />
-              ) : (
-                <Text className="text-body-sm text-app-muted">Credits are unavailable right now.</Text>
-              )}
-
-              <View className="mt-8">
-                <Text className="mb-4 text-overline text-rose-deep">Buy credits</Text>
-                <View className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  {CREDIT_PACKAGES.map((pkg) => (
-                    <WebPriceCard
-                      key={pkg.id}
-                      cta={
-                        <WebButton
-                          isLoading={checkoutPackage === pkg.id}
-                          label="Buy credits"
-                          onPress={() => handleCreditsCheckout(pkg.id)}
-                          size="sm"
-                          variant={pkg.id === 'medium' ? 'primary' : 'outline'}
+                  <View className="mt-8">
+                    <Text className="mb-4 text-overline text-rose-deep">Buy credits</Text>
+                    <View className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      {CREDIT_PACKAGES.map((pkg) => (
+                        <WebPriceCard
+                          key={pkg.id}
+                          cta={
+                            <WebButton
+                              isLoading={checkoutPackage === pkg.id}
+                              label="Buy credits"
+                              onPress={() => handleCreditsCheckout(pkg.id)}
+                              size="sm"
+                              variant={pkg.id === 'medium' ? 'primary' : 'outline'}
+                            />
+                          }
+                          description={`${pkg.credits.toLocaleString()} credits`}
+                          highlight={pkg.id === 'medium'}
+                          price={pkg.price}
+                          title={pkg.label}
+                          className="min-w-0 p-5"
                         />
-                      }
-                      description={`${pkg.credits} credits`}
-                      highlight={pkg.id === 'medium'}
-                      price={pkg.price}
-                      title={pkg.label}
-                      className="min-w-0 p-5"
-                    />
-                  ))}
-                </View>
-              </View>
-            </WebCard>
-          </WebSection>
+                      ))}
+                    </View>
+                  </View>
+                </WebCard>
+              </WebSection>
 
-          <WebSection description="Recent account credit events." eyebrow="Ledger" title="Recent activity">
-            <WebCard padding="md">
-              <WebTimeline entries={ledgerEntries} emptyLabel="No credit activity yet." />
-            </WebCard>
-          </WebSection>
-        </View>
+              <WebSection description="Recent account credit events." eyebrow="Ledger" title="Recent activity">
+                <WebCard padding="md">
+                  <WebTimeline entries={ledgerEntries} emptyLabel="No credit activity yet." />
+                </WebCard>
+              </WebSection>
+            </View>
+
+            <View className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+              <WebPriceCard
+                className="xl:col-span-2"
+                cta={
+                  isPro ? (
+                    <WebButton
+                      iconLeft={<Ionicons color="#9A2F4F" name="settings-outline" size={16} />}
+                      isLoading={isOpeningPortal}
+                      label="Manage subscription"
+                      onPress={handlePortal}
+                      variant="primary"
+                    />
+                  ) : (
+                    <WebButton
+                      iconLeft={<Ionicons color="#9A2F4F" name="sparkles-outline" size={16} />}
+                      isLoading={isCheckingOut}
+                      label="Upgrade to Pro"
+                      onPress={handleCheckout}
+                      variant="primary"
+                    />
+                  )
+                }
+                description="More monthly credits, unlimited custom companions, and priority access to new scenes."
+                features={PRO_FEATURES}
+                highlight={!isPro}
+                price="$9.99"
+                priceUnit="/ month"
+                title="Pro Monthly"
+              />
+
+              {data ? (
+                <WebCard padding="md">
+                  <View className="mb-3 flex-row items-center justify-between gap-3">
+                    <Text className="font-serif text-title text-app-ink">Current plan</Text>
+                    <WebTag size="sm" variant={isPro ? 'rose' : 'neutral'}>
+                      {isPro ? 'Pro' : 'Free'}
+                    </WebTag>
+                  </View>
+                  <WebFieldRow label="Tier" value={isPro ? 'Pro' : 'Free'} />
+                  <WebFieldRow label="Status" value={data.subscription.status} />
+                  <WebFieldRow label="Next billing date" value={formatDateTime(data.subscription.current_period_end)} />
+                </WebCard>
+              ) : null}
+            </View>
+          </>
+        )}
       </View>
     </WebAppShell>
   );
-}
-
-function formatUsage(used: number, limit: number | null): string {
-  return limit === null ? `${used} used` : `${used}/${limit}`;
 }

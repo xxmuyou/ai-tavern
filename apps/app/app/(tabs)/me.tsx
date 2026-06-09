@@ -11,6 +11,7 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
 import { ADMIN_ROUTE, BILLING_ROUTE, PERSONAS_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
+import { useCredits } from '@/hooks/use-credits';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePush } from '@/hooks/use-push';
 import { useSession } from '@/hooks/use-session';
@@ -22,6 +23,7 @@ export default function MeScreen() {
   const { pushError } = useErrorBanner();
   const { session, signOut } = useSession();
   const { data: billing, refetch: refetchBilling } = useBilling();
+  const { data: credits } = useCredits();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [imageAssets, setImageAssets] = useState<UserImageAsset[]>([]);
   const push = usePush(me?.push_enabled);
@@ -86,8 +88,6 @@ export default function MeScreen() {
   const isPro = billing?.subscription.tier === 'pro' || me?.subscription.tier === 'pro';
   const displayName = me?.display_name ?? email;
   const version = Constants.expoConfig?.version ?? '0.1.0';
-  const messagesUsed = billing?.usage.messages_used_today ?? me?.quota.messages_used_today ?? 0;
-  const messageLimit = billing?.usage.message_limit_daily ?? me?.quota.message_limit_daily ?? me?.quota.messages_limit_today ?? null;
 
   return (
     <View className="flex-1 bg-app-bg">
@@ -149,17 +149,19 @@ export default function MeScreen() {
               </>
             ) : (
               <>
-                <Text className="text-sm leading-5 text-app-muted">Free includes 30 messages per day and 3 custom companions.</Text>
+                <Text className="text-sm leading-5 text-app-muted">Free includes 1,000 credits each month and 3 custom companions.</Text>
                 <Button label="Upgrade to Pro" onPress={() => router.push(BILLING_ROUTE)} />
               </>
             )}
           </Section>
 
-          <Section title="Usage">
-            <InfoRow label="Messages today" value={formatUsage(messagesUsed, messageLimit)} />
-            {isPro && billing?.usage.subscriber_soft_threshold_exceeded ? (
-              <Text className="text-sm text-app-warning">High usage detected today.</Text>
-            ) : null}
+          <Section title="Credits">
+            <InfoRow label="Available" value={credits ? credits.available_credits.toLocaleString() : '—'} />
+            <InfoRow label="Reserved" value={credits ? credits.reserved_credits.toLocaleString() : '—'} />
+            <Text className="text-sm leading-5 text-app-muted">
+              Credits power every chat and image. Top up or see history on the billing page.
+            </Text>
+            <Button label="Manage credits" onPress={() => router.push(BILLING_ROUTE)} variant="secondary" />
           </Section>
 
           <Section title="Personas">
@@ -252,13 +254,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       </Text>
     </View>
   );
-}
-
-function formatUsage(used: number, limit: number | null): string {
-  if (limit === null) {
-    return `${used} used`;
-  }
-  return `${used}/${limit}`;
 }
 
 const PREFERENCE_OPTIONS: { label: string; value: RomancePreference }[] = [

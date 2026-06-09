@@ -21,12 +21,12 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
 
-const PRO_FEATURES = ['Unlimited conversations', 'Unlimited custom companions', 'Priority access to new scenes'];
+const PRO_FEATURES = ['30,000 credits every month', 'Unlimited custom companions', 'Priority access to new scenes'];
 
 const CREDIT_PACKAGES: { id: CreditPackageId; label: string; credits: number; price: string }[] = [
-  { id: 'small', label: 'Small', credits: 500, price: '$4.99' },
-  { id: 'medium', label: 'Medium', credits: 1200, price: '$9.99' },
-  { id: 'large', label: 'Large', credits: 3000, price: '$19.99' },
+  { id: 'small', label: 'Small', credits: 5000, price: '$4.99' },
+  { id: 'medium', label: 'Medium', credits: 15000, price: '$9.99' },
+  { id: 'large', label: 'Large', credits: 40000, price: '$19.99' },
 ];
 
 const LEDGER_LABELS: Record<CreditLedgerType, string> = {
@@ -153,12 +153,57 @@ export default function BillingScreen() {
           ) : null}
 
           <View className="rounded-lg border border-app-line bg-app-card p-5">
+            <Text className="text-lg font-semibold text-app-text">Credits</Text>
+            <Text className="mt-1 text-sm text-app-muted">
+              Credits power every chat and image. Spend them as you go—top up or upgrade to Pro for more each month.
+            </Text>
+            <View className="mt-4 gap-3">
+              {credits.data ? (
+                <>
+                  <BillingRow label="Available" value={credits.data.available_credits.toLocaleString()} />
+                  <BillingRow label="Reserved" value={credits.data.reserved_credits.toLocaleString()} />
+                  {credits.data.monthly_grant ? (
+                    <BillingRow
+                      label="This month's grant"
+                      value={`${credits.data.monthly_grant.amount.toLocaleString()} (${credits.data.monthly_grant.tier === 'pro' ? 'Pro' : 'Free'})`}
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <Text className="text-sm text-app-muted">
+                  {credits.isLoading ? 'Loading credits...' : 'Credits are unavailable right now.'}
+                </Text>
+              )}
+            </View>
+
+            <Text className="mb-3 mt-6 text-sm font-semibold uppercase tracking-normal text-app-primary">Buy credits</Text>
+            <View className="gap-3">
+              {CREDIT_PACKAGES.map((pkg) => (
+                <View key={pkg.id} className="flex-row items-center justify-between gap-3 rounded-lg border border-app-line p-3">
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-base font-semibold text-app-text">{pkg.label}</Text>
+                    <Text className="text-sm text-app-muted">{pkg.credits.toLocaleString()} credits · {pkg.price}</Text>
+                  </View>
+                  <View className="w-24">
+                    <Button
+                      isLoading={checkoutPackage === pkg.id}
+                      label="Buy"
+                      onPress={() => handleCreditsCheckout(pkg.id)}
+                      variant="secondary"
+                    />
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View className="rounded-lg border border-app-line bg-app-card p-5">
             <View className="flex-row items-start justify-between gap-4">
               <View className="min-w-0 flex-1">
                 <Text className="text-sm font-semibold uppercase tracking-normal text-app-primary">Pro Monthly</Text>
                 <Text className="mt-2 text-3xl font-semibold text-app-text">Upgrade your sandbox</Text>
                 <Text className="mt-2 text-base leading-6 text-app-muted">
-                  Keep conversations flowing and create more companions as your story grows.
+                  More monthly credits, unlimited custom companions, and priority access to new scenes.
                 </Text>
               </View>
               <View className="rounded-full bg-app-primarySoft px-3 py-1">
@@ -190,53 +235,10 @@ export default function BillingScreen() {
               <View className="mt-4 gap-3">
                 <BillingRow label="Tier" value={isPro ? 'Pro' : 'Free'} />
                 <BillingRow label="Status" value={data.subscription.status} />
-                <BillingRow label="Messages today" value={formatUsage(data.usage.messages_used_today, data.usage.message_limit_daily)} />
                 <BillingRow label="Next billing date" value={formatDateTime(data.subscription.current_period_end)} />
               </View>
             </View>
           ) : null}
-
-          <View className="rounded-lg border border-app-line bg-app-card p-5">
-            <Text className="text-lg font-semibold text-app-text">Credits</Text>
-            <View className="mt-4 gap-3">
-              {credits.data ? (
-                <>
-                  <BillingRow label="Available" value={String(credits.data.available_credits)} />
-                  <BillingRow label="Reserved" value={String(credits.data.reserved_credits)} />
-                  {credits.data.monthly_grant ? (
-                    <BillingRow
-                      label="This month's grant"
-                      value={`${credits.data.monthly_grant.amount} (${credits.data.monthly_grant.tier === 'pro' ? 'Pro' : 'Free'})`}
-                    />
-                  ) : null}
-                </>
-              ) : (
-                <Text className="text-sm text-app-muted">
-                  {credits.isLoading ? 'Loading credits...' : 'Credits are unavailable right now.'}
-                </Text>
-              )}
-            </View>
-
-            <Text className="mb-3 mt-6 text-sm font-semibold uppercase tracking-normal text-app-primary">Buy credits</Text>
-            <View className="gap-3">
-              {CREDIT_PACKAGES.map((pkg) => (
-                <View key={pkg.id} className="flex-row items-center justify-between gap-3 rounded-lg border border-app-line p-3">
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-base font-semibold text-app-text">{pkg.label}</Text>
-                    <Text className="text-sm text-app-muted">{pkg.credits} credits · {pkg.price}</Text>
-                  </View>
-                  <View className="w-24">
-                    <Button
-                      isLoading={checkoutPackage === pkg.id}
-                      label="Buy"
-                      onPress={() => handleCreditsCheckout(pkg.id)}
-                      variant="secondary"
-                    />
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
 
           {ledger.length ? (
             <View className="rounded-lg border border-app-line bg-app-card p-5">
@@ -265,11 +267,4 @@ function BillingRow({ label, value }: { label: string; value: string }) {
       <Text className="text-sm font-semibold text-app-text">{value}</Text>
     </View>
   );
-}
-
-function formatUsage(used: number, limit: number | null): string {
-  if (limit === null) {
-    return `${used} used`;
-  }
-  return `${used}/${limit}`;
 }

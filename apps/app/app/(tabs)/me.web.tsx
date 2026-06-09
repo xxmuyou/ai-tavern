@@ -27,6 +27,7 @@ import {
 } from '@/components/web/ui';
 import { ADMIN_ROUTE, BILLING_ROUTE, PERSONAS_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
+import { useCredits } from '@/hooks/use-credits';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePush } from '@/hooks/use-push';
 import { useSession } from '@/hooks/use-session';
@@ -44,6 +45,7 @@ export default function WebMeScreen() {
   const { pushError } = useErrorBanner();
   const { session, signOut } = useSession();
   const { data: billing, refetch: refetchBilling } = useBilling();
+  const { data: credits } = useCredits();
   const [me, setMe] = useState<MeResponse | null>(null);
   const [imageAssets, setImageAssets] = useState<UserImageAsset[]>([]);
   const push = usePush(me?.push_enabled);
@@ -76,8 +78,6 @@ export default function WebMeScreen() {
   const email = me?.email ?? session?.email ?? '';
   const displayName = me?.display_name ?? email;
   const isPro = billing?.subscription.tier === 'pro' || me?.subscription.tier === 'pro';
-  const messagesUsed = billing?.usage.messages_used_today ?? me?.quota.messages_used_today ?? 0;
-  const messageLimit = billing?.usage.message_limit_daily ?? me?.quota.message_limit_daily ?? me?.quota.messages_limit_today ?? null;
   const providers = me?.linked_providers?.length ? me.linked_providers : ['email'];
 
   async function handlePortal() {
@@ -209,13 +209,14 @@ export default function WebMeScreen() {
 
           <WebSection
             eyebrow="Plan"
-            title="Subscription and usage"
-            description="Where you are on the journey and how today's conversations are tracking."
+            title="Subscription and credits"
+            description="Where you are on the journey and how many credits you have to spend."
           >
             <WebCard padding="md">
               <WebFieldRow label="Plan" value={isPro ? 'Pro' : 'Free'} />
               <WebFieldRow label="Status" value={billing?.subscription.status ?? '—'} />
-              <WebFieldRow label="Messages today" value={formatUsage(messagesUsed, messageLimit)} />
+              <WebFieldRow label="Credits available" value={credits ? credits.available_credits.toLocaleString() : '—'} />
+              <WebFieldRow label="Credits reserved" value={credits ? credits.reserved_credits.toLocaleString() : '—'} />
               <WebFieldRow
                 label="Next billing date"
                 value={formatDateTime(billing?.subscription.current_period_end ?? me?.subscription.current_period_end)}
@@ -365,8 +366,4 @@ function downloadAsset(asset: UserImageAsset): void {
     return;
   }
   openExternalUrl(url);
-}
-
-function formatUsage(used: number, limit: number | null): string {
-  return limit === null ? `${used} used` : `${used}/${limit}`;
 }
