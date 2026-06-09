@@ -6,7 +6,7 @@
 1. 用你自己的 LLM key **批量起草** companion 人设 / 场景 → 落本地 JSON（`drafts/`）。
 2. 你**手动编辑** `drafts/personas.json`、`drafts/scenes.json`：改名、删（把 `status` 设成 `"rejected"`）、调字段。
 3. **发布**：驱动产品**现有**接口跑图，再把官方角色 / 场景行写进 D1。
-   - 角色：`POST /companions/base-art/generate`(WF1 底图) → 轮询 → 写 `companions` 行。
+   - 角色：`POST /companions/base-art/generate`(base-art 底图，可逐条选 ckpt/LoRA/seed) → 轮询 → 写 `companions` 行。
    - 场景：同一个 base-art 接口选 `wf_scene` 跑背景 → 写 `scenes` 行（解锁条件按 tier 推导）。
 
 > 真正出图的是产品里配置的 RunningHub/OpenAI 工作流；本工具只负责"堆 prompt + 编排"。出图引擎、`wf_scene` 工作流属于产品永久基建，不在本文件夹内。
@@ -26,14 +26,22 @@
 ```bash
 cd <repo-root>
 node tools/companion-factory/factory.mjs gen-personas --count 8 --brief "都市职场恋爱向，性别均衡"
+node tools/companion-factory/factory.mjs gen-personas --male 50 --female 50 --batch-size 10 --brief "偏二次元恋爱陪伴，职业和性格尽量不重复"
 node tools/companion-factory/factory.mjs gen-scenes   --count 6 --brief "游泳馆、台球厅、约会餐厅、野外爬山、酒店(intimate)"
 # 编辑 drafts/*.json 审核
 node tools/companion-factory/factory.mjs status
+node tools/companion-factory/factory.mjs validate-personas --male 50 --female 50
+node tools/companion-factory/factory.mjs publish-personas --limit 10
 node tools/companion-factory/factory.mjs publish-personas
+node tools/companion-factory/factory.mjs rollback-personas --yes
 node tools/companion-factory/factory.mjs publish-scenes
 ```
 
 发布是**断点续跑**的：每条处理完即写回 JSON，失败的标 `status:"failed"` 并记 `error`，重跑只处理未完成的。
+
+批量角色生成会从 `/image-models` 读取当前可用的 `portrait_create` / `portrait_create_lora` 选项，自动轮换 ckpt/LoRA，并把每条的 `model`、`lora_id`、`seed`、`size_preset` 写进 draft。`preferred_scenes` 是场景偏好标签 / 未来场景 slug，不强绑当前 seed scenes。
+
+回滚只删除 `drafts/personas.json` 中已发布并记录了 `companion_id` 的 official companion 行；不会碰 user-created companion。
 
 ## 注意
 - 表情立绘（WF2）已退役；聊天情绪只驱动 UI，瞬间图按需走 cutout/moment 管线。

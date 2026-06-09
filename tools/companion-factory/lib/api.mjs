@@ -38,12 +38,17 @@ export async function listImageModels(cfg) {
 }
 
 /** Kick off a text-to-image run on the workflow that `model` resolves to. */
-export async function startBaseArt(cfg, { model, prompt }) {
-  const json = await request(cfg, 'POST', '/companions/base-art/generate', {
+export async function startBaseArt(cfg, { batch_size, lora_id, model, prompt, seed, size_preset }) {
+  const body = {
     source: 'text',
     model,
     prompt,
-  });
+  };
+  if (lora_id) body.lora_id = lora_id;
+  if (seed != null) body.seed = seed;
+  if (size_preset) body.size_preset = size_preset;
+  if (batch_size != null) body.batch_size = batch_size;
+  const json = await request(cfg, 'POST', '/companions/base-art/generate', body);
   return json.job_id;
 }
 

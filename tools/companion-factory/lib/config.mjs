@@ -20,6 +20,7 @@ const DEFAULTS = {
   // Image-model option ids from GET /image-models (workflow+checkpoint selection).
   wf1Model: '',
   wfSceneModel: '',
+  personaSizePreset: 'portrait_3_5',
   wrangler: {
     configPath: 'infra/cloudflare/wrangler.jsonc',
     dbName: 'xtbit-apps-dev',
@@ -66,6 +67,7 @@ export function loadConfig() {
     },
     wf1Model: env.FACTORY_WF1_MODEL,
     wfSceneModel: env.FACTORY_WF_SCENE_MODEL,
+    personaSizePreset: env.FACTORY_PERSONA_SIZE_PRESET,
     wrangler: {
       dbName: env.FACTORY_DB_NAME,
       remote: env.FACTORY_DB_REMOTE === '1' ? true : undefined,

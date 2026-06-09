@@ -4,7 +4,7 @@
  * the product. Asks for a strict JSON array and parses it defensively.
  */
 
-const PERSONA_SYSTEM = `You design original AI roleplay companions for a relationship/dating sim. Output ONLY a JSON array, no prose, no markdown fences. Each element:
+const PERSONA_SYSTEM = `You design original AI roleplay companions for a relationship/dating sim. Output ONLY a JSON array, no prose, no markdown fences. Every companion must be an adult. Each element:
 {
   "name": string,
   "gender": "male" | "female",
@@ -17,11 +17,12 @@ const PERSONA_SYSTEM = `You design original AI roleplay companions for a relatio
   "secret": string (a hidden truth),
   "boundary": string (a hard limit),
   "greeting": string (their first line to the user, in-character),
+  "example_dialogues": string[] (2-4 short in-character sample lines),
   "tags": string[] (3-6 lowercase discovery tags),
-  "preferred_scenes": string[] (0-3 scene tags they fit, e.g. "cafe","gym","pool"),
-  "image_prompt": string (English portrait prompt: appearance, outfit, mood, composition; transparent/plain background; no real-person or copyrighted names)
+  "preferred_scenes": string[] (1-4 scene preference tags or future scene slugs, e.g. "night_market","library","rooftop","arcade"),
+  "image_prompt": string (English portrait prompt: adult original character, appearance, outfit, mood, composition; transparent/plain background; no real-person or copyrighted names)
 }
-Make them diverse and distinct. No NSFW.`;
+Make them diverse and distinct. No NSFW, minors, real-person names, celebrity likenesses, or copyrighted character names.`;
 
 const SCENE_SYSTEM = `You design background scenes for a relationship sim where cutout character portraits are composited over scene backgrounds. Output ONLY a JSON array, no prose, no markdown fences. Each element:
 {
@@ -74,9 +75,21 @@ function parseJsonArray(text) {
   return parsed;
 }
 
-export async function generatePersonas(cfg, { brief, count }) {
-  const user = `Generate ${count} companions. Theme / direction: ${brief || 'a varied roster across personalities and looks'}.`;
-  return chat(cfg, PERSONA_SYSTEM, user, Math.min(4000, 600 + count * 320));
+export async function generatePersonas(cfg, { brief, count, existingNames = [], gender }) {
+  const genderLine = gender ? `All companions must have gender "${gender}".` : 'Use a balanced mix of male and female companions.';
+  const namesLine = existingNames.length
+    ? `Avoid these already-used names: ${existingNames.slice(-120).join(', ')}.`
+    : '';
+  const user = [
+    `Generate ${count} companions.`,
+    genderLine,
+    'Use preferred_scenes as concise scene tags or plausible future scene slugs, not limited to today\'s seed scenes.',
+    namesLine,
+    `Theme / direction: ${brief || 'a varied roster across personalities and looks'}.`,
+    'Prioritize anime-friendly visual variety: distinct hair shapes/colors, silhouettes, outfits, occupations, energy, and relationship roles.',
+    'Keep all image prompts safe for public discovery: adult, original, clothed, expressive portrait, clean composition.',
+  ].filter(Boolean).join('\n');
+  return chat(cfg, PERSONA_SYSTEM, user, Math.min(8000, 800 + count * 520));
 }
 
 export async function generateScenes(cfg, { brief, count }) {

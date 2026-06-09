@@ -38,7 +38,7 @@ export function appendDrafts(kind, items) {
   return { file: saveDrafts(kind, next), added: stamped.length, total: next.length };
 }
 
-/** Drafts eligible to publish: not rejected, not already published. */
+/** Drafts eligible to publish: new drafts and failed drafts that should retry. */
 export function publishable(drafts) {
-  return drafts.filter((d) => d.status !== 'rejected' && d.status !== 'published');
+  return drafts.filter((d) => !d.status || d.status === 'draft' || d.status === 'failed');
 }

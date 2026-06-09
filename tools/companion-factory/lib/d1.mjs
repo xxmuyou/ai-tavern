@@ -112,6 +112,17 @@ export function insertCompanion(cfg, draft, artKey) {
   return id;
 }
 
+/** Delete official companion rows recorded in persona drafts. */
+export function deleteCompanions(cfg, companionIds) {
+  const ids = [...new Set((companionIds ?? []).filter(Boolean))];
+  if (!ids.length) return 0;
+  const sql = `DELETE FROM companions
+   WHERE source = 'official'
+     AND id IN (${ids.map((id) => sqlStr(id)).join(', ')});`;
+  runSql(cfg, sql);
+  return ids.length;
+}
+
 /** Insert a scene row. Uses draft.id as the scene id (slug). */
 export function insertScene(cfg, draft, artKey, unlockCondition, displayOrder) {
   const now = Date.now();
