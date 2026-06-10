@@ -213,7 +213,6 @@ async function composePrompt(
         }
       : null,
     companion: {
-      appearance: companion?.appearance ?? null,
       gender: companion?.gender ?? null,
       name: companion?.name ?? "the companion",
       personality: companion?.personality ?? null,

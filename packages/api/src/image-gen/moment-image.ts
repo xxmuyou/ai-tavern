@@ -61,7 +61,6 @@ export type MomentPromptContext = {
   companion: {
     name: string;
     gender: string | null;
-    appearance: string | null;
     personality: string | null;
     relationship_role: string | null;
   };
@@ -84,6 +83,7 @@ function fallbackMomentPose(ctx: MomentPromptContext): MomentVisualAction {
     body_pose: "standing or seated alone in the scene, posture matching the emotional tone",
     expression: `${ctx.emotion ?? "neutral"} expression`,
     gaze: "eyes toward the viewer",
+    outfit: "an outfit that naturally fits the scene",
   };
 }
 
@@ -95,6 +95,11 @@ function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void 
     .filter(Boolean);
   if (handsAndProps.length > 0) {
     lines.push(`Hands/props: ${handsAndProps.join(", ")}.`);
+  }
+  if (action.outfit?.trim()) {
+    lines.push(
+      `Outfit (overrides any clothing mentioned in the reference): ${action.outfit.trim()}.`,
+    );
   }
   if (action.gaze?.trim()) {
     lines.push(`Gaze: ${action.gaze.trim()}.`);
@@ -121,7 +126,7 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   // free-form user/story text) was what summoned background crowds.
   lines.push(
     "Edit the input image into a single-character scene image of the same companion.",
-    "Keep this exact person: same face, facial features, hairstyle, body, and outfit as the input image.",
+    "Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene.",
     "Keep exactly one person in the image — this companion only. Do not add any other people, a second person, the user, an opponent, a crowd, bystanders, reflections of another person, or duplicate bodies.",
     "The companion looks directly at the viewer, both eyes meeting the viewer's gaze; do not render any camera, phone, or photographic device.",
   );
@@ -129,20 +134,17 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   const momentPose = ctx.visualAction ?? fallbackMomentPose(ctx);
   pushMomentPoseLines(lines, momentPose);
   lines.push(
-    `Exactly one person: ${companion.name} only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.`,
+    "Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.",
   );
 
-  const companionBits = [
-    companion.appearance?.trim(),
-    companion.personality?.trim(),
-  ].filter(Boolean);
-  const genderHint = companion.gender ? ` (${companion.gender})` : "";
-  lines.push(
-    `Companion: ${companion.name}${genderHint}${companionBits.length ? `, ${companionBits.join(", ")}` : ""}.`,
-  );
-
-  if (companion.relationship_role?.trim()) {
-    lines.push(`Relationship context: ${companion.relationship_role.trim()}.`);
+  // The companion's face is locked by the reference image the edit model holds,
+  // not by text. We deliberately do NOT describe the face/appearance here: free-text
+  // appearance mixes immutable identity with mutable hair/outfit and would drag the
+  // old look back in, fighting the scene-driven restyle. Keep only a one-word gender
+  // anchor to guard against gender drift under heavy pose/outfit changes.
+  const gender = companion.gender?.trim();
+  if (gender) {
+    lines.push(`Companion gender: ${gender}.`);
   }
 
   const sceneTags = scene.tags.length ? `, ${scene.tags.join(", ")}` : "";
@@ -153,8 +155,6 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   if (ctx.emotion && !momentPose.expression?.trim()) {
     lines.push(`Expression: ${ctx.emotion}.`);
   }
-
-  lines.push(`Body language fits a ${ctx.stage} relationship.`);
 
   if (ctx.activity) {
     const activityBits = [ctx.activity.activity_type, ctx.activity.activity_hint, ctx.activity.mood]
