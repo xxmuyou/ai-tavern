@@ -10,7 +10,6 @@ import {
   TextInput,
   View,
   type ListRenderItemInfo,
-  type NativeScrollEvent,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
   type ViewStyle,
@@ -45,6 +44,7 @@ import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebTag } from
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useAutoVoice } from '@/hooks/use-auto-voice';
+import { useChatAutoScroll } from '@/hooks/use-chat-auto-scroll';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
@@ -60,10 +60,6 @@ import { UserMessageEditor } from '@/components/UserMessageEditor';
 import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
 
 const STREAMING_ID = '__streaming__';
-const AUTO_SCROLL_BOTTOM_THRESHOLD = 72;
-// How far the user must scroll up (px) before we treat it as "detach from
-// bottom". Programmatic scrollToEnd only moves down, so it never trips this.
-const SCROLL_UP_EPSILON = 12;
 
 type StreamingItem = {
   __streaming: true;
@@ -75,11 +71,6 @@ type ChatListItem = ChatMessage | StreamingItem;
 
 function isStreamingItem(item: ChatListItem): item is StreamingItem {
   return (item as StreamingItem).__streaming === true;
-}
-
-function isNearThreadBottom(event: NativeScrollEvent): boolean {
-  const visibleBottom = event.contentOffset.y + event.layoutMeasurement.height;
-  return event.contentSize.height - visibleBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD;
 }
 
 export default function WebChatScreen() {
@@ -105,12 +96,6 @@ export default function WebChatScreen() {
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
   const messageActions = useMessageActions(companionId, history, pushError);
   const autoVoice = useAutoVoice();
-  const editMessage = useEditMessage(companionId, history, {
-    onError: pushError,
-    onSaved: () => {
-      void relationship.refresh();
-    },
-  });
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
   const { activity, refresh: refreshActivity, setActivity } = activityState;
@@ -135,9 +120,32 @@ export default function WebChatScreen() {
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
   const threadScrollRef = useRef<FlatList<ChatListItem>>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const lastThreadOffsetYRef = useRef(0);
-  const didInitialScrollRef = useRef(false);
+  const items = useMemo<ChatListItem[]>(() => {
+    if (!stream.isStreaming) return history.messages;
+    return [...history.messages, { __streaming: true, id: STREAMING_ID, text: stream.streamingText }];
+  }, [history.messages, stream.isStreaming, stream.streamingText]);
+  const autoScroll = useChatAutoScroll({
+    getItems: () => items,
+    listRef: threadScrollRef,
+  });
+  const {
+    detachFromBottom,
+    handleContentSizeChange,
+    handleScroll,
+    jumpToBottom,
+    jumpToMessage,
+    notifyMomentReady,
+    notifyNewReply,
+    pendingNotice,
+    resetForThread,
+  } = autoScroll;
+  const editMessage = useEditMessage(companionId, history, {
+    onError: pushError,
+    onSaved: () => {
+      notifyNewReply();
+      void relationship.refresh();
+    },
+  });
 
   useEffect(() => {
     void refreshActivity();
@@ -209,63 +217,33 @@ export default function WebChatScreen() {
     if (rateLimitedUntil && now >= rateLimitedUntil) setRateLimitedUntil(null);
   }, [now, rateLimitedUntil]);
 
-  const scrollThreadToEnd = useCallback((animated = false) => {
-    globalThis.setTimeout(() => {
-      threadScrollRef.current?.scrollToEnd({ animated });
-    }, 0);
-  }, []);
-
-  const handleThreadContentSizeChange = useCallback(() => {
-    if (shouldAutoScrollRef.current) {
-      scrollThreadToEnd(false);
-    }
-  }, [scrollThreadToEnd]);
-
-  const handleThreadScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    // Detach by scroll DIRECTION, not by position: any upward drag detaches.
-    // A programmatic scrollToEnd only increases offset, so it can never detach
-    // us — this kills the streaming "yank back to bottom" fight.
-    const y = event.nativeEvent.contentOffset.y;
-    if (isNearThreadBottom(event.nativeEvent)) {
-      shouldAutoScrollRef.current = true;
-    } else if (y < lastThreadOffsetYRef.current - SCROLL_UP_EPSILON) {
-      shouldAutoScrollRef.current = false;
-    }
-    lastThreadOffsetYRef.current = y;
-  }, []);
-
   const handleLoadMore = useCallback(async () => {
-    shouldAutoScrollRef.current = false;
+    detachFromBottom();
     await history.loadMore();
-  }, [history]);
+  }, [detachFromBottom, history]);
 
   useEffect(() => {
-    didInitialScrollRef.current = false;
-    shouldAutoScrollRef.current = true;
-  }, [companionId]);
+    resetForThread();
+  }, [companionId, resetForThread]);
 
   useEffect(() => {
-    if (history.isLoadingInitial || didInitialScrollRef.current) {
+    if (history.isLoadingInitial) {
       return;
     }
-    didInitialScrollRef.current = true;
-    shouldAutoScrollRef.current = true;
-    scrollThreadToEnd(false);
-  }, [history.isLoadingInitial, scrollThreadToEnd]);
-
-  const items = useMemo<ChatListItem[]>(() => {
-    if (!stream.isStreaming) return history.messages;
-    return [...history.messages, { __streaming: true, id: STREAMING_ID, text: stream.streamingText }];
-  }, [history.messages, stream.isStreaming, stream.streamingText]);
+    resetForThread();
+  }, [history.isLoadingInitial, resetForThread]);
 
   const updateHistoryMessage = history.updateMessage;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
-    const shouldFollow = shouldAutoScrollRef.current;
+    const previousMoment = history.messages.find((message) => message.id === messageId)?.moment_image ?? null;
+    const isNewSucceededMoment =
+      moment.status === 'succeeded' &&
+      (previousMoment?.status !== 'succeeded' || previousMoment.output_key !== moment.output_key);
     updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
-    if (shouldFollow) {
-      scrollThreadToEnd(false);
+    if (isNewSucceededMoment) {
+      notifyMomentReady(messageId);
     }
-  }, [scrollThreadToEnd, updateHistoryMessage]);
+  }, [history.messages, notifyMomentReady, updateHistoryMessage]);
 
   const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
 
@@ -368,7 +346,6 @@ export default function WebChatScreen() {
   const sendInviteToTarget = useCallback(async (target: InviteTarget) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
     const text = inviteTextForTarget(target);
-    shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
       content: text,
@@ -387,6 +364,7 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
+        onChunk: notifyNewReply,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onInviteResult: (invite) => {
           acceptedSceneId = invite.accepted ? invite.scene_id : null;
@@ -402,7 +380,6 @@ export default function WebChatScreen() {
         },
         sceneId,
       });
-      const shouldFollow = shouldAutoScrollRef.current;
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -423,9 +400,7 @@ export default function WebChatScreen() {
           scene_id: acceptedSceneId,
         });
       }
-      if (shouldFollow) {
-        scrollThreadToEnd(false);
-      }
+      notifyNewReply();
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
       }
@@ -443,7 +418,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send invitation.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -454,7 +429,6 @@ export default function WebChatScreen() {
     const text = draft.trim();
     if (!text || stream.isStreaming || remainingSeconds > 0) return;
 
-    shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
       content: text,
@@ -472,6 +446,7 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
+        onChunk: notifyNewReply,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onSignals: (signals) => {
           setLastSignals(signals);
@@ -483,7 +458,6 @@ export default function WebChatScreen() {
         },
         sceneId,
       });
-      const shouldFollow = shouldAutoScrollRef.current;
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -494,9 +468,7 @@ export default function WebChatScreen() {
         scene_id: sceneId ?? null,
       });
       await history.refresh({ silent: true });
-      if (shouldFollow) {
-        scrollThreadToEnd(false);
-      }
+      notifyNewReply();
       // Auto-play the new reply when the global voice toggle is on.
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -516,12 +488,11 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
 
   const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
     const text = quickActionTextForItem(itemId);
-    shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
       content: text,
@@ -540,6 +511,7 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
+        onChunk: notifyNewReply,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
           showInviteNotice(quick.ok
@@ -555,7 +527,6 @@ export default function WebChatScreen() {
           setUnlockToken((token) => token + 1);
         },
       });
-      const shouldFollow = shouldAutoScrollRef.current;
       history.appendMessage({
         companion_id: companionId,
         content: result.text,
@@ -566,9 +537,7 @@ export default function WebChatScreen() {
         scene_id: sceneId ?? null,
       });
       await history.refresh({ silent: true });
-      if (shouldFollow) {
-        scrollThreadToEnd(false);
-      }
+      notifyNewReply();
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
       }
@@ -586,12 +555,11 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Quick action failed.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, history, messageActions, pushError, relationship, remainingSeconds, sceneId, scrollThreadToEnd, showInviteNotice, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
     setIsResolvingStory(true);
-    shouldAutoScrollRef.current = true;
     history.appendMessage({
       companion_id: companionId,
       content: choice.user_narration,
@@ -631,15 +599,14 @@ export default function WebChatScreen() {
         setUnlockToken((token) => token + 1);
       }
       setStoryMoment(null);
-      shouldAutoScrollRef.current = true;
-      scrollThreadToEnd(false);
+      notifyNewReply();
       void relationship.refresh();
     } catch (error) {
       pushError(error instanceof Error ? error.message : 'Story moment could not be resolved.');
     } finally {
       setIsResolvingStory(false);
     }
-  }, [activeActivityId, companionId, history, isResolvingStory, pushError, relationship, sceneId, scrollThreadToEnd, stream.isStreaming]);
+  }, [activeActivityId, companionId, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, stream.isStreaming]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -858,32 +825,46 @@ export default function WebChatScreen() {
           />
 
           {/* Messages scroll area */}
-          <FlatList
-            ref={threadScrollRef}
-            data={items}
-            keyExtractor={keyExtractor}
-            renderItem={renderItem}
-            contentContainerStyle={twilightStyles.threadContent}
-            ListHeaderComponent={
-              history.hasMore ? (
-                <View className="items-center pb-4 pt-2">
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => void handleLoadMore()}
-                    className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
-                  >
-                    <Text className="text-caption font-semibold text-app-rose-deep">
-                      {history.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null
-            }
-            onContentSizeChange={handleThreadContentSizeChange}
-            onScroll={handleThreadScroll}
-            scrollEventThrottle={16}
-            style={twilightStyles.thread}
-          />
+          <View className="relative">
+            <FlatList
+              ref={threadScrollRef}
+              data={items}
+              keyExtractor={keyExtractor}
+              renderItem={renderItem}
+              contentContainerStyle={twilightStyles.threadContent}
+              ListHeaderComponent={
+                history.hasMore ? (
+                  <View className="items-center pb-4 pt-2">
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => void handleLoadMore()}
+                      className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
+                    >
+                      <Text className="text-caption font-semibold text-app-rose-deep">
+                        {history.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null
+              }
+              onContentSizeChange={handleContentSizeChange}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              style={twilightStyles.thread}
+            />
+            {pendingNotice ? (
+              <ChatScrollNotice
+                label={pendingNotice.label}
+                onPress={() => {
+                  if (pendingNotice.kind === 'moment') {
+                    jumpToMessage(pendingNotice.messageId);
+                  } else {
+                    jumpToBottom();
+                  }
+                }}
+              />
+            ) : null}
+          </View>
 
           {/* Composer */}
           <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
@@ -995,6 +976,21 @@ export default function WebChatScreen() {
         title="Out of credits"
       />
     </WebAppShell>
+  );
+}
+
+function ChatScrollNotice({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <View pointerEvents="box-none" className="absolute inset-x-0 bottom-4 items-center px-4">
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        className="min-h-10 flex-row items-center gap-2 rounded-full border border-rose/30 bg-rose px-4 shadow-glow"
+      >
+        <Ionicons color="#FFFFFF" name="arrow-down" size={16} />
+        <Text className="text-caption font-semibold text-white">{label}</Text>
+      </Pressable>
+    </View>
   );
 }
 
