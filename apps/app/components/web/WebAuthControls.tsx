@@ -3,6 +3,9 @@ import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { BRAND_NAME } from '@/constants/brand';
+import { PALETTE } from '@/constants/palette';
+
 import { isApiRequestError } from '@/api/companion-client';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
@@ -54,8 +57,8 @@ export function WebAuthControls() {
   if (session) {
     return (
       <View className="flex-row items-center gap-2 rounded-full border border-app-line bg-app-surface px-2.5 py-2 shadow-card">
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-rose-soft">
-          <Text className="font-serif text-body-sm font-semibold text-rose-deep">
+        <View className="h-8 w-8 items-center justify-center rounded-full bg-app-rose-soft">
+          <Text className="font-serif text-body-sm font-semibold text-app-rose-deep">
             {session.email.slice(0, 1).toUpperCase()}
           </Text>
         </View>
@@ -71,7 +74,7 @@ export function WebAuthControls() {
           onPress={() => void signOut()}
           className="h-8 w-8 items-center justify-center rounded-full hover:bg-app-sunken"
         >
-          <Ionicons color="#7A6A5E" name="log-out-outline" size={17} />
+          <Ionicons color={PALETTE.muted} name="log-out-outline" size={17} />
         </Pressable>
       </View>
     );
@@ -80,20 +83,20 @@ export function WebAuthControls() {
   return (
     <>
       <WebButton
-        iconLeft={<Ionicons color="#9A2F4F" name="person-circle-outline" size={17} />}
+        iconLeft={<Ionicons color="#FFFFFF" name="person-circle-outline" size={17} />}
         label="Sign in"
         onPress={() => setDialogOpen(true)}
-        variant="secondary"
+        variant="primary"
       />
       <WebDialog
         description="Continue with Google or get a one-time email link."
         onClose={() => setDialogOpen(false)}
         open={dialogOpen}
-        title="Sign in to your sandbox"
+        title={`Sign in to ${BRAND_NAME}`}
       >
         <View className="gap-4">
           <WebButton
-            iconLeft={<Ionicons color="#3B6EA5" name="logo-google" size={18} />}
+            iconLeft={<Ionicons color="#4285F4" name="logo-google" size={18} />}
             label="Continue with Google"
             onPress={() => {
               storePendingRedirect(params.redirect);
@@ -123,7 +126,7 @@ export function WebAuthControls() {
             size="lg"
             variant="outline"
           />
-          {notice ? <Text className="text-caption text-rose-deep">{notice}</Text> : null}
+          {notice ? <Text className="text-caption text-app-rose-deep">{notice}</Text> : null}
           <Text className="text-caption leading-5 text-app-muted">
             Open the link on this device. Local dev sessions may return a token immediately.
           </Text>

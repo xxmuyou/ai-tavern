@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { createPersona, deletePersona, updatePersona } from '@/api/companion-client';
 import type { Persona } from '@/api/types';
@@ -120,7 +121,7 @@ export default function PersonasScreen() {
           ) : null}
 
           {draft ? (
-            <View className="gap-3 rounded-lg border border-app-line bg-app-card p-4 web:bg-white">
+            <View className="gap-3 rounded-lg border border-app-line bg-app-card p-4 web:bg-app-surface">
               <Text className="text-base font-semibold text-app-text">
                 {draft.id ? 'Edit persona' : 'New persona'}
               </Text>
@@ -151,7 +152,7 @@ export default function PersonasScreen() {
               >
                 <View
                   className={`h-5 w-5 items-center justify-center rounded border ${
-                    draft.isDefault ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                    draft.isDefault ? 'border-app-primary bg-app-primary' : 'border-app-line bg-app-surface'
                   }`}
                 >
                   {draft.isDefault ? <Text className="text-xs font-bold text-white">✓</Text> : null}
@@ -187,7 +188,7 @@ export default function PersonasScreen() {
             personas.map((persona) => (
               <View
                 key={persona.id}
-                className="gap-2 rounded-lg border border-app-line bg-app-card p-4 web:bg-white"
+                className="gap-2 rounded-lg border border-app-line bg-app-card p-4 web:bg-app-surface"
               >
                 <View className="flex-row items-center gap-2">
                   <Text className="text-base font-semibold text-app-text">{persona.name}</Text>
@@ -240,13 +241,13 @@ function Field({
     <View>
       <Text className="mb-2 text-sm font-semibold text-app-text">{label}</Text>
       <TextInput
-        className={`rounded-lg border border-app-line bg-white px-3 py-3 text-base text-app-text ${
+        className={`rounded-lg border border-app-line bg-app-sunken px-3 py-3 text-base text-app-text ${
           multiline ? 'min-h-24' : ''
         }`}
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#687076"
+        placeholderTextColor={PALETTE.muted}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />

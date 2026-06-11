@@ -156,7 +156,7 @@ export function SettingRow({
             onPress={() => void run(on ? 'false' : 'true')}
             className={`rounded-full border px-4 py-2 ${on ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
           >
-            <Text className={`text-body-sm font-semibold ${on ? 'text-rose-deep' : 'text-app-muted'}`}>{on ? 'On' : 'Off'}</Text>
+            <Text className={`text-body-sm font-semibold ${on ? 'text-app-rose-deep' : 'text-app-muted'}`}>{on ? 'On' : 'Off'}</Text>
           </Pressable>
         </View>
       </View>
@@ -258,7 +258,7 @@ export function RowHeader({ item }: { item: AdminSettingItem }) {
       <Text className="text-caption text-app-muted">{item.env_key ? `${item.env_key} · ` : ''}{item.key}</Text>
       {item.description ? <Text className="text-caption text-app-muted">{item.description}</Text> : null}
       {item.admin_mode === 'status_only' ? <Text className="text-caption font-semibold text-app-muted">Managed in environment secrets; value is not viewable or editable here.</Text> : null}
-      {item.danger_level === 'high' ? <Text className="text-caption font-semibold text-rose-deep">High-risk runtime setting</Text> : null}
+      {item.danger_level === 'high' ? <Text className="text-caption font-semibold text-app-rose-deep">High-risk runtime setting</Text> : null}
     </View>
   );
 }

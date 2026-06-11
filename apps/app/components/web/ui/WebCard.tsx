@@ -16,7 +16,7 @@ const variantClass: Record<WebCardVariant, string> = {
   elevated: 'bg-app-surface border border-app-line shadow-card',
   flat: 'bg-app-surface border border-app-line',
   outline: 'bg-transparent border border-app-line',
-  glass: 'bg-app-surface/70 border border-white/40 backdrop-blur-md shadow-card',
+  glass: 'bg-white/[0.04] border border-white/10 backdrop-blur-md shadow-card',
   sunken: 'bg-app-sunken/60 border border-app-line-soft',
 };
 

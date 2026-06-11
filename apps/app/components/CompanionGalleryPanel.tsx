@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { listCompanionMomentImages, mediaSource } from '@/api/companion-client';
 import type { CompanionMomentImage } from '@/api/types';
@@ -91,7 +92,7 @@ export function CompanionGalleryPanel({
 
       {isLoading ? (
         <View className="flex-row items-center gap-2">
-          <ActivityIndicator color="#9A2F4F" />
+          <ActivityIndicator color={PALETTE.roseDeep} />
           <Text className="text-sm text-app-muted">Loading moments...</Text>
         </View>
       ) : null}
@@ -128,7 +129,7 @@ function MomentCell({ moment, name }: { moment: CompanionMomentImage; name: stri
           />
         ) : (
           <View className="items-center gap-2 px-3">
-            <ActivityIndicator color="#9A2F4F" />
+            <ActivityIndicator color={PALETTE.roseDeep} />
             <Text className="text-center text-xs font-semibold text-app-muted">Generating</Text>
           </View>
         )}

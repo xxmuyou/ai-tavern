@@ -15,9 +15,9 @@ export function WebStat({ className, description, eyebrow, icon, value }: WebSta
   return (
     <View className={cn('gap-2 rounded-2xl border border-app-line bg-app-surface p-5', className)}>
       <View className="flex-row items-center gap-2">
-        {icon ? <View className="text-rose">{icon}</View> : null}
+        {icon ? <View className="text-app-rose">{icon}</View> : null}
         {eyebrow ? (
-          <Text className="text-overline text-rose-deep">{eyebrow}</Text>
+          <Text className="text-overline text-app-rose-deep">{eyebrow}</Text>
         ) : null}
       </View>
       <Text className="font-serif text-display-sm text-app-ink">{value}</Text>

@@ -3,6 +3,8 @@ import { useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { PALETTE } from '@/constants/palette';
+
 import { cn } from './cn';
 
 type Crumb = { href?: Href; label: string };
@@ -18,7 +20,7 @@ export type WebTopBarProps = {
 export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: WebTopBarProps) {
   const router = useRouter();
   return (
-    <View className={cn('border-b border-app-line bg-app-surface px-10 py-7', className)}>
+    <View className={cn('border-b border-app-line bg-app-canvas/85 px-10 py-7 backdrop-blur', className)}>
       {breadcrumbs?.length ? (
         <View className="mb-3 flex-row items-center gap-1.5">
           {breadcrumbs.map((crumb, idx) => {
@@ -27,14 +29,14 @@ export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: 
               <View key={`${crumb.label}-${idx}`} className="flex-row items-center gap-1.5">
                 {crumb.href && !isLast ? (
                   <Pressable accessibilityRole="link" onPress={() => router.push(crumb.href as Href)}>
-                    <Text className="text-caption font-semibold text-app-muted hover:text-rose">{crumb.label}</Text>
+                    <Text className="text-caption font-semibold text-app-muted hover:text-app-rose">{crumb.label}</Text>
                   </Pressable>
                 ) : (
                   <Text className={cn('text-caption font-semibold', isLast ? 'text-app-ink' : 'text-app-muted')}>
                     {crumb.label}
                   </Text>
                 )}
-                {!isLast ? <Ionicons color="#A89A8B" name="chevron-forward" size={12} /> : null}
+                {!isLast ? <Ionicons color={PALETTE.mutedSoft} name="chevron-forward" size={12} /> : null}
               </View>
             );
           })}

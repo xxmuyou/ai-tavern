@@ -2,6 +2,7 @@ import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { importCompanionCard } from '@/api/companion-client';
 import { Button } from '@/components/Button';
@@ -61,7 +62,7 @@ export default function CompanionImportScreen() {
                     key={value}
                     accessibilityRole="button"
                     onPress={() => setGender(value)}
-                    className={`rounded-full border px-4 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
+                    className={`rounded-full border px-4 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-app-surface'}`}
                   >
                     <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-muted'}`}>
                       {value === 'female' ? 'Female' : 'Male'}
@@ -80,9 +81,9 @@ export default function CompanionImportScreen() {
               value={json}
               onChangeText={setJson}
               placeholder='{ "spec": "chara_card_v2", "data": { "name": "...", ... } }'
-              placeholderTextColor="#687076"
+              placeholderTextColor={PALETTE.muted}
               textAlignVertical="top"
-              className="min-h-56 rounded-lg border border-app-line bg-white px-3 py-3 text-sm text-app-text"
+              className="min-h-56 rounded-lg border border-app-line bg-app-sunken px-3 py-3 text-sm text-app-text"
             />
           </View>
 

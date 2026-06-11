@@ -170,8 +170,8 @@ function WorkflowPanel({
       ) : null}
 
       {showSharedOutfitWorkflowWarning ? (
-        <View className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2">
-          <Text className="text-xs leading-5 text-ember">
+        <View className="rounded-lg border border-app-ember/30 bg-app-ember/10 px-3 py-2">
+          <Text className="text-xs leading-5 text-app-ember">
             profile_outfit and chat_moment share RunningHub workflow {profileOutfitWorkflowId}. Outfit prompts are still
             sent to the prompt node, but a shared workflow can make generated outfits look stylistically similar.
           </Text>
@@ -179,8 +179,8 @@ function WorkflowPanel({
       ) : null}
 
       {showCutoutSyncWarning ? (
-        <View className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2">
-          <Text className="text-xs leading-5 text-ember">
+        <View className="rounded-lg border border-app-ember/30 bg-app-ember/10 px-3 py-2">
+          <Text className="text-xs leading-5 text-app-ember">
             companion_cutout has no workflow id in the runtime D1 catalog. If the repo config already has one, run
             sync:runninghub for this environment so image generation uses the updated catalog.
           </Text>

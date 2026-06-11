@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import type { AdminSection } from '@/components/admin/AdminSectionTabs';
 import { LlmSection } from '@/components/admin/LlmSection';
@@ -48,7 +49,7 @@ function WebAdminContent() {
             bottomSlot={
               <View className="gap-2 rounded-xl border border-app-line bg-app-sunken/50 p-3">
                 <View className="flex-row items-center gap-2">
-                  <Ionicons color="#9A2F4F" name={activeItem.icon} size={16} />
+                  <Ionicons color={PALETTE.roseDeep} name={activeItem.icon} size={16} />
                   <Text className="text-caption font-semibold text-app-ink">{activeItem.label}</Text>
                 </View>
                 <Text className="text-caption text-app-muted">{activeItem.subtitle}</Text>

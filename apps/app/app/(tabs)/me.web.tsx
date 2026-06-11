@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import {
   deleteImageAsset,
@@ -142,14 +143,14 @@ export default function WebMeScreen() {
                   label="Admin workspace"
                   onPress={() => router.push(ADMIN_ROUTE)}
                   variant="outline"
-                  iconLeft={<Ionicons color="#2A1F1A" name="shield-checkmark-outline" size={16} />}
+                  iconLeft={<Ionicons color={PALETTE.ink} name="shield-checkmark-outline" size={16} />}
                 />
               ) : null}
               <WebButton
                 label="Sign out"
                 onPress={() => void signOut()}
                 variant="ghost"
-                iconLeft={<Ionicons color="#4A3B33" name="log-out-outline" size={16} />}
+                iconLeft={<Ionicons color={PALETTE.inkSoft} name="log-out-outline" size={16} />}
               />
             </View>
           </WebCard>
@@ -190,12 +191,12 @@ export default function WebMeScreen() {
                         });
                       }}
                       className={`min-w-[100px] rounded-full border px-5 py-2.5 ${
-                        active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
+                        active ? 'border-rose bg-app-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
                       }`}
                     >
                       <Text
                         className={`text-center text-body-sm font-semibold ${
-                          active ? 'text-rose-deep' : 'text-app-ink-soft'
+                          active ? 'text-app-rose-deep' : 'text-app-ink-soft'
                         }`}
                       >
                         {opt.label}
@@ -228,14 +229,14 @@ export default function WebMeScreen() {
                     isLoading={isOpeningPortal}
                     onPress={handlePortal}
                     variant="primary"
-                    iconLeft={<Ionicons color="#9A2F4F" name="settings-outline" size={16} />}
+                    iconLeft={<Ionicons color={PALETTE.roseDeep} name="settings-outline" size={16} />}
                   />
                 ) : (
                   <WebButton
                     label="Upgrade to Pro"
                     onPress={() => router.push(BILLING_ROUTE)}
                     variant="primary"
-                    iconLeft={<Ionicons color="#9A2F4F" name="sparkles-outline" size={16} />}
+                    iconLeft={<Ionicons color={PALETTE.roseDeep} name="sparkles-outline" size={16} />}
                   />
                 )}
               </View>
@@ -251,7 +252,7 @@ export default function WebMeScreen() {
               label="Manage personas"
               onPress={() => router.push(PERSONAS_ROUTE)}
               variant="outline"
-              iconLeft={<Ionicons color="#2A1F1A" name="person-outline" size={16} />}
+              iconLeft={<Ionicons color={PALETTE.ink} name="person-outline" size={16} />}
             />
           </WebSection>
 
@@ -324,7 +325,7 @@ function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDele
               />
             ) : (
               <View className="aspect-[4/5] w-full items-center justify-center bg-app-sunken">
-                <Ionicons color="#7A6A5E" name="image-outline" size={24} />
+                <Ionicons color={PALETTE.muted} name="image-outline" size={24} />
               </View>
             )}
             <View className="gap-2 p-3">

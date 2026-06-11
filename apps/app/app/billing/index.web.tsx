@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import {
   getCreditLedger,
@@ -133,7 +134,7 @@ export default function WebBillingScreen() {
       <View className="gap-8">
         {isSuccess ? (
           <View className="flex-row items-center gap-3 rounded-2xl border border-app-success/20 bg-app-success/10 px-5 py-4">
-            <Ionicons color="#1E8E5C" name="checkmark-circle" size={18} />
+            <Ionicons color={PALETTE.success} name="checkmark-circle" size={18} />
             <Text className="text-body-sm font-semibold text-app-success">Checkout complete. Your account is refreshing.</Text>
           </View>
         ) : null}
@@ -176,7 +177,7 @@ export default function WebBillingScreen() {
                   )}
 
                   <View className="mt-8">
-                    <Text className="mb-4 text-overline text-rose-deep">Buy credits</Text>
+                    <Text className="mb-4 text-overline text-app-rose-deep">Buy credits</Text>
                     <View className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       {CREDIT_PACKAGES.map((pkg) => (
                         <WebPriceCard
@@ -215,7 +216,7 @@ export default function WebBillingScreen() {
                 cta={
                   isPro ? (
                     <WebButton
-                      iconLeft={<Ionicons color="#9A2F4F" name="settings-outline" size={16} />}
+                      iconLeft={<Ionicons color={PALETTE.roseDeep} name="settings-outline" size={16} />}
                       isLoading={isOpeningPortal}
                       label="Manage subscription"
                       onPress={handlePortal}
@@ -223,7 +224,7 @@ export default function WebBillingScreen() {
                     />
                   ) : (
                     <WebButton
-                      iconLeft={<Ionicons color="#9A2F4F" name="sparkles-outline" size={16} />}
+                      iconLeft={<Ionicons color={PALETTE.roseDeep} name="sparkles-outline" size={16} />}
                       isLoading={isCheckingOut}
                       label="Upgrade to Pro"
                       onPress={handleCheckout}

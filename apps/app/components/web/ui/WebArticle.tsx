@@ -19,7 +19,7 @@ type WebArticleProps = {
 export function WebArticle({ children, className, eyebrow, lead, title }: WebArticleProps) {
   return (
     <View className={cn('gap-4', className)}>
-      {eyebrow ? <Text className="text-overline text-rose-deep">{eyebrow}</Text> : null}
+      {eyebrow ? <Text className="text-overline text-app-rose-deep">{eyebrow}</Text> : null}
       <Text className="font-serif text-display-md text-app-ink">{title}</Text>
       {lead ? (
         <Text className="max-w-2xl text-body-lg leading-8 text-app-ink-soft">{lead}</Text>

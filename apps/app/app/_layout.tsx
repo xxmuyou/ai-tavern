@@ -1,10 +1,11 @@
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { PushRegistrar } from '@/components/PushRegistrar';
+import { PALETTE } from '@/constants/palette';
 import { ErrorBannerProvider } from '@/hooks/use-error-banner';
 import { SessionProvider } from '@/hooks/use-session';
 
@@ -14,9 +15,21 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+const NocturneTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: PALETTE.canvas,
+    card: PALETTE.surface,
+    border: PALETTE.line,
+    primary: PALETTE.rose,
+    text: PALETTE.ink,
+  },
+};
+
 export default function RootLayout() {
   return (
-    <ThemeProvider value={DefaultTheme}>
+    <ThemeProvider value={NocturneTheme}>
       <SessionProvider>
         <ErrorBannerProvider>
           <Stack screenOptions={{ headerShown: false }}>
@@ -37,7 +50,7 @@ export default function RootLayout() {
           </Stack>
           <PushRegistrar />
           <ErrorBanner />
-          <StatusBar style="dark" />
+          <StatusBar style="light" />
         </ErrorBannerProvider>
       </SessionProvider>
     </ThemeProvider>

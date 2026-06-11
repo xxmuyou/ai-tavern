@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { cn } from './cn';
 
@@ -45,7 +46,7 @@ export function WebDialog({ children, description, footer, onClose, open, size =
               onPress={onClose}
               className="h-9 w-9 items-center justify-center rounded-full hover:bg-app-sunken"
             >
-              <Ionicons color="#7A6A5E" name="close" size={20} />
+              <Ionicons color={PALETTE.muted} name="close" size={20} />
             </Pressable>
           </View>
           <View className="px-7 py-6">{children}</View>

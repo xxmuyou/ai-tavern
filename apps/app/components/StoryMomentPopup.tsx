@@ -1,4 +1,5 @@
 import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import type { StoryChoice, StoryChoiceResolveResponse, StoryMoment } from '@/api/types';
 
@@ -77,7 +78,7 @@ export function StoryMomentPopup({
             className="mt-4 min-h-10 items-center justify-center rounded-xl border border-app-line"
           >
             {isResolving ? (
-              <ActivityIndicator color="#6E59C7" />
+              <ActivityIndicator color={PALETTE.brand} />
             ) : (
               <Text className="text-sm font-semibold text-app-muted">{result ? 'Done' : 'Later'}</Text>
             )}

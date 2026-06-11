@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import {
   clearCompanionProfileImage,
@@ -192,7 +193,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
     <WebCard padding="md" className="gap-3">
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
-          <Text className="text-overline text-rose-deep">Profile image</Text>
+          <Text className="text-overline text-app-rose-deep">Profile image</Text>
           <Text className="mt-1 text-body-sm text-app-muted">Generate a new outfit for {name}, then keep only the one that feels right.</Text>
         </View>
         <WebButton
@@ -200,7 +201,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
           isLoading={phase === 'generating'}
           onPress={() => void openChooser()}
           variant="primary"
-          iconLeft={<Ionicons color="#9A2F4F" name="shirt-outline" size={16} />}
+          iconLeft={<Ionicons color={PALETTE.roseDeep} name="shirt-outline" size={16} />}
         />
       </View>
 
@@ -208,7 +209,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
         <View className="gap-3 rounded-2xl border border-app-line-soft bg-app-sunken/40 p-3">
           <View className="flex-row flex-wrap gap-2">
             {isLoadingRecommendations ? (
-              <ActivityIndicator color="#9A2F4F" size="small" />
+              <ActivityIndicator color={PALETTE.roseDeep} size="small" />
             ) : recommendations.map((item) => {
               const selected = selectedRecommendationId === item.id && customPrompt.trim().length === 0;
               return (
@@ -220,10 +221,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
                     setSelectedRecommendationId(item.id);
                   }}
                   className={`rounded-full border px-3 py-1.5 ${
-                    selected ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-canvas/70'
+                    selected ? 'border-app-rose bg-app-rose-soft' : 'border-app-line bg-app-canvas/70'
                   }`}
                 >
-                  <Text className={`text-xs font-semibold ${selected ? 'text-rose-deep' : 'text-app-muted'}`}>{item.title}</Text>
+                  <Text className={`text-xs font-semibold ${selected ? 'text-app-rose-deep' : 'text-app-muted'}`}>{item.title}</Text>
                 </Pressable>
               );
             })}
@@ -236,7 +237,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
               if (text.trim()) setSelectedRecommendationId(null);
             }}
             placeholder="Custom outfit..."
-            placeholderTextColor="#8F7F76"
+            placeholderTextColor={PALETTE.muted}
             value={customPrompt}
             className="min-h-10 rounded-xl border border-app-line bg-app-canvas px-3 py-2 text-sm text-app-ink"
           />
@@ -248,7 +249,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
           ) : null}
 
           {phase === 'error' ? (
-            <Text className="text-caption font-semibold text-ember">Generation failed. Try another outfit prompt.</Text>
+            <Text className="text-caption font-semibold text-app-ember">Generation failed. Try another outfit prompt.</Text>
           ) : null}
 
           <View className="flex-row flex-wrap gap-2">

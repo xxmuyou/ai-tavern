@@ -265,7 +265,7 @@ function ConfigEditor({
   }
 
   return (
-    <View className="rounded-lg border border-rose bg-rose-soft p-3">
+    <View className="rounded-lg border border-app-rose bg-app-rose-soft p-3">
       <Text className="text-sm font-semibold text-app-ink">{row.task}</Text>
       <View className="mt-3 gap-3">
         <Field label="Provider">
@@ -382,7 +382,7 @@ function TestResult({ result }: { result: LlmTestResult }) {
   if (result.ok) {
     return (
       <View className="mt-4 rounded-xl border border-app-line bg-app-sunken/60 p-4">
-        <Text className="text-xs font-semibold uppercase text-rose-deep">Success</Text>
+        <Text className="text-xs font-semibold uppercase text-app-rose-deep">Success</Text>
         <Text className="mt-1 text-xs text-app-muted">
           {result.provider} · {result.model} · {result.tokens.input}/{result.tokens.output} tok · $
           {result.cost_usd.toFixed(4)} · {result.latency_ms}ms
@@ -393,7 +393,7 @@ function TestResult({ result }: { result: LlmTestResult }) {
   }
   return (
     <View className="mt-4 rounded-lg border border-app-danger bg-app-canvas p-4">
-      <Text className="text-xs font-semibold uppercase text-rose-deep">{result.error_code}</Text>
+      <Text className="text-xs font-semibold uppercase text-app-rose-deep">{result.error_code}</Text>
       <Text className="mt-1 text-xs text-app-muted">
         {result.provider} · {result.model} · {result.latency_ms}ms
       </Text>
@@ -504,10 +504,10 @@ function Chip({ active, label, onPress }: { active: boolean; label: string; onPr
       accessibilityRole="button"
       onPress={onPress}
       className={`min-h-9 items-center justify-center rounded-full border px-3 ${
-        active ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-surface'
+        active ? 'border-app-rose bg-app-rose-soft' : 'border-app-line bg-app-surface'
       }`}
     >
-      <Text className={`text-xs font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>
+      <Text className={`text-xs font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>
         {label}
       </Text>
     </Pressable>

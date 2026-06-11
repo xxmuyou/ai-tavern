@@ -3,6 +3,9 @@ import { usePathname, useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
+import { BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
+import { PALETTE } from '@/constants/palette';
+
 import { cn } from './cn';
 
 export type WebNavItem = {
@@ -27,8 +30,8 @@ export type WebSidebarProps = {
 export function WebSidebar({
   activeId,
   bottomSlot,
-  brandSubtitle = 'Relationship sandbox',
-  brandTitle = 'AI Apps Box',
+  brandSubtitle = BRAND_TAGLINE,
+  brandTitle = BRAND_NAME,
   className,
   items,
   onItemPress,
@@ -39,7 +42,7 @@ export function WebSidebar({
 
   return (
     <View
-      className={cn('h-full border-r border-app-line bg-app-surface px-4 py-6', className)}
+      className={cn('h-full border-r border-app-line bg-app-surface/60 px-4 py-6', className)}
       style={{ width }}
     >
       <Pressable
@@ -67,21 +70,24 @@ export function WebSidebar({
                   else router.push(item.href);
                 }}
                 className={cn(
-                  'flex-row items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
-                  active ? 'bg-rose-soft' : 'bg-transparent hover:bg-app-sunken/60',
+                  'relative flex-row items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
+                  active ? 'bg-app-rose-soft' : 'bg-transparent hover:bg-white/[0.05]',
                 )}
               >
-                <Ionicons color={active ? '#9A2F4F' : '#7A6A5E'} name={item.icon} size={18} />
+                {active ? (
+                  <View className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-app-rose" />
+                ) : null}
+                <Ionicons color={active ? PALETTE.roseDeep : PALETTE.muted} name={item.icon} size={18} />
                 <Text
                   className={cn(
                     'flex-1 text-body-sm font-semibold',
-                    active ? 'text-rose-deep' : 'text-app-ink-soft',
+                    active ? 'text-app-rose-deep' : 'text-app-ink-soft',
                   )}
                 >
                   {item.label}
                 </Text>
                 {item.badge ? (
-                  <View className="min-w-5 items-center justify-center rounded-full bg-rose px-2 py-0.5">
+                  <View className="min-w-5 items-center justify-center rounded-full bg-app-rose px-2 py-0.5">
                     <Text className="text-[11px] font-semibold text-white">{item.badge}</Text>
                   </View>
                 ) : null}

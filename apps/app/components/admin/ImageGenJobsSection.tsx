@@ -76,8 +76,8 @@ function ImageGenJobsDialog({ onClose, open }: { onClose: () => void; open: bool
           <WebButton disabled={isLoading || !range} label="Refresh" onPress={() => void reload()} size="sm" variant="outline" />
         </View>
 
-        {!range ? <Text className="text-body-sm font-semibold text-rose-deep">Use YYYY-MM-DD.</Text> : null}
-        {error ? <Text className="text-body-sm font-semibold text-rose-deep">{error}</Text> : null}
+        {!range ? <Text className="text-body-sm font-semibold text-app-rose-deep">Use YYYY-MM-DD.</Text> : null}
+        {error ? <Text className="text-body-sm font-semibold text-app-rose-deep">{error}</Text> : null}
 
         {isLoading ? (
           <WebLoading fullscreen={false} label="Loading jobs..." />
@@ -124,7 +124,7 @@ function JobRow({ expanded, job, onToggle }: { expanded: boolean; job: AdminImag
         <Text className="ml-auto text-caption text-app-muted">{formatTime(job.created_at)}</Text>
       </View>
       {job.error_code ? (
-        <Text className="text-caption font-semibold text-rose-deep">{job.error_code}</Text>
+        <Text className="text-caption font-semibold text-app-rose-deep">{job.error_code}</Text>
       ) : null}
       {expanded ? (
         <View className="gap-1 border-t border-app-line-soft pt-2">

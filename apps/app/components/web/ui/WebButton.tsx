@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
+import { PALETTE } from '@/constants/palette';
+
 import { cn } from './cn';
 
 export type WebButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger' | 'glow' | 'brand' | 'ember' | 'google';
@@ -36,34 +38,34 @@ const textSizeClass: Record<WebButtonSize, string> = {
 
 const variantClass: Record<WebButtonVariant, string> = {
   primary:
-    'border border-app-rose/35 bg-app-rose-soft shadow-card hover:border-app-rose/60 hover:bg-app-rose-soft/80 hover:shadow-float active:bg-app-rose-soft',
+    'border border-app-rose bg-app-rose shadow-card hover:bg-[#FF6691] hover:shadow-glow active:bg-app-rose',
   secondary:
-    'border border-app-brand/20 bg-app-brand-soft shadow-card hover:border-app-brand/40 hover:bg-app-brand-soft/80 active:bg-app-brand-soft',
+    'border border-app-brand/30 bg-app-brand-soft shadow-card hover:border-app-brand/55 hover:bg-app-brand-soft/80 active:bg-app-brand-soft',
   ghost:
-    'border border-transparent bg-app-sunken/70 hover:border-app-line hover:bg-app-ember-soft/70 active:bg-app-ember-soft',
+    'border border-transparent bg-white/[0.04] hover:border-app-line hover:bg-white/[0.08] active:bg-white/[0.06]',
   outline:
-    'border border-app-rose/30 bg-app-rose-soft/80 shadow-card hover:border-app-rose/50 hover:bg-app-rose-soft active:bg-app-rose-soft',
+    'border border-white/15 bg-transparent hover:border-app-rose/60 hover:bg-app-rose-soft/50 active:bg-app-rose-soft/70',
   danger:
-    'border border-app-danger/25 bg-app-danger-soft shadow-card hover:border-app-danger/45 hover:bg-app-danger-soft/80 active:bg-app-danger-soft',
-  glow: 'border border-rose/30 bg-gradient-warm hover:border-rose/50 hover:shadow-glow active:bg-rose-soft',
+    'border border-app-danger/30 bg-app-danger-soft shadow-card hover:border-app-danger/55 hover:bg-app-danger-soft/80 active:bg-app-danger-soft',
+  glow: 'border border-app-rose/40 bg-gradient-warm hover:border-app-rose/70 hover:shadow-glow active:bg-app-rose-soft',
   brand:
-    'border border-app-brand/25 bg-app-brand-soft shadow-card hover:border-app-brand/45 hover:bg-app-brand-soft/80 hover:shadow-float active:bg-app-brand-soft',
+    'border border-app-brand/30 bg-app-brand-soft shadow-card hover:border-app-brand/55 hover:bg-app-brand-soft/80 hover:shadow-glow-soft active:bg-app-brand-soft',
   ember:
-    'border border-app-ember/25 bg-app-ember-soft shadow-card hover:border-app-ember/45 hover:bg-app-ember-soft/80 hover:shadow-float active:bg-app-ember-soft',
+    'border border-app-ember/30 bg-app-ember-soft shadow-card hover:border-app-ember/55 hover:bg-app-ember-soft/80 hover:shadow-float active:bg-app-ember-soft',
   google:
-    'border border-app-info/25 bg-app-info-soft shadow-card hover:border-app-info/45 hover:bg-app-info-soft/80 hover:shadow-float active:bg-app-info-soft',
+    'border border-white/80 bg-white shadow-card hover:bg-white/90 hover:shadow-float active:bg-white',
 };
 
 const textColorClass: Record<WebButtonVariant, string> = {
-  primary: 'text-app-rose-deep',
+  primary: 'text-white',
   secondary: 'text-app-brand-deep',
   ghost: 'text-app-ink-soft',
-  outline: 'text-app-rose-deep',
+  outline: 'text-app-ink',
   danger: 'text-app-danger',
-  glow: 'text-app-ink',
+  glow: 'text-app-rose-deep',
   brand: 'text-app-brand-deep',
   ember: 'text-app-ember',
-  google: 'text-app-info',
+  google: 'text-[#1F1F1F]',
 };
 
 export function WebButton({
@@ -93,7 +95,7 @@ export function WebButton({
       )}
     >
       {isLoading ? (
-        <ActivityIndicator color="#2A1F1A" />
+        <ActivityIndicator color={PALETTE.ink} />
       ) : (
         <View className="flex-row items-center gap-2">
           {iconLeft ? <View>{iconLeft}</View> : null}

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { cn } from './cn';
 
@@ -32,14 +33,14 @@ export function WebPriceCard({
       className={cn(
         'flex-1 gap-5 rounded-2xl border p-7 transition-shadow',
         highlight
-          ? 'border-rose/40 bg-gradient-warm shadow-float'
+          ? 'border-app-rose/40 bg-gradient-warm shadow-float'
           : 'border-app-line bg-app-surface shadow-card',
         className,
       )}
     >
       <View className="gap-2">
         {highlight ? (
-          <View className="self-start rounded-full bg-rose px-2.5 py-0.5">
+          <View className="self-start rounded-full bg-app-rose px-2.5 py-0.5">
             <Text className="text-[11px] font-semibold uppercase tracking-wider text-white">Most loved</Text>
           </View>
         ) : null}
@@ -60,7 +61,7 @@ export function WebPriceCard({
         <View className="gap-2.5">
           {features.map((feature) => (
             <View key={feature} className="flex-row items-start gap-2.5">
-              <Ionicons color={highlight ? '#9A2F4F' : '#1E6B52'} name="checkmark-circle" size={18} />
+              <Ionicons color={highlight ? PALETTE.roseDeep : PALETTE.rose} name="checkmark-circle" size={18} />
               <Text className="flex-1 text-body-sm text-app-ink-soft">{feature}</Text>
             </View>
           ))}

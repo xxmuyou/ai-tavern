@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { getVoiceOptions, getVoicePreview, mediaSource } from '@/api/companion-client';
 import type { CompanionCreateInput, CompanionDetail, Gender, Scene, VoiceOption, VoiceOptionsResponse, VoiceSpeed } from '@/api/types';
@@ -505,7 +506,7 @@ function VoicePicker({
                 selectedVoice && !isPreviewing ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-sunken'
               }`}
             >
-              <Ionicons color={selectedVoice && !isPreviewing ? '#9A2F4F' : '#8A7A82'} name={isPreviewing ? 'hourglass-outline' : 'volume-medium-outline'} size={16} />
+              <Ionicons color={selectedVoice && !isPreviewing ? PALETTE.roseDeep : PALETTE.muted} name={isPreviewing ? 'hourglass-outline' : 'volume-medium-outline'} size={16} />
             </Pressable>
           </View>
         </View>
@@ -595,7 +596,7 @@ function Field({
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#687076"
+        placeholderTextColor={PALETTE.muted}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />
@@ -675,7 +676,7 @@ function Choice({ active, label, onPress }: { active: boolean; label: string; on
 
 const styles = StyleSheet.create({
   portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.42)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     bottom: 0,
     height: 58,
     left: 0,

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import {
   assistStoryArc,
@@ -153,7 +154,7 @@ export function CompanionStoryPanel({
     return (
       <Panel compact={compact}>
         <View className="flex-row items-center gap-2">
-          <ActivityIndicator color="#9A2F4F" />
+          <ActivityIndicator color={PALETTE.roseDeep} />
           <Text className="text-sm text-app-muted">Loading story...</Text>
         </View>
       </Panel>
@@ -405,7 +406,7 @@ function Field({
         multiline={multiline}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#687076"
+        placeholderTextColor={PALETTE.muted}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
       />

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Text, TextInput, View, type TextInputProps } from 'react-native';
 
+import { PALETTE } from '@/constants/palette';
+
 import { cn } from './cn';
 
 export type WebInputProps = {
@@ -14,7 +16,7 @@ export type WebInputProps = {
 } & Omit<TextInputProps, 'style'>;
 
 const baseFieldClass =
-  'flex-row items-center gap-2 rounded-xl border border-app-line bg-app-surface px-4 transition-shadow duration-150 focus-within:border-rose focus-within:shadow-glow-soft';
+  'flex-row items-center gap-2 rounded-xl border border-app-line bg-app-sunken px-4 transition-shadow duration-150 focus-within:border-app-rose focus-within:shadow-glow-soft';
 
 const errorFieldClass = 'border-app-danger focus-within:border-app-danger focus-within:shadow-none';
 
@@ -26,13 +28,13 @@ export function WebInput({ className, error, helperText, inputClassName, label, 
         {leftAdornment ? <View>{leftAdornment}</View> : null}
         <TextInput
           {...rest}
-          placeholderTextColor={rest.placeholderTextColor ?? '#A89A8B'}
+          placeholderTextColor={rest.placeholderTextColor ?? PALETTE.muted}
           className={cn('flex-1 py-3 text-body text-app-ink', inputClassName)}
         />
         {rightAdornment ? <View>{rightAdornment}</View> : null}
       </View>
       {error ? (
-        <Text className="text-caption text-rose-deep">{error}</Text>
+        <Text className="text-caption text-app-danger">{error}</Text>
       ) : helperText ? (
         <Text className="text-caption text-app-muted">{helperText}</Text>
       ) : null}
@@ -56,15 +58,15 @@ export function WebTextarea({ className, error, helperText, inputClassName, labe
         {...rest}
         multiline
         textAlignVertical="top"
-        placeholderTextColor={rest.placeholderTextColor ?? '#A89A8B'}
+        placeholderTextColor={rest.placeholderTextColor ?? PALETTE.muted}
         className={cn(
-          'min-h-28 rounded-xl border border-app-line bg-app-surface p-4 text-body text-app-ink',
+          'min-h-28 rounded-xl border border-app-line bg-app-sunken p-4 text-body text-app-ink',
           error ? 'border-app-danger' : null,
           inputClassName,
         )}
       />
       {error ? (
-        <Text className="text-caption text-rose-deep">{error}</Text>
+        <Text className="text-caption text-app-danger">{error}</Text>
       ) : helperText ? (
         <Text className="text-caption text-app-muted">{helperText}</Text>
       ) : null}

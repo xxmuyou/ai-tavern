@@ -33,7 +33,7 @@ const ringClass = {
   none: '',
   rose: 'ring-2 ring-rose/40 ring-offset-2 ring-offset-app-canvas',
   wine: 'ring-2 ring-wine/40 ring-offset-2 ring-offset-app-canvas',
-  glow: 'shadow-[0_0_0_4px_rgba(201,72,107,0.18)]',
+  glow: 'shadow-[0_0_0_4px_rgba(255,77,126,0.35)]',
 };
 
 export function WebAvatar({ className, fallback, ring = 'none', size = 'md', source }: WebAvatarProps) {
@@ -50,7 +50,7 @@ export function WebAvatar({ className, fallback, ring = 'none', size = 'md', sou
       {source ? (
         <Image accessibilityLabel={fallback} resizeMode="cover" source={source} className="h-full w-full" />
       ) : (
-        <Text className={cn('font-serif font-semibold text-rose-deep', textSize[size])}>{initials}</Text>
+        <Text className={cn('font-serif font-semibold text-app-rose-deep', textSize[size])}>{initials}</Text>
       )}
     </View>
   );

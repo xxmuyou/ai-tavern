@@ -37,7 +37,7 @@ export function WebTabs({ active, className, onChange, size = 'md', tabs, varian
                 {tab.label}
               </Text>
               {isActive ? (
-                <View className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-rose" />
+                <View className="absolute -bottom-px left-0 right-0 h-0.5 rounded-full bg-app-rose" />
               ) : null}
             </Pressable>
           );

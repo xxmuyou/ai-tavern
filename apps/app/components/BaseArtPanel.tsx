@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { assistBaseArtPrompt, generateBaseArt, getBaseArtJob, mediaSource, saveImageAsset } from '@/api/companion-client';
 import { useImageModels } from '@/hooks/use-image-models';
@@ -393,7 +394,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                         keyboardType="number-pad"
                         onChangeText={setBatchSize}
                         placeholder={`${generationControls.batchSizeDefault}`}
-                        placeholderTextColor="#687076"
+                        placeholderTextColor={PALETTE.muted}
                         value={batchSize}
                       />
                     </View>
@@ -405,7 +406,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                         keyboardType="number-pad"
                         onChangeText={setSeed}
                         placeholder="Random"
-                        placeholderTextColor="#687076"
+                        placeholderTextColor={PALETTE.muted}
                         value={seed}
                       />
                     </View>
@@ -422,7 +423,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
             multiline
             onChangeText={setPrompt}
             placeholder="A gentle young woman with long dark hair, soft smile, casual sweater..."
-            placeholderTextColor="#687076"
+            placeholderTextColor={PALETTE.muted}
             textAlignVertical="top"
             value={prompt}
           />
@@ -467,7 +468,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
             multiline
             onChangeText={setAssistantInput}
             placeholder="Tell me the vibe, personality, outfit, or scene..."
-            placeholderTextColor="#687076"
+            placeholderTextColor={PALETTE.muted}
             textAlignVertical="top"
             value={assistantInput}
           />
@@ -483,7 +484,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
 
       {isBusy ? (
         <View className="items-center gap-3 rounded-lg border border-app-line bg-app-card p-8 web:bg-white">
-          <ActivityIndicator color="#1E6B52" />
+          <ActivityIndicator color={PALETTE.rose} />
           <Text className="text-sm text-app-muted">
             {isUploading ? 'Uploading portrait...' : 'Generating portrait... this can take up to a minute.'}
           </Text>

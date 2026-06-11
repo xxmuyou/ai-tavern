@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 type MessageActionsProps = {
   variants?: string[] | null;
@@ -69,7 +70,7 @@ export function MessageActions({
           <ActivityIndicator size="small" />
         ) : (
           <>
-            <Ionicons color={disabled ? '#B0B4B8' : '#9AA0A6'} name="refresh-outline" size={14} />
+            <Ionicons color={disabled ? PALETTE.mutedSoft : PALETTE.muted} name="refresh-outline" size={14} />
             <Text className={`text-xs font-medium ${disabled ? 'text-app-muted/50' : 'text-app-muted'}`}>
               Rewrite
             </Text>
@@ -88,7 +89,7 @@ export function MessageActions({
           {isSpeaking ? (
             <ActivityIndicator size="small" />
           ) : (
-            <Ionicons color={disabled ? '#B0B4B8' : '#6E59C7'} name="volume-medium-outline" size={16} />
+            <Ionicons color={disabled ? PALETTE.mutedSoft : PALETTE.brand} name="volume-medium-outline" size={16} />
           )}
         </Pressable>
       ) : null}

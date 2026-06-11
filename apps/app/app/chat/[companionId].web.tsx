@@ -15,6 +15,7 @@ import {
   type TextInputKeyPressEventData,
   type ViewStyle,
 } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { getCompanion, getInviteTargets, getScenes, getStoryMoment, mediaSource, resolveStoryChoice } from '@/api/companion-client';
 import type {
@@ -710,7 +711,7 @@ export default function WebChatScreen() {
         <View className="gap-5">
           <WebCard padding="md" className="gap-4">
             <View className="items-center gap-3">
-              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-app-rose-soft shadow-card">
+              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-app-rose/25 bg-app-rose-soft shadow-glow">
                 <View pointerEvents="none" style={chatPortraitStyles.portraitFloor} />
                 {portrait ? (
                   <Image
@@ -721,13 +722,13 @@ export default function WebChatScreen() {
                   />
                 ) : (
                   <View className="flex-1 items-center justify-center">
-                    <Ionicons color="#C9486B" name="person-outline" size={32} />
+                    <Ionicons color={PALETTE.rose} name="person-outline" size={32} />
                   </View>
                 )}
               </View>
               <View className="items-center gap-1">
                 <Text className="font-serif text-title text-app-ink">{companion?.name ?? 'Companion'}</Text>
-                <Text className="text-overline text-rose-deep">{companion?.relationship_role ?? 'companion'}</Text>
+                <Text className="text-overline text-app-rose-deep">{companion?.relationship_role ?? 'companion'}</Text>
               </View>
               <WebTag size="sm" variant="rose">
                 {shownEmotion}
@@ -753,7 +754,7 @@ export default function WebChatScreen() {
               label="View profile"
               onPress={() => router.push(`/companion/${encodeURIComponent(companionId)}`)}
               variant="outline"
-              iconLeft={<Ionicons color="#2A1F1A" name="person-circle-outline" size={16} />}
+              iconLeft={<Ionicons color={PALETTE.ink} name="person-circle-outline" size={16} />}
             />
           </WebCard>
         </View>
@@ -767,8 +768,8 @@ export default function WebChatScreen() {
             style={twilightStyles.stickyHeader}
           >
             <View className="flex-row items-center gap-3">
-              <View className="h-9 w-9 items-center justify-center rounded-full bg-rose-soft">
-                <Ionicons color="#9A2F4F" name="chatbubbles" size={16} />
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-app-rose-soft">
+                <Ionicons color={PALETTE.roseDeep} name="chatbubbles" size={16} />
               </View>
               <View>
                 <Text className="font-serif text-title-sm text-white">{companion?.name ?? 'Companion'}</Text>
@@ -787,7 +788,7 @@ export default function WebChatScreen() {
                 accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
                 onPress={autoVoice.toggle}
                 className={`h-9 w-9 items-center justify-center rounded-full ${
-                  autoVoice.enabled ? 'bg-rose shadow-glow' : 'bg-white/10'
+                  autoVoice.enabled ? 'bg-app-rose shadow-glow' : 'bg-white/10'
                 }`}
               >
                 <Ionicons
@@ -822,8 +823,8 @@ export default function WebChatScreen() {
             </View>
           ) : null}
             {inviteNotice ? (
-              <View className="border-b border-white/5 bg-rose/15 px-5 py-2">
-                <Text className="text-center text-caption font-semibold text-rose-soft">{inviteNotice}</Text>
+              <View className="border-b border-white/5 bg-app-rose/15 px-5 py-2">
+                <Text className="text-center text-caption font-semibold text-app-rose-deep">{inviteNotice}</Text>
               </View>
             ) : null}
             <StoryActionBar
@@ -912,7 +913,7 @@ export default function WebChatScreen() {
               />
             </View>
             <View className="flex-row items-end gap-3">
-              <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
+              <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-app-rose/60">
                 <TextInput
                   multiline
                   onChangeText={setDraft}
@@ -929,16 +930,16 @@ export default function WebChatScreen() {
                 disabled={!canSend}
                 onPress={() => void handleSend()}
                 className={`h-12 w-12 items-center justify-center rounded-2xl ${
-                  canSend ? 'bg-rose shadow-glow' : 'bg-white/10'
+                  canSend ? 'bg-app-rose shadow-glow' : 'bg-white/10'
                 }`}
               >
                 <Ionicons color={canSend ? '#FFFFFF' : 'rgba(255,255,255,0.4)'} name="send" size={18} />
               </Pressable>
             </View>
             {remainingSeconds > 0 ? (
-              <View className="mt-3 flex-row items-center gap-2 self-start rounded-full border border-ember/30 bg-ember/10 px-3 py-1">
-                <Ionicons color="#D97757" name="hourglass-outline" size={12} />
-                <Text className="text-caption font-semibold text-ember">{`Slow down — try again in ${remainingSeconds}s`}</Text>
+              <View className="mt-3 flex-row items-center gap-2 self-start rounded-full border border-app-ember/30 bg-app-ember/10 px-3 py-1">
+                <Ionicons color={PALETTE.ember} name="hourglass-outline" size={12} />
+                <Text className="text-caption font-semibold text-app-ember">{`Slow down — try again in ${remainingSeconds}s`}</Text>
               </View>
             ) : null}
           </View>
@@ -1017,10 +1018,10 @@ function QuickActionButton({
       disabled={disabled}
       onPress={onPress}
       className={`min-h-9 flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${
-        selected ? 'border-rose/50 bg-rose/20' : 'border-white/10 bg-white/5'
+        selected ? 'border-app-rose/50 bg-app-rose/20' : 'border-white/10 bg-white/5'
       } ${disabled ? 'opacity-50' : 'opacity-100'}`}
     >
-      <Ionicons color="#F6C6D6" name={icon} size={15} />
+      <Ionicons color={PALETTE.roseDeep} name={icon} size={15} />
       <Text className="text-caption font-semibold text-white">{label}</Text>
     </Pressable>
   );
@@ -1028,7 +1029,7 @@ function QuickActionButton({
 
 const chatPortraitStyles = StyleSheet.create({
   portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,77,126,0.10)',
     bottom: 0,
     height: 56,
     left: 0,

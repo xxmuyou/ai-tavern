@@ -1,4 +1,5 @@
 import { ActivityIndicator, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 export type WebLoadingProps = {
   fullscreen?: boolean;
@@ -9,8 +10,8 @@ export function WebLoading({ fullscreen = true, label = 'Loading...' }: WebLoadi
   if (fullscreen) {
     return (
       <View className="flex-1 items-center justify-center bg-app-canvas px-6">
-        <View className="h-12 w-12 items-center justify-center rounded-full bg-rose-soft">
-          <ActivityIndicator color="#9A2F4F" size="small" />
+        <View className="h-12 w-12 items-center justify-center rounded-full bg-app-rose-soft">
+          <ActivityIndicator color={PALETTE.roseDeep} size="small" />
         </View>
         {label ? <Text className="mt-3 text-caption text-app-muted">{label}</Text> : null}
       </View>
@@ -19,7 +20,7 @@ export function WebLoading({ fullscreen = true, label = 'Loading...' }: WebLoadi
 
   return (
     <View className="flex-row items-center gap-3 py-3">
-      <ActivityIndicator color="#9A2F4F" size="small" />
+      <ActivityIndicator color={PALETTE.roseDeep} size="small" />
       {label ? <Text className="text-caption text-app-muted">{label}</Text> : null}
     </View>
   );

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { WebButton } from './WebButton';
 
@@ -15,8 +16,8 @@ export type WebEmptyStateProps = {
 export function WebEmptyState({ actionLabel, description, icon = 'sparkles-outline', onAction, title }: WebEmptyStateProps) {
   return (
     <View className="flex-1 items-center justify-center rounded-2xl border border-dashed border-app-line bg-app-sunken/30 px-8 py-16">
-      <View className="mb-5 h-14 w-14 items-center justify-center rounded-full bg-rose-soft">
-        <Ionicons color="#9A2F4F" name={icon} size={24} />
+      <View className="mb-5 h-14 w-14 items-center justify-center rounded-full bg-app-rose-soft">
+        <Ionicons color={PALETTE.roseDeep} name={icon} size={24} />
       </View>
       <Text className="text-center font-serif text-title text-app-ink">{title}</Text>
       {description ? (

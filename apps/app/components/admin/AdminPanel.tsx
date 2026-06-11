@@ -32,7 +32,7 @@ export function AdminPanelHeader({
     <View>
       <Text className="text-sm font-semibold text-app-ink">{title}</Text>
       {subtitle ? <Text className="mt-0.5 text-xs leading-5 text-app-muted">{subtitle}</Text> : null}
-      {error ? <Text className="mt-1 text-xs font-semibold text-rose-deep">{error}</Text> : null}
+      {error ? <Text className="mt-1 text-xs font-semibold text-app-rose-deep">{error}</Text> : null}
     </View>
   );
 }

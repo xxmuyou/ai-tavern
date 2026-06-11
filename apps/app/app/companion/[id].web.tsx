@@ -3,6 +3,7 @@ import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { WebAppShell } from '@/components/web/WebAppShell';
@@ -110,7 +111,7 @@ export default function WebCompanionDetailScreen() {
             label="Start chat"
             onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
             variant="primary"
-            iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
+            iconLeft={<Ionicons color="#FFFFFF" name="chatbubble-ellipses" size={16} />}
           />
           {canPublish ? (
             <>
@@ -118,14 +119,14 @@ export default function WebCompanionDetailScreen() {
                 label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
                 onPress={() => void handleTogglePublish(false)}
                 variant="outline"
-                iconLeft={<Ionicons color="#9A2F4F" name={isPublic ? 'earth' : 'earth-outline'} size={16} />}
+                iconLeft={<Ionicons color={PALETTE.roseDeep} name={isPublic ? 'earth' : 'earth-outline'} size={16} />}
               />
               {!isPublic ? (
                 <WebButton
                   label="Publish + story"
                   onPress={() => void handleTogglePublish(true)}
                   variant="ghost"
-                  iconLeft={<Ionicons color="#9A2F4F" name="git-branch-outline" size={16} />}
+                  iconLeft={<Ionicons color={PALETTE.roseDeep} name="git-branch-outline" size={16} />}
                 />
               ) : null}
             </>
@@ -151,7 +152,7 @@ export default function WebCompanionDetailScreen() {
         <View className="gap-5">
           <WebCard padding="lg" className="gap-5">
             <View className="items-center gap-4">
-              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-rose-soft shadow-float">
+              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-app-rose/25 bg-app-rose-soft shadow-glow">
                 <View pointerEvents="none" style={portraitStyles.portraitFloor} />
                 {imageSource ? (
                   <Image
@@ -162,7 +163,7 @@ export default function WebCompanionDetailScreen() {
                   />
                 ) : (
                   <View className="h-full w-full items-center justify-center">
-                    <Text className="font-serif text-display-2xl text-rose-deep/60">
+                    <Text className="font-serif text-display-2xl text-app-rose-deep/60">
                       {companion.name.slice(0, 1).toUpperCase()}
                     </Text>
                   </View>
@@ -176,7 +177,7 @@ export default function WebCompanionDetailScreen() {
               <View className="items-center gap-2">
                 <Text className="font-serif text-display-sm text-app-ink">{companion.name}</Text>
                 {companion.relationship_role ? (
-                  <Text className="text-caption uppercase tracking-wider text-rose-deep">
+                  <Text className="text-caption uppercase tracking-wider text-app-rose-deep">
                     {companion.relationship_role}
                   </Text>
                 ) : null}
@@ -194,7 +195,7 @@ export default function WebCompanionDetailScreen() {
             ) : null}
 
             <View className="border-t border-app-line-soft pt-4">
-              <Text className="text-overline text-rose-deep">Relationship goal</Text>
+              <Text className="text-overline text-app-rose-deep">Relationship goal</Text>
               <Text className="mt-2 font-serif text-title-sm text-app-ink">{relationshipGoal.label}</Text>
               <Text className="mt-1 text-caption text-app-muted">Stage · {relationshipGoal.stage}</Text>
             </View>
@@ -239,7 +240,7 @@ export default function WebCompanionDetailScreen() {
                 onChanged={refetch}
               />
               <WebPanel>
-                <Text className="mb-2 text-overline text-rose-deep">Current stage</Text>
+                <Text className="mb-2 text-overline text-app-rose-deep">Current stage</Text>
                 <Text className="font-serif text-title text-app-ink">{companion.relationship.stage ?? '—'}</Text>
                 <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">
                   A snapshot of how this companion is presenting today. It shifts with your conversations, time of day, and story beat.
@@ -282,7 +283,7 @@ export default function WebCompanionDetailScreen() {
 
           {tab === 'profile' ? (
             <WebCard padding="lg" className="gap-1">
-              <Text className="mb-3 text-overline text-rose-deep">Character card</Text>
+              <Text className="mb-3 text-overline text-app-rose-deep">Character card</Text>
               <TextBlock label="Personality" value={companion.personality} />
               <TextBlock label="Background" value={companion.background} />
               <TextBlock label="Appearance" value={companion.appearance} />
@@ -311,7 +312,7 @@ export default function WebCompanionDetailScreen() {
 
 const portraitStyles = StyleSheet.create({
   portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,77,126,0.10)',
     bottom: 0,
     height: 64,
     left: 0,
@@ -329,7 +330,7 @@ function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
     <View className="mb-4 border-b border-app-line-soft pb-4 last:border-b-0 last:pb-0">
-      <Text className="text-overline text-rose-deep">{label}</Text>
+      <Text className="text-overline text-app-rose-deep">{label}</Text>
       <Text className="mt-1.5 text-body-sm leading-7 text-app-ink-soft">{value}</Text>
     </View>
   );

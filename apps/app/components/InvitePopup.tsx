@@ -1,4 +1,5 @@
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { mediaSource } from '@/api/companion-client';
 import type { InviteTarget } from '@/api/types';
@@ -40,7 +41,7 @@ export function InvitePopup({
           <View className="mt-4">
             {loading ? (
               <View className="items-center py-8">
-                <ActivityIndicator color="#6E59C7" />
+                <ActivityIndicator color={PALETTE.brand} />
               </View>
             ) : targets.length === 0 ? (
               <View className="rounded-xl border border-app-line bg-app-bg p-4">

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 import { generateMomentImage, getMomentImageJob, mediaSource } from '@/api/companion-client';
 import type { ChatMomentImage, MomentImageStatus } from '@/api/types';
@@ -213,7 +214,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
           onPress={() => void capture(true)}
           className="mt-1.5 flex-row items-center gap-1.5 self-start rounded-full border border-app-brand/25 bg-app-brand-soft px-3 py-1.5"
         >
-          <Ionicons color="#1E6B52" name="refresh" size={14} />
+          <Ionicons color={PALETTE.rose} name="refresh" size={14} />
           <Text className="text-xs font-medium text-app-primary">Regenerate image</Text>
         </Pressable>
       </View>
@@ -235,14 +236,14 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         }`}
       >
         {phase === 'capturing' ? (
-          <ActivityIndicator color="#1E6B52" size="small" />
+          <ActivityIndicator color={PALETTE.rose} size="small" />
         ) : (
-          <Ionicons color="#1E6B52" name="camera-outline" size={16} />
+          <Ionicons color={PALETTE.rose} name="camera-outline" size={16} />
         )}
         <Text className="text-xs font-medium text-app-primary">{label}</Text>
       </Pressable>
       {phase === 'error' && errorMessage ? (
-        <Text className="mt-1 max-w-[80%] text-xs font-medium text-ember">{errorMessage}</Text>
+        <Text className="mt-1 max-w-[80%] text-xs font-medium text-app-ember">{errorMessage}</Text>
       ) : null}
     </View>
   );

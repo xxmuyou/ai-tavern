@@ -35,7 +35,7 @@ export function WebTimeline({ className, emptyLabel = 'Nothing here yet.', entri
           return (
             <View key={entry.id} className="flex-row gap-5">
               <View className="items-center pt-1.5">
-                <View className="h-2.5 w-2.5 rounded-full bg-rose" />
+                <View className="h-2.5 w-2.5 rounded-full bg-app-rose" />
                 {!isLast ? <View className="mt-1 h-full w-px flex-1 bg-app-line" /> : null}
               </View>
               <View className={cn('flex-1 pb-6', isLast && 'pb-0')}>

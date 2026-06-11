@@ -22,7 +22,7 @@ const variantClass: Record<WebTagVariant, string> = {
   neutral: 'bg-app-sunken text-app-ink-soft',
   success: 'bg-app-success/15 text-app-success',
   warning: 'bg-app-warning-soft text-app-warning',
-  danger: 'bg-app-danger-soft text-rose-deep',
+  danger: 'bg-app-danger-soft text-app-danger',
 };
 
 const sizeClass: Record<WebTagSize, string> = {

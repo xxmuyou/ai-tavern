@@ -111,19 +111,19 @@ export default function WebSceneDetailScreen() {
               <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
             ) : (
               <View className="h-full w-full items-center justify-center bg-gradient-warm">
-                <Text className="font-serif text-display-lg text-rose-deep/40">{scene.name.slice(0, 1)}</Text>
+                <Text className="font-serif text-display-lg text-app-rose-deep/40">{scene.name.slice(0, 1)}</Text>
               </View>
             )}
             <View className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-app-twilight/70 to-transparent" />
             <View className="absolute left-7 right-7 bottom-6 flex-row items-center justify-between">
               <View className="flex-row flex-wrap gap-1.5">
                 {scene.tags.map((tag) => (
-                  <WebTag key={tag} size="sm" variant="rose" className="bg-white/90">
+                  <WebTag key={tag} size="sm" variant="rose">
                     {tag}
                   </WebTag>
                 ))}
               </View>
-              <View className="rounded-full bg-white/90 px-3 py-1">
+              <View className="rounded-full border border-white/10 bg-black/55 px-3 py-1 backdrop-blur">
                 <Text className="text-caption font-semibold text-app-ink">
                   {companions.length} here
                 </Text>
@@ -132,7 +132,7 @@ export default function WebSceneDetailScreen() {
           </View>
           <View className="gap-5 p-7">
             <View>
-              <Text className="text-overline text-rose-deep">A place to be</Text>
+              <Text className="text-overline text-app-rose-deep">A place to be</Text>
               <Text className="mt-2 font-serif text-title text-app-ink">{`"${scene.mood}"`}</Text>
             </View>
           </View>
@@ -140,7 +140,7 @@ export default function WebSceneDetailScreen() {
 
         <WebCard padding="lg" className="gap-5">
           <View>
-            <Text className="text-overline text-rose-deep">At a glance</Text>
+            <Text className="text-overline text-app-rose-deep">At a glance</Text>
             <Text className="mt-1 font-serif text-title text-app-ink">Scene state</Text>
           </View>
           <View className="gap-3">
@@ -160,7 +160,7 @@ export default function WebSceneDetailScreen() {
         <View className="mt-10">
           <View className="mb-5 flex-row items-end justify-between">
             <View>
-              <Text className="text-overline text-rose-deep">Guided actions</Text>
+              <Text className="text-overline text-app-rose-deep">Guided actions</Text>
               <Text className="mt-1 font-serif text-title text-app-ink">Choose the next step</Text>
             </View>
             <Text className="text-caption text-app-muted">{companions.length} available</Text>
@@ -178,7 +178,7 @@ export default function WebSceneDetailScreen() {
         </View>
       ) : (
         <WebCard padding="lg" className="mt-10 gap-2">
-          <Text className="text-overline text-rose-deep">Guided actions</Text>
+          <Text className="text-overline text-app-rose-deep">Guided actions</Text>
           <Text className="font-serif text-title text-app-ink">No one is here right now</Text>
           <Text className="text-body-sm leading-6 text-app-ink-soft">
             Browse another scene or come back later when a companion is available.
@@ -239,11 +239,11 @@ function SceneActionCard({
   return (
     <WebCard padding="lg" className="gap-5">
       <View className="flex-row gap-4">
-        <View className="h-24 w-20 items-center justify-end overflow-hidden rounded-2xl bg-rose-soft">
+        <View className="h-24 w-20 items-center justify-end overflow-hidden rounded-2xl bg-app-rose-soft">
           {portrait ? (
             <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" />
           ) : (
-            <Text className="font-serif text-title text-rose-deep">
+            <Text className="font-serif text-title text-app-rose-deep">
               {companion.name.slice(0, 1).toUpperCase()}
             </Text>
           )}
@@ -260,7 +260,7 @@ function SceneActionCard({
       </View>
 
       <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
-        <Text className="text-caption font-semibold uppercase tracking-normal text-rose-deep">
+        <Text className="text-caption font-semibold uppercase tracking-normal text-app-rose-deep">
           {guided.source === 'story' ? 'Story objective' : 'Recommended next step'}
         </Text>
         <Text className="mt-1 font-serif text-title-sm text-app-ink">{guided.title}</Text>

@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 
 import type { RelationshipDimensionKey } from '@/api/types';
+import { PALETTE } from '@/constants/palette';
 
 type DimensionBarProps = {
   dimension: RelationshipDimensionKey;
@@ -27,13 +28,13 @@ export function DimensionBar({ dimension, label, tone, value }: DimensionBarProp
 }
 
 function positiveColor(dimension: RelationshipDimensionKey): string {
-  if (dimension === 'romance') return '#B65C3A';
-  if (dimension === 'friendship') return '#C87918';
-  return '#1E6B52';
+  if (dimension === 'romance') return PALETTE.rose;
+  if (dimension === 'friendship') return PALETTE.ember;
+  return PALETTE.success;
 }
 
 function negativeColor(dimension: RelationshipDimensionKey): string {
-  if (dimension === 'hostility') return '#7C3AED';
-  if (dimension === 'tension') return '#2563EB';
-  return '#475569';
+  if (dimension === 'hostility') return PALETTE.brand;
+  if (dimension === 'tension') return PALETTE.info;
+  return PALETTE.mutedSoft;
 }

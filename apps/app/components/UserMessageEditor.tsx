@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { PALETTE } from '@/constants/palette';
 
 type UserMessageEditorProps = {
   text: string;
@@ -19,7 +20,7 @@ export function UserMessageEditor({ text, isSaving, onChangeText, onSave, onCanc
           editable={!isSaving}
           value={text}
           onChangeText={onChangeText}
-          placeholderTextColor="#687076"
+          placeholderTextColor={PALETTE.muted}
           textAlignVertical="top"
           className="min-h-12 rounded-2xl border border-app-primary bg-white px-4 py-2.5 text-base text-app-text"
         />
