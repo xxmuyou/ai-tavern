@@ -481,11 +481,32 @@ function buildInvite(input: ChatPromptInput): string {
 function buildQuickAction(input: ChatPromptInput): string {
   const { quickAction } = input;
   if (!quickAction) return "";
-  return [
+  const lines = [
     "# A concrete gesture just now",
     quickAction.description,
     "The user's visible message is the primary source of truth for how this gesture happened. Acknowledge it naturally in your reply. Let it affect the emotional texture of the moment, but do not mention points, metadata, systems, or rewards.",
-  ].join("\n");
+    "Do not narrate extra actions, thoughts, or physical escalation on behalf of the user beyond the gesture they chose.",
+  ];
+  if (quickAction.kind === "scene_action") {
+    lines.push(`Scene action label: ${quickAction.label}. Tone: ${quickAction.tone}.`);
+  }
+  if (quickAction.kind === "custom_scene_action") {
+    lines.push(`Custom scene action entered by the user: ${quickAction.label}.`);
+    lines.push(
+      "Treat this as a visible action that just happened in the current scene, not as ordinary dialogue. Respond to how it makes you feel or what you do next in character.",
+    );
+  }
+  if (quickAction.tone === "negative" || quickAction.tone === "awkward") {
+    lines.push(
+      "If this gesture is rude, reckless, embarrassing, or harmful to trust, react honestly in character. You may become guarded, disappointed, annoyed, or set a boundary.",
+    );
+  }
+  if (quickAction.tone === "intimate") {
+    lines.push(
+      "For intimate or sexual implications, consent and relationship stage matter. You may refuse, slow down, ask for confirmation, or set a boundary. If intimacy proceeds, keep it non-graphic and fade to black; do not describe explicit sexual acts or private bodily functions.",
+    );
+  }
+  return lines.join("\n");
 }
 
 function buildStoryBeat(input: ChatPromptInput): string {
@@ -577,6 +598,12 @@ function buildRules(input: ChatPromptInput): string {
   );
   lines.push("Plain text (outside any tag) is reserved for spoken dialogue ONLY.");
   lines.push(
+    "Narration voice rule: describe your own actions in third person using your name or pronouns, never first person. Dialogue may still use I/me naturally because that is what you say out loud.",
+  );
+  lines.push(
+    "If a user message contains second-person UI narration like '<narration>You set a coffee down.</narration>', treat that as the user/player's action, not yours.",
+  );
+  lines.push(
     "DO NOT use markdown for actions: no *asterisks*, no _underscores_, no (parentheses). Use ONLY <narration> tags.",
   );
   lines.push(
@@ -603,6 +630,8 @@ function buildPostHistoryGuard(input: ChatPromptInput): string {
   lines.push(`Relationship guidance: ${addressGuidanceForStage(input.stage)}`);
   lines.push("Never narrate or decide the user's actions, thoughts, feelings, or words.");
   lines.push("Use <narration>...</narration> for actions/gestures/inner observations; spoken dialogue stays outside tags.");
+  lines.push("Narration for your actions must be third person or use your name, not first person; first person is allowed only in spoken dialogue.");
+  lines.push("Second-person narration inside a user message describes the user/player action, not yours.");
   lines.push("Match the user's current language. Do not output JSON, analysis, system text, or meta-commentary.");
   return lines.join("\n");
 }

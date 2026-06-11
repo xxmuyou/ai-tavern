@@ -19,9 +19,9 @@ export function WebEmptyState({ actionLabel, description, icon = 'sparkles-outli
       <View className="mb-5 h-14 w-14 items-center justify-center rounded-full bg-app-rose-soft">
         <Ionicons color={PALETTE.roseDeep} name={icon} size={24} />
       </View>
-      <Text className="text-center font-serif text-title text-app-ink">{title}</Text>
+      <Text className="text-center font-serif text-title text-white">{title}</Text>
       {description ? (
-        <Text className="mt-2 max-w-md text-center text-body-sm leading-6 text-app-muted">{description}</Text>
+        <Text className="mt-2 max-w-md text-center text-body-sm leading-6 text-rose-50/60">{description}</Text>
       ) : null}
       {actionLabel && onAction ? (
         <View className="mt-6">

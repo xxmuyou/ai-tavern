@@ -52,7 +52,13 @@
 
 ## Prompt Context
 
-v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由后端规则拼接最终生图 prompt。这个 extractor 不是聊天总结器；它只把当前这一轮转译成“companion 一个人在画面中可见的姿态和反应”。最终 RunningHub prompt 仍由代码生成，并继续承担角色一致性、场景、单人约束和无 UI/文字等硬规则。
+v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由后端规则拼接最终生图 prompt。这个 extractor 不是聊天总结器；它只把当前这一轮转译成“companion 一个人在画面中可见的姿态、服装和反应”。最终 RunningHub prompt 仍由代码生成，并继续承担场景、单人约束和无 UI/文字等硬规则。
+
+**身份策略（v1.4）**：底层是 Qwen-Image-Edit 编辑模型，已持有 companion cutout 作参考图。**脸由参考图像锁定，不由文字锁定**——模型直接保留输入图里那张脸。因此最终 prompt **不写任何 appearance/族裔/五官文字**：文字描脸对身份保持零增益，而 `appearance` 自由文本把不可变的脸与可变的发型/服装混在一起，写进去只会把旧发型旧服装带回来、与"随场景换装"自相矛盾。最终 prompt 只用一句 `Keep only this person's facial identity…` 配合参考图锁脸，并保留**一个 gender 单词锚点**防性别漂移；**发型、服装、表情、身体姿势、构图全部随场景同步变化**。
+
+**最终图片 prompt 只放可渲染的具体视觉指令**。`appearance`、名字、relationship_role、relationship stage、personality 等**都不拼进最终图片 prompt**：appearance 因"脸靠参考图、文字会带回旧造型"而排除；名字是无视觉收益且易诱发画面文字的 token；relationship/personality 是不可渲染的抽象概念，仅作 pose planner 输入。
+
+> 注意：这里的"放开服装/发型"是 `chat_moment` 这一 workflow 的策略；与 spec-030 的 `profile_outfit` 换装功能（独立 workflow，其 prompt 仍锁 hairstyle/body 以保持同一造型换装）是两套不同流程，不构成矛盾。
 
 后端从来源 message 和上下文加载：
 
@@ -60,8 +66,8 @@ v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由
 - `previous_user_message`：同一 thread 中来源 message 前一条 user message，用来判断用户刚刚做了什么；该内容不能原样进入最终图片 prompt，必须转译成 companion 的单人可见反应。
 - `scene`：`name / mood / tags / art_url`；prompt 使用 name、mood、tags，不依赖 art_url 合成。
 - `time`：用户本地 `time_slot`，如 `morning / afternoon / evening / night`。
-- `companion`：`name / appearance / personality / relationship_role / gender`。
-- `relationship`：当前 stage，用于亲密程度、距离感、姿态氛围。
+- `companion`：`name / appearance / personality / relationship_role / gender`。其中**仅 `gender`** 进最终图片 prompt（作单词锚点 `Companion gender: …`）；`appearance` **不进**最终图片 prompt（脸由参考图锁定，文字会带回旧造型）；`name / personality / relationship_role` 仅作 pose planner 输入。注意 `appearance` 字段本身不删，它在 profile_outfit / emotion_art / 聊天文本人设 / story-beats 等链路仍正常使用——只是不进 chat_moment 这一条 prompt。
+- `relationship`：当前 stage，仅作 pose planner 输入（影响亲密程度、距离感、姿态氛围），不再以 `Relationship stage: …` 行进入最终图片 prompt。
 - `emotion/status`：来源 message 的 emotion，如 `warm / playful / guarded / tense / annoyed`，映射为画面状态。
 - `activity`：若聊天来自 activity，加入 `activity_type`、`activity_hint`、daily mood/availability。
 - `story_beat`：若当前 scene 有 active story beat，加入 `title / objective`，但不强行剧透未完成内容。
@@ -78,6 +84,7 @@ type MomentVisualAction = {
   hand_action?: string;
   gaze?: string;
   expression?: string;
+  outfit?: string; // 贴合场景/季节/活动的单人服装，覆盖参考图原服装
   held_or_nearby_props?: string;
   scene_position?: string;
 };
@@ -89,23 +96,26 @@ type MomentVisualAction = {
 - 用户动作要转译成 companion 的单人反应：用户送花 → `she holds a small bouquet close to her chest`；用户点咖啡 → `she sits with a coffee cup near her hands`；用户邀请去某处 → `she stands near the doorway, turning back toward the viewer`。
 - 亲密互动不画第二个人，也不逐字保留身体接触：牵手、拥抱、靠近、从某人腿上起身等动作转译成 viewer 视角的单人姿态，例如 `she reaches one hand slightly toward the viewer`、`she leans a little closer while looking at the viewer`、`she sits alone near the bed edge, adjusting fabric with one hand`。
 - companion narration 只作为上下文，不允许原样复制；用户消息只补足 props、触发动作和可见反应。
+- `outfit` 输出一句贴合场景/季节/活动的单人服装（海滩=轻便泳装/夏裙、雪夜=厚外套围巾、卧室=居家睡衣等），对关系阶段保持得体；它会以覆盖措辞拼进最终 prompt，替换参考图原服装。extractor 失败时使用 `an outfit that naturally fits the scene` 兜底。
 - extractor 失败、超时、JSON 不合法，或输出含风险词时，最终 prompt 使用安全单人姿态 fallback；图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
 
-最终 prompt 示例结构：
+最终 prompt 示例结构（v1.4：脸靠参考图锁定；无 appearance/名字/relationship/personality，仅留 gender 锚点）：
 
 ```text
 Edit the input image into a single-character scene image of the same companion.
-Moment pose: Maya sits alone at the cafe table.
+Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene.
+Keep exactly one person in the image — this companion only. Do not add any other people, ...
+The companion looks directly at the viewer, ...; do not render any camera, phone, or photographic device.
+Moment pose: sits alone at the cafe table.
 Hands/props: one hand near a coffee cup, coffee cup.
+Outfit (overrides any clothing mentioned in the reference): light summer dress.
 Gaze: eyes toward the viewer.
 Expression: shy warm smile.
 Position in scene: near the cafe window.
-Exactly one person: Maya only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.
-Companion: Maya, [appearance], [personality].
-Scene: Pier Coffee Shop, morning, warm cafe light, quiet harbor atmosphere.
-Emotional state: shy but warm.
-Relationship stage: familiar; keep the body language gentle and not overly intimate.
-Full environment image, natural composition, no text, no UI, no speech bubbles, no visible camera.
+Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.
+Companion gender: female.
+Change the background to: Pier Coffee Shop, morning, warm cafe atmosphere, ...tags. The background is empty of other people.
+Single companion only, natural composition, no other people, ..., no text, no UI, no speech bubbles, no visible camera or photographic device.
 ```
 
 ## API / Data Model

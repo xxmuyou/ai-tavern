@@ -44,16 +44,16 @@ export function WebPriceCard({
             <Text className="text-[11px] font-semibold uppercase tracking-wider text-white">Most loved</Text>
           </View>
         ) : null}
-        <Text className="font-serif text-title text-app-ink">{title}</Text>
+        <Text className="font-serif text-title text-white">{title}</Text>
         {description ? (
-          <Text className="text-body-sm leading-6 text-app-muted">{description}</Text>
+          <Text className="text-body-sm leading-6 text-rose-50/60">{description}</Text>
         ) : null}
       </View>
 
       {price ? (
         <View className="flex-row items-baseline gap-1">
-          <Text className="font-serif text-display-md text-app-ink">{price}</Text>
-          {priceUnit ? <Text className="text-caption text-app-muted">{priceUnit}</Text> : null}
+          <Text className="font-serif text-display-md text-white">{price}</Text>
+          {priceUnit ? <Text className="text-caption text-rose-50/60">{priceUnit}</Text> : null}
         </View>
       ) : null}
 

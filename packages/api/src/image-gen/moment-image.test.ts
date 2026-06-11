@@ -250,7 +250,6 @@ function sampleContext(): MomentPromptContext {
   return {
     activity: { activity_hint: "sketching by the window", activity_type: "coffee", mood: "calm" },
     companion: {
-      appearance: "long dark hair, soft sweater",
       gender: "female",
       name: "Maya",
       personality: "shy but warm",
@@ -267,18 +266,37 @@ function sampleContext(): MomentPromptContext {
 }
 
 describe("buildMomentPrompt", () => {
-  it("includes scene, time slot, companion, emotion and a safe fallback pose", () => {
+  it("includes scene, time slot, gender anchor, emotion and a safe fallback pose", () => {
     const prompt = buildMomentPrompt(sampleContext());
     expect(prompt).toContain("Pier Coffee Shop");
     expect(prompt).toContain("morning");
-    expect(prompt).toContain("Maya");
+    // The face is locked by the reference image, not by appearance text. Only a
+    // one-word gender anchor remains in the prompt.
+    expect(prompt).toContain("Companion gender: female");
+    expect(prompt).not.toContain("long dark hair");
+    expect(prompt).not.toContain("soft sweater");
+    expect(prompt).not.toContain("identity reference");
     expect(prompt).toContain("warm");
     expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
     expect(prompt).toContain("Gaze: eyes toward the viewer");
     expect(prompt).toContain("Expression: warm expression");
+    expect(prompt).toContain("Outfit (overrides any clothing mentioned in the reference): an outfit that naturally fits the scene");
     expect(prompt).not.toContain("Maya wraps her hands around the cup");
-    expect(prompt).toContain("familiar");
     expect(prompt).toContain("no text, no UI");
+  });
+
+  it("locks only facial identity and lets style follow the scene", () => {
+    const prompt = buildMomentPrompt(sampleContext());
+    expect(prompt).toContain("the same recognizable face and facial features");
+    expect(prompt).toContain(
+      "The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene",
+    );
+    // Abstract, non-visual metadata is kept out of the final image prompt.
+    expect(prompt).not.toContain("Maya");
+    expect(prompt).not.toContain("shy but warm");
+    expect(prompt).not.toContain("Relationship context");
+    expect(prompt).not.toContain("Body language fits");
+    expect(prompt).toContain("this companion only");
   });
 
   it("drops free-form user/story text that would summon extra people", () => {
@@ -301,15 +319,23 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("first-person perspective from the user's point of view");
   });
 
-  it("includes the companion's relationship role", () => {
-    const prompt = buildMomentPrompt(sampleContext());
-    expect(prompt).toContain("Relationship context: friend");
+  it("renders a scene-appropriate outfit from the visual action", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      visualAction: {
+        body_pose: "standing alone on the warm sand",
+        outfit: "light summer dress",
+      },
+    });
+    expect(prompt).toContain(
+      "Outfit (overrides any clothing mentioned in the reference): light summer dress",
+    );
   });
 
   it("prioritizes a sanitized visual action without including the user's raw action", () => {
     const prompt = buildMomentPrompt({
       ...sampleContext(),
-      previousUserText: "<narration>I offer you a small bouquet.</narration>These are for you.",
+      previousUserText: "<narration>You offer a small bouquet.</narration>These are for you.",
       sourceReply: "<narration>Maya blushes.</narration>Thank you.",
       visualAction: {
         body_pose: "standing slightly turned toward the viewer",
@@ -326,7 +352,7 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Position in scene: near the cafe table");
     expect(prompt).toContain("The viewer/user is not visible");
     expect(prompt).not.toContain("Render this exact visible moment");
-    expect(prompt).not.toContain("I offer you a small bouquet");
+    expect(prompt).not.toContain("You offer a small bouquet");
     expect(prompt).not.toContain("Maya blushes");
   });
 

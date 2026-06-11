@@ -105,6 +105,13 @@ export default function WebMeScreen() {
 
   return (
     <WebAppShell title="Me" subtitle="Account, subscription, usage, and workspace controls.">
+      <View className="mb-7">
+        <Text className="font-serif text-display-sm text-white">Me</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">
+          Account, subscription, usage, and workspace controls.
+        </Text>
+      </View>
+
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[340px_1fr]">
         {/* Profile card */}
         <View className="gap-5">
@@ -116,8 +123,8 @@ export default function WebMeScreen() {
               source={null}
             />
             <View className="items-center gap-1.5">
-              <Text className="font-serif text-title text-app-ink">{displayName}</Text>
-              <Text className="text-body-sm text-app-muted">{email}</Text>
+              <Text className="font-serif text-title text-white">{displayName}</Text>
+              <Text className="text-body-sm text-rose-50/60">{email}</Text>
             </View>
             <View className="flex-row flex-wrap justify-center gap-1.5">
               {providers.map((provider) => (
@@ -126,11 +133,11 @@ export default function WebMeScreen() {
                 </WebTag>
               ))}
             </View>
-            <View className="w-full border-t border-app-line-soft pt-5">
+            <View className="w-full border-t border-white/8 pt-5">
               <View className="flex-row items-center justify-between gap-3">
                 <View>
-                  <Text className="text-overline text-app-muted">Plan</Text>
-                  <Text className="mt-1 font-serif text-title-sm text-app-ink">{isPro ? 'Pro' : 'Free'}</Text>
+                  <Text className="text-overline text-rose-50/60">Plan</Text>
+                  <Text className="mt-1 font-serif text-title-sm text-white">{isPro ? 'Pro' : 'Free'}</Text>
                 </View>
                 <WebTag size="sm" variant={isPro ? 'rose' : 'neutral'}>
                   {isPro ? 'Unlocked' : 'Upgrade me'}
@@ -268,8 +275,8 @@ export default function WebMeScreen() {
             <WebCard padding="md">
               <View className="flex-row items-center justify-between gap-4">
                 <View className="min-w-0 flex-1">
-                  <Text className="text-body-sm font-semibold text-app-ink">Daily relationship prompts</Text>
-                  <Text className="mt-1 text-caption text-app-muted">
+                  <Text className="text-body-sm font-semibold text-white">Daily relationship prompts</Text>
+                  <Text className="mt-1 text-caption text-rose-50/60">
                     {push.enabled ? 'Enabled' : 'Currently off — open the app to switch it on.'}
                   </Text>
                 </View>
@@ -277,7 +284,7 @@ export default function WebMeScreen() {
                   accessibilityRole="switch"
                   accessibilityState={{ checked: push.enabled, disabled: true }}
                   disabled
-                  className="h-7 w-12 justify-center rounded-full border border-app-line bg-app-sunken/60 px-0.5 opacity-50"
+                  className="h-7 w-12 justify-center rounded-full border border-white/10 bg-white/[0.08] px-0.5 opacity-50"
                 >
                   <View
                     className={`h-6 w-6 rounded-full bg-white shadow-card ${
@@ -314,7 +321,7 @@ function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDele
         return (
           <View
             key={asset.id}
-            className="overflow-hidden rounded-2xl border border-app-line bg-app-surface shadow-card"
+            className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-card"
           >
             {source ? (
               <Image
@@ -329,21 +336,21 @@ function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDele
               </View>
             )}
             <View className="gap-2 p-3">
-              <Text className="text-caption text-app-muted">{asset.source === 'generated' ? 'Generated image' : 'Uploaded image'}</Text>
+              <Text className="text-caption text-rose-50/60">{asset.source === 'generated' ? 'Generated image' : 'Uploaded image'}</Text>
               <View className="flex-row flex-wrap gap-2">
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => downloadAsset(asset)}
-                  className="rounded-full border border-app-line bg-app-canvas px-3 py-1.5"
+                  className="rounded-full border border-white/10 bg-[#10070d] px-3 py-1.5"
                 >
-                  <Text className="text-xs font-semibold text-app-ink-soft">Download</Text>
+                  <Text className="text-xs font-semibold text-rose-50/75">Download</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => onDelete(asset.id)}
-                  className="rounded-full border border-app-danger/25 bg-app-danger-soft px-3 py-1.5"
+                  className="rounded-full border border-app-danger/25 bg-rose-500/12 px-3 py-1.5"
                 >
-                  <Text className="text-xs font-semibold text-app-danger">Delete</Text>
+                  <Text className="text-xs font-semibold text-rose-300">Delete</Text>
                 </Pressable>
               </View>
             </View>

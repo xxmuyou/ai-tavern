@@ -10,6 +10,7 @@ export type AuthEnv = Env & {
   GOOGLE_OAUTH_CLIENT_SECRET?: string;
   EMAIL_PROVIDER_API_KEY?: string;
   EMAIL_FROM_ADDRESS?: string;
+  LOCAL_EMAIL_DIRECT_LOGIN?: string;
   APPLE_SIGNIN_TEAM_ID?: string;
   APPLE_SIGNIN_KEY_ID?: string;
   APPLE_SIGNIN_CLIENT_ID?: string;

@@ -23,9 +23,9 @@ export function WebSection({ actionLabel, children, className, description, eyeb
           {eyebrow ? (
             <Text className="text-overline text-app-rose-deep">{eyebrow}</Text>
           ) : null}
-          <Text className="font-serif text-title text-app-ink">{title}</Text>
+          <Text className="font-serif text-title text-white">{title}</Text>
           {description ? (
-            <Text className="mt-1.5 max-w-2xl text-body-sm leading-6 text-app-muted">{description}</Text>
+            <Text className="mt-1.5 max-w-2xl text-body-sm leading-6 text-rose-50/60">{description}</Text>
           ) : null}
         </View>
         {actionLabel && onAction ? (

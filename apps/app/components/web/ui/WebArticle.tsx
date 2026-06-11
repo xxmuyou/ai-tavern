@@ -22,7 +22,7 @@ export function WebArticle({ children, className, eyebrow, lead, title }: WebArt
       {eyebrow ? <Text className="text-overline text-app-rose-deep">{eyebrow}</Text> : null}
       <Text className="font-serif text-display-md text-app-ink">{title}</Text>
       {lead ? (
-        <Text className="max-w-2xl text-body-lg leading-8 text-app-ink-soft">{lead}</Text>
+        <Text className="max-w-2xl text-body-lg leading-8 text-rose-50/75">{lead}</Text>
       ) : null}
       {children}
     </View>

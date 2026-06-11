@@ -6,6 +6,8 @@
 
 ## 实现记录（2026-05-29）
 
+> **2026-06-10 Web 口径更新：** 本实现记录里的 `UnlockCelebration` 是早期轻量庆祝卡。Web 端更显著的解锁/成就覆盖层、统一 celebration queue 与 CTA 规则，以 [spec-038](./spec-038-web-scene-immersion-and-unlocks.md) 为新权威。
+
 **后端（`packages/api`）**
 - 迁移 `0019_companion_persona_fields.sql`：`companions` 加 `want/secret/boundary`（可空）。
 - 迁移 `0020_companion_persona_seed.sql`：`UPDATE`-by-id 回填 10 个官方角色（不动 0007）。

@@ -33,24 +33,24 @@ export function WebDialog({ children, description, footer, onClose, open, size =
         <Pressable
           accessibilityRole="none"
           onPress={(e) => e.stopPropagation?.()}
-          className={cn('w-full overflow-hidden rounded-2xl bg-app-surface shadow-float', sizeClass[size])}
+          className={cn('w-full overflow-hidden rounded-2xl bg-white/[0.06] shadow-float', sizeClass[size])}
         >
-          <View className="flex-row items-start justify-between gap-4 border-b border-app-line-soft px-7 py-5">
+          <View className="flex-row items-start justify-between gap-4 border-b border-white/8 px-7 py-5">
             <View className="min-w-0 flex-1">
-              <Text className="font-serif text-title text-app-ink">{title}</Text>
-              {description ? <Text className="mt-1 text-body-sm text-app-muted">{description}</Text> : null}
+              <Text className="font-serif text-title text-white">{title}</Text>
+              {description ? <Text className="mt-1 text-body-sm text-rose-50/60">{description}</Text> : null}
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Close"
               onPress={onClose}
-              className="h-9 w-9 items-center justify-center rounded-full hover:bg-app-sunken"
+              className="h-9 w-9 items-center justify-center rounded-full hover:bg-white/[0.075]"
             >
               <Ionicons color={PALETTE.muted} name="close" size={20} />
             </Pressable>
           </View>
           <View className="px-7 py-6">{children}</View>
-          {footer ? <View className="border-t border-app-line-soft bg-app-sunken/40 px-7 py-4">{footer}</View> : null}
+          {footer ? <View className="border-t border-white/8 bg-white/[0.065] px-7 py-4">{footer}</View> : null}
         </Pressable>
       </Pressable>
     </Modal>

@@ -72,8 +72,21 @@ type ImageJobFixture = {
   status: string;
 };
 
+type CutoutJobFixture = {
+  id: string;
+  companion_id: string;
+  user_id: string | null;
+  source_art_url: string;
+  image_job_id: string;
+  status: string;
+  output_key: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+};
+
 type Fixtures = {
   companions: CompanionRow[];
+  cutoutJobs?: CutoutJobFixture[];
   imageJobs?: ImageJobFixture[];
   profileImages?: ProfileImageFixture[];
   profileOutfits?: ProfileOutfitFixture[];
@@ -384,6 +397,87 @@ describe("companions module", () => {
     expect(body.art_url).toBe("user-art/user-1/profile-outfits/maya-new.webp");
     expect(body.canonical_art_url).toBe("portraits/maya/neutral.webp");
     expect(body.profile_image_override).toBe("user-art/user-1/profile-outfits/maya-new.webp");
+  });
+
+  it("get detail exposes a cached companion cutout url", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", {
+          art_cutout_key: "user-art/user-1/companion-cutout/maya.png",
+          art_url: "https://cdn.example/maya.webp",
+        }),
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya", token),
+      env,
+      "/companions/maya",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { art_cutout_url: string | null };
+    expect(body.art_cutout_url).toBe("user-art/user-1/companion-cutout/maya.png");
+  });
+
+  it("GET /companions/:id/cutout returns the current cache or job status", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", {
+          art_url: "https://cdn.example/maya.webp",
+        }),
+      ],
+      cutoutJobs: [
+        {
+          companion_id: "maya",
+          id: "cutout-1",
+          image_job_id: "job-cutout-1",
+          output_key: null,
+          source_art_url: "https://cdn.example/maya.webp",
+          status: "processing",
+          user_id: "user-1",
+        },
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/cutout", token),
+      env,
+      "/companions/maya/cutout",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toMatchObject({
+      art_cutout_url: null,
+      companion_id: "maya",
+      job_id: "job-cutout-1",
+      status: "processing",
+    });
+  });
+
+  it("POST /companions/:id/cutout/ensure creates a reusable pending cutout job", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", {
+          art_url: "https://cdn.example/maya.webp",
+        }),
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/cutout/ensure", token, "POST"),
+      env,
+      "/companions/maya/cutout/ensure",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { job_id: string | null; status: string };
+    expect(body.status).toBe("pending");
+    expect(body.job_id).toBeTruthy();
+    expect((env.JOB_QUEUE.send as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
   });
 
   it("public discovery keeps canonical art_url even when a user has a profile override", async () => {
@@ -1081,6 +1175,8 @@ function createEnv(fixtures: Fixtures): Env {
   for (const item of fixtures.profileOutfits ?? []) profileOutfits.set(item.id, { ...item });
   const imageJobs = new Map<string, ImageJobFixture>();
   for (const item of fixtures.imageJobs ?? []) imageJobs.set(item.id, { ...item });
+  const cutoutJobs = new Map<string, CutoutJobFixture>();
+  for (const item of fixtures.cutoutJobs ?? []) cutoutJobs.set(item.id, { ...item });
   const userImageAssets = new Map<string, { art_key: string; user_id: string }>();
   const relationships = fixtures.relationships.map((r) => ({ ...r }));
   const proUserIds = new Set(fixtures.proUserIds ?? []);
@@ -1097,6 +1193,7 @@ function createEnv(fixtures: Fixtures): Env {
       prepare(sql: string) {
         return buildStatement(sql, {
           companions,
+          cutoutJobs,
           imageJobs,
           profileImages,
           profileOutfits,
@@ -1108,11 +1205,15 @@ function createEnv(fixtures: Fixtures): Env {
         });
       },
     },
+    JOB_QUEUE: {
+      send: vi.fn().mockResolvedValue(undefined),
+    },
   } as unknown as Env;
 }
 
 type MockState = {
   companions: Map<string, CompanionRow>;
+  cutoutJobs: Map<string, CutoutJobFixture>;
   imageJobs: Map<string, ImageJobFixture>;
   profileImages: Map<string, ProfileImageFixture>;
   profileOutfits: Map<string, ProfileOutfitFixture>;
@@ -1230,7 +1331,7 @@ function queryFirst<T>(
   values: unknown[],
   state: MockState,
 ): T | null {
-  const { companions, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
+  const { companions, cutoutJobs, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
   if (sql.includes("FROM admin_user_allowlist")) {
     return { email: values[0] as string } as T;
   }
@@ -1254,10 +1355,23 @@ function queryFirst<T>(
     if (!companion) return null;
     const override = profileImages.get(`${userId}:${companionId}`)?.art_key ?? null;
     return {
+      art_cutout_key: override ? null : companion.art_cutout_key ?? null,
       art_url: override ?? companion.art_url,
       canonical_art_url: companion.art_url,
       profile_image_override: override,
     } as T;
+  }
+
+  if (sql.includes("FROM companion_cutout_jobs WHERE companion_id = ? AND source_art_url = ?")) {
+    const [companionId, sourceArtUrl] = values as [string, string];
+    return ([...cutoutJobs.values()].find(
+      (job) => job.companion_id === companionId && job.source_art_url === sourceArtUrl,
+    ) ?? null) as T | null;
+  }
+
+  if (sql.includes("FROM companion_cutout_jobs WHERE id = ?")) {
+    const [id] = values as [string];
+    return (cutoutJobs.get(id) ?? null) as T | null;
   }
 
   if (sql.includes("FROM profile_outfit_images")) {
@@ -1373,7 +1487,7 @@ function queryFirst<T>(
 }
 
 function mutate(sql: string, values: unknown[], state: MockState): void {
-  const { companions, profileImages, profileOutfits, userImageAssets, users } = state;
+  const { companions, cutoutJobs, imageJobs, profileImages, profileOutfits, userImageAssets, users } = state;
   if (sql.includes("INSERT OR IGNORE INTO users")) {
     const [id, email] = values as [string, string];
     if (id && email && !users.has(email)) {
@@ -1591,6 +1705,55 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       for (const [key, row] of profileImages.entries()) {
         if (row.user_id === userId && row.art_key === companionIdOrArtKey) profileImages.delete(key);
       }
+    }
+    return;
+  }
+
+  if (sql.includes("INSERT INTO image_generation_jobs")) {
+    const [id, userId, task, mode, workflowKey, inputKeys, outputPrefix] = values as [
+      string,
+      string | null,
+      string,
+      string,
+      string,
+      string,
+      string,
+    ];
+    imageJobs.set(id, {
+      id,
+      output_key: null,
+      status: "pending",
+    });
+    void userId;
+    void task;
+    void mode;
+    void workflowKey;
+    void inputKeys;
+    void outputPrefix;
+    return;
+  }
+
+  if (sql.includes("INSERT INTO companion_cutout_jobs")) {
+    const [id, companionId, userId, sourceArtUrl, imageJobId] = values as [string, string, string | null, string, string];
+    cutoutJobs.set(id, {
+      companion_id: companionId,
+      error_code: null,
+      error_message: null,
+      id,
+      image_job_id: imageJobId,
+      output_key: null,
+      source_art_url: sourceArtUrl,
+      status: "pending",
+      user_id: userId,
+    });
+    return;
+  }
+
+  if (sql.startsWith("UPDATE companion_cutout_jobs")) {
+    const id = values[values.length - 1] as string;
+    const existing = cutoutJobs.get(id);
+    if (existing) {
+      cutoutJobs.set(id, { ...existing, status: "pending", output_key: null, error_code: null, error_message: null });
     }
   }
 }

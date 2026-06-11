@@ -304,9 +304,9 @@ async function generateMemorySummary(
   const snapshotText = typeof activity.daily_state_snapshot === "string"
     ? activity.daily_state_snapshot
     : JSON.stringify(activity.daily_state_snapshot);
-  const itemId = readQuickActionItemId(activity);
-  const actionText = itemId
-    ? `Specific gift/action: ${itemId === "coffee" ? "the user ordered coffee for both of them" : "the user sent flowers"}.\n`
+  const actionLabel = readQuickActionLabel(activity);
+  const actionText = actionLabel
+    ? `Specific gift/action: ${actionLabel}.\n`
     : "";
   const prompt = `Write a one-paragraph (max 60 words) diary-style summary of this moment.\n`
     + `Memory type: ${memoryType}.\n`
@@ -345,6 +345,8 @@ function titleForActivityMemory(memoryType: MemoryType, activity: ActivityHookIn
   const itemId = readQuickActionItemId(activity);
   if (memoryType === "gift_received" && itemId === "coffee") return "Coffee together";
   if (memoryType === "gift_received" && itemId === "flowers") return "Flowers sent";
+  const actionLabel = readQuickActionLabel(activity);
+  if (memoryType === "gift_received" && actionLabel) return actionLabel;
   return defaultTitleFor(memoryType);
 }
 
@@ -363,6 +365,17 @@ function defaultSummaryFor(memoryType: MemoryType): string {
 function readQuickActionItemId(activity: ActivityHookInput): "coffee" | "flowers" | null {
   const itemId = activity.metadata?.item_id;
   return itemId === "coffee" || itemId === "flowers" ? itemId : null;
+}
+
+function readQuickActionLabel(activity: ActivityHookInput): string | null {
+  const itemId = readQuickActionItemId(activity);
+  if (itemId === "coffee") return "the user ordered coffee for both of them";
+  if (itemId === "flowers") return "the user sent flowers";
+  const label = activity.metadata?.label;
+  if (typeof label === "string" && label.trim().length > 0) return label.trim();
+  const labelZh = activity.metadata?.label_zh;
+  if (typeof labelZh === "string" && labelZh.trim().length > 0) return labelZh.trim();
+  return null;
 }
 
 function cgTemplateFor(memoryType: MemoryType): string | null {

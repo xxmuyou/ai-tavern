@@ -6,12 +6,14 @@
 
 ## 实现记录（2026-06-05）
 
+> **2026-06-10 Web 口径更新：** 本实现记录中的“accepted 后立即切场景 / activity chat 自动 complete activity”是 spec-036 的历史行为。Web 新体验以 [spec-038](./spec-038-web-scene-immersion-and-unlocks.md) 为准：`invite_result.accepted === true` 只表示 companion 同意；前端创建 pending arrival，用户点击“立即到达”后才切 `scene_id` 并完成 activity。
+
 落地文件：
 - `scenes/invite.ts`（新）：`loadInviteTargets`（所有 active 且 `evaluateUnlock` 通过的场景 + 排除当前场景）、`resolveInviteTarget`（校验单个目标，messages 用）、`handleInviteTargetsRequest`（`GET /companions/:id/invite-targets`，含 companion 可见性校验）。
 - `companions/index.ts`：在 idMatch 前挂 `handleInviteTargetsRequest`。
 - `chat/invite-resolve.ts`（新）：`resolveInvite` 分离 JSON 判定（仿 signal-extract，复用 `signal` task），失败一律回退 `accepted:false`。
 - `chat/prompt.ts`：新增 `InviteForPrompt` 与 `# An invitation just now` 指令段（角色可拒绝/婉拒/反感不合适邀约）。
-- `chat/messages.ts`：`PostBody` 加 `invite_scene_id`；activity chat 允许邀约，接受后自动 complete activity；解析+校验目标 → 注入 prompt → runChat 末尾跑 `resolveInvite` 并写 SSE `invite_result`（accepted 才带 scene_id/scene_art_url）。越界邀约的扣分由本轮既有 `extractSignals` 链路自然产生。
+- `chat/messages.ts`：`PostBody` 加 `invite_scene_id`；activity chat 允许邀约；解析+校验目标 → 注入 prompt → runChat 末尾跑 `resolveInvite` 并写 SSE `invite_result`（accepted 才带 scene_id/scene_art_url）。早期实现曾在接受后自动 complete activity；该行为已被 spec-038 的“用户确认到达后再完成”取代。越界邀约的扣分由本轮既有 `extractSignals` 链路自然产生。
 - 前端：`api/types.ts`（`InviteTarget`/`InviteTargetsResponse`/`ChatInviteResult`/`ChatMessageInput.invite_scene_id`）、`companion-client.ts`（`getInviteTargets`）、`hooks/use-chat-stream.ts`（`inviteSceneId` 入参 + `onInviteResult` + 解析 `invite_result`）。
 - `components/InvitePopup.tsx`（新，两端共用）：目的地选择浮窗。
 - `app/chat/[companionId].tsx` / `.web.tsx`：`sceneId`/`sceneArt` 提升为 state；组合器旁"邀请前往"按钮 → 浮窗 → 选中后立即发送可见邀约动作 `<narration>I glance toward the way out, then back at you.</narration>Would you come with me to {sceneName}?` 并带 `invite_scene_id`；`onInviteResult` 接受则切 `sceneId`+背景、追加本地抵达 narration，拒绝仅提示不切。web 在会话区顶部加场景横幅（预设图 + 地名）作为可见的换场景呈现。

@@ -50,8 +50,8 @@ export function WebSidebar({
         onPress={() => router.push(items[0]?.href ?? ('/' as Href))}
         className="mb-7 px-2"
       >
-        <Text className="font-serif text-[22px] font-semibold text-app-ink">{brandTitle}</Text>
-        <Text className="mt-0.5 text-caption text-app-muted">{brandSubtitle}</Text>
+        <Text className="font-serif text-[22px] font-semibold text-white">{brandTitle}</Text>
+        <Text className="mt-0.5 text-caption text-rose-50/60">{brandSubtitle}</Text>
       </Pressable>
 
       <ScrollView className="editorial-scroll flex-1" showsVerticalScrollIndicator={false}>

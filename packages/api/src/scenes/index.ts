@@ -33,6 +33,7 @@ type CompanionPreviewRow = {
   gender: string | null;
   source: "official" | "user";
   art_url: string | null;
+  art_cutout_key: string | null;
 };
 
 type ScenesListItem = {
@@ -53,6 +54,7 @@ type CompanionPreviewItem = {
   gender: Gender | null;
   source: "official" | "user";
   art_url: string | null;
+  art_cutout_key: string | null;
 };
 
 type CompanionPreviewPublic = {
@@ -60,6 +62,7 @@ type CompanionPreviewPublic = {
   name: string;
   level: string | null;
   art_url: string | null;
+  art_cutout_url: string | null;
 };
 
 type EnterSceneResponse = {
@@ -76,6 +79,7 @@ type EnterSceneResponse = {
     name: string;
     opener: string;
     art_url: string | null;
+    art_cutout_url: string | null;
     story_moment: StoryMomentPublic | null;
   }>;
   event: EventResponseItem | null;
@@ -171,7 +175,7 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
   const present = pickPresentCompanions(companions, preference);
   const now = Date.now();
   const companionsPresent = await Promise.all(
-    present.map(async ({ id, name, art_url }) => {
+    present.map(async ({ art_cutout_key, art_url, id, name }) => {
       const activeStoryBeat = await loadStoryBeatForScene(env, user.id, id, row.id);
       const fallbackOpener = pickOpener({
         companionId: id,
@@ -183,6 +187,7 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
       });
       return {
         active_story_beat: activeStoryBeat,
+        art_cutout_url: art_cutout_key,
         art_url,
         id,
         name,
@@ -242,6 +247,7 @@ async function loadPotentialCompanions(
             c.gender      AS gender,
             c.source      AS source,
             c.art_url     AS art_url,
+            c.art_cutout_key AS art_cutout_key,
             r.level_label AS level_label
      FROM companions c
      LEFT JOIN relationships r
@@ -253,6 +259,7 @@ async function loadPotentialCompanions(
 
   return (results ?? []).map((row) => ({
     art_url: row.art_url,
+    art_cutout_key: row.art_cutout_key,
     gender: normalizeGender(row.gender),
     id: row.id,
     level: row.level_label,
@@ -300,7 +307,7 @@ function normalizeGender(raw: string | null | undefined): Gender | null {
 }
 
 function toPublicPreview(c: CompanionPreviewItem): CompanionPreviewPublic {
-  return { art_url: c.art_url, id: c.id, level: c.level, name: c.name };
+  return { art_cutout_url: c.art_cutout_key, art_url: c.art_url, id: c.id, level: c.level, name: c.name };
 }
 
 function normalizePreference(raw: string | null | undefined): RomancePreference {

@@ -13,7 +13,7 @@ export function WebLoading({ fullscreen = true, label = 'Loading...' }: WebLoadi
         <View className="h-12 w-12 items-center justify-center rounded-full bg-app-rose-soft">
           <ActivityIndicator color={PALETTE.roseDeep} size="small" />
         </View>
-        {label ? <Text className="mt-3 text-caption text-app-muted">{label}</Text> : null}
+        {label ? <Text className="mt-3 text-caption text-rose-50/60">{label}</Text> : null}
       </View>
     );
   }

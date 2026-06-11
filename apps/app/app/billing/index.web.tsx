@@ -24,7 +24,7 @@ import {
   WebTimeline,
   type WebTimelineEntry,
 } from '@/components/web/ui';
-import { SCENES_ROUTE } from '@/constants/routes';
+import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useCredits } from '@/hooks/use-credits';
 import { useErrorBanner } from '@/hooks/use-error-banner';
@@ -80,7 +80,7 @@ export default function WebBillingScreen() {
     void refetch();
     void credits.refetch();
     void loadLedger();
-    const timeout = setTimeout(() => router.replace(SCENES_ROUTE), 5000);
+    const timeout = setTimeout(() => router.replace(DISCOVER_ROUTE), 5000);
     return () => clearTimeout(timeout);
   }, [isSuccess, refetch, credits, loadLedger, router]);
 
@@ -132,6 +132,13 @@ export default function WebBillingScreen() {
   return (
     <WebAppShell title="Billing" subtitle="Plan status, subscription controls, and credits for image generation.">
       <View className="gap-8">
+        <View>
+          <Text className="font-serif text-display-sm text-white">Billing</Text>
+          <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">
+            Plan status, subscription controls, and credits for image generation.
+          </Text>
+        </View>
+
         {isSuccess ? (
           <View className="flex-row items-center gap-3 rounded-2xl border border-app-success/20 bg-app-success/10 px-5 py-4">
             <Ionicons color={PALETTE.success} name="checkmark-circle" size={18} />
@@ -173,7 +180,7 @@ export default function WebBillingScreen() {
                   ) : credits.isLoading ? (
                     <WebLoading fullscreen={false} label="Loading credits..." />
                   ) : (
-                    <Text className="text-body-sm text-app-muted">Credits are unavailable right now.</Text>
+                    <Text className="text-body-sm text-rose-50/60">Credits are unavailable right now.</Text>
                   )}
 
                   <View className="mt-8">
@@ -243,7 +250,7 @@ export default function WebBillingScreen() {
               {data ? (
                 <WebCard padding="md">
                   <View className="mb-3 flex-row items-center justify-between gap-3">
-                    <Text className="font-serif text-title text-app-ink">Current plan</Text>
+                    <Text className="font-serif text-title text-white">Current plan</Text>
                     <WebTag size="sm" variant={isPro ? 'rose' : 'neutral'}>
                       {isPro ? 'Pro' : 'Free'}
                     </WebTag>

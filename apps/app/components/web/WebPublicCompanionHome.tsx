@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { API_BASE_URL, isApiRequestError } from '@/api/companion-client';
 import type { CompanionListItem } from '@/api/types';
 import { DiscoverCompanionCard } from '@/components/web/discover/DiscoverCompanionCard';
 import { DiscoverRail, DiscoverSection } from '@/components/web/discover/DiscoverSection';
@@ -198,10 +199,10 @@ export function WebPublicCompanionHome() {
           ) : popular.error ? (
             <DarkState
               actionLabel="Try again"
-              description="The public companion list could not be loaded."
+              description={getDiscoveryError(popular.error).description}
               icon="alert-circle-outline"
               onAction={popular.refetch}
-              title="Discovery unavailable"
+              title={getDiscoveryError(popular.error).title}
             />
           ) : isFiltering ? (
             filteredItems.length === 0 ? (
@@ -309,6 +310,19 @@ export function WebPublicCompanionHome() {
       </ScrollView>
     </View>
   );
+}
+
+function getDiscoveryError(error: Error | null): { description: string; title: string } {
+  if (isApiRequestError(error) && error.code === 'api_unreachable' && API_BASE_URL.includes('127.0.0.1:8787')) {
+    return {
+      description: 'Start the local API with pnpm run:local:api, or use pnpm run:local to run the local API and web app together.',
+      title: `Local API is not reachable at ${API_BASE_URL}`,
+    };
+  }
+  return {
+    description: 'The public companion list could not be loaded.',
+    title: 'Discovery unavailable',
+  };
 }
 
 function SegmentedControl({

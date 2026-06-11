@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -7,7 +7,9 @@ import { BRAND_NAME } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
 
 import { isApiRequestError } from '@/api/companion-client';
+import { ADMIN_ROUTE, BILLING_ROUTE, ME_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { useMe } from '@/hooks/use-me';
 import { useSession } from '@/hooks/use-session';
 
 import { WebButton, WebDialog, WebInput } from './ui';
@@ -24,10 +26,13 @@ function signInErrorMessage(error: unknown): string {
 export function WebAuthControls() {
   const { sendMagicLink, session, signInGoogle, signOut } = useSession();
   const params = useLocalSearchParams<{ redirect?: string }>();
+  const router = useRouter();
   const { pushError } = useErrorBanner();
+  const { me } = useMe();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [isSendingLink, setIsSendingLink] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function handleSendLink() {
@@ -56,26 +61,61 @@ export function WebAuthControls() {
 
   if (session) {
     return (
-      <View className="flex-row items-center gap-2 rounded-full border border-app-line bg-app-surface px-2.5 py-2 shadow-card">
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-app-rose-soft">
+      <View className="relative z-50">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Account menu"
+          accessibilityState={{ expanded: menuOpen }}
+          onPress={() => setMenuOpen((open) => !open)}
+          className="h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-rose-300/12 shadow-card hover:border-app-rose/40"
+        >
           <Text className="font-serif text-body-sm font-semibold text-app-rose-deep">
             {session.email.slice(0, 1).toUpperCase()}
           </Text>
-        </View>
-        <View className="hidden min-w-0 max-w-[220px] md:flex">
-          <Text numberOfLines={1} className="text-caption font-semibold text-app-ink">
-            {session.email}
-          </Text>
-          <Text className="text-[11px] font-semibold uppercase tracking-wider text-app-muted">Signed in</Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          onPress={() => void signOut()}
-          className="h-8 w-8 items-center justify-center rounded-full hover:bg-app-sunken"
-        >
-          <Ionicons color={PALETTE.muted} name="log-out-outline" size={17} />
         </Pressable>
+        {menuOpen ? (
+          <View className="absolute right-0 top-11 w-56 gap-1 rounded-2xl border border-white/10 bg-white/[0.06] p-2 shadow-float">
+            <View className="border-b border-white/10 px-3 py-2">
+              <Text numberOfLines={1} className="text-caption font-semibold text-white">
+                {session.email}
+              </Text>
+            </View>
+            <AccountMenuItem
+              icon="person-circle-outline"
+              label="Me"
+              onPress={() => {
+                setMenuOpen(false);
+                router.push(ME_ROUTE);
+              }}
+            />
+            <AccountMenuItem
+              icon="card-outline"
+              label="Billing"
+              onPress={() => {
+                setMenuOpen(false);
+                router.push(BILLING_ROUTE);
+              }}
+            />
+            {me?.is_admin ? (
+              <AccountMenuItem
+                icon="shield-checkmark-outline"
+                label="Admin"
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push(ADMIN_ROUTE);
+                }}
+              />
+            ) : null}
+            <AccountMenuItem
+              icon="log-out-outline"
+              label="Sign out"
+              onPress={() => {
+                setMenuOpen(false);
+                void signOut();
+              }}
+            />
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -107,7 +147,7 @@ export function WebAuthControls() {
           />
           <View className="flex-row items-center gap-3">
             <View className="h-px flex-1 bg-app-line" />
-            <Text className="text-overline text-app-muted">or email</Text>
+            <Text className="text-overline text-rose-50/60">or email</Text>
             <View className="h-px flex-1 bg-app-line" />
           </View>
           <WebInput
@@ -133,6 +173,27 @@ export function WebAuthControls() {
         </View>
       </WebDialog>
     </>
+  );
+}
+
+function AccountMenuItem({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      className="min-h-10 flex-row items-center gap-2 rounded-xl px-3 hover:bg-white/[0.075]"
+    >
+      <Ionicons color="#7A6A5E" name={icon} size={16} />
+      <Text className="text-caption font-semibold text-rose-50/75">{label}</Text>
+    </Pressable>
   );
 }
 

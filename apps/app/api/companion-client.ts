@@ -16,6 +16,7 @@ import type {
   BaseArtPromptAssistResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
+  CompanionCutoutResponse,
   ChatMessageInput,
   CompanionCreateInput,
   CompanionDetailResponse,
@@ -93,6 +94,7 @@ export const EMAIL_STORAGE_KEY = 'xtbit.companion.email';
 export const BILLING_EMAIL_STORAGE_KEY = 'xtbit.billing.email';
 export const AUTH_TOKEN_STORAGE_KEY = 'xtbit.companion.authToken';
 export const AUTH_EXPIRES_STORAGE_KEY = 'xtbit.companion.authExpiresAt';
+export const AUTH_SESSION_CLEARED_EVENT = 'xtbit.auth.sessionCleared';
 
 function resolveApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
@@ -186,6 +188,7 @@ const LOCAL_MEDIA: Record<string, ImageSourcePropType> = {
   'scenes/rain_arcade.png': require('../assets/ai-companion/scenes/rain_arcade.png'),
   'scenes/rainfall_window_lounge.png': require('../assets/ai-companion/scenes/rainfall_window_lounge.png'),
   'scenes/rainlit_bookshop.png': require('../assets/ai-companion/scenes/rainlit_bookshop.png'),
+  'scenes/restaurant.png': require('../assets/ai-companion/scenes/restaurant.png'),
   'scenes/riverside_walk.png': require('../assets/ai-companion/scenes/riverside_walk.png'),
   'scenes/shared_laundry_room.png': require('../assets/ai-companion/scenes/shared_laundry_room.png'),
   'scenes/skyline_roof_garden.png': require('../assets/ai-companion/scenes/skyline_roof_garden.png'),
@@ -535,6 +538,16 @@ export async function getInviteTargets(
   return requestJson<InviteTargetsResponse>(
     `/companions/${encodeURIComponent(companionId)}/invite-targets${query}`,
   );
+}
+
+export async function getCompanionCutout(companionId: string): Promise<CompanionCutoutResponse> {
+  return requestJson<CompanionCutoutResponse>(`/companions/${encodeURIComponent(companionId)}/cutout`);
+}
+
+export async function ensureCompanionCutout(companionId: string): Promise<CompanionCutoutResponse> {
+  return requestJson<CompanionCutoutResponse>(`/companions/${encodeURIComponent(companionId)}/cutout/ensure`, {
+    method: 'POST',
+  });
 }
 
 export async function listEvents(status: 'pending' | 'resolved' | 'dismissed' = 'pending'): Promise<EventsListResponse> {
@@ -1440,6 +1453,7 @@ export function clearStoredAuthSession(): void {
   window.localStorage.removeItem(BILLING_EMAIL_STORAGE_KEY);
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(AUTH_EXPIRES_STORAGE_KEY);
+  window.dispatchEvent(new Event(AUTH_SESSION_CLEARED_EVENT));
 }
 
 export async function requestJson<T>(
@@ -1467,6 +1481,9 @@ export async function requestJson<T>(
   const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
 
   if (!response.ok) {
+    if (response.status === 401 && !options?.skipAuth) {
+      clearStoredAuthSession();
+    }
     const error: ApiRequestError = new Error(apiErrorMessage(payload, `HTTP ${response.status}`));
     error.code = payload.code ?? payload.error;
     error.retryAfter = parseRetryAfter(response.headers.get('retry-after'));

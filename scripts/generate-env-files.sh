@@ -178,6 +178,8 @@ echo "Preparing local env from $source_file"
 echo "Expo keys: $expo_count -> $expo_target"
 
 if [ "$target" = "local" ]; then
+    printf '%s=%s\n' "LOCAL_EMAIL_DIRECT_LOGIN" "1" >> "$worker_tmp"
+    worker_count=$((worker_count + 1))
     echo "Worker keys: $worker_count -> $worker_target"
 else
     echo "Worker keys: skipped for $target. Remote Worker secrets use scripts/upload-worker-secrets.sh $target"

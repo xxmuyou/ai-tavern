@@ -6,10 +6,10 @@ Run from the Linux repo copy:
 
 ```bash
 cd /home/pgx123/private/xtbit/publisher-apps/xtbit-apps
-pnpm dev:app
+pnpm run:local
 ```
 
-The app reads `EXPO_PUBLIC_API_URL` and defaults to `http://127.0.0.1:8787`.
+The app reads `EXPO_PUBLIC_API_URL` and defaults to `http://127.0.0.1:8787` for local development. Use `pnpm run:local` to run both the local API and web app, or `pnpm preview:web:local` to export a static web bundle that still talks to the local API.
 
 ## Web / Mobile UI split
 

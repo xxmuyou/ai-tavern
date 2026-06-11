@@ -4,13 +4,13 @@
 
 当前 Expo app 已经能同时输出 Web / iOS / Android，但早期 UI 为了兼容手机端，Web 上呈现为“移动端页面放大版”：底部 tabs、窄卡片、低信息密度、聊天与管理页都不符合桌面使用习惯。
 
-产品方向已明确：从现在开始优先开发 Web 端体验，mobile UI 日后单独设计。后端、API、hooks、session 和类型仍共享，不拆成独立后端或独立业务逻辑。
+产品方向已明确：从现在开始优先开发 Web 端体验，mobile UI 日后单独设计。后端、API、hooks、session 和类型仍共享，不拆成独立后端或独立业务逻辑。Web 的当前导航与主题权威口径见 [`../product/web-navigation-and-theme.md`](../product/web-navigation-and-theme.md)。
 
 ## 目标
 
 - Web 端作为桌面工作台独立设计，不再受 mobile UI 妥协限制。
-- 未登录 Web 首页使用公开 companion discovery + 登录入口；已登录进入应用工作台。
-- 登录后 Web 使用左侧导航、宽屏主内容区和桌面密度布局。
+- 未登录和已登录 Web 首页都优先进入公开 companion Discover；登录不再默认跳转到 Scenes。
+- 登录后 Web 使用顶部主导航、宽屏主内容区和桌面密度布局。
 - 覆盖 Web 核心链路：landing/login、scenes、companions、scene detail、companion detail、chat、me、billing、admin。
 - 保持 mobile 现有 UI 不被 Web 改造破坏。
 
@@ -37,7 +37,7 @@
 ## 当前已实施
 
 - Web 专属 public companion discovery home / login。
-- Web 专属 app shell：左侧导航、顶部状态区、宽屏内容区。
+- Web 专属 app shell：顶部主导航、账号/credits 状态区、宽屏内容区。
 - Web 专属页面：
   - scenes
   - companions
@@ -71,7 +71,7 @@ pnpm --filter @xtbit/app export:web
 dev 部署后至少验证：
 
 - 未登录 `https://dev.aiappsbox.com` 显示 Web public companion discovery home。
-- 登录后进入 Web 工作台而不是 mobile tabs。
+- 登录后默认回到 `/` Discover，而不是 `/scenes` 或 mobile tabs。
 - `/scenes`、`/companions`、`/chat/{id}`、`/billing`、`/admin` 使用桌面布局。
 - mobile 默认 `.tsx` 页面未因 Web 变更被删除或强行改造成桌面布局。
 
@@ -115,6 +115,8 @@ pnpm --dir apps/app export:web
 - 命令、组件接口假设、admin 顶层区域名称与当前仓库保持一致。
 - `spec-023` 与 `docs/ops/admin-settings-workspace.md` 不暗示本轮会改后端或配置语义。
 
-## 2026-06 首页修订（spec-032）
+## 2026-06 首页与导航修订（spec-032 + web-navigation-and-theme）
 
 `spec-032` 取代早期“未登录营销 landing”的口径：Web 上线优先让用户在第一屏浏览真实 companions，并通过 `Female/Male` 与 `Anime/Realistic` 两组筛选直接选择角色。旧浅色营销首页与 fake catalog skeleton 不再作为并行入口保留；mobile/native 页面仍按本 spec 原原则暂不重做。
+
+2026-06-11 补充：`/` 是 canonical Discover 首页，`/companions` 只作为兼容 alias。Web topbar 主导航为 `Discover / Scenes / Create / Memories`；视觉基调统一为暗色角色发现，不再在登录后切回浅色/暖色 dashboard shell。

@@ -35,6 +35,13 @@ export default function WebScenesScreen() {
       title="Scenes"
       subtitle="Walk into a room, see who is already there, and let the conversation choose its own direction."
     >
+      <View className="mb-7">
+        <Text className="font-serif text-display-sm text-white">Scenes</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">
+          Walk into a room, see who is already there, and let the conversation choose its own direction.
+        </Text>
+      </View>
+
       <View className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <WebStat eyebrow="Total" value={String(scenes.length)} description="Locations open to you" icon={<Ionicons color={PALETTE.roseDeep} name="map-outline" size={16} />} />
         <WebStat eyebrow="Unlocked" value={String(unlocked.length)} description="Free to step into" icon={<Ionicons color={PALETTE.success} name="lock-open-outline" size={16} />} />
@@ -78,8 +85,8 @@ export default function WebScenesScreen() {
           {locked.length > 0 ? (
             <View className="gap-5">
               <View>
-                <Text className="text-overline text-app-muted">Still sealed</Text>
-                <Text className="mt-1 font-serif text-title text-app-ink">Scenes waiting for a relationship</Text>
+                <Text className="text-overline text-rose-50/60">Still sealed</Text>
+                <Text className="mt-1 font-serif text-title text-white">Scenes waiting for a relationship</Text>
               </View>
               <View className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {locked.map((scene) => (
@@ -111,7 +118,7 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
         scene.unlocked ? 'border-app-line hover:border-app-rose/50 hover:shadow-glow' : 'border-app-line opacity-90'
       }`}
     >
-      <View className="relative aspect-[16/9] overflow-hidden bg-app-sunken">
+      <View className="relative aspect-[16/9] overflow-hidden bg-white/[0.075]">
         {imageSource ? (
           <Image
             accessibilityLabel={scene.name}
@@ -148,8 +155,8 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
         </View>
       </View>
       <View className="gap-4 p-5">
-        <Text className="font-serif text-title-sm text-app-ink">{scene.name}</Text>
-        <Text className="text-body-sm leading-6 text-app-ink-soft" numberOfLines={2}>{scene.mood}</Text>
+        <Text className="font-serif text-title-sm text-white">{scene.name}</Text>
+        <Text className="text-body-sm leading-6 text-rose-50/75" numberOfLines={2}>{scene.mood}</Text>
         {scene.tags.length ? (
           <View className="flex-row flex-wrap gap-1.5">
             {scene.tags.slice(0, 4).map((tag) => (
@@ -159,8 +166,8 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
             ))}
           </View>
         ) : null}
-        <View className="flex-row items-center justify-between border-t border-app-line-soft pt-3">
-          <Text className="text-caption text-app-muted">
+        <View className="flex-row items-center justify-between border-t border-white/8 pt-3">
+          <Text className="text-caption text-rose-50/60">
             {scene.unlocked ? 'Tap to enter' : formatUnlockHint(scene.unlock_hint) || 'Reach a relationship threshold'}
           </Text>
           <Ionicons

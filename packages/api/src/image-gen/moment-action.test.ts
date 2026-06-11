@@ -17,7 +17,7 @@ function sampleInput() {
     activity: { activity_hint: "sharing coffee", activity_type: "gift", mood: "warm" },
     companionName: "Maya",
     emotion: "warm",
-    previousUserText: "<narration>I set a coffee down near you.</narration>I got this for us.",
+    previousUserText: "<narration>You set a coffee down nearby.</narration>I got this for us.",
     sceneMood: "warm cafe",
     sceneName: "Pier Coffee Shop",
     sourceReply: "<narration>Maya wraps her hands around the cup.</narration>Thank you.",
@@ -33,6 +33,7 @@ describe("parseMomentVisualAction", () => {
       expression: "warm shy smile",
       gaze: "looking directly at the viewer",
       hand_action: "both hands around the coffee cup",
+      outfit: "cozy knit sweater and jeans",
       held_or_nearby_props: "coffee cup",
       scene_position: "near the window",
     });
@@ -42,8 +43,21 @@ describe("parseMomentVisualAction", () => {
       expression: "warm shy smile",
       gaze: "looking directly at the viewer",
       hand_action: "both hands around the coffee cup",
+      outfit: "cozy knit sweater and jeans",
       held_or_nearby_props: "coffee cup",
       scene_position: "near the window",
+    });
+  });
+
+  it("keeps a scene-appropriate outfit without tripping the multi-subject guard", () => {
+    expect(
+      parseMomentVisualAction({
+        body_pose: "standing alone on the warm sand",
+        outfit: "light summer dress",
+      }),
+    ).toEqual({
+      body_pose: "standing alone on the warm sand",
+      outfit: "light summer dress",
     });
   });
 
@@ -118,11 +132,13 @@ describe("extractMomentVisualAction", () => {
         max_tokens: 200,
         messages: expect.arrayContaining([
           expect.objectContaining({
-            content: expect.stringContaining("pose planner"),
+            content: expect.stringContaining("pose-and-styling planner"),
             role: "system",
           }),
           expect.objectContaining({
-            content: expect.stringContaining("Plan a safe solo pose for the companion"),
+            content: expect.stringContaining(
+              "Plan a safe solo pose and a scene-appropriate outfit for the companion",
+            ),
             role: "user",
           }),
         ]),

@@ -38,7 +38,10 @@ export type SendOptions = ChatStreamCallbacks & {
   sceneId?: string;
   personaId?: string;
   inviteSceneId?: string;
-  quickAction?: { type: 'gift'; item_id: 'coffee' | 'flowers' };
+  quickAction?:
+    | { type: 'gift'; item_id: 'coffee' | 'flowers' }
+    | { type: 'scene_action'; action_id: string }
+    | { type: 'custom_scene_action'; text: string };
 };
 
 function asEmotion(value: unknown): ChatEmotion | null {
@@ -66,6 +69,13 @@ function categorizeStreamError(rawError: unknown): Error {
   if (status === 429) {
     const retryAfter = typeof err.retryAfter === 'number' && err.retryAfter > 0 ? err.retryAfter : 60;
     return new RateLimitedError('You are sending messages too quickly.', retryAfter);
+  }
+  if (err.code === 'content_filter') {
+    return new ApiError(
+      'That action was rejected by the model provider. Try a different description.',
+      status,
+      'content_filter',
+    );
   }
   if (status && status >= 500) {
     return new ServerError(
@@ -142,11 +152,10 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             });
           } else if (event.type === 'quick_action_result') {
             const data = (event.data as Partial<ChatQuickActionResult> | undefined) ?? {};
-            const itemId = data.item_id === 'coffee' || data.item_id === 'flowers' ? data.item_id : 'flowers';
             options.onQuickActionResult?.({
               activity_id: typeof data.activity_id === 'string' ? data.activity_id : null,
               cooldown_until: typeof data.cooldown_until === 'number' ? data.cooldown_until : null,
-              item_id: itemId,
+              item_id: typeof data.item_id === 'string' ? data.item_id : '',
               memory_id: typeof data.memory_id === 'string' ? data.memory_id : null,
               ok: data.ok === true,
             });

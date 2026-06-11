@@ -83,4 +83,171 @@
   .editorial-scroll::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  @keyframes web-unlock-pop {
+    0% {
+      opacity: 0;
+      transform: translateY(18px) scale(0.86);
+    }
+    58% {
+      opacity: 1;
+      transform: translateY(-2px) scale(1.04);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes web-firework {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.1);
+    }
+    22% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+
+  @keyframes web-confetti-fall {
+    0% {
+      opacity: 0;
+      transform: translateY(-24px) rotate(0deg);
+    }
+    12% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(180px) rotate(280deg);
+    }
+  }
+
+  .web-unlock-pop {
+    animation: web-unlock-pop 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .web-firework {
+    animation: web-firework 1300ms ease-out infinite;
+  }
+
+  .web-confetti {
+    animation: web-confetti-fall 2600ms linear infinite;
+  }
+
+  /*
+    Web-only dark product shell. Native screens keep their current design
+    tokens because this stylesheet is consumed by the web bundle only.
+  */
+  .bg-app-canvas,
+  .bg-app-canvas\/70,
+  .bg-app-bg {
+    background-color: #10070d;
+  }
+
+  .bg-app-surface,
+  .bg-app-card,
+  .bg-app-surface\/95,
+  .bg-app-surface\/90,
+  .bg-app-surface\/80,
+  .bg-app-surface\/70 {
+    background-color: rgba(28, 15, 24, 0.94);
+  }
+
+  .bg-app-sunken,
+  .bg-app-sunken\/40,
+  .bg-app-sunken\/30,
+  .bg-app-sunken\/70,
+  .bg-app-sunken\/60,
+  .bg-app-sunken\/50 {
+    background-color: rgba(43, 24, 36, 0.88);
+  }
+
+  .border-app-line,
+  .border-app-line-soft {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .text-app-ink,
+  .text-app-text {
+    color: #fff7fb;
+  }
+
+  .text-app-ink-soft {
+    color: rgba(255, 247, 251, 0.78);
+  }
+
+  .text-app-muted {
+    color: rgba(246, 214, 224, 0.64);
+  }
+
+  .text-app-muted-soft {
+    color: rgba(246, 214, 224, 0.48);
+  }
+
+  .bg-app-rose-soft,
+  .bg-rose-soft,
+  .bg-app-rose-soft\/80 {
+    background-color: rgba(201, 72, 107, 0.22);
+  }
+
+  .text-app-rose-deep,
+  .text-rose-deep {
+    color: #fecdd3;
+  }
+
+  .bg-app-brand-soft,
+  .bg-app-brand-soft\/70 {
+    background-color: rgba(30, 107, 82, 0.24);
+  }
+
+  .text-app-brand-deep {
+    color: #b7f7dc;
+  }
+
+  .bg-app-ember-soft,
+  .bg-app-ember-soft\/70,
+  .bg-app-ember-soft\/80 {
+    background-color: rgba(217, 119, 87, 0.22);
+  }
+
+  .text-app-ember {
+    color: #f7a177;
+  }
+
+  .bg-app-info-soft {
+    background-color: rgba(59, 110, 165, 0.24);
+  }
+
+  .text-app-info {
+    color: #a9cef4;
+  }
+
+  .bg-app-danger-soft {
+    background-color: rgba(180, 35, 24, 0.20);
+  }
+
+  .text-app-danger {
+    color: #fda4af;
+  }
+
+  .bg-app-warning-soft {
+    background-color: rgba(200, 121, 24, 0.22);
+  }
+
+  .text-app-warning {
+    color: #fbbf24;
+  }
+
+  .text-app-success {
+    color: #86efac;
+  }
+
+  .bg-gradient-warm {
+    background-image: linear-gradient(135deg, rgba(201, 72, 107, 0.26) 0%, rgba(217, 119, 87, 0.20) 100%);
+  }
 }

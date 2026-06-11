@@ -162,6 +162,27 @@ describe("POST /auth/email/send-link", () => {
     }
   });
 
+  it("local direct-login flag signs in directly even when the provider key is configured", async () => {
+    const env = createEnv({
+      EMAIL_FROM_ADDRESS: "no-reply@x.com",
+      EMAIL_PROVIDER_API_KEY: "rk-test",
+      LOCAL_EMAIL_DIRECT_LOGIN: "1",
+    });
+    const sender = vi.fn<EmailSender>(async () => undefined);
+    const response = await handleSendLink(
+      jsonRequest({ email: "flagged@example.com" }),
+      env,
+      { sender },
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { email: string; token: string; verify_url?: string };
+    expect(body.email).toBe("flagged@example.com");
+    expect(body.token).toBeTruthy();
+    expect(body.verify_url).toBeUndefined();
+    expect(sender).not.toHaveBeenCalled();
+  });
+
   it("dev domain still uses magic-link behavior instead of direct session", async () => {
     const env = createEnv();
     const response = await handleSendLink(

@@ -36,27 +36,27 @@ function WebAdminContent() {
 
   return (
     <WebAppShell maxWidth="full" title="Admin" subtitle="Operational controls for the current environment.">
-      <View className="min-h-[calc(100vh-220px)] overflow-hidden rounded-2xl border border-app-line bg-app-surface shadow-card">
+      <View className="min-h-[calc(100vh-220px)] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-card">
         <View className="min-h-[calc(100vh-220px)] flex-row">
           <WebSidebar
             activeId={section}
             brandSubtitle="Operational controls"
             brandTitle="Admin"
-            className="bg-app-surface"
+            className="bg-white/[0.06]"
             items={SECTION_ITEMS}
             onItemPress={(item) => setSection((item.id ?? 'users') as AdminSection)}
             width={260}
             bottomSlot={
-              <View className="gap-2 rounded-xl border border-app-line bg-app-sunken/50 p-3">
+              <View className="gap-2 rounded-xl border border-white/10 bg-white/[0.075] p-3">
                 <View className="flex-row items-center gap-2">
                   <Ionicons color={PALETTE.roseDeep} name={activeItem.icon} size={16} />
                   <Text className="text-caption font-semibold text-app-ink">{activeItem.label}</Text>
                 </View>
-                <Text className="text-caption text-app-muted">{activeItem.subtitle}</Text>
+                <Text className="text-caption text-rose-50/60">{activeItem.subtitle}</Text>
               </View>
             }
           />
-          <View className="min-w-0 flex-1 bg-app-canvas">
+          <View className="min-w-0 flex-1 bg-[#10070d]">
             <WebTopBar
               className="rounded-none"
               subtitle={activeItem.subtitle}

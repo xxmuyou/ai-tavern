@@ -22,7 +22,7 @@ export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: 
   return (
     <View className={cn('border-b border-app-line bg-app-canvas/85 px-10 py-7 backdrop-blur', className)}>
       {breadcrumbs?.length ? (
-        <View className="mb-3 flex-row items-center gap-1.5">
+        <View className="mb-2 flex-row items-center gap-1.5">
           {breadcrumbs.map((crumb, idx) => {
             const isLast = idx === breadcrumbs.length - 1;
             return (
@@ -32,7 +32,7 @@ export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: 
                     <Text className="text-caption font-semibold text-app-muted hover:text-app-rose">{crumb.label}</Text>
                   </Pressable>
                 ) : (
-                  <Text className={cn('text-caption font-semibold', isLast ? 'text-app-ink' : 'text-app-muted')}>
+                  <Text className={cn('text-caption font-semibold', isLast ? 'text-white' : 'text-rose-50/60')}>
                     {crumb.label}
                   </Text>
                 )}
@@ -42,11 +42,11 @@ export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: 
           })}
         </View>
       ) : null}
-      <View className="flex-row items-start justify-between gap-6">
+      <View className="flex-row items-center justify-between gap-4">
         <View className="min-w-0 flex-1">
-          <Text className="font-serif text-display-sm text-app-ink">{title}</Text>
+          <Text className="font-serif text-title text-white">{title}</Text>
           {subtitle ? (
-            <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">{subtitle}</Text>
+            <Text className="mt-1 max-w-2xl text-caption text-rose-50/60">{subtitle}</Text>
           ) : null}
         </View>
         {actions ? <View className="flex-row items-center gap-3">{actions}</View> : null}

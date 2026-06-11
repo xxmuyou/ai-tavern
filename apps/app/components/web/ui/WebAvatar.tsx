@@ -41,7 +41,7 @@ export function WebAvatar({ className, fallback, ring = 'none', size = 'md', sou
   return (
     <View
       className={cn(
-        'items-center justify-center overflow-hidden rounded-full bg-app-rose-soft',
+        'items-center justify-center overflow-hidden rounded-full bg-rose-300/12',
         sizeClass[size],
         ringClass[ring],
         className,

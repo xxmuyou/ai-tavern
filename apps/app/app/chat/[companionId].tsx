@@ -11,7 +11,6 @@ import {
   Text,
   TextInput,
   View,
-  type NativeScrollEvent,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
@@ -49,6 +48,7 @@ import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useAutoVoice } from '@/hooks/use-auto-voice';
+import { useChatAutoScroll } from '@/hooks/use-chat-auto-scroll';
 import { useChatHistory } from '@/hooks/use-chat-history';
 import { useChatRelationship } from '@/hooks/use-chat-relationship';
 import { CHAT_EMOTIONS, useChatStream, type ChatEmotion } from '@/hooks/use-chat-stream';
@@ -65,15 +65,6 @@ import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type 
 
 const BILLING_ROUTE = '/billing' as Href;
 const STREAMING_ID = '__streaming__';
-const AUTO_SCROLL_BOTTOM_THRESHOLD = 72;
-// How far the user must scroll up (px) before we treat it as "detach from
-// bottom". Programmatic scrollToEnd only moves down, so it never trips this.
-const SCROLL_UP_EPSILON = 12;
-
-function isNearBottom(event: NativeScrollEvent): boolean {
-  const visibleBottom = event.contentOffset.y + event.layoutMeasurement.height;
-  return event.contentSize.height - visibleBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD;
-}
 
 type StreamingItem = {
   __streaming: true;
@@ -140,13 +131,35 @@ function ChatScreenInner() {
   const [isResolvingStory, setIsResolvingStory] = useState(false);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
-  // Sticky "follow the bottom" flag. Detaches on an upward scroll, re-attaches
-  // when the user returns to the bottom (see handleScroll).
-  const shouldAutoScrollRef = useRef(true);
-  const lastOffsetYRef = useRef(0);
 
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
+  const items = useMemo<ChatListItem[]>(() => {
+    if (!stream.isStreaming) {
+      return history.messages;
+    }
+    const placeholder: StreamingItem = {
+      __streaming: true,
+      id: STREAMING_ID,
+      text: stream.streamingText,
+    };
+    return [...history.messages, placeholder];
+  }, [history.messages, stream.isStreaming, stream.streamingText]);
+  const autoScroll = useChatAutoScroll({
+    getItems: () => items,
+    listRef,
+  });
+  const {
+    detachFromBottom,
+    handleContentSizeChange,
+    handleScroll,
+    jumpToBottom,
+    jumpToMessage,
+    notifyMomentReady,
+    notifyNewReply,
+    pendingNotice,
+    resetForThread,
+  } = autoScroll;
   const relationship = useChatRelationship(companionId);
   const personasState = usePersonas();
   const personas = personasState.data?.personas ?? [];
@@ -158,7 +171,7 @@ function ChatScreenInner() {
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
     onSaved: () => {
-      shouldAutoScrollRef.current = true;
+      notifyNewReply();
       void relationship.refresh();
     },
   });
@@ -171,6 +184,10 @@ function ChatScreenInner() {
   useEffect(() => {
     void refreshActivity();
   }, [refreshActivity]);
+
+  useEffect(() => {
+    resetForThread();
+  }, [companionId, resetForThread]);
 
   useEffect(() => {
     let cancelled = false;
@@ -260,41 +277,10 @@ function ChatScreenInner() {
     }
   }, [now, rateLimitedUntil]);
 
-  const items = useMemo<ChatListItem[]>(() => {
-    if (!stream.isStreaming) {
-      return history.messages;
-    }
-    const placeholder: StreamingItem = {
-      __streaming: true,
-      id: STREAMING_ID,
-      text: stream.streamingText,
-    };
-    return [...history.messages, placeholder];
-  }, [history.messages, stream.isStreaming, stream.streamingText]);
-
-  const handleContentSizeChange = useCallback(() => {
-    if (shouldAutoScrollRef.current) {
-      listRef.current?.scrollToEnd({ animated: false });
-    }
-  }, []);
-
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    // Detach by scroll DIRECTION, not by position: any upward drag detaches.
-    // A programmatic scrollToEnd only increases offset, so it can never detach
-    // us — this keeps streaming/moment-image updates from yanking the view.
-    const y = event.nativeEvent.contentOffset.y;
-    if (isNearBottom(event.nativeEvent)) {
-      shouldAutoScrollRef.current = true;
-    } else if (y < lastOffsetYRef.current - SCROLL_UP_EPSILON) {
-      shouldAutoScrollRef.current = false;
-    }
-    lastOffsetYRef.current = y;
-  }, []);
-
   const handleLoadMore = useCallback(() => {
-    shouldAutoScrollRef.current = false;
+    detachFromBottom();
     void history.loadMore();
-  }, [history]);
+  }, [detachFromBottom, history]);
 
   const showInviteNotice = useCallback((message: string) => {
     setInviteNotice(message);
@@ -346,7 +332,6 @@ function ChatScreenInner() {
       role: 'user',
     };
     history.appendMessage(userMessage);
-    shouldAutoScrollRef.current = true;
 
     let serverMessageId = '';
     let acceptedSceneId: string | null = null;
@@ -358,6 +343,7 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
+        onChunk: notifyNewReply,
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
         },
@@ -395,7 +381,7 @@ function ChatScreenInner() {
           scene_id: acceptedSceneId,
         });
       }
-      shouldAutoScrollRef.current = true;
+      notifyNewReply();
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
       }
@@ -414,7 +400,7 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -445,7 +431,6 @@ function ChatScreenInner() {
     };
     history.appendMessage(userMessage);
     setDraft('');
-    shouldAutoScrollRef.current = true;
 
     let serverMessageId = '';
     try {
@@ -455,6 +440,7 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
+        onChunk: notifyNewReply,
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
         },
@@ -478,7 +464,7 @@ function ChatScreenInner() {
         scene_id: sceneId ?? null,
       };
       history.appendMessage(finalMessage);
-      shouldAutoScrollRef.current = true;
+      notifyNewReply();
       // Auto-play the new reply when the global voice toggle is on.
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -499,7 +485,7 @@ function ChatScreenInner() {
         pushError(message);
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream]);
 
   const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -512,7 +498,6 @@ function ChatScreenInner() {
       role: 'user',
     };
     history.appendMessage(userMessage);
-    shouldAutoScrollRef.current = true;
 
     let serverMessageId = '';
     try {
@@ -524,6 +509,7 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
+        onChunk: notifyNewReply,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
           showInviteNotice(quick.ok
@@ -548,7 +534,7 @@ function ChatScreenInner() {
         role: 'companion',
         scene_id: sceneId ?? null,
       });
-      shouldAutoScrollRef.current = true;
+      notifyNewReply();
       void relationship.refresh();
     } catch (error) {
       if (error instanceof QuotaExceededError) {
@@ -557,7 +543,7 @@ function ChatScreenInner() {
         pushError(error instanceof Error ? error.message : 'Quick action failed.');
       }
     }
-  }, [activeActivityId, activePersonaId, companionId, history, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activePersonaId, companionId, history, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
@@ -570,7 +556,6 @@ function ChatScreenInner() {
       role: 'user',
       scene_id: sceneId,
     });
-    shouldAutoScrollRef.current = true;
     try {
       const result = await resolveStoryChoice(companionId, choice.id, {
         activity_id: activeActivityId ?? null,
@@ -601,14 +586,14 @@ function ChatScreenInner() {
         setUnlockToken((token) => token + 1);
       }
       setStoryMoment(null);
-      shouldAutoScrollRef.current = true;
+      notifyNewReply();
       void relationship.refresh();
     } catch (error) {
       pushError(error instanceof Error ? error.message : 'Story moment could not be resolved.');
     } finally {
       setIsResolvingStory(false);
     }
-  }, [activeActivityId, companionId, history, isResolvingStory, pushError, relationship, sceneId, stream.isStreaming]);
+  }, [activeActivityId, companionId, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, stream.isStreaming]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -662,8 +647,15 @@ function ChatScreenInner() {
 
   const updateHistoryMessage = history.updateMessage;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
+    const previousMoment = history.messages.find((message) => message.id === messageId)?.moment_image ?? null;
+    const isNewSucceededMoment =
+      moment.status === 'succeeded' &&
+      (previousMoment?.status !== 'succeeded' || previousMoment.output_key !== moment.output_key);
     updateHistoryMessage(messageId, (message) => ({ ...message, moment_image: moment }));
-  }, [updateHistoryMessage]);
+    if (isNewSucceededMoment) {
+      notifyMomentReady(messageId);
+    }
+  }, [history.messages, notifyMomentReady, updateHistoryMessage]);
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const renderItem = useCallback(({ item }: { item: ChatListItem }) => {
     if (isStreamingItem(item)) {
@@ -840,43 +832,57 @@ function ChatScreenInner() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
       >
-        {history.messages.length === 0 && !stream.isStreaming ? (
-          <EmptyState
-            title="Start the conversation"
-            description="Send a message to begin chatting with this companion."
-          />
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={items}
-            keyExtractor={keyExtractor}
-            renderItem={renderItem}
-            contentContainerStyle={{ paddingVertical: 12 }}
-            onContentSizeChange={handleContentSizeChange}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            ListHeaderComponent={
-              history.hasMore ? (
-                <View className="items-center px-4 py-3">
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={history.isLoadingMore}
-                    onPress={handleLoadMore}
-                    className={`rounded-full border border-app-line bg-app-card px-4 py-2 ${
-                      history.isLoadingMore ? 'opacity-50' : 'opacity-100'
-                    }`}
-                  >
-                    {history.isLoadingMore ? (
-                      <ActivityIndicator color="#1E6B52" size="small" />
-                    ) : (
-                      <Text className="text-sm font-medium text-app-primary">Load earlier messages</Text>
-                    )}
-                  </Pressable>
-                </View>
-              ) : null
-            }
-          />
-        )}
+        <View className="relative flex-1">
+          {history.messages.length === 0 && !stream.isStreaming ? (
+            <EmptyState
+              title="Start the conversation"
+              description="Send a message to begin chatting with this companion."
+            />
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={items}
+              keyExtractor={keyExtractor}
+              renderItem={renderItem}
+              contentContainerStyle={{ paddingVertical: 12 }}
+              onContentSizeChange={handleContentSizeChange}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              ListHeaderComponent={
+                history.hasMore ? (
+                  <View className="items-center px-4 py-3">
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={history.isLoadingMore}
+                      onPress={handleLoadMore}
+                      className={`rounded-full border border-app-line bg-app-card px-4 py-2 ${
+                        history.isLoadingMore ? 'opacity-50' : 'opacity-100'
+                      }`}
+                    >
+                      {history.isLoadingMore ? (
+                        <ActivityIndicator color="#1E6B52" size="small" />
+                      ) : (
+                        <Text className="text-sm font-medium text-app-primary">Load earlier messages</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                ) : null
+              }
+            />
+          )}
+          {pendingNotice ? (
+            <ChatScrollNotice
+              label={pendingNotice.label}
+              onPress={() => {
+                if (pendingNotice.kind === 'moment') {
+                  jumpToMessage(pendingNotice.messageId);
+                } else {
+                  jumpToBottom();
+                }
+              }}
+            />
+          ) : null}
+        </View>
 
         {remainingSeconds > 0 ? (
           <View className="border-t border-app-line bg-app-warning/10 px-4 py-2">
@@ -1041,6 +1047,21 @@ function ChatScreenInner() {
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function ChatScrollNotice({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <View pointerEvents="box-none" className="absolute inset-x-0 bottom-3 items-center px-4">
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        className="min-h-10 flex-row items-center gap-2 rounded-full border border-app-primary/25 bg-app-primary px-4 shadow-card"
+      >
+        <Ionicons color="#FFFFFF" name="arrow-down" size={16} />
+        <Text className="text-sm font-semibold text-white">{label}</Text>
+      </Pressable>
     </View>
   );
 }

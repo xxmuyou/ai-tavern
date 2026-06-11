@@ -15,8 +15,8 @@ export type WebTagProps = {
 };
 
 const variantClass: Record<WebTagVariant, string> = {
-  brand: 'bg-app-brand-soft text-app-brand-deep',
-  rose: 'bg-app-rose-soft text-app-rose-deep',
+  brand: 'bg-emerald-300/12 text-emerald-200',
+  rose: 'bg-rose-300/12 text-rose-200',
   wine: 'bg-app-wine-soft text-app-wine',
   ember: 'bg-app-ember-soft text-app-ember',
   neutral: 'bg-app-sunken text-app-ink-soft',

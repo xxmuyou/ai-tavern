@@ -2,6 +2,8 @@
 
 > **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-020(emotion-art), spec-022(RunningHub), spec-027(moment images)  |  **估时：** 4-6 天  |  **状态：** 📝 draft
 
+> **2026-06-10 口径更新：** 本 spec 原本把 cutout 定位为 moment image 后端管线的内部能力。Web 前端直接消费 companion cutout、`art_cutout_url` 展示字段与 ensure/status 端点，以 [spec-038](./spec-038-web-scene-immersion-and-unlocks.md) 为新权威。
+
 ---
 
 ## Context
@@ -134,7 +136,7 @@ ALTER TABLE companions ADD COLUMN art_cutout_key TEXT;        -- 缓存的透明
   `loadCompanionArtUrl`（带背景 base art）改为**优先用 `art_cutout_key`（透明角色）**；为空则先触发抠图。
 - 合成方式（RunningHub workflow 图内，**二选一见待定**）：(a) alpha 合成到生成场景 + 协调重打光；
   (b) 透明角色作 IP-Adapter/参考引导场景重绘。
-- `buildMomentPrompt` 已接入 scene/appearance/emotion/stage/上条用户文本，本轮重点提升构图与一致性稳定度。
+- `buildMomentPrompt`（详见 spec-027 v1.4）：**脸由 cutout 参考图锁定，不写 appearance/族裔/五官文字**（文字会带回旧造型、零身份增益）；发型/服装/姿势/表情随场景同步变化；服装由 pose planner LLM 规划 `outfit`；名字/relationship/personality 等非视觉抽象字段不进最终图片 prompt（仅作 LLM 输入）；最终 prompt 只保留一个 `Companion gender: …` 锚点防性别漂移。本轮重点提升构图与一致性稳定度。
 
 ### 配置
 - `config/runninghub-workflows.{dev,prod}.json`：移除 `portrait_variation`；**保留 `profile_outfit` 不动**；新增 `companion_cutout`（mode=cutout，声明 `loadImageNodeId`）。

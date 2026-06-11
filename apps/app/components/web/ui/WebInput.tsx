@@ -23,7 +23,7 @@ const errorFieldClass = 'border-app-danger focus-within:border-app-danger focus-
 export function WebInput({ className, error, helperText, inputClassName, label, leftAdornment, rightAdornment, ...rest }: WebInputProps) {
   return (
     <View className={cn('gap-1.5', className)}>
-      {label ? <Text className="text-caption font-semibold text-app-ink-soft">{label}</Text> : null}
+      {label ? <Text className="text-caption font-semibold text-rose-50/75">{label}</Text> : null}
       <View className={cn(baseFieldClass, error ? errorFieldClass : null, 'min-h-12')}>
         {leftAdornment ? <View>{leftAdornment}</View> : null}
         <TextInput
@@ -36,7 +36,7 @@ export function WebInput({ className, error, helperText, inputClassName, label, 
       {error ? (
         <Text className="text-caption text-app-danger">{error}</Text>
       ) : helperText ? (
-        <Text className="text-caption text-app-muted">{helperText}</Text>
+        <Text className="text-caption text-rose-50/60">{helperText}</Text>
       ) : null}
     </View>
   );
@@ -53,7 +53,7 @@ type WebTextareaProps = {
 export function WebTextarea({ className, error, helperText, inputClassName, label, ...rest }: WebTextareaProps) {
   return (
     <View className={cn('gap-1.5', className)}>
-      {label ? <Text className="text-caption font-semibold text-app-ink-soft">{label}</Text> : null}
+      {label ? <Text className="text-caption font-semibold text-rose-50/75">{label}</Text> : null}
       <TextInput
         {...rest}
         multiline
@@ -68,7 +68,7 @@ export function WebTextarea({ className, error, helperText, inputClassName, labe
       {error ? (
         <Text className="text-caption text-app-danger">{error}</Text>
       ) : helperText ? (
-        <Text className="text-caption text-app-muted">{helperText}</Text>
+        <Text className="text-caption text-rose-50/60">{helperText}</Text>
       ) : null}
     </View>
   );
