@@ -22,6 +22,7 @@ import {
   ensureCompanionCutout,
   getCompanion,
   getCompanionCutout,
+  getDailyState,
   getInviteTargets,
   getScenes,
   getStoryMoment,
@@ -202,7 +203,11 @@ export default function WebChatScreen() {
   const threadScrollRef = useRef<FlatList<ChatListItem>>(null);
   const activeSceneChangedThisSessionRef = useRef(Boolean(initialSceneId));
   const hasReconciledInitialSceneRef = useRef(Boolean(initialSceneId));
+  const hasCheckedStoredSceneRef = useRef(Boolean(initialSceneId));
   const historySceneTargetRef = useRef<string | null>(null);
+  const sceneIdRef = useRef(sceneId);
+  const defaultDailySceneRef = useRef(false);
+  const restoredStoredSceneRef = useRef(Boolean(initialSceneId));
   const restoredSceneSavedAtRef = useRef<number | null>(null);
   const items = useMemo<ChatListItem[]>(() => {
     if (!stream.isStreaming) return history.messages;
@@ -235,6 +240,20 @@ export default function WebChatScreen() {
       void relationship.refresh();
     },
   });
+
+  useEffect(() => {
+    sceneIdRef.current = sceneId;
+  }, [sceneId]);
+
+  useEffect(() => {
+    activeSceneChangedThisSessionRef.current = Boolean(initialSceneId);
+    hasReconciledInitialSceneRef.current = Boolean(initialSceneId);
+    hasCheckedStoredSceneRef.current = Boolean(initialSceneId);
+    restoredStoredSceneRef.current = Boolean(initialSceneId);
+    defaultDailySceneRef.current = false;
+    historySceneTargetRef.current = null;
+    restoredSceneSavedAtRef.current = null;
+  }, [companionId, initialSceneId]);
 
   useEffect(() => {
     void refreshActivity();
@@ -275,6 +294,9 @@ export default function WebChatScreen() {
   useEffect(() => {
     if (!initialSceneId) return;
     activeSceneChangedThisSessionRef.current = true;
+    defaultDailySceneRef.current = false;
+    hasCheckedStoredSceneRef.current = true;
+    restoredStoredSceneRef.current = true;
     hasReconciledInitialSceneRef.current = true;
     historySceneTargetRef.current = null;
     restoredSceneSavedAtRef.current = null;
@@ -325,18 +347,25 @@ export default function WebChatScreen() {
   }, [companionId]);
 
   useEffect(() => {
-    if (!companionId || initialSceneId || typeof window === 'undefined') return;
+    if (!companionId || initialSceneId || typeof window === 'undefined') {
+      hasCheckedStoredSceneRef.current = true;
+      return;
+    }
     try {
       const raw = window.localStorage.getItem(currentSceneKey(companionId));
+      hasCheckedStoredSceneRef.current = true;
       if (!raw) return;
       const parsed = JSON.parse(raw) as StoredCurrentScene;
       if (!parsed?.id) return;
+      defaultDailySceneRef.current = false;
+      restoredStoredSceneRef.current = true;
       restoredSceneSavedAtRef.current = typeof parsed.savedAt === 'number' ? parsed.savedAt : null;
       setSceneId(parsed.id);
       setSceneArt(parsed.art_url ?? null);
       setSceneName(parsed.name ?? null);
     } catch {
       window.localStorage.removeItem(currentSceneKey(companionId));
+      hasCheckedStoredSceneRef.current = true;
       restoredSceneSavedAtRef.current = null;
     }
   }, [companionId, initialSceneId]);
@@ -363,11 +392,51 @@ export default function WebChatScreen() {
 
     const scene = scenes.find((candidate) => candidate.id === latestSceneMessage.scene_id) ?? null;
     historySceneTargetRef.current = latestSceneMessage.scene_id;
+    defaultDailySceneRef.current = false;
     setSceneId(latestSceneMessage.scene_id);
     setSceneArt(scene?.art_url ?? null);
     setSceneName(scene?.name ?? null);
     restoredSceneSavedAtRef.current = null;
   }, [history.isLoadingInitial, history.messages, initialSceneId, sceneId, scenes]);
+
+  useEffect(() => {
+    if (
+      !companionId ||
+      initialSceneId ||
+      sceneId ||
+      history.isLoadingInitial ||
+      activeSceneChangedThisSessionRef.current ||
+      !hasCheckedStoredSceneRef.current ||
+      restoredStoredSceneRef.current ||
+      !hasReconciledInitialSceneRef.current ||
+      historySceneTargetRef.current !== null
+    ) {
+      return;
+    }
+
+    const hasHistoricalScene = history.messages.some((message) => Boolean(message.scene_id));
+    if (hasHistoricalScene) return;
+
+    let cancelled = false;
+    getDailyState(companionId)
+      .then((dailyState) => {
+        if (cancelled || sceneIdRef.current || activeSceneChangedThisSessionRef.current) return;
+        const dailySceneId = dailyState.scene.id;
+        if (!dailySceneId) return;
+        const catalogScene = scenes.find((candidate) => candidate.id === dailySceneId) ?? null;
+        defaultDailySceneRef.current = true;
+        setSceneId(dailySceneId);
+        setSceneArt(dailyState.scene.art_url ?? catalogScene?.art_url ?? null);
+        setSceneName(catalogScene?.name ?? null);
+      })
+      .catch(() => {
+        // Daily state is a fallback only. If it is unavailable, plain chat still works.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [companionId, history.isLoadingInitial, history.messages, initialSceneId, sceneId, scenes]);
 
   useEffect(() => {
     if (
@@ -382,6 +451,9 @@ export default function WebChatScreen() {
     if (historySceneTargetRef.current === sceneId) {
       historySceneTargetRef.current = null;
     }
+    if (defaultDailySceneRef.current && !activeSceneChangedThisSessionRef.current && !initialSceneId) {
+      return;
+    }
     const scene = scenes.find((candidate) => candidate.id === sceneId) ?? null;
     const stored: StoredCurrentScene = {
       art_url: sceneArt ?? scene?.art_url ?? null,
@@ -390,7 +462,7 @@ export default function WebChatScreen() {
       savedAt: Date.now(),
     };
     window.localStorage.setItem(currentSceneKey(companionId), JSON.stringify(stored));
-  }, [companionId, sceneArt, sceneId, sceneName, scenes]);
+  }, [companionId, initialSceneId, sceneArt, sceneId, sceneName, scenes]);
 
   useEffect(() => {
     if (!companion || artCutoutUrl) return;
