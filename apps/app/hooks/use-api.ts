@@ -49,12 +49,19 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 }
 
-export function useApi<T>(loader: () => Promise<T>, deps: unknown[] = []) {
+export function useApi<T>(loader: () => Promise<T>, deps: unknown[] = [], opts: { enabled?: boolean } = {}) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const enabled = opts.enabled ?? true;
+  const [isLoading, setIsLoading] = useState(enabled);
 
   const refetch = useCallback(async () => {
+    if (!enabled) {
+      setData(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -65,7 +72,7 @@ export function useApi<T>(loader: () => Promise<T>, deps: unknown[] = []) {
     } finally {
       setIsLoading(false);
     }
-  }, deps);
+  }, [enabled, ...deps]);
 
   useEffect(() => {
     void refetch();

@@ -9,7 +9,8 @@ import type { CompanionListItem } from '@/api/types';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebEmptyState, WebLoading, WebTabs, WebTag } from '@/components/web/ui';
 import { useBilling } from '@/hooks/use-billing';
-import { type CompanionSourceFilter, useCompanions } from '@/hooks/use-companions';
+import { type CompanionSourceFilter, useCompanions, usePublicCompanions } from '@/hooks/use-companions';
+import { useSession } from '@/hooks/use-session';
 import { formatLevel } from '@/utils/format';
 
 const FILTERS: { id: CompanionSourceFilter; label: string }[] = [
@@ -42,11 +43,23 @@ export function WebCompanionDirectory({
   const router = useRouter();
   const [source, setSource] = useState<CompanionSourceFilter>('all');
   const [topic, setTopic] = useState<DiscoveryTopic>('recommended');
-  const { data, error, isLoading, refetch } = useCompanions(source);
-  const userCompanions = useCompanions('user');
-  const billing = useBilling();
+  const { isLoading: isSessionLoading, session } = useSession();
+  const isSignedIn = Boolean(session);
+  const authedCompanions = useCompanions(source, { enabled: isSignedIn });
+  const publicCompanions = usePublicCompanions();
+  const userCompanions = useCompanions('user', { enabled: isSignedIn });
+  const billing = useBilling({ enabled: isSignedIn });
+  const canUseAuthedData = isSignedIn && !isUnauthorizedError(authedCompanions.error);
+  const data = canUseAuthedData ? authedCompanions.data : publicCompanions.data;
+  const error = canUseAuthedData ? authedCompanions.error : publicCompanions.error;
+  const isLoading = isSessionLoading || (canUseAuthedData ? authedCompanions.isLoading : publicCompanions.isLoading);
+  const refetch = canUseAuthedData ? authedCompanions.refetch : publicCompanions.refetch;
 
   function createCompanion() {
+    if (!canUseAuthedData) {
+      router.push('/auth/login' as Href);
+      return;
+    }
     const limit = billing.data?.entitlements.custom_companion_limit;
     const count = userCompanions.data?.items.length ?? 0;
     if (typeof limit === 'number' && count >= limit) {
@@ -56,7 +69,10 @@ export function WebCompanionDirectory({
     router.push('/companion-create' as Href);
   }
 
-  const visibleItems = useMemo(() => filterDiscoveryItems(data?.items ?? [], topic), [data?.items, topic]);
+  const visibleItems = useMemo(
+    () => filterDiscoveryItems(data?.items ?? [], topic, source, canUseAuthedData),
+    [canUseAuthedData, data?.items, source, topic],
+  );
   const customLimit = billing.data?.entitlements.custom_companion_limit;
   const customCount = userCompanions.data?.items.length ?? 0;
 
@@ -84,7 +100,7 @@ export function WebCompanionDirectory({
           <View className="h-6 w-6 items-center justify-center rounded-full bg-ember-soft">
             <Ionicons color="#9A4318" name="sparkles-outline" size={12} />
           </View>
-          <Text className="text-caption text-app-muted">{formatCompanionCount(customCount, customLimit)}</Text>
+          <Text className="text-caption text-app-muted">{formatCompanionCount(customCount, customLimit, canUseAuthedData)}</Text>
         </View>
       </View>
 
@@ -141,14 +157,29 @@ export function WebCompanionDirectory({
   );
 }
 
-function formatCompanionCount(count: number, limit: number | null | undefined): string {
+function formatCompanionCount(count: number, limit: number | null | undefined, isSignedIn: boolean): string {
+  if (!isSignedIn) {
+    return 'Sign in to create companions';
+  }
   if (limit === null) {
     return `${count} custom companions · unlimited`;
   }
   return `${count}/${limit ?? 3} custom companions`;
 }
 
-function filterDiscoveryItems(items: CompanionListItem[], topic: DiscoveryTopic): CompanionListItem[] {
+function isUnauthorizedError(error: unknown): boolean {
+  return (error as { status?: number } | null)?.status === 401;
+}
+
+function filterDiscoveryItems(
+  items: CompanionListItem[],
+  topic: DiscoveryTopic,
+  source: CompanionSourceFilter,
+  isSignedIn: boolean,
+): CompanionListItem[] {
+  if (!isSignedIn && (source === 'user' || source === 'favorites')) {
+    return [];
+  }
   switch (topic) {
     case 'official':
       return items.filter((item) => item.source === 'official');

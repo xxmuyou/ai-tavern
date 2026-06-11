@@ -25,11 +25,12 @@ export type CompanionDiscoveryStyle = 'anime' | 'realistic';
 
 export function useCompanions(
   source: CompanionSourceFilter,
-  opts: { q?: string; sort?: CompanionSort } = {},
+  opts: { enabled?: boolean; q?: string; sort?: CompanionSort } = {},
 ) {
   return useApi<CompanionsListResponse>(
     () => listCompanions(source, { q: opts.q, sort: opts.sort }),
     [source, opts.q, opts.sort],
+    { enabled: opts.enabled ?? true },
   );
 }
 
