@@ -36,8 +36,8 @@ export default function WebScenesScreen() {
       subtitle="Walk into a room, see who is already there, and let the conversation choose its own direction."
     >
       <View className="mb-7">
-        <Text className="font-serif text-display-sm text-app-ink">Scenes</Text>
-        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">
+        <Text className="font-serif text-display-sm text-white">Scenes</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">
           Walk into a room, see who is already there, and let the conversation choose its own direction.
         </Text>
       </View>
@@ -67,8 +67,8 @@ export default function WebScenesScreen() {
           {unlocked.length > 0 ? (
             <View className="gap-5">
               <View>
-                <Text className="text-overline text-rose-deep">Open doors</Text>
-                <Text className="mt-1 font-serif text-title text-app-ink">Scenes you can step into</Text>
+                <Text className="text-overline text-rose-200">Open doors</Text>
+                <Text className="mt-1 font-serif text-title text-white">Scenes you can step into</Text>
               </View>
               <View className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 {unlocked.map((scene) => (
@@ -85,8 +85,8 @@ export default function WebScenesScreen() {
           {locked.length > 0 ? (
             <View className="gap-5">
               <View>
-                <Text className="text-overline text-app-muted">Still sealed</Text>
-                <Text className="mt-1 font-serif text-title text-app-ink">Scenes waiting for a relationship</Text>
+                <Text className="text-overline text-rose-50/60">Still sealed</Text>
+                <Text className="mt-1 font-serif text-title text-white">Scenes waiting for a relationship</Text>
               </View>
               <View className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                 {locked.map((scene) => (
@@ -114,9 +114,9 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
     <Pressable
       accessibilityRole="link"
       onPress={onPress}
-      className="group overflow-hidden rounded-2xl border border-app-line bg-app-surface shadow-card transition-shadow hover:shadow-float"
+      className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-card transition-shadow hover:shadow-float"
     >
-      <View className="relative aspect-[16/9] overflow-hidden bg-app-sunken">
+      <View className="relative aspect-[16/9] overflow-hidden bg-white/[0.075]">
         {imageSource ? (
           <Image
             accessibilityLabel={scene.name}
@@ -126,7 +126,7 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
           />
         ) : (
           <View className="h-full w-full items-center justify-center bg-gradient-warm">
-            <Text className="font-serif text-display-sm text-rose-deep/40">{scene.name.slice(0, 1)}</Text>
+            <Text className="font-serif text-display-sm text-rose-200/40">{scene.name.slice(0, 1)}</Text>
           </View>
         )}
         <View className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-app-twilight/70 via-app-twilight/20 to-transparent" />
@@ -137,7 +137,7 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
           </View>
           {scene.unlocked ? (
             <View className="rounded-full bg-white/90 px-3 py-1">
-              <Text className="text-caption font-semibold text-app-ink">
+              <Text className="text-caption font-semibold text-white">
                 {scene.potential_companions.length} companion{scene.potential_companions.length === 1 ? '' : 's'}
               </Text>
             </View>
@@ -150,8 +150,8 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
         </View>
       </View>
       <View className="gap-4 p-5">
-        <Text className="font-serif text-title-sm text-app-ink">{scene.name}</Text>
-        <Text className="text-body-sm leading-6 text-app-ink-soft" numberOfLines={2}>{scene.mood}</Text>
+        <Text className="font-serif text-title-sm text-white">{scene.name}</Text>
+        <Text className="text-body-sm leading-6 text-rose-50/75" numberOfLines={2}>{scene.mood}</Text>
         {scene.tags.length ? (
           <View className="flex-row flex-wrap gap-1.5">
             {scene.tags.slice(0, 4).map((tag) => (
@@ -161,8 +161,8 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
             ))}
           </View>
         ) : null}
-        <View className="flex-row items-center justify-between border-t border-app-line-soft pt-3">
-          <Text className="text-caption text-app-muted">
+        <View className="flex-row items-center justify-between border-t border-white/8 pt-3">
+          <Text className="text-caption text-rose-50/60">
             {scene.unlocked ? 'Tap to enter' : formatUnlockHint(scene.unlock_hint) || 'Reach a relationship threshold'}
           </Text>
           <Ionicons

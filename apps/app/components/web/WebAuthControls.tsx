@@ -64,16 +64,16 @@ export function WebAuthControls() {
           accessibilityLabel="Account menu"
           accessibilityState={{ expanded: menuOpen }}
           onPress={() => setMenuOpen((open) => !open)}
-          className="h-9 w-9 items-center justify-center rounded-full border border-app-line bg-rose-soft shadow-card hover:border-app-rose/40"
+          className="h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-rose-300/12 shadow-card hover:border-app-rose/40"
         >
-          <Text className="font-serif text-body-sm font-semibold text-rose-deep">
+          <Text className="font-serif text-body-sm font-semibold text-rose-200">
             {session.email.slice(0, 1).toUpperCase()}
           </Text>
         </Pressable>
         {menuOpen ? (
-          <View className="absolute right-0 top-11 w-56 gap-1 rounded-2xl border border-app-line bg-app-surface p-2 shadow-float">
-            <View className="border-b border-app-line px-3 py-2">
-              <Text numberOfLines={1} className="text-caption font-semibold text-app-ink">
+          <View className="absolute right-0 top-11 w-56 gap-1 rounded-2xl border border-white/10 bg-white/[0.06] p-2 shadow-float">
+            <View className="border-b border-white/10 px-3 py-2">
+              <Text numberOfLines={1} className="text-caption font-semibold text-white">
                 {session.email}
               </Text>
             </View>
@@ -144,7 +144,7 @@ export function WebAuthControls() {
           />
           <View className="flex-row items-center gap-3">
             <View className="h-px flex-1 bg-app-line" />
-            <Text className="text-overline text-app-muted">or email</Text>
+            <Text className="text-overline text-rose-50/60">or email</Text>
             <View className="h-px flex-1 bg-app-line" />
           </View>
           <WebInput
@@ -163,8 +163,8 @@ export function WebAuthControls() {
             size="lg"
             variant="outline"
           />
-          {notice ? <Text className="text-caption text-rose-deep">{notice}</Text> : null}
-          <Text className="text-caption leading-5 text-app-muted">
+          {notice ? <Text className="text-caption text-rose-200">{notice}</Text> : null}
+          <Text className="text-caption leading-5 text-rose-50/60">
             Open the link on this device. Local dev sessions may return a token immediately.
           </Text>
         </View>
@@ -186,10 +186,10 @@ function AccountMenuItem({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className="min-h-10 flex-row items-center gap-2 rounded-xl px-3 hover:bg-app-sunken"
+      className="min-h-10 flex-row items-center gap-2 rounded-xl px-3 hover:bg-white/[0.075]"
     >
       <Ionicons color="#7A6A5E" name={icon} size={16} />
-      <Text className="text-caption font-semibold text-app-ink-soft">{label}</Text>
+      <Text className="text-caption font-semibold text-rose-50/75">{label}</Text>
     </Pressable>
   );
 }

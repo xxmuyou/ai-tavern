@@ -20,20 +20,20 @@ export function WebSection({ actionLabel, children, className, description, eyeb
       <View className="flex-row items-end justify-between gap-4">
         <View className="min-w-0 flex-1">
           {eyebrow ? (
-            <Text className="text-overline text-rose-deep">{eyebrow}</Text>
+            <Text className="text-overline text-rose-200">{eyebrow}</Text>
           ) : null}
-          <Text className="font-serif text-title text-app-ink">{title}</Text>
+          <Text className="font-serif text-title text-white">{title}</Text>
           {description ? (
-            <Text className="mt-1.5 max-w-2xl text-body-sm leading-6 text-app-muted">{description}</Text>
+            <Text className="mt-1.5 max-w-2xl text-body-sm leading-6 text-rose-50/60">{description}</Text>
           ) : null}
         </View>
         {actionLabel && onAction ? (
           <Pressable
             accessibilityRole="link"
             onPress={onAction}
-            className="flex-row items-center gap-1 self-end rounded-full px-3 py-1.5 hover:bg-rose-soft"
+            className="flex-row items-center gap-1 self-end rounded-full px-3 py-1.5 hover:bg-rose-300/12"
           >
-            <Text className="text-body-sm font-semibold text-rose-deep">{actionLabel}</Text>
+            <Text className="text-body-sm font-semibold text-rose-200">{actionLabel}</Text>
             <Ionicons color="#9A2F4F" name="arrow-forward" size={14} />
           </Pressable>
         ) : null}

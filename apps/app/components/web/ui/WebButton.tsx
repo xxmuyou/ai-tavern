@@ -36,34 +36,34 @@ const textSizeClass: Record<WebButtonSize, string> = {
 
 const variantClass: Record<WebButtonVariant, string> = {
   primary:
-    'border border-app-rose/35 bg-app-rose-soft shadow-card hover:border-app-rose/60 hover:bg-app-rose-soft/80 hover:shadow-float active:bg-app-rose-soft',
+    'border border-app-rose/35 bg-rose-300/12 shadow-card hover:border-app-rose/60 hover:bg-rose-300/16 hover:shadow-float active:bg-rose-300/12',
   secondary:
-    'border border-app-brand/20 bg-app-brand-soft shadow-card hover:border-app-brand/40 hover:bg-app-brand-soft/80 active:bg-app-brand-soft',
+    'border border-app-brand/20 bg-emerald-300/12 shadow-card hover:border-app-brand/40 hover:bg-emerald-300/16 active:bg-emerald-300/12',
   ghost:
-    'border border-transparent bg-app-sunken/70 hover:border-app-line hover:bg-app-ember-soft/70 active:bg-app-ember-soft',
+    'border border-transparent bg-white/[0.09] hover:border-white/10 hover:bg-orange-300/14 active:bg-orange-300/12',
   outline:
-    'border border-app-rose/30 bg-app-rose-soft/80 shadow-card hover:border-app-rose/50 hover:bg-app-rose-soft active:bg-app-rose-soft',
+    'border border-app-rose/30 bg-rose-300/16 shadow-card hover:border-app-rose/50 hover:bg-rose-300/12 active:bg-rose-300/12',
   danger:
-    'border border-app-danger/25 bg-app-danger-soft shadow-card hover:border-app-danger/45 hover:bg-app-danger-soft/80 active:bg-app-danger-soft',
-  glow: 'border border-rose/30 bg-gradient-warm hover:border-rose/50 hover:shadow-glow active:bg-rose-soft',
+    'border border-app-danger/25 bg-rose-500/12 shadow-card hover:border-app-danger/45 hover:bg-rose-500/16 active:bg-rose-500/12',
+  glow: 'border border-rose/30 bg-rose-400/20 hover:border-rose/50 hover:bg-rose-400/26 hover:shadow-glow active:bg-rose-400/18',
   brand:
-    'border border-app-brand/25 bg-app-brand-soft shadow-card hover:border-app-brand/45 hover:bg-app-brand-soft/80 hover:shadow-float active:bg-app-brand-soft',
+    'border border-app-brand/25 bg-emerald-300/12 shadow-card hover:border-app-brand/45 hover:bg-emerald-300/16 hover:shadow-float active:bg-emerald-300/12',
   ember:
-    'border border-app-ember/25 bg-app-ember-soft shadow-card hover:border-app-ember/45 hover:bg-app-ember-soft/80 hover:shadow-float active:bg-app-ember-soft',
+    'border border-app-ember/25 bg-orange-300/12 shadow-card hover:border-app-ember/45 hover:bg-orange-300/16 hover:shadow-float active:bg-orange-300/12',
   google:
-    'border border-app-info/25 bg-app-info-soft shadow-card hover:border-app-info/45 hover:bg-app-info-soft/80 hover:shadow-float active:bg-app-info-soft',
+    'border border-app-info/25 bg-sky-300/12 shadow-card hover:border-app-info/45 hover:bg-sky-300/16 hover:shadow-float active:bg-sky-300/12',
 };
 
 const textColorClass: Record<WebButtonVariant, string> = {
-  primary: 'text-app-rose-deep',
-  secondary: 'text-app-brand-deep',
-  ghost: 'text-app-ink-soft',
-  outline: 'text-app-rose-deep',
-  danger: 'text-app-danger',
-  glow: 'text-app-ink',
-  brand: 'text-app-brand-deep',
-  ember: 'text-app-ember',
-  google: 'text-app-info',
+  primary: 'text-rose-200',
+  secondary: 'text-emerald-200',
+  ghost: 'text-rose-50/75',
+  outline: 'text-rose-200',
+  danger: 'text-rose-300',
+  glow: 'text-white',
+  brand: 'text-emerald-200',
+  ember: 'text-orange-200',
+  google: 'text-sky-200',
 };
 
 export function WebButton({
@@ -93,7 +93,7 @@ export function WebButton({
       )}
     >
       {isLoading ? (
-        <ActivityIndicator color="#2A1F1A" />
+        <ActivityIndicator color="#fff7fb" />
       ) : (
         <View className="flex-row items-center gap-2">
           {iconLeft ? <View>{iconLeft}</View> : null}

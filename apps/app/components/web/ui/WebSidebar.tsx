@@ -39,7 +39,7 @@ export function WebSidebar({
 
   return (
     <View
-      className={cn('h-full border-r border-app-line bg-app-surface px-4 py-6', className)}
+      className={cn('h-full border-r border-white/10 bg-white/[0.06] px-4 py-6', className)}
       style={{ width }}
     >
       <Pressable
@@ -47,8 +47,8 @@ export function WebSidebar({
         onPress={() => router.push(items[0]?.href ?? ('/' as Href))}
         className="mb-7 px-2"
       >
-        <Text className="font-serif text-[22px] font-semibold text-app-ink">{brandTitle}</Text>
-        <Text className="mt-0.5 text-caption text-app-muted">{brandSubtitle}</Text>
+        <Text className="font-serif text-[22px] font-semibold text-white">{brandTitle}</Text>
+        <Text className="mt-0.5 text-caption text-rose-50/60">{brandSubtitle}</Text>
       </Pressable>
 
       <ScrollView className="editorial-scroll flex-1" showsVerticalScrollIndicator={false}>
@@ -68,14 +68,14 @@ export function WebSidebar({
                 }}
                 className={cn(
                   'flex-row items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
-                  active ? 'bg-rose-soft' : 'bg-transparent hover:bg-app-sunken/60',
+                  active ? 'bg-rose-300/12' : 'bg-transparent hover:bg-white/[0.08]',
                 )}
               >
                 <Ionicons color={active ? '#9A2F4F' : '#7A6A5E'} name={item.icon} size={18} />
                 <Text
                   className={cn(
                     'flex-1 text-body-sm font-semibold',
-                    active ? 'text-rose-deep' : 'text-app-ink-soft',
+                    active ? 'text-rose-200' : 'text-rose-50/75',
                   )}
                 >
                   {item.label}

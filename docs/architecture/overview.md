@@ -52,6 +52,7 @@
 - 后续产品 UI 优先开发 Web 桌面体验，mobile UI 日后单独设计
 - 不为了适配 Web 去改 mobile 页面；Web 需要独立布局时新增或修改 `*.web.tsx`
 - mobile 端当前以“不破坏现状”为目标，除非明确进入 mobile 阶段
+- 2026-06 起 Web 首页 canonical route 为 `/` Discover；`/companions` 仅为兼容旧链接，登录默认回 Discover，详见 [`../product/web-navigation-and-theme.md`](../product/web-navigation-and-theme.md)
 
 **不做：**
 - 业务逻辑（关系数值变化、prompt 构造）一律在后端

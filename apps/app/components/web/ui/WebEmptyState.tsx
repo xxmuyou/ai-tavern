@@ -14,13 +14,13 @@ export type WebEmptyStateProps = {
 
 export function WebEmptyState({ actionLabel, description, icon = 'sparkles-outline', onAction, title }: WebEmptyStateProps) {
   return (
-    <View className="flex-1 items-center justify-center rounded-2xl border border-dashed border-app-line bg-app-sunken/30 px-8 py-16">
-      <View className="mb-5 h-14 w-14 items-center justify-center rounded-full bg-rose-soft">
-        <Ionicons color="#9A2F4F" name={icon} size={24} />
+    <View className="flex-1 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.055] px-8 py-16">
+      <View className="mb-5 h-14 w-14 items-center justify-center rounded-full bg-rose-300/12">
+        <Ionicons color="#fecdd3" name={icon} size={24} />
       </View>
-      <Text className="text-center font-serif text-title text-app-ink">{title}</Text>
+      <Text className="text-center font-serif text-title text-white">{title}</Text>
       {description ? (
-        <Text className="mt-2 max-w-md text-center text-body-sm leading-6 text-app-muted">{description}</Text>
+        <Text className="mt-2 max-w-md text-center text-body-sm leading-6 text-rose-50/60">{description}</Text>
       ) : null}
       {actionLabel && onAction ? (
         <View className="mt-6">

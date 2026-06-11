@@ -20,8 +20,8 @@ export type WebTimelineProps = {
 export function WebTimeline({ className, emptyLabel = 'Nothing here yet.', entries, header }: WebTimelineProps) {
   if (!entries.length) {
     return (
-      <View className={cn('rounded-2xl border border-dashed border-app-line bg-app-sunken/30 px-6 py-10', className)}>
-        <Text className="text-center text-body-sm text-app-muted">{emptyLabel}</Text>
+      <View className={cn('rounded-2xl border border-dashed border-white/10 bg-white/[0.055] px-6 py-10', className)}>
+        <Text className="text-center text-body-sm text-rose-50/60">{emptyLabel}</Text>
       </View>
     );
   }
@@ -39,10 +39,10 @@ export function WebTimeline({ className, emptyLabel = 'Nothing here yet.', entri
                 {!isLast ? <View className="mt-1 h-full w-px flex-1 bg-app-line" /> : null}
               </View>
               <View className={cn('flex-1 pb-6', isLast && 'pb-0')}>
-                <Text className="font-semibold text-app-ink">{entry.title}</Text>
-                {entry.meta ? <Text className="mt-0.5 text-caption text-app-muted">{entry.meta}</Text> : null}
+                <Text className="font-semibold text-white">{entry.title}</Text>
+                {entry.meta ? <Text className="mt-0.5 text-caption text-rose-50/60">{entry.meta}</Text> : null}
                 {entry.body ? (
-                  <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">{entry.body}</Text>
+                  <Text className="mt-2 text-body-sm leading-6 text-rose-50/75">{entry.body}</Text>
                 ) : null}
               </View>
             </View>

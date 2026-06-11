@@ -41,7 +41,7 @@ export function WebAvatar({ className, fallback, ring = 'none', size = 'md', sou
   return (
     <View
       className={cn(
-        'items-center justify-center overflow-hidden rounded-full bg-app-rose-soft',
+        'items-center justify-center overflow-hidden rounded-full bg-rose-300/12',
         sizeClass[size],
         ringClass[ring],
         className,
@@ -50,7 +50,7 @@ export function WebAvatar({ className, fallback, ring = 'none', size = 'md', sou
       {source ? (
         <Image accessibilityLabel={fallback} resizeMode="cover" source={source} className="h-full w-full" />
       ) : (
-        <Text className={cn('font-serif font-semibold text-rose-deep', textSize[size])}>{initials}</Text>
+        <Text className={cn('font-serif font-semibold text-rose-200', textSize[size])}>{initials}</Text>
       )}
     </View>
   );

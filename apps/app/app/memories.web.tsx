@@ -22,10 +22,10 @@ export default function WebMemoriesScreen() {
         <WebCard padding="lg">
           <View className="flex-row flex-wrap items-start justify-between gap-4">
             <View className="min-w-0 flex-1">
-              <Text className="font-serif text-title text-app-ink">
+              <Text className="font-serif text-title text-white">
                 {data.tier === 'pro' ? 'Unlimited album' : `${data.items.length}/${data.album_limit ?? 30} memories`}
               </Text>
-              <Text className="mt-1 text-body-sm text-app-muted">
+              <Text className="mt-1 text-body-sm text-rose-50/60">
                 {data.tier === 'pro'
                   ? 'Pro keeps the full relationship history.'
                   : 'Free albums keep the latest memories up to the plan limit.'}

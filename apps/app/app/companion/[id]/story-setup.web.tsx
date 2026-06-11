@@ -5,7 +5,7 @@ import { Text, View } from 'react-native';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebEmptyState, WebLoading, WebSection } from '@/components/web/ui';
-import { COMPANIONS_ROUTE } from '@/constants/routes';
+import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useCompanion } from '@/hooks/use-companions';
 
 export default function WebCompanionStorySetupScreen() {
@@ -23,12 +23,12 @@ export default function WebCompanionStorySetupScreen() {
       <WebAppShell
         title="Set up story"
         subtitle="This companion could not be loaded."
-        breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }]}
+        breadcrumbs={[{ href: DISCOVER_ROUTE, label: 'Discover' }]}
       >
         <WebEmptyState
-          actionLabel="Back to companions"
+          actionLabel="Back to Discover"
           description="The story setup flow could not be opened."
-          onAction={() => router.replace(COMPANIONS_ROUTE as Href)}
+          onAction={() => router.replace(DISCOVER_ROUTE as Href)}
           title="Story setup unavailable"
         />
       </WebAppShell>
@@ -41,7 +41,7 @@ export default function WebCompanionStorySetupScreen() {
     <WebAppShell
       title="Set up story"
       subtitle={detail.name}
-      breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }, { href: `/companion/${encodeURIComponent(detail.id)}` as Href, label: detail.name }, { label: 'Story setup' }]}
+      breadcrumbs={[{ href: DISCOVER_ROUTE, label: 'Discover' }, { href: `/companion/${encodeURIComponent(detail.id)}` as Href, label: detail.name }, { label: 'Story setup' }]}
     >
       <WebSection
         eyebrow="Story setup"
@@ -51,8 +51,8 @@ export default function WebCompanionStorySetupScreen() {
         <View className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_1fr]">
           <CompanionStoryPanel canEdit companionId={detail.id} onChanged={companion.refetch} />
           <WebCard padding="md" className="gap-4">
-            <Text className="font-serif text-title-sm text-app-ink">{detail.name}</Text>
-            <Text className="text-body-sm leading-6 text-app-muted">
+            <Text className="font-serif text-title-sm text-white">{detail.name}</Text>
+            <Text className="text-body-sm leading-6 text-rose-50/60">
               A story arc gives Today, Scene, and Chat a clear objective. Completion is manual, so the player decides when a beat is done.
             </Text>
             <View className="gap-2">

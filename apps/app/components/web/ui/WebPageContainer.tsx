@@ -37,7 +37,7 @@ export function WebPageContainer({
   if (scroll) {
     return (
       <ScrollView
-        className={cn('editorial-scroll min-h-0 flex-1 bg-app-canvas', className)}
+        className={cn('editorial-scroll min-h-0 flex-1 bg-[#10070d]', className)}
         contentContainerStyle={{ flexGrow: 1 }}
       >
         {inner}
@@ -45,5 +45,5 @@ export function WebPageContainer({
     );
   }
 
-  return <View className={cn('min-h-0 flex-1 bg-app-canvas', className)}>{inner}</View>;
+  return <View className={cn('min-h-0 flex-1 bg-[#10070d]', className)}>{inner}</View>;
 }

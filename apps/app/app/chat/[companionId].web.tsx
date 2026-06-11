@@ -574,7 +574,7 @@ export default function WebChatScreen() {
               disabled={editMessage.isSaving}
               onPress={() => editMessage.beginEdit(item.id, item.content)}
             >
-              <Text className="text-xs font-semibold text-app-muted">Edit</Text>
+              <Text className="text-xs font-semibold text-rose-50/60">Edit</Text>
             </Pressable>
           </View>
         ) : null}
@@ -1313,9 +1313,9 @@ export default function WebChatScreen() {
                       <Pressable
                         accessibilityRole="button"
                         onPress={() => void handleLoadMore()}
-                        className="items-center justify-center rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
+                        className="items-center justify-center rounded-full border border-app-rose/30 bg-rose-300/12 px-5 py-2"
                       >
-                        <Text className="text-center text-caption font-semibold text-app-rose-deep">
+                        <Text className="text-center text-caption font-semibold text-rose-200">
                           {history.isLoadingMore ? 'Loading...' : 'Load earlier messages'}
                         </Text>
                       </Pressable>
@@ -1560,14 +1560,14 @@ function WebInviteDialog({
                   key={target.id}
                   accessibilityRole="button"
                   onPress={() => onSelect(target)}
-                  className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken/45 p-2 transition-colors hover:border-app-rose/30 hover:bg-app-rose-soft/60 active:opacity-75"
+                  className="flex-row items-center gap-3 rounded-xl border border-white/10 bg-white/[0.075] p-2 transition-colors hover:border-app-rose/30 hover:bg-rose-300/16 active:opacity-75"
                 >
-                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-app-rose-soft">
+                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-rose-300/12">
                     {thumb ? <Image source={thumb} resizeMode="cover" className="h-full w-full" /> : null}
                   </View>
                   <View className="min-w-0 flex-1">
-                    <Text className="text-base font-semibold text-app-ink">{target.name}</Text>
-                    <Text className="mt-1 text-body-sm leading-5 text-app-muted" numberOfLines={2}>
+                    <Text className="text-base font-semibold text-white">{target.name}</Text>
+                    <Text className="mt-1 text-body-sm leading-5 text-rose-50/60" numberOfLines={2}>
                       {target.mood}
                     </Text>
                   </View>
@@ -1617,13 +1617,13 @@ function WebEventDialog({
       size="md"
       title={EVENT_TITLES[event.event_type]}
     >
-      <Text className="text-base leading-7 text-app-ink">{event.payload.description}</Text>
+      <Text className="text-base leading-7 text-white">{event.payload.description}</Text>
 
       {result ? (
-        <View className="mt-5 rounded-2xl border border-app-rose/25 bg-app-rose-soft/60 p-4">
-          <Text className="text-body-sm leading-6 text-app-ink">{result.result.description}</Text>
+        <View className="mt-5 rounded-2xl border border-app-rose/25 bg-rose-300/12 p-4">
+          <Text className="text-body-sm leading-6 text-white">{result.result.description}</Text>
           {result.level_changed ? (
-            <Text className="mt-3 text-caption font-semibold uppercase text-app-rose-deep">
+            <Text className="mt-3 text-caption font-semibold uppercase text-rose-200">
               {`Relationship changed: ${result.level_changed}`}
             </Text>
           ) : null}
@@ -1636,11 +1636,11 @@ function WebEventDialog({
               accessibilityRole="button"
               disabled={isResolving}
               onPress={() => onResolve(event, option.id)}
-              className={`min-h-12 justify-center rounded-xl border border-app-line bg-app-sunken/45 px-4 py-3 transition-colors hover:border-app-rose/30 hover:bg-app-rose-soft/60 ${
+              className={`min-h-12 justify-center rounded-xl border border-white/10 bg-white/[0.075] px-4 py-3 transition-colors hover:border-app-rose/30 hover:bg-rose-300/16 ${
                 isResolving ? 'opacity-50' : 'opacity-100'
               }`}
             >
-              <Text className="text-sm font-semibold text-app-ink">{option.label}</Text>
+              <Text className="text-sm font-semibold text-white">{option.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -1655,10 +1655,10 @@ function ChatScrollNotice({ label, onPress }: { label: string; onPress: () => vo
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
-        className="min-h-8 flex-row items-center justify-center gap-1.5 rounded-full border border-white/70 bg-white px-3 shadow-lg"
+        className="min-h-8 flex-row items-center justify-center gap-1.5 rounded-full border border-rose-100/40 bg-rose-400/24 px-3 shadow-lg"
       >
-        <Ionicons color="#211A24" name="arrow-down" size={13} />
-        <Text className="text-center text-[11px] font-semibold text-[#211A24]">{label}</Text>
+        <Ionicons color="#fff7fb" name="arrow-down" size={13} />
+        <Text className="text-center text-[11px] font-semibold text-rose-50">{label}</Text>
       </Pressable>
     </View>
   );

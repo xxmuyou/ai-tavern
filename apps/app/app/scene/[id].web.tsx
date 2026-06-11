@@ -104,19 +104,19 @@ export default function WebSceneDetailScreen() {
       breadcrumbs={[{ href: SCENES_ROUTE, label: 'Scenes' }, { label: scene.name }]}
     >
       <View className="mb-7">
-        <Text className="font-serif text-display-sm text-app-ink">{scene.name}</Text>
-        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">{scene.mood}</Text>
+        <Text className="font-serif text-display-sm text-white">{scene.name}</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">{scene.mood}</Text>
       </View>
 
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[1.4fr_1fr]">
         {/* Hero card */}
         <WebCard padding="none" className="overflow-hidden">
-          <View className="relative aspect-[16/9] w-full overflow-hidden bg-app-sunken">
+          <View className="relative aspect-[16/9] w-full overflow-hidden bg-white/[0.075]">
             {imageSource ? (
               <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
             ) : (
               <View className="h-full w-full items-center justify-center bg-gradient-warm">
-                <Text className="font-serif text-display-lg text-rose-deep/40">{scene.name.slice(0, 1)}</Text>
+                <Text className="font-serif text-display-lg text-rose-200/40">{scene.name.slice(0, 1)}</Text>
               </View>
             )}
             <View className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-app-twilight/70 to-transparent" />
@@ -129,7 +129,7 @@ export default function WebSceneDetailScreen() {
                 ))}
               </View>
               <View className="rounded-full bg-white/90 px-3 py-1">
-                <Text className="text-caption font-semibold text-app-ink">
+                <Text className="text-caption font-semibold text-white">
                   {companions.length} here
                 </Text>
               </View>
@@ -137,25 +137,25 @@ export default function WebSceneDetailScreen() {
           </View>
           <View className="gap-5 p-7">
             <View>
-              <Text className="text-overline text-rose-deep">A place to be</Text>
-              <Text className="mt-2 font-serif text-title text-app-ink">{`"${scene.mood}"`}</Text>
+              <Text className="text-overline text-rose-200">A place to be</Text>
+              <Text className="mt-2 font-serif text-title text-white">{`"${scene.mood}"`}</Text>
             </View>
           </View>
         </WebCard>
 
         <WebCard padding="lg" className="gap-5">
           <View>
-            <Text className="text-overline text-rose-deep">At a glance</Text>
-            <Text className="mt-1 font-serif text-title text-app-ink">Scene state</Text>
+            <Text className="text-overline text-rose-200">At a glance</Text>
+            <Text className="mt-1 font-serif text-title text-white">Scene state</Text>
           </View>
           <View className="gap-3">
-            <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
-              <Text className="text-caption text-app-muted">Companions here</Text>
-              <Text className="mt-1 font-serif text-display-sm text-app-ink">{companions.length}</Text>
+            <View className="rounded-2xl border border-white/8 bg-white/[0.075] p-4">
+              <Text className="text-caption text-rose-50/60">Companions here</Text>
+              <Text className="mt-1 font-serif text-display-sm text-white">{companions.length}</Text>
             </View>
-            <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
-              <Text className="text-caption text-app-muted">Mood</Text>
-              <Text className="mt-1 text-body-sm leading-6 text-app-ink-soft">{scene.mood}</Text>
+            <View className="rounded-2xl border border-white/8 bg-white/[0.075] p-4">
+              <Text className="text-caption text-rose-50/60">Mood</Text>
+              <Text className="mt-1 text-body-sm leading-6 text-rose-50/75">{scene.mood}</Text>
             </View>
           </View>
         </WebCard>
@@ -165,10 +165,10 @@ export default function WebSceneDetailScreen() {
         <View className="mt-10">
           <View className="mb-5 flex-row items-end justify-between">
             <View>
-              <Text className="text-overline text-rose-deep">Guided actions</Text>
-              <Text className="mt-1 font-serif text-title text-app-ink">Choose the next step</Text>
+              <Text className="text-overline text-rose-200">Guided actions</Text>
+              <Text className="mt-1 font-serif text-title text-white">Choose the next step</Text>
             </View>
-            <Text className="text-caption text-app-muted">{companions.length} available</Text>
+            <Text className="text-caption text-rose-50/60">{companions.length} available</Text>
           </View>
           <View className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {companions.map((companion) => (
@@ -183,9 +183,9 @@ export default function WebSceneDetailScreen() {
         </View>
       ) : (
         <WebCard padding="lg" className="mt-10 gap-2">
-          <Text className="text-overline text-rose-deep">Guided actions</Text>
-          <Text className="font-serif text-title text-app-ink">No one is here right now</Text>
-          <Text className="text-body-sm leading-6 text-app-ink-soft">
+          <Text className="text-overline text-rose-200">Guided actions</Text>
+          <Text className="font-serif text-title text-white">No one is here right now</Text>
+          <Text className="text-body-sm leading-6 text-rose-50/75">
             Browse another scene or come back later when a companion is available.
           </Text>
         </WebCard>
@@ -244,38 +244,38 @@ function SceneActionCard({
   return (
     <WebCard padding="lg" className="gap-5">
       <View className="flex-row gap-4">
-        <View className="h-24 w-20 items-center justify-end overflow-hidden rounded-2xl bg-rose-soft">
+        <View className="h-24 w-20 items-center justify-end overflow-hidden rounded-2xl bg-rose-300/12">
           {portrait ? (
             <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" />
           ) : (
-            <Text className="font-serif text-title text-rose-deep">
+            <Text className="font-serif text-title text-rose-200">
               {companion.name.slice(0, 1).toUpperCase()}
             </Text>
           )}
         </View>
         <View className="min-w-0 flex-1 gap-2">
           <View className="flex-row flex-wrap items-center gap-2">
-            <Text className="font-serif text-title-sm text-app-ink">{companion.name}</Text>
+            <Text className="font-serif text-title-sm text-white">{companion.name}</Text>
             <WebTag size="sm" variant={guided.source === 'story' ? 'rose' : 'neutral'}>
               {guided.statusLabel}
             </WebTag>
           </View>
-          <Text className="text-body-sm leading-6 text-app-ink-soft">{companion.opener}</Text>
+          <Text className="text-body-sm leading-6 text-rose-50/75">{companion.opener}</Text>
         </View>
       </View>
 
-      <View className="rounded-2xl border border-app-line-soft bg-app-sunken/50 p-4">
-        <Text className="text-caption font-semibold uppercase tracking-normal text-rose-deep">
+      <View className="rounded-2xl border border-white/8 bg-white/[0.075] p-4">
+        <Text className="text-caption font-semibold uppercase tracking-normal text-rose-200">
           {guided.source === 'story' ? 'Story objective' : 'Recommended next step'}
         </Text>
-        <Text className="mt-1 font-serif text-title-sm text-app-ink">{guided.title}</Text>
-        <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">{guided.body}</Text>
+        <Text className="mt-1 font-serif text-title-sm text-white">{guided.title}</Text>
+        <Text className="mt-2 text-body-sm leading-6 text-rose-50/75">{guided.body}</Text>
       </View>
 
       {daily.isLoading ? (
-        <Text className="text-body-sm text-app-muted">Loading today state...</Text>
+        <Text className="text-body-sm text-rose-50/60">Loading today state...</Text>
       ) : daily.error || !daily.data ? (
-        <Text className="text-body-sm text-app-muted">Today state is unavailable.</Text>
+        <Text className="text-body-sm text-rose-50/60">Today state is unavailable.</Text>
       ) : (
         <DailyStateSummary dailyState={daily.data} />
       )}

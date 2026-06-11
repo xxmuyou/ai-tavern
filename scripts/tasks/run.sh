@@ -18,6 +18,7 @@ Available tasks:
   api:sync-runninghub-dev
   api:sync-runninghub-prod
   api:typecheck
+  app:export-web-local
   app:export-web-dev
   app:export-web-prod
   app:local
@@ -138,6 +139,12 @@ task_app_export_web_dev() {
     run_in "apps/app" npx expo export --platform web
 }
 
+task_app_export_web_local() {
+    load_env_file "$REPO_ROOT/.env.local"
+    export EXPO_PUBLIC_API_URL="http://127.0.0.1:8787"
+    run_in "apps/app" npx expo export --platform web
+}
+
 task_app_export_web_prod() {
     load_env_file "$REPO_ROOT/.env.prod"
     export EXPO_PUBLIC_API_URL="https://aiappsbox.com/api"
@@ -146,7 +153,7 @@ task_app_export_web_prod() {
 
 task_app_local() {
     load_env_file "$REPO_ROOT/.env.local"
-    export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://dev.aiappsbox.com/api}"
+    export EXPO_PUBLIC_API_URL="http://127.0.0.1:8787"
     run_in "apps/app" npx expo start --web
 }
 
@@ -181,6 +188,7 @@ case "$task" in
     api:sync-runninghub-dev)  task_api_sync_runninghub_dev ;;
     api:sync-runninghub-prod) task_api_sync_runninghub_prod ;;
     api:typecheck)        task_api_typecheck ;;
+    app:export-web-local) task_app_export_web_local ;;
     app:export-web-dev)   task_app_export_web_dev ;;
     app:export-web-prod)  task_app_export_web_prod ;;
     app:local)            task_app_local ;;

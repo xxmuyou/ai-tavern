@@ -37,7 +37,7 @@ type WebCompanionDirectoryProps = {
 };
 
 export function WebCompanionDirectory({
-  subtitle = 'Find a companion, open their profile, and start a private roleplay thread.',
+  subtitle = 'Find a character, open their profile, and start a private roleplay thread.',
   title = 'Discover',
 }: WebCompanionDirectoryProps) {
   const router = useRouter();
@@ -80,10 +80,10 @@ export function WebCompanionDirectory({
     <WebAppShell title={title} subtitle={subtitle}>
       <View className="mb-7 flex-row flex-wrap items-start justify-between gap-4">
         <View className="min-w-0 flex-1">
-          <Text className="font-serif text-display-sm text-app-ink">{title}</Text>
-          <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">{subtitle}</Text>
+          <Text className="font-serif text-display-sm text-white">{title}</Text>
+          <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">{subtitle}</Text>
         </View>
-        <WebButton label="Create companion" onPress={createCompanion} variant="primary" />
+        <WebButton label="Create character" onPress={createCompanion} variant="primary" />
       </View>
 
       <View className="mb-8 flex-row flex-wrap items-center justify-between gap-4">
@@ -96,11 +96,11 @@ export function WebCompanionDirectory({
           tabs={FILTERS.map((f) => ({ id: f.id, label: f.label }))}
           variant="pill"
         />
-        <View className="flex-row items-center gap-2 rounded-full border border-app-line bg-app-surface px-4 py-2 shadow-card">
+        <View className="flex-row items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 shadow-card">
           <View className="h-6 w-6 items-center justify-center rounded-full bg-ember-soft">
             <Ionicons color="#9A4318" name="sparkles-outline" size={12} />
           </View>
-          <Text className="text-caption text-app-muted">{formatCompanionCount(customCount, customLimit, canUseAuthedData)}</Text>
+          <Text className="text-caption text-rose-50/60">{formatCompanionCount(customCount, customLimit, canUseAuthedData)}</Text>
         </View>
       </View>
 
@@ -114,11 +114,11 @@ export function WebCompanionDirectory({
               accessibilityState={{ selected: active }}
               onPress={() => setTopic(item.id)}
               className={`min-h-10 flex-row items-center gap-2 rounded-full border px-4 ${
-                active ? 'border-app-rose/35 bg-app-rose-soft' : 'border-app-line bg-app-surface hover:bg-app-sunken'
+                active ? 'border-app-rose/35 bg-rose-300/12' : 'border-white/10 bg-white/[0.06] hover:bg-white/[0.075]'
               }`}
             >
               <Ionicons color={active ? '#9A2F4F' : '#7A6A5E'} name={item.icon} size={14} />
-              <Text className={`text-caption font-semibold ${active ? 'text-app-rose-deep' : 'text-app-ink-soft'}`}>
+              <Text className={`text-caption font-semibold ${active ? 'text-rose-200' : 'text-rose-50/75'}`}>
                 {item.label}
               </Text>
             </Pressable>
@@ -131,16 +131,16 @@ export function WebCompanionDirectory({
       ) : error ? (
         <WebEmptyState
           actionLabel="Try again"
-          description="Companions could not be loaded."
+          description="The Discover cast could not be loaded."
           onAction={refetch}
-          title="Companions unavailable"
+          title="Discover unavailable"
         />
       ) : visibleItems.length === 0 ? (
         <WebEmptyState
           actionLabel="Refresh"
-          description="No companions match this view yet."
+          description="No characters match this view yet."
           onAction={refetch}
-          title="No companions yet"
+          title="No characters yet"
         />
       ) : (
         <View className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -207,9 +207,9 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
     <Pressable
       accessibilityRole="link"
       onPress={onPress}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-app-line bg-app-surface shadow-card transition-shadow hover:shadow-float"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-card transition-shadow hover:shadow-float"
     >
-      <View className="relative aspect-[4/5] items-center justify-end overflow-hidden bg-rose-soft">
+      <View className="relative aspect-[4/5] items-center justify-end overflow-hidden bg-rose-300/12">
         <View pointerEvents="none" style={tileStyles.portraitFloor} />
         {imageSource ? (
           <Image
@@ -219,7 +219,7 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
             style={tileStyles.portraitImage}
           />
         ) : (
-          <Text className="font-serif text-display-lg text-rose-deep/50">{companion.name.slice(0, 1).toUpperCase()}</Text>
+          <Text className="font-serif text-display-lg text-rose-200/50">{companion.name.slice(0, 1).toUpperCase()}</Text>
         )}
         <View className="absolute left-3 top-3">
           <WebTag size="sm" variant={companion.source === 'user' ? 'ember' : 'rose'}>
@@ -233,8 +233,8 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
         </View>
       </View>
       <View className="flex-1 gap-3 p-5">
-        <Text className="font-serif text-title text-app-ink" numberOfLines={1}>{companion.name}</Text>
-        <Text className="text-body-sm leading-5 text-app-muted" numberOfLines={2}>{intro}</Text>
+        <Text className="font-serif text-title text-white" numberOfLines={1}>{companion.name}</Text>
+        <Text className="text-body-sm leading-5 text-rose-50/60" numberOfLines={2}>{intro}</Text>
         {tags.length > 0 ? (
           <View className="flex-row flex-wrap gap-1.5">
             {tags.map((tag) => (
@@ -245,10 +245,10 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
         <View className="mt-auto flex-row items-center justify-between gap-3 pt-2">
           <View className="flex-row items-center gap-2">
             <Ionicons color="#7A6A5E" name="chatbubble-ellipses-outline" size={12} />
-            <Text className="text-caption text-app-muted">{formatPlayCount(companion.play_count)}</Text>
+            <Text className="text-caption text-rose-50/60">{formatPlayCount(companion.play_count)}</Text>
           </View>
-          <View className="rounded-full bg-app-rose-soft px-4 py-2">
-            <Text className="text-caption font-semibold text-app-rose-deep">Chat</Text>
+          <View className="rounded-full bg-rose-300/12 px-4 py-2">
+            <Text className="text-caption font-semibold text-rose-200">Chat</Text>
           </View>
         </View>
       </View>

@@ -16,7 +16,7 @@ export type WebTabsProps = {
 export function WebTabs({ active, className, onChange, size = 'md', tabs, variant = 'pill' }: WebTabsProps) {
   if (variant === 'underline') {
     return (
-      <View className={cn('flex-row items-center gap-6 border-b border-app-line', className)}>
+      <View className={cn('flex-row items-center gap-6 border-b border-white/10', className)}>
         {tabs.map((tab) => {
           const isActive = tab.id === active;
           return (
@@ -31,7 +31,7 @@ export function WebTabs({ active, className, onChange, size = 'md', tabs, varian
                 className={cn(
                   'font-semibold transition-colors',
                   size === 'sm' ? 'text-sm' : 'text-body',
-                  isActive ? 'text-app-ink' : 'text-app-muted',
+                  isActive ? 'text-white' : 'text-rose-50/60',
                 )}
               >
                 {tab.label}
@@ -47,7 +47,7 @@ export function WebTabs({ active, className, onChange, size = 'md', tabs, varian
   }
 
   return (
-    <View className={cn('flex-row items-center gap-1 rounded-xl border border-app-line bg-app-sunken/70 p-1', className)}>
+    <View className={cn('flex-row items-center gap-1 rounded-xl border border-white/10 bg-white/[0.09] p-1', className)}>
       {tabs.map((tab) => {
         const isActive = tab.id === active;
         return (
@@ -59,14 +59,14 @@ export function WebTabs({ active, className, onChange, size = 'md', tabs, varian
             className={cn(
               'flex-1 items-center justify-center rounded-lg px-4 transition-colors',
               size === 'sm' ? 'min-h-8' : 'min-h-10',
-              isActive ? 'bg-gradient-warm shadow-card' : 'bg-app-canvas/70 hover:bg-app-brand-soft/70',
+              isActive ? 'bg-gradient-warm shadow-card' : 'bg-[#10070d]/70 hover:bg-emerald-300/14',
             )}
           >
             <Text
               className={cn(
                 'font-semibold',
                 size === 'sm' ? 'text-sm' : 'text-body-sm',
-                isActive ? 'text-app-rose-deep' : 'text-app-muted',
+                isActive ? 'text-rose-200' : 'text-rose-50/60',
               )}
             >
               {tab.label}

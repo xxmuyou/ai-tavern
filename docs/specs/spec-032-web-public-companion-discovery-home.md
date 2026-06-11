@@ -6,7 +6,7 @@
 
 ## Context
 
-Web 端准备先上线，当前首页仍残留浅色营销 landing、未登录 fake catalog skeleton，以及 mobile 体验妥协后的布局。产品方向已改为：用户进入 web 第一屏就看到真实 companions，直接按偏好选人。
+Web 端准备先上线，当前首页仍残留浅色营销 landing、未登录 fake catalog skeleton，以及 mobile 体验妥协后的布局。产品方向已改为：用户进入 web 第一屏就看到真实 companions，直接按偏好选人。导航与主题的当前权威口径见 [`../product/web-navigation-and-theme.md`](../product/web-navigation-and-theme.md)。
 
 本 spec 是 spec-018 的 web 首页收口：只改 Web 首页和相关公开 discovery API，不重做 mobile。旧的多层风格口径在本 spec 收敛：用户侧和 Admin 主分类都只显示 **Realistic** 与 **Anime** 两个 bucket；不再使用地区标签拆分 Anime。
 
@@ -106,11 +106,13 @@ Security boundary:
 ## Web Experience
 
 - `/` 未登录：暗色 companion discovery 首页。
-- `/` 已登录：同样优先展示 companion discovery，可保留登录后 create/favorites/actions。
+- `/` 已登录：同样优先展示 companion discovery，可保留登录后 create/favorites/actions；登录成功无 redirect 时回到 `/`。
+- `/companions`：兼容旧链接，渲染同一个 Discover 体验，不作为新的主入口命名。
 - `/auth/login`：不再使用旧浅色营销 `WebLanding`，改为同一暗色登录体验或 discovery 登录弹窗。
 - 筛选默认：`female + anime`。
 - 无结果：展示暗色空态，提示切换筛选，不展示 fake skeleton people。
 - 角色卡优先展示 portrait；没有 `art_url` 的角色可在首页隐藏，避免上线第一屏出现占位人。
+- Topbar 主导航统一为 `Discover / Scenes / Create / Memories`；面向用户不再把主入口称为 `Companions`。
 
 ---
 

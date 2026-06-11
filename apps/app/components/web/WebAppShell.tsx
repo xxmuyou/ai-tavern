@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import { BILLING_ROUTE, COMPANIONS_ROUTE } from '@/constants/routes';
+import { BILLING_ROUTE, COMPANIONS_ROUTE, DISCOVER_ROUTE, MEMORIES_ROUTE, SCENES_ROUTE } from '@/constants/routes';
+import { useSession } from '@/hooks/use-session';
 
 import { WebAuthControls } from './WebAuthControls';
 import {
@@ -25,13 +26,18 @@ type WebAppShellProps = {
   hero?: ReactNode;
   hideChrome?: boolean;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
+  requireAuth?: boolean;
   subtitle?: string;
   title: string;
 };
 
-const BASE_NAV_ITEMS: WebNavItem[] = [
-  { href: COMPANIONS_ROUTE, icon: 'compass-outline', label: 'Discover' },
+type ShellNavItem = WebNavItem & { activePaths?: string[] };
+
+const BASE_NAV_ITEMS: ShellNavItem[] = [
+  { href: DISCOVER_ROUTE, icon: 'compass-outline', label: 'Discover', activePaths: [String(DISCOVER_ROUTE), String(COMPANIONS_ROUTE), '/companion'] },
+  { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
   { href: '/companion-create' as Href, icon: 'sparkles-outline', label: 'Create' },
+  { href: MEMORIES_ROUTE, icon: 'images-outline', label: 'Memories' },
 ];
 
 export function WebAppShell({
@@ -40,40 +46,37 @@ export function WebAppShell({
   hero,
   hideChrome = false,
   maxWidth = '2xl',
+  requireAuth = true,
 }: WebAppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { session } = useSession();
 
-  if (hideChrome) {
-    return (
-      <AuthGuard>
-        <View className="min-h-screen flex-1 bg-app-canvas">
+  const content = (
+    <>
+      {hideChrome ? (
+        <View className="min-h-screen flex-1 bg-[#10070d]">
           <View className="mx-auto w-full max-w-[1280px] px-8 py-10">{children}</View>
         </View>
-      </AuthGuard>
-    );
-  }
-
-  return (
-    <AuthGuard>
-      <View className="h-screen min-h-0 flex-1 overflow-hidden bg-app-canvas">
-        <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-app-line bg-app-surface/95 px-5 backdrop-blur">
+      ) : (
+      <View className="h-screen min-h-0 flex-1 overflow-hidden bg-[#10070d]">
+        <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-white/10 bg-[#10070d]/94 px-5 backdrop-blur">
           <Pressable
             accessibilityRole="link"
-            onPress={() => router.push(COMPANIONS_ROUTE)}
+            onPress={() => router.push(DISCOVER_ROUTE)}
             className="min-w-[150px] flex-row items-center gap-2.5"
           >
-            <View className="h-8 w-8 items-center justify-center rounded-xl bg-app-twilight">
+            <View className="h-8 w-8 items-center justify-center rounded-xl border border-rose-200/20 bg-white/8">
               <Ionicons color="#FBE6EC" name="sparkles" size={15} />
             </View>
             <View>
-              <Text className="font-serif text-title-sm text-app-ink">AI Apps Box</Text>
+              <Text className="font-serif text-title-sm text-white">AI Apps Box</Text>
             </View>
           </Pressable>
 
           <View className="min-w-0 flex-1 flex-row items-center justify-center gap-1 px-4">
             {BASE_NAV_ITEMS.map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const active = isShellNavActive(pathname, item);
               return (
                 <Pressable
                   key={item.id ?? String(item.href)}
@@ -81,11 +84,11 @@ export function WebAppShell({
                   accessibilityState={{ selected: active }}
                   onPress={() => router.push(item.href)}
                   className={`min-h-10 flex-row items-center gap-2 rounded-full px-3 ${
-                    active ? 'bg-rose-soft' : 'bg-transparent hover:bg-app-sunken/70'
+                    active ? 'bg-rose-200/18' : 'bg-transparent hover:bg-white/8'
                   }`}
                 >
-                  <Ionicons color={active ? '#9A2F4F' : '#7A6A5E'} name={item.icon} size={16} />
-                  <Text className={`text-caption font-semibold ${active ? 'text-rose-deep' : 'text-app-ink-soft'}`}>
+                  <Ionicons color={active ? '#fecdd3' : '#d6b7bd'} name={item.icon} size={16} />
+                  <Text className={`text-caption font-semibold ${active ? 'text-rose-100' : 'text-white/68'}`}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -94,7 +97,7 @@ export function WebAppShell({
           </View>
 
           <View className="min-w-[150px] flex-row items-center justify-end gap-2.5">
-            <WebQuotaBadge onPress={() => router.push(BILLING_ROUTE)} />
+            {session ? <WebQuotaBadge onPress={() => router.push(BILLING_ROUTE)} /> : null}
             <WebAuthControls />
           </View>
         </View>
@@ -113,8 +116,19 @@ export function WebAppShell({
           </ScrollView>
         )}
       </View>
-    </AuthGuard>
+      )}
+    </>
   );
+
+  return requireAuth ? <AuthGuard>{content}</AuthGuard> : content;
+}
+
+function isShellNavActive(pathname: string, item: ShellNavItem): boolean {
+  const activePaths = item.activePaths ?? [String(item.href)];
+  return activePaths.some((path) => {
+    if (path === DISCOVER_ROUTE) return pathname === DISCOVER_ROUTE;
+    return pathname === path || pathname.startsWith(`${path}/`);
+  });
 }
 
 function maxWidthToClass(width: NonNullable<WebAppShellProps['maxWidth']>): string {

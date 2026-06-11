@@ -40,10 +40,13 @@
 ```bash
 pnpm install
 cp .env.example .env.local
-pnpm run:local    # 同时启动 API (8787) 与 App (8081)
+pnpm run:local    # 同时启动本地 API (8787) 与本地 App (8081)
+pnpm preview:web:local  # 可选：导出静态 Web，并在 19006 预览；仍连接本地 API (8787)
 pnpm typecheck
 pnpm test
 ```
+
+本地测试默认全链路走本地：Web -> `http://127.0.0.1:8787` -> local D1。dev API 只用于特殊集成排查或部署验收，不作为日常本地测试默认依赖。
 
 ## 部署
 

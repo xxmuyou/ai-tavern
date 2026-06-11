@@ -14,7 +14,7 @@ import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { ProfileOutfitPanel } from '@/components/ProfileOutfitPanel';
 import { RelationshipGoalPanel } from '@/components/RelationshipGoalPanel';
-import { COMPANIONS_ROUTE } from '@/constants/routes';
+import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useCompanion } from '@/hooks/use-companions';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useMe } from '@/hooks/use-me';
@@ -53,7 +53,7 @@ export default function WebCompanionDetailScreen() {
       <WebAppShell
         title="Companion"
         subtitle="This profile could not be loaded."
-        breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }]}
+        breadcrumbs={[{ href: DISCOVER_ROUTE, label: 'Discover' }]}
       >
         <WebEmptyState
           actionLabel="Try again"
@@ -92,7 +92,7 @@ export default function WebCompanionDetailScreen() {
     setIsDeleting(true);
     try {
       await deleteCompanion(companion.id);
-      router.replace(COMPANIONS_ROUTE as Href);
+      router.replace(DISCOVER_ROUTE as Href);
     } catch (nextError) {
       setIsDeleting(false);
       setConfirmDelete(false);
@@ -104,12 +104,12 @@ export default function WebCompanionDetailScreen() {
     <WebAppShell
       title={companion.name}
       subtitle={companion.relationship_role ?? 'Companion profile'}
-      breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }, { label: companion.name }]}
+      breadcrumbs={[{ href: DISCOVER_ROUTE, label: 'Discover' }, { label: companion.name }]}
     >
       <View className="mb-7 flex-row flex-wrap items-start justify-between gap-4">
         <View className="min-w-0 flex-1">
-          <Text className="font-serif text-display-sm text-app-ink">{companion.name}</Text>
-          <Text className="mt-2 text-body-sm leading-6 text-app-muted">
+          <Text className="font-serif text-display-sm text-white">{companion.name}</Text>
+          <Text className="mt-2 text-body-sm leading-6 text-rose-50/60">
             {companion.relationship_role ?? companion.greeting ?? 'Open their profile, review the first beat, then start a private chat.'}
           </Text>
         </View>
@@ -127,7 +127,7 @@ export default function WebCompanionDetailScreen() {
         <View className="gap-5">
           <WebCard padding="lg" className="gap-5">
             <View className="items-center gap-4">
-              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-rose-soft shadow-float">
+              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-rose-300/12 shadow-float">
                 <View pointerEvents="none" style={portraitStyles.portraitFloor} />
                 {imageSource ? (
                   <Image
@@ -138,7 +138,7 @@ export default function WebCompanionDetailScreen() {
                   />
                 ) : (
                   <View className="h-full w-full items-center justify-center">
-                    <Text className="font-serif text-display-2xl text-rose-deep/60">
+                    <Text className="font-serif text-display-2xl text-rose-200/60">
                       {companion.name.slice(0, 1).toUpperCase()}
                     </Text>
                   </View>
@@ -150,9 +150,9 @@ export default function WebCompanionDetailScreen() {
                 </View>
               </View>
               <View className="items-center gap-2">
-                <Text className="font-serif text-display-sm text-app-ink">{companion.name}</Text>
+                <Text className="font-serif text-display-sm text-white">{companion.name}</Text>
                 {companion.relationship_role ? (
-                  <Text className="text-caption uppercase tracking-wider text-rose-deep">
+                  <Text className="text-caption uppercase tracking-wider text-rose-200">
                     {companion.relationship_role}
                   </Text>
                 ) : null}
@@ -169,24 +169,24 @@ export default function WebCompanionDetailScreen() {
               </View>
             ) : null}
 
-            <View className="border-t border-app-line-soft pt-4">
-              <Text className="text-overline text-rose-deep">Relationship goal</Text>
-              <Text className="mt-2 font-serif text-title-sm text-app-ink">{relationshipGoal.label}</Text>
-              <Text className="mt-1 text-caption text-app-muted">Stage · {relationshipGoal.stage}</Text>
+            <View className="border-t border-white/8 pt-4">
+              <Text className="text-overline text-rose-200">Relationship goal</Text>
+              <Text className="mt-2 font-serif text-title-sm text-white">{relationshipGoal.label}</Text>
+              <Text className="mt-1 text-caption text-rose-50/60">Stage · {relationshipGoal.stage}</Text>
             </View>
 
-            <View className="flex-row items-center justify-between gap-3 border-t border-app-line-soft pt-4">
+            <View className="flex-row items-center justify-between gap-3 border-t border-white/8 pt-4">
               <View>
-                <Text className="text-overline text-app-muted">First met</Text>
-                <Text className="mt-1 text-body-sm text-app-ink-soft">{formatDateTime(companion.relationship.first_met_at)}</Text>
+                <Text className="text-overline text-rose-50/60">First met</Text>
+                <Text className="mt-1 text-body-sm text-rose-50/75">{formatDateTime(companion.relationship.first_met_at)}</Text>
               </View>
               <View>
-                <Text className="text-overline text-app-muted text-right">Last seen</Text>
-                <Text className="mt-1 text-body-sm text-app-ink-soft text-right">{formatDateTime(companion.relationship.last_interaction_at)}</Text>
+                <Text className="text-overline text-rose-50/60 text-right">Last seen</Text>
+                <Text className="mt-1 text-body-sm text-rose-50/75 text-right">{formatDateTime(companion.relationship.last_interaction_at)}</Text>
               </View>
             </View>
 
-            <View className="gap-2 border-t border-app-line-soft pt-4">
+            <View className="gap-2 border-t border-white/8 pt-4">
               <WebButton
                 label="Chat now"
                 onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
@@ -245,12 +245,12 @@ export default function WebCompanionDetailScreen() {
             <View className="gap-6">
               <WebCard padding="lg" className="gap-5">
                 <View>
-                  <Text className="text-overline text-rose-deep">Greeting</Text>
-                  <Text className="mt-2 font-serif text-title text-app-ink">
+                  <Text className="text-overline text-rose-200">Greeting</Text>
+                  <Text className="mt-2 font-serif text-title text-white">
                     {companion.greeting ?? `Start a private thread with ${companion.name}.`}
                   </Text>
                 </View>
-                <Text className="text-body-sm leading-7 text-app-ink-soft">
+                <Text className="text-body-sm leading-7 text-rose-50/75">
                   {companion.speech_style
                     ? `Voice: ${companion.speech_style}`
                     : 'Use this opening beat to decide whether you want to chat, explore their story, or adjust the profile.'}
@@ -268,9 +268,9 @@ export default function WebCompanionDetailScreen() {
               <RelationshipGoalPanel goal={relationshipGoal} />
               <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
               <WebPanel>
-                <Text className="mb-2 text-overline text-rose-deep">Current stage</Text>
-                <Text className="font-serif text-title text-app-ink">{companion.relationship.stage ?? '—'}</Text>
-                <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">
+                <Text className="mb-2 text-overline text-rose-200">Current stage</Text>
+                <Text className="font-serif text-title text-white">{companion.relationship.stage ?? '—'}</Text>
+                <Text className="mt-2 text-body-sm leading-6 text-rose-50/75">
                   This profile snapshot updates as conversations, choices, and scene moments change the relationship.
                 </Text>
               </WebPanel>
@@ -304,7 +304,7 @@ export default function WebCompanionDetailScreen() {
 
           {tab === 'profile' ? (
             <WebCard padding="lg" className="gap-1">
-              <Text className="mb-3 text-overline text-rose-deep">Character card</Text>
+              <Text className="mb-3 text-overline text-rose-200">Character card</Text>
               <TextBlock label="Personality" value={companion.personality} />
               <TextBlock label="Background" value={companion.background} />
               <TextBlock label="Appearance" value={companion.appearance} />
@@ -350,9 +350,9 @@ const portraitStyles = StyleSheet.create({
 function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <View className="mb-4 border-b border-app-line-soft pb-4 last:border-b-0 last:pb-0">
-      <Text className="text-overline text-rose-deep">{label}</Text>
-      <Text className="mt-1.5 text-body-sm leading-7 text-app-ink-soft">{value}</Text>
+    <View className="mb-4 border-b border-white/8 pb-4 last:border-b-0 last:pb-0">
+      <Text className="text-overline text-rose-200">{label}</Text>
+      <Text className="mt-1.5 text-body-sm leading-7 text-rose-50/75">{value}</Text>
     </View>
   );
 }

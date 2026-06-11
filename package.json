@@ -10,6 +10,8 @@
     "run:local": "bash ./scripts/run-local-stack.sh",
     "run:local:app": "bash ./scripts/tasks/run.sh app:local",
     "run:local:api": "bash ./scripts/tasks/run.sh api:local",
+    "export:web:local": "bash ./scripts/tasks/run.sh app:export-web-local",
+    "preview:web:local": "bash ./scripts/preview-local-web.sh",
     "dev": "bash -c 'echo \"pnpm dev is disabled to avoid local/dev confusion. Use pnpm run:local for local development.\" >&2; exit 1'",
     "dev:app": "bash -c 'echo \"pnpm dev:app is disabled. Use pnpm run:local:app.\" >&2; exit 1'",
     "dev:api": "bash -c 'echo \"pnpm dev:api is disabled. Use pnpm run:local:api.\" >&2; exit 1'",

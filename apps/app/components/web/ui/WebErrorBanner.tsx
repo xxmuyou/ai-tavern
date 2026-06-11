@@ -12,9 +12,9 @@ export function WebErrorBanner() {
 
   return (
     <View className="pointer-events-none absolute left-0 right-0 top-0 z-50 items-center px-4 pt-4">
-      <View className="pointer-events-auto flex w-full max-w-2xl flex-row items-center gap-3 rounded-xl border border-app-danger/40 bg-app-danger-soft px-4 py-3 shadow-card">
+      <View className="pointer-events-auto flex w-full max-w-2xl flex-row items-center gap-3 rounded-xl border border-app-danger/40 bg-rose-500/12 px-4 py-3 shadow-card">
         <Ionicons color="#B42318" name="alert-circle-outline" size={18} />
-        <Text className="flex-1 text-body-sm font-medium text-rose-deep">{current.message}</Text>
+        <Text className="flex-1 text-body-sm font-medium text-rose-200">{current.message}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss"

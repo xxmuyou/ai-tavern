@@ -1,5 +1,5 @@
-import { WebCompanionDirectory } from '@/components/web/WebCompanionDirectory';
+import { WebPublicCompanionHome } from '@/components/web/WebPublicCompanionHome';
 
 export default function WebCompanionsScreen() {
-  return <WebCompanionDirectory />;
+  return <WebPublicCompanionHome />;
 }

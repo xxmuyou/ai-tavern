@@ -21,6 +21,10 @@ export function isLocalEmailSessionRequest(request: Request, env: AuthEnv): bool
     return false;
   }
 
+  if (env.LOCAL_EMAIL_DIRECT_LOGIN === "1") {
+    return true;
+  }
+
   return localHostCandidates(request).some((host) => LOCAL_HOSTS.has(host));
 }
 

@@ -1,11 +1,11 @@
 import { useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { consumePendingAuthRedirect } from '@/components/web/WebAuthControls';
-import { AUTH_LOGIN_ROUTE, SCENES_ROUTE } from '@/constants/routes';
+import { AUTH_LOGIN_ROUTE, DISCOVER_ROUTE, SCENES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
 const errorMessages: Record<string, string> = {
@@ -33,7 +33,8 @@ export default function AuthSuccessScreen() {
     if (hash.includes('token=')) {
       const session = acceptSessionFragment(hash);
       if (session) {
-        router.replace((consumePendingAuthRedirect() ?? SCENES_ROUTE) as Href);
+        const fallback = Platform.OS === 'web' ? DISCOVER_ROUTE : SCENES_ROUTE;
+        router.replace((consumePendingAuthRedirect() ?? fallback) as Href);
         return;
       }
       setError('The sign-in information is invalid. Please sign in again.');

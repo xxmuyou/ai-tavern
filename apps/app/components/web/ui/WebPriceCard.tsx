@@ -33,7 +33,7 @@ export function WebPriceCard({
         'flex-1 gap-5 rounded-2xl border p-7 transition-shadow',
         highlight
           ? 'border-rose/40 bg-gradient-warm shadow-float'
-          : 'border-app-line bg-app-surface shadow-card',
+          : 'border-white/10 bg-white/[0.06] shadow-card',
         className,
       )}
     >
@@ -43,16 +43,16 @@ export function WebPriceCard({
             <Text className="text-[11px] font-semibold uppercase tracking-wider text-white">Most loved</Text>
           </View>
         ) : null}
-        <Text className="font-serif text-title text-app-ink">{title}</Text>
+        <Text className="font-serif text-title text-white">{title}</Text>
         {description ? (
-          <Text className="text-body-sm leading-6 text-app-muted">{description}</Text>
+          <Text className="text-body-sm leading-6 text-rose-50/60">{description}</Text>
         ) : null}
       </View>
 
       {price ? (
         <View className="flex-row items-baseline gap-1">
-          <Text className="font-serif text-display-md text-app-ink">{price}</Text>
-          {priceUnit ? <Text className="text-caption text-app-muted">{priceUnit}</Text> : null}
+          <Text className="font-serif text-display-md text-white">{price}</Text>
+          {priceUnit ? <Text className="text-caption text-rose-50/60">{priceUnit}</Text> : null}
         </View>
       ) : null}
 
@@ -60,8 +60,8 @@ export function WebPriceCard({
         <View className="gap-2.5">
           {features.map((feature) => (
             <View key={feature} className="flex-row items-start gap-2.5">
-              <Ionicons color={highlight ? '#9A2F4F' : '#1E6B52'} name="checkmark-circle" size={18} />
-              <Text className="flex-1 text-body-sm text-app-ink-soft">{feature}</Text>
+              <Ionicons color={highlight ? '#fecdd3' : '#b7f7dc'} name="checkmark-circle" size={18} />
+              <Text className="flex-1 text-body-sm text-rose-50/75">{feature}</Text>
             </View>
           ))}
         </View>

@@ -13,11 +13,11 @@ export type WebCardProps = {
 };
 
 const variantClass: Record<WebCardVariant, string> = {
-  elevated: 'bg-app-surface border border-app-line shadow-card',
-  flat: 'bg-app-surface border border-app-line',
-  outline: 'bg-transparent border border-app-line',
-  glass: 'bg-app-surface/70 border border-white/40 backdrop-blur-md shadow-card',
-  sunken: 'bg-app-sunken/60 border border-app-line-soft',
+  elevated: 'bg-white/[0.06] border border-white/10 shadow-card',
+  flat: 'bg-white/[0.06] border border-white/10',
+  outline: 'bg-transparent border border-white/10',
+  glass: 'bg-white/[0.055] border border-white/40 backdrop-blur-md shadow-card',
+  sunken: 'bg-white/[0.08] border border-white/8',
 };
 
 const paddingClass = {

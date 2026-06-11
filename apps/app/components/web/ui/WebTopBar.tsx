@@ -18,7 +18,7 @@ export type WebTopBarProps = {
 export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: WebTopBarProps) {
   const router = useRouter();
   return (
-    <View className={cn('border-b border-app-line bg-app-surface px-6 py-4', className)}>
+    <View className={cn('border-b border-white/10 bg-white/[0.06] px-6 py-4', className)}>
       {breadcrumbs?.length ? (
         <View className="mb-2 flex-row items-center gap-1.5">
           {breadcrumbs.map((crumb, idx) => {
@@ -27,10 +27,10 @@ export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: 
               <View key={`${crumb.label}-${idx}`} className="flex-row items-center gap-1.5">
                 {crumb.href && !isLast ? (
                   <Pressable accessibilityRole="link" onPress={() => router.push(crumb.href as Href)}>
-                    <Text className="text-caption font-semibold text-app-muted hover:text-rose">{crumb.label}</Text>
+                    <Text className="text-caption font-semibold text-rose-50/60 hover:text-rose">{crumb.label}</Text>
                   </Pressable>
                 ) : (
-                  <Text className={cn('text-caption font-semibold', isLast ? 'text-app-ink' : 'text-app-muted')}>
+                  <Text className={cn('text-caption font-semibold', isLast ? 'text-white' : 'text-rose-50/60')}>
                     {crumb.label}
                   </Text>
                 )}
@@ -42,9 +42,9 @@ export function WebTopBar({ actions, breadcrumbs, className, subtitle, title }: 
       ) : null}
       <View className="flex-row items-center justify-between gap-4">
         <View className="min-w-0 flex-1">
-          <Text className="font-serif text-title text-app-ink">{title}</Text>
+          <Text className="font-serif text-title text-white">{title}</Text>
           {subtitle ? (
-            <Text className="mt-1 max-w-2xl text-caption text-app-muted">{subtitle}</Text>
+            <Text className="mt-1 max-w-2xl text-caption text-rose-50/60">{subtitle}</Text>
           ) : null}
         </View>
         {actions ? <View className="flex-row items-center gap-3">{actions}</View> : null}
