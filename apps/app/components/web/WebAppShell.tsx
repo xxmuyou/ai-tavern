@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { usePathname, type Href } from 'expo-router';
+import { usePathname, useRouter, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import { ADMIN_ROUTE, BILLING_ROUTE, COMPANIONS_ROUTE, ME_ROUTE, SCENES_ROUTE } from '@/constants/routes';
-import { useMe } from '@/hooks/use-me';
+import { BILLING_ROUTE, COMPANIONS_ROUTE } from '@/constants/routes';
 
 import { WebAuthControls } from './WebAuthControls';
 import {
@@ -13,7 +12,6 @@ import {
   WebCard,
   WebPanel,
   WebQuotaBadge,
-  WebSidebar,
   WebTag,
   WebTopBar,
   type WebNavItem,
@@ -23,6 +21,7 @@ type WebAppShellProps = {
   actions?: ReactNode;
   breadcrumbs?: { href?: Href; label: string }[];
   children: ReactNode;
+  contentMode?: 'standard' | 'immersive';
   hero?: ReactNode;
   hideChrome?: boolean;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full';
@@ -31,27 +30,19 @@ type WebAppShellProps = {
 };
 
 const BASE_NAV_ITEMS: WebNavItem[] = [
-  { href: COMPANIONS_ROUTE, icon: 'people-outline', label: 'Companions' },
-  { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
-  { href: ME_ROUTE, icon: 'person-circle-outline', label: 'Me' },
-  { href: BILLING_ROUTE, icon: 'card-outline', label: 'Billing' },
+  { href: COMPANIONS_ROUTE, icon: 'compass-outline', label: 'Discover' },
+  { href: '/companion-create' as Href, icon: 'sparkles-outline', label: 'Create' },
 ];
 
-const ADMIN_NAV_ITEM: WebNavItem = { href: ADMIN_ROUTE, icon: 'shield-checkmark-outline', label: 'Admin' };
-
 export function WebAppShell({
-  actions,
-  breadcrumbs,
   children,
+  contentMode = 'standard',
   hero,
   hideChrome = false,
   maxWidth = '2xl',
-  subtitle,
-  title,
 }: WebAppShellProps) {
   const pathname = usePathname();
-  const { me } = useMe();
-  const navItems: WebNavItem[] = me?.is_admin ? [...BASE_NAV_ITEMS, ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
+  const router = useRouter();
 
   if (hideChrome) {
     return (
@@ -66,28 +57,61 @@ export function WebAppShell({
   return (
     <AuthGuard>
       <View className="h-screen min-h-0 flex-1 overflow-hidden bg-app-canvas">
-        <View className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] flex-row">
-          <WebSidebar items={navItems} />
+        <View className="h-14 shrink-0 flex-row items-center justify-between border-b border-app-line bg-app-surface/95 px-5 backdrop-blur">
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push(COMPANIONS_ROUTE)}
+            className="min-w-[150px] flex-row items-center gap-2.5"
+          >
+            <View className="h-8 w-8 items-center justify-center rounded-xl bg-app-twilight">
+              <Ionicons color="#FBE6EC" name="sparkles" size={15} />
+            </View>
+            <View>
+              <Text className="font-serif text-title-sm text-app-ink">AI Apps Box</Text>
+            </View>
+          </Pressable>
 
-          <View className="min-h-0 min-w-0 flex-1">
-            <WebTopBar actions={
-              <View className="flex-row items-center gap-3">
-                <WebQuotaBadge />
-                {actions}
-                <WebAuthControls />
-              </View>
-            } breadcrumbs={breadcrumbs ?? defaultBreadcrumbs(pathname)} subtitle={subtitle} title={title} />
-            <ScrollView
-              className="editorial-scroll min-h-0 flex-1"
-              contentContainerStyle={{ flexGrow: 1 }}
-            >
-              {hero ? <View>{hero}</View> : null}
-              <View className={`mx-auto w-full px-8 ${maxWidth === 'full' ? '' : maxWidthToClass(maxWidth)} ${hero ? 'py-10' : 'py-10'}`}>
-                {children}
-              </View>
-            </ScrollView>
+          <View className="min-w-0 flex-1 flex-row items-center justify-center gap-1 px-4">
+            {BASE_NAV_ITEMS.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Pressable
+                  key={item.id ?? String(item.href)}
+                  accessibilityRole="link"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => router.push(item.href)}
+                  className={`min-h-10 flex-row items-center gap-2 rounded-full px-3 ${
+                    active ? 'bg-rose-soft' : 'bg-transparent hover:bg-app-sunken/70'
+                  }`}
+                >
+                  <Ionicons color={active ? '#9A2F4F' : '#7A6A5E'} name={item.icon} size={16} />
+                  <Text className={`text-caption font-semibold ${active ? 'text-rose-deep' : 'text-app-ink-soft'}`}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View className="min-w-[150px] flex-row items-center justify-end gap-2.5">
+            <WebQuotaBadge onPress={() => router.push(BILLING_ROUTE)} />
+            <WebAuthControls />
           </View>
         </View>
+
+        {contentMode === 'immersive' ? (
+          <View className="min-h-0 w-full flex-1 overflow-hidden">{children}</View>
+        ) : (
+          <ScrollView
+            className="editorial-scroll min-h-0 flex-1"
+            contentContainerStyle={{ flexGrow: 1 }}
+          >
+            {hero ? <View>{hero}</View> : null}
+            <View className={`mx-auto w-full px-8 py-8 ${maxWidth === 'full' ? '' : maxWidthToClass(maxWidth)}`}>
+              {children}
+            </View>
+          </ScrollView>
+        )}
       </View>
     </AuthGuard>
   );
@@ -103,25 +127,6 @@ function maxWidthToClass(width: NonNullable<WebAppShellProps['maxWidth']>): stri
     case '3xl': return 'max-w-[1440px]';
     case 'full': return 'max-w-none';
   }
-}
-
-type Crumb = { href?: Href; label: string };
-
-const ROUTE_CRUMBS: { match: Href; crumb: Crumb }[] = [
-  { match: SCENES_ROUTE, crumb: { label: 'Scenes' } },
-  { match: COMPANIONS_ROUTE, crumb: { label: 'Companions' } },
-  { match: ME_ROUTE, crumb: { label: 'Me' } },
-  { match: BILLING_ROUTE, crumb: { label: 'Billing' } },
-  { match: ADMIN_ROUTE, crumb: { label: 'Admin' } },
-];
-
-function defaultBreadcrumbs(pathname: string): Crumb[] {
-  for (const { match, crumb } of ROUTE_CRUMBS) {
-    if (pathname === match || pathname.startsWith(`${match}/`)) {
-      return [{ href: match, label: 'Home' }, crumb];
-    }
-  }
-  return [];
 }
 
 export { WebCard, WebPanel, WebTag, WebButton, WebTopBar };

@@ -20,6 +20,7 @@ type CompanionFixture = {
   id: string;
   name: string;
   is_active?: number;
+  art_cutout_key?: string | null;
   gender?: "male" | "female" | null;
   source?: "official" | "user";
   art_url?: string | null;
@@ -135,7 +136,7 @@ describe("scenes module", () => {
     expect(cafe?.unlock_hint).toBeNull();
     expect(cafe?.tags).toEqual(["cafe"]);
     expect(cafe?.potential_companions).toEqual([
-      { art_url: null, id: "maya", level: "Friend", name: "Maya" },
+      { art_cutout_url: null, art_url: null, id: "maya", level: "Friend", name: "Maya" },
     ]);
 
     const rooftop = body.scenes.find((s) => s.id === "rooftop");
@@ -170,7 +171,7 @@ describe("scenes module", () => {
           name: "Secret",
           tags: null,
           unlock_condition: JSON.stringify({
-            companion_id: "maya",
+      companion_id: "maya",
             dim: "trust",
             type: "min_relationship",
             value: 40,
@@ -240,6 +241,7 @@ describe("scenes module", () => {
     expect(body.scene.art_url).toBe("https://cdn/scene.png");
     expect(body.companions_present).toHaveLength(1);
     expect(body.companions_present[0]?.id).toBe("iris");
+    expect(body.companions_present[0]).toMatchObject({ art_cutout_url: null });
     expect(body.companions_present[0]?.name).toBe("Iris");
     expect(body.companions_present[0]?.opener).toContain("Iris");
     expect(body.companions_present[0]?.active_story_beat).toBeNull();
@@ -458,6 +460,7 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
         const rel = fixtures.relationships.find((r) => r.user_id === userId && r.companion_id === c.id);
         return {
           art_url: c.art_url ?? null,
+          art_cutout_key: c.art_cutout_key ?? null,
           gender: c.gender ?? null,
           id: c.id,
           level_label: rel?.level_label ?? null,

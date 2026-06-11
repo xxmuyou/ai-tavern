@@ -17,7 +17,7 @@ function sampleInput() {
     activity: { activity_hint: "sharing coffee", activity_type: "gift", mood: "warm" },
     companionName: "Maya",
     emotion: "warm",
-    previousUserText: "<narration>I set a coffee down near you.</narration>I got this for us.",
+    previousUserText: "<narration>You set a coffee down nearby.</narration>I got this for us.",
     sceneMood: "warm cafe",
     sceneName: "Pier Coffee Shop",
     sourceReply: "<narration>Maya wraps her hands around the cup.</narration>Thank you.",

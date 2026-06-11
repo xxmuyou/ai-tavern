@@ -14,6 +14,24 @@ export function parseNarration(content: string, options: { tolerateUnclosed?: bo
 
   while (cursor < content.length) {
     const openIdx = content.indexOf(NARRATION_OPEN, cursor);
+    const closeIdxBeforeOpen = content.indexOf(NARRATION_CLOSE, cursor);
+
+    if (closeIdxBeforeOpen !== -1 && (openIdx === -1 || closeIdxBeforeOpen < openIdx)) {
+      pushMixed(segments, content.slice(cursor, closeIdxBeforeOpen));
+
+      const orphanTextStart = closeIdxBeforeOpen + NARRATION_CLOSE.length;
+      const nextCloseIdx = content.indexOf(NARRATION_CLOSE, orphanTextStart);
+      const nextOpenIdx = content.indexOf(NARRATION_OPEN, orphanTextStart);
+
+      if (nextCloseIdx !== -1 && (nextOpenIdx === -1 || nextCloseIdx < nextOpenIdx)) {
+        pushNarration(segments, content.slice(orphanTextStart, nextCloseIdx));
+        cursor = nextCloseIdx + NARRATION_CLOSE.length;
+      } else {
+        cursor = orphanTextStart;
+      }
+      continue;
+    }
+
     if (openIdx === -1) {
       pushMixed(segments, content.slice(cursor));
       break;
@@ -39,6 +57,19 @@ export function parseNarration(content: string, options: { tolerateUnclosed?: bo
   return segments;
 }
 
+export function normalizeCompanionNarrationPerspective(text: string, companionName?: string | null) {
+  const name = companionName?.trim();
+  if (!name) {
+    return text;
+  }
+
+  return text
+    .replace(/(^|[\s"'“‘（(，,。.!！?？；;：:])我们/g, '$1两人')
+    .replace(/(^|[\s"'“‘（(，,。.!！?？；;：:])我/g, `$1${name}`)
+    .replace(/(^|[\s"'“‘（(，,。.!！?？；;：:])my\b/gi, `$1${name}'s`)
+    .replace(/(^|[\s"'“‘（(，,。.!！?？；;：:])I\b/g, `$1${name}`);
+}
+
 // Markdown-italic fallback: many LLMs ignore <narration> instructions and use *...* for actions.
 function pushMixed(out: NarrationSegment[], raw: string) {
   if (!raw) return;
@@ -62,7 +93,7 @@ function pushDialogue(out: NarrationSegment[], raw: string) {
   // blank lines between sentences and around <narration> tags; if those stay in
   // the dialogue segment the bubble renders taller than its visible text.
   // Internal newlines (a genuinely multi-line line) are preserved.
-  const trimmed = raw.replace(/^\s+|\s+$/g, '');
+  const trimmed = raw.replaceAll(NARRATION_CLOSE, '').replace(/^\s+|\s+$/g, '');
   if (trimmed.length === 0) return;
   out.push({ text: trimmed, type: 'dialogue' });
 }

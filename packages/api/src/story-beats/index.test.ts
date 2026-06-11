@@ -173,6 +173,16 @@ describe("story beats", () => {
       target_scene_id: "night_street",
       transition_mode: "scene",
     });
+    expect(moment?.choices.map((choice) => choice.user_narration)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("<narration>You stay"),
+        expect.stringContaining("<narration>You step"),
+        expect.stringContaining("<narration>You offer"),
+      ]),
+    );
+    for (const choice of moment?.choices ?? []) {
+      expect(choice.user_narration).not.toMatch(/<narration>I\b/);
+    }
   });
 
   it("downgrades travel choices to offstage when no preset scene matches", async () => {

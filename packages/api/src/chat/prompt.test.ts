@@ -42,6 +42,8 @@ describe("buildChatPrompt", () => {
     expect(system).toContain("rainy afternoon");
     expect(system).toContain("You trust them.");
     expect(system).toContain("Stay strictly in character");
+    expect(system).toContain("Narration voice rule");
+    expect(system).toContain("treat that as the user/player's action");
     // spec-025: want + boundary are always injected.
     expect(system).toContain("to be taken seriously as an artist");
     expect(system).toContain("being rushed or treated as a backup option");
@@ -245,20 +247,47 @@ describe("buildChatPrompt", () => {
       quickAction: {
         description: "The user sent flowers to you.",
         item_id: "flowers",
+        kind: "gift",
         label: "Send flowers",
+        tone: "gift",
       },
       recentMessages: [],
       scene,
       secretToReveal: null,
       stage: "trusted",
       threadSummary: null,
-      userText: "<narration>I offer you a small bouquet.</narration>These are for you.",
+      userText: "<narration>You offer a small bouquet.</narration>These are for you.",
     });
 
     const system = messages[0]?.content ?? "";
     expect(system).toContain("# A concrete gesture just now");
     expect(system).toContain("The user's visible message is the primary source of truth");
     expect(system).toContain("The user sent flowers to you.");
+  });
+
+  it("treats custom scene actions as visible actions, not ordinary dialogue", () => {
+    const messages = buildChatPrompt({
+      companion,
+      narrative: "Friend.",
+      quickAction: {
+        custom_text: "draw a heart on the foggy window",
+        description: "The user just did this visible action in the current scene: draw a heart on the foggy window",
+        item_id: "custom:draw a heart on the foggy window",
+        kind: "custom_scene_action",
+        label: "draw a heart on the foggy window",
+        tone: "neutral",
+      },
+      recentMessages: [],
+      scene,
+      secretToReveal: null,
+      stage: "trusted",
+      threadSummary: null,
+      userText: "<narration>You draw a heart on the foggy window.</narration>",
+    });
+
+    const system = messages[0]?.content ?? "";
+    expect(system).toContain("Custom scene action entered by the user: draw a heart on the foggy window.");
+    expect(system).toContain("Treat this as a visible action that just happened in the current scene");
   });
 
   it("keeps required identity and output format segments when budget trims history", () => {

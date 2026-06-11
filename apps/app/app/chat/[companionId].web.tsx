@@ -2,26 +2,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ImageStyle,
   type ListRenderItemInfo,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
   type ViewStyle,
 } from 'react-native';
 
-import { getCompanion, getInviteTargets, getScenes, getStoryMoment, mediaSource, resolveStoryChoice } from '@/api/companion-client';
+import {
+  ensureCompanionCutout,
+  getCompanion,
+  getCompanionCutout,
+  getInviteTargets,
+  getScenes,
+  getStoryMoment,
+  mediaSource,
+  resolveStoryChoice,
+} from '@/api/companion-client';
 import type {
   ChatInviteResult,
   ChatMessage,
   ChatMomentImage,
-  ChatUnlock,
   CompanionDetail,
+  EventResponseItem,
+  EventResolveResponse,
   InviteTarget,
   RelationshipDimensions,
   Scene,
@@ -30,17 +43,14 @@ import type {
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
-import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
-import { EventPopup } from '@/components/EventPopup';
-import { InvitePopup } from '@/components/InvitePopup';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StoryActionBar } from '@/components/StoryActionBar';
 import { StreamingBubble } from '@/components/StreamingBubble';
-import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { WebAppShell } from '@/components/web/WebAppShell';
-import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebTag } from '@/components/web/ui';
+import { WebUnlockCelebrationOverlay, type WebCelebrationItem } from '@/components/web/WebUnlockCelebrationOverlay';
+import { WebButton, WebDialog, WebEmptyState, WebLoading, WebTag } from '@/components/web/ui';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
 import { useActivities, useActivity } from '@/hooks/use-activities';
 import { useAutoVoice } from '@/hooks/use-auto-voice';
@@ -53,13 +63,25 @@ import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { usePendingEvents } from '@/hooks/use-pending-events';
 import { PersonaSelector } from '@/components/PersonaSelector';
+import { ProfileOutfitPanel } from '@/components/ProfileOutfitPanel';
 import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
 import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
-import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
+import { inviteTextForTarget, sceneTransitionText } from '@/utils/chat-actions';
+import { detectChatLanguage, type ChatLanguage } from '@/utils/chat-language';
+import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionText, type SceneAction } from '@/utils/scene-actions';
 
 const STREAMING_ID = '__streaming__';
+const CUSTOM_SCENE_ACTION_MAX_LENGTH = 120;
+
+const EVENT_TITLES: Record<EventResponseItem['event_type'], string> = {
+  confession: 'A confession',
+  conflict: 'A tense moment',
+  gift: 'A small gift',
+  invitation: 'An invitation',
+  milestone: 'A milestone',
+};
 
 type StreamingItem = {
   __streaming: true;
@@ -68,6 +90,58 @@ type StreamingItem = {
 };
 
 type ChatListItem = ChatMessage | StreamingItem;
+
+type PendingArrival = {
+  createdAt: number;
+  target: InviteTarget;
+};
+
+type StoredCurrentScene = {
+  art_url: string | null;
+  id: string;
+  name: string | null;
+  savedAt: number;
+};
+
+const pendingArrivalKey = (companionId: string) => `xtbit.chat.pendingArrival.${companionId}`;
+const currentSceneKey = (companionId: string) => `xtbit.chat.currentScene.${companionId}`;
+
+function createdAtMs(value: ChatMessage['created_at']): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+const ARRIVAL_COPY: Record<ChatLanguage, {
+  arrivedNotice: (sceneName: string) => string;
+  arriveNow: string;
+  later: string;
+  pendingLabel: (sceneName: string) => string;
+  promptDescription: (sceneName: string) => string;
+  promptTitle: (name: string, sceneName: string) => string;
+  refused: (name: string) => string;
+}> = {
+  en: {
+    arrivedNotice: (sceneName) => `You arrived at ${sceneName} together.`,
+    arriveNow: 'Arrive now',
+    later: 'Later',
+    pendingLabel: (sceneName) => `Go to ${sceneName}`,
+    promptDescription: (sceneName) => `Switch the conversation into ${sceneName} now, or keep it waiting as a pending destination.`,
+    promptTitle: (name, sceneName) => `${name} agreed to go to ${sceneName}`,
+    refused: (name) => `${name} did not take you up on it.`,
+  },
+  zh: {
+    arrivedNotice: (sceneName) => `你们已经一起到了${sceneName}。`,
+    arriveNow: '立即到达',
+    later: '稍后',
+    pendingLabel: (sceneName) => `前往${sceneName}`,
+    promptDescription: (sceneName) => `现在把对话切换到${sceneName}，或者先挂起，稍后再出发。`,
+    promptTitle: (name, sceneName) => `${name}同意一起去${sceneName}`,
+    refused: (name) => `${name}没有答应这次邀约。`,
+  },
+};
 
 function isStreamingItem(item: ChatListItem): item is StreamingItem {
   return (item as StreamingItem).__streaming === true;
@@ -102,6 +176,7 @@ export default function WebChatScreen() {
   const activeActivityId = activity?.status === 'active' ? activityId : undefined;
   const pendingEvents = usePendingEvents(null);
   const [companion, setCompanion] = useState<CompanionDetail | null>(null);
+  const [artCutoutUrl, setArtCutoutUrl] = useState<string | null>(null);
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
@@ -109,21 +184,35 @@ export default function WebChatScreen() {
   const [now, setNow] = useState(() => Date.now());
   const [lastSignals, setLastSignals] = useState<Partial<RelationshipDimensions> | null>(null);
   const [signalToken, setSignalToken] = useState(0);
-  const [lastUnlocks, setLastUnlocks] = useState<ChatUnlock[] | null>(null);
-  const [unlockToken, setUnlockToken] = useState(0);
   // spec-036: in-chat invitation to go somewhere.
   const [invitePickerVisible, setInvitePickerVisible] = useState(false);
   const [inviteTargets, setInviteTargets] = useState<InviteTarget[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  const [pendingArrival, setPendingArrival] = useState<PendingArrival | null>(null);
+  const [arrivalPrompt, setArrivalPrompt] = useState<PendingArrival | null>(null);
+  const [outfitDialogVisible, setOutfitDialogVisible] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [customActionText, setCustomActionText] = useState('');
+  const [celebrationQueue, setCelebrationQueue] = useState<WebCelebrationItem[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
   const threadScrollRef = useRef<FlatList<ChatListItem>>(null);
+  const activeSceneChangedThisSessionRef = useRef(Boolean(initialSceneId));
+  const hasReconciledInitialSceneRef = useRef(Boolean(initialSceneId));
+  const historySceneTargetRef = useRef<string | null>(null);
+  const restoredSceneSavedAtRef = useRef<number | null>(null);
   const items = useMemo<ChatListItem[]>(() => {
     if (!stream.isStreaming) return history.messages;
     return [...history.messages, { __streaming: true, id: STREAMING_ID, text: stream.streamingText }];
   }, [history.messages, stream.isStreaming, stream.streamingText]);
+  const chatLanguage = useMemo(
+    () => detectChatLanguage(history.messages, draft),
+    [draft, history.messages],
+  );
+  const arrivalCopy = ARRIVAL_COPY[chatLanguage];
   const autoScroll = useChatAutoScroll({
     getItems: () => items,
     listRef: threadScrollRef,
@@ -184,10 +273,30 @@ export default function WebChatScreen() {
   }, []);
 
   useEffect(() => {
+    if (!initialSceneId) return;
+    activeSceneChangedThisSessionRef.current = true;
+    hasReconciledInitialSceneRef.current = true;
+    historySceneTargetRef.current = null;
+    restoredSceneSavedAtRef.current = null;
+    setSceneId(initialSceneId);
+    setSceneArt(initialSceneArt);
+    setSceneName(null);
+  }, [initialSceneArt, initialSceneId]);
+
+  const refreshCompanionDetail = useCallback(async () => {
+    const detail = await getCompanion(companionId);
+    setCompanion(detail);
+    setArtCutoutUrl(detail.art_cutout_url ?? null);
+  }, [companionId]);
+
+  useEffect(() => {
     let cancelled = false;
     getCompanion(companionId)
       .then((detail) => {
-        if (!cancelled) setCompanion(detail);
+        if (!cancelled) {
+          setCompanion(detail);
+          setArtCutoutUrl(detail.art_cutout_url ?? null);
+        }
       })
       .catch(() => {
         if (!cancelled) setCompanion(null);
@@ -196,6 +305,124 @@ export default function WebChatScreen() {
       cancelled = true;
     };
   }, [companionId]);
+
+  useEffect(() => {
+    if (!companionId || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(pendingArrivalKey(companionId));
+      if (!raw) {
+        setPendingArrival(null);
+        return;
+      }
+      const parsed = JSON.parse(raw) as PendingArrival;
+      if (parsed?.target?.id && parsed.target.name) {
+        setPendingArrival(parsed);
+      }
+    } catch {
+      window.localStorage.removeItem(pendingArrivalKey(companionId));
+      setPendingArrival(null);
+    }
+  }, [companionId]);
+
+  useEffect(() => {
+    if (!companionId || initialSceneId || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(currentSceneKey(companionId));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StoredCurrentScene;
+      if (!parsed?.id) return;
+      restoredSceneSavedAtRef.current = typeof parsed.savedAt === 'number' ? parsed.savedAt : null;
+      setSceneId(parsed.id);
+      setSceneArt(parsed.art_url ?? null);
+      setSceneName(parsed.name ?? null);
+    } catch {
+      window.localStorage.removeItem(currentSceneKey(companionId));
+      restoredSceneSavedAtRef.current = null;
+    }
+  }, [companionId, initialSceneId]);
+
+  useEffect(() => {
+    if (history.isLoadingInitial) return;
+    hasReconciledInitialSceneRef.current = true;
+    if (initialSceneId || activeSceneChangedThisSessionRef.current) return;
+    let latestSceneMessage: ChatMessage | null = null;
+    for (let i = history.messages.length - 1; i >= 0; i -= 1) {
+      const message = history.messages[i];
+      if (message?.scene_id) {
+        latestSceneMessage = message;
+        break;
+      }
+    }
+    if (!latestSceneMessage?.scene_id || latestSceneMessage.scene_id === sceneId) return;
+
+    const latestSceneTime = createdAtMs(latestSceneMessage.created_at);
+    const restoredSceneSavedAt = restoredSceneSavedAtRef.current;
+    if (restoredSceneSavedAt !== null && latestSceneTime !== null && restoredSceneSavedAt > latestSceneTime) {
+      return;
+    }
+
+    const scene = scenes.find((candidate) => candidate.id === latestSceneMessage.scene_id) ?? null;
+    historySceneTargetRef.current = latestSceneMessage.scene_id;
+    setSceneId(latestSceneMessage.scene_id);
+    setSceneArt(scene?.art_url ?? null);
+    setSceneName(scene?.name ?? null);
+    restoredSceneSavedAtRef.current = null;
+  }, [history.isLoadingInitial, history.messages, initialSceneId, sceneId, scenes]);
+
+  useEffect(() => {
+    if (
+      !companionId ||
+      !sceneId ||
+      !hasReconciledInitialSceneRef.current ||
+      (historySceneTargetRef.current !== null && historySceneTargetRef.current !== sceneId) ||
+      typeof window === 'undefined'
+    ) {
+      return;
+    }
+    if (historySceneTargetRef.current === sceneId) {
+      historySceneTargetRef.current = null;
+    }
+    const scene = scenes.find((candidate) => candidate.id === sceneId) ?? null;
+    const stored: StoredCurrentScene = {
+      art_url: sceneArt ?? scene?.art_url ?? null,
+      id: sceneId,
+      name: sceneName ?? scene?.name ?? null,
+      savedAt: Date.now(),
+    };
+    window.localStorage.setItem(currentSceneKey(companionId), JSON.stringify(stored));
+  }, [companionId, sceneArt, sceneId, sceneName, scenes]);
+
+  useEffect(() => {
+    if (!companion || artCutoutUrl) return;
+    let cancelled = false;
+    let timeout: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+    const poll = async (ensure: boolean) => {
+      try {
+        const status = ensure
+          ? await ensureCompanionCutout(companion.id)
+          : await getCompanionCutout(companion.id);
+        if (cancelled) return;
+        if (status.status === 'succeeded' && status.art_cutout_url) {
+          setArtCutoutUrl(status.art_cutout_url);
+          return;
+        }
+        if (status.status === 'pending' || status.status === 'processing') {
+          timeout = globalThis.setTimeout(() => {
+            void poll(false);
+          }, 2400);
+        }
+      } catch {
+        // Cutout is an enhancement; the clean base portrait remains usable.
+      }
+    };
+
+    void poll(true);
+    return () => {
+      cancelled = true;
+      if (timeout) globalThis.clearTimeout(timeout);
+    };
+  }, [artCutoutUrl, companion]);
 
   useEffect(() => {
     for (let i = history.messages.length - 1; i >= 0; i--) {
@@ -249,7 +476,7 @@ export default function WebChatScreen() {
 
   const renderItem = useCallback(({ item }: ListRenderItemInfo<ChatListItem>) => {
     if (isStreamingItem(item)) {
-      return <StreamingBubble text={item.text} />;
+      return <StreamingBubble text={item.text} companionName={companion?.name} />;
     }
     const role = item.role === 'assistant' ? 'companion' : item.role;
     const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
@@ -267,7 +494,7 @@ export default function WebChatScreen() {
     }
     return (
       <View>
-        <MessageBubble content={item.content} role={role} />
+        <MessageBubble content={item.content} role={role} companionName={role === 'companion' ? companion?.name : null} />
         {isServerUser ? (
           <View className="w-full flex-row justify-end px-5 pb-1">
             <Pressable
@@ -300,7 +527,7 @@ export default function WebChatScreen() {
         ) : null}
       </View>
     );
-  }, [editMessage, handleMomentReady, messageActions]);
+  }, [companion?.name, editMessage, handleMomentReady, messageActions]);
 
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const remainingSeconds = useMemo(() => {
@@ -313,21 +540,72 @@ export default function WebChatScreen() {
     globalThis.setTimeout(() => setInviteNotice(null), 3200);
   }, []);
 
+  const persistPendingArrival = useCallback((arrival: PendingArrival | null) => {
+    setPendingArrival(arrival);
+    if (typeof window === 'undefined') return;
+    const key = pendingArrivalKey(companionId);
+    if (!arrival) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(arrival));
+  }, [companionId]);
+
+  const enqueueCelebrations = useCallback((items: WebCelebrationItem[]) => {
+    if (items.length === 0) return;
+    setCelebrationQueue((current) => [...current, ...items]);
+  }, []);
+
+  const closeCelebration = useCallback(() => {
+    setCelebrationQueue((current) => current.slice(1));
+  }, []);
+
+  const arriveAtPendingScene = useCallback(async (arrival: PendingArrival) => {
+    setArrivalPrompt(null);
+    persistPendingArrival(null);
+    activeSceneChangedThisSessionRef.current = true;
+    setSceneId(arrival.target.id);
+    setSceneArt(arrival.target.art_url ?? null);
+    setSceneName(arrival.target.name);
+    history.appendMessage({
+      companion_id: companionId,
+      content: sceneTransitionText(arrival.target.name, chatLanguage),
+      created_at: new Date().toISOString(),
+      id: `local-scene-transition-${Date.now()}`,
+      role: 'companion',
+      scene_id: arrival.target.id,
+    });
+    showInviteNotice(arrivalCopy.arrivedNotice(arrival.target.name));
+    notifyNewReply();
+    if (activeActivityId) {
+      try {
+        await activityActions.complete(activeActivityId);
+        setActivity(null);
+      } catch (error) {
+        pushError(error instanceof Error ? error.message : 'Activity could not be completed.');
+      }
+    }
+  }, [activeActivityId, activityActions, arrivalCopy, chatLanguage, companionId, history, notifyNewReply, persistPendingArrival, pushError, setActivity, showInviteNotice]);
+
   const handleInviteResult = useCallback(
     (invite: ChatInviteResult, target: InviteTarget | null) => {
       if (invite.accepted && invite.scene_id) {
-        setSceneId(invite.scene_id);
-        setSceneArt(invite.scene_art_url ?? null);
-        setSceneName(target?.name ?? null);
-        if (invite.activity_completed) {
-          setActivity(null);
-        }
-        showInviteNotice(`You headed to ${target?.name ?? 'a new place'} together.`);
+        const arrival: PendingArrival = {
+          createdAt: Date.now(),
+          target: {
+            art_url: invite.scene_art_url ?? target?.art_url ?? null,
+            id: invite.scene_id,
+            mood: target?.mood ?? '',
+            name: target?.name ?? 'the new place',
+          },
+        };
+        persistPendingArrival(arrival);
+        setArrivalPrompt(arrival);
       } else {
-        showInviteNotice(`${companion?.name ?? 'They'} didn't take you up on it.`);
+        showInviteNotice(arrivalCopy.refused(companion?.name ?? 'They'));
       }
     },
-    [companion?.name, setActivity, showInviteNotice],
+    [arrivalCopy, companion?.name, persistPendingArrival, showInviteNotice],
   );
 
   const openInvitePicker = useCallback(async () => {
@@ -345,7 +623,7 @@ export default function WebChatScreen() {
 
   const sendInviteToTarget = useCallback(async (target: InviteTarget) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
-    const text = inviteTextForTarget(target);
+    const text = inviteTextForTarget(target, chatLanguage);
     history.appendMessage({
       companion_id: companionId,
       content: text,
@@ -355,7 +633,6 @@ export default function WebChatScreen() {
     });
 
     let serverMessageId = '';
-    let acceptedSceneId: string | null = null;
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
@@ -367,7 +644,6 @@ export default function WebChatScreen() {
         onChunk: notifyNewReply,
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onInviteResult: (invite) => {
-          acceptedSceneId = invite.accepted ? invite.scene_id : null;
           handleInviteResult(invite, target);
         },
         onSignals: (signals) => {
@@ -375,8 +651,7 @@ export default function WebChatScreen() {
           setSignalToken((token) => token + 1);
         },
         onUnlocks: (unlocks) => {
-          setLastUnlocks(unlocks);
-          setUnlockToken((token) => token + 1);
+          enqueueCelebrations(unlocks);
         },
         sceneId,
       });
@@ -390,16 +665,6 @@ export default function WebChatScreen() {
         scene_id: sceneId ?? null,
       });
       await history.refresh({ silent: true });
-      if (acceptedSceneId) {
-        history.appendMessage({
-          companion_id: companionId,
-          content: sceneTransitionText(target.name),
-          created_at: new Date().toISOString(),
-          id: `local-scene-transition-${Date.now()}`,
-          role: 'companion',
-          scene_id: acceptedSceneId,
-        });
-      }
       notifyNewReply();
       if (autoVoice.enabled && serverMessageId) {
         void messageActions.speak(serverMessageId);
@@ -418,7 +683,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send invitation.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, enqueueCelebrations, handleInviteResult, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -453,8 +718,7 @@ export default function WebChatScreen() {
           setSignalToken((token) => token + 1);
         },
         onUnlocks: (unlocks) => {
-          setLastUnlocks(unlocks);
-          setUnlockToken((token) => token + 1);
+          enqueueCelebrations(unlocks);
         },
         sceneId,
       });
@@ -484,15 +748,19 @@ export default function WebChatScreen() {
         pushError(`Please wait ${seconds} seconds before sending again.`);
       } else if (error instanceof ApiError && error.status === 401) {
         pushError('Your session has expired. Please sign in again.');
+      } else if (error instanceof ApiError && error.code === 'content_filter') {
+        pushError(chatLanguage === 'zh'
+          ? '这个内容被模型服务拒绝了，请换一种描述。'
+          : 'That content was rejected by the model provider. Try a different description.');
       } else {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, draft, enqueueCelebrations, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
 
-  const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
+  const sendSceneAction = useCallback(async (action: SceneAction) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
-    const text = quickActionTextForItem(itemId);
+    const text = sceneActionText(action, chatLanguage);
     history.appendMessage({
       companion_id: companionId,
       content: text,
@@ -506,7 +774,7 @@ export default function WebChatScreen() {
       const result = await stream.send(text, {
         activityId: activeActivityId,
         personaId: activePersonaId ?? undefined,
-        quickAction: { item_id: itemId, type: 'gift' },
+        quickAction: { action_id: action.id, type: 'scene_action' },
         sceneId,
         onDone: (info) => {
           serverMessageId = info.messageId;
@@ -515,16 +783,15 @@ export default function WebChatScreen() {
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
           showInviteNotice(quick.ok
-            ? (quick.item_id === 'coffee' ? 'Coffee is part of this moment now.' : 'Flowers are part of this moment now.')
-            : 'That gesture could not be recorded.');
+            ? (chatLanguage === 'zh' ? '这个动作已经成为此刻的一部分。' : 'That action is part of this moment now.')
+            : (chatLanguage === 'zh' ? '这个动作没能被记录。' : 'That gesture could not be recorded.'));
         },
         onSignals: (signals) => {
           setLastSignals(signals);
           setSignalToken((token) => token + 1);
         },
         onUnlocks: (unlocks) => {
-          setLastUnlocks(unlocks);
-          setUnlockToken((token) => token + 1);
+          enqueueCelebrations(unlocks);
         },
       });
       history.appendMessage({
@@ -551,11 +818,103 @@ export default function WebChatScreen() {
         pushError(`Please wait ${seconds} seconds before sending again.`);
       } else if (error instanceof ApiError && error.status === 401) {
         pushError('Your session has expired. Please sign in again.');
+      } else if (error instanceof ApiError && error.code === 'content_filter') {
+        pushError(chatLanguage === 'zh'
+          ? '这个动作被模型服务拒绝了，请换一种描述。'
+          : 'That action was rejected by the model provider. Try a different description.');
       } else {
-        pushError(error instanceof Error ? error.message : 'Quick action failed.');
+        pushError(error instanceof Error ? error.message : 'Scene action failed.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, enqueueCelebrations, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+
+  const sendCustomSceneAction = useCallback(async () => {
+    if (stream.isStreaming || remainingSeconds > 0) return;
+    const actionText = customActionText.trim();
+    if (!sceneId) {
+      pushError(chatLanguage === 'zh' ? '需要先进入一个场景，才能使用动作。' : 'Enter a scene before using an action.');
+      return;
+    }
+    if (!actionText) {
+      pushError(chatLanguage === 'zh' ? '先输入一个动作。' : 'Enter an action first.');
+      return;
+    }
+    if (actionText.length > CUSTOM_SCENE_ACTION_MAX_LENGTH) {
+      pushError(chatLanguage === 'zh'
+        ? `动作最多 ${CUSTOM_SCENE_ACTION_MAX_LENGTH} 个字。`
+        : `Actions can be at most ${CUSTOM_SCENE_ACTION_MAX_LENGTH} characters.`);
+      return;
+    }
+
+    const text = customSceneActionText(actionText, chatLanguage);
+    history.appendMessage({
+      companion_id: companionId,
+      content: text,
+      created_at: new Date().toISOString(),
+      id: `local-custom-action-user-${Date.now()}`,
+      role: 'user',
+      scene_id: sceneId,
+    });
+
+    let serverMessageId = '';
+    try {
+      const result = await stream.send(text, {
+        activityId: activeActivityId,
+        personaId: activePersonaId ?? undefined,
+        quickAction: { text: actionText, type: 'custom_scene_action' },
+        sceneId,
+        onDone: (info) => {
+          serverMessageId = info.messageId;
+        },
+        onChunk: notifyNewReply,
+        onEmotion: (emotion) => setCurrentEmotion(emotion),
+        onQuickActionResult: (quick) => {
+          showInviteNotice(quick.ok
+            ? (chatLanguage === 'zh' ? '这个动作已经成为此刻的一部分。' : 'That action is part of this moment now.')
+            : (chatLanguage === 'zh' ? '这个动作没能被记录。' : 'That gesture could not be recorded.'));
+        },
+        onSignals: (signals) => {
+          setLastSignals(signals);
+          setSignalToken((token) => token + 1);
+        },
+        onUnlocks: (unlocks) => {
+          enqueueCelebrations(unlocks);
+        },
+      });
+      history.appendMessage({
+        companion_id: companionId,
+        content: result.text,
+        created_at: new Date().toISOString(),
+        emotion: result.emotion,
+        id: serverMessageId || `local-companion-${Date.now()}`,
+        role: 'companion',
+        scene_id: sceneId,
+      });
+      setCustomActionText('');
+      await history.refresh({ silent: true });
+      notifyNewReply();
+      if (autoVoice.enabled && serverMessageId) {
+        void messageActions.speak(serverMessageId);
+      }
+      void relationship.refresh();
+    } catch (error) {
+      if (error instanceof QuotaExceededError) {
+        setQuotaModalVisible(true);
+      } else if (error instanceof RateLimitedError) {
+        const seconds = error.retryAfter ?? 60;
+        setRateLimitedUntil(Date.now() + seconds * 1000);
+        pushError(`Please wait ${seconds} seconds before sending again.`);
+      } else if (error instanceof ApiError && error.status === 401) {
+        pushError('Your session has expired. Please sign in again.');
+      } else if (error instanceof ApiError && error.code === 'content_filter') {
+        pushError(chatLanguage === 'zh'
+          ? '这个动作被模型服务拒绝了，请换一种描述。'
+          : 'That action was rejected by the model provider. Try a different description.');
+      } else {
+        pushError(error instanceof Error ? error.message : 'Custom action failed.');
+      }
+    }
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, customActionText, enqueueCelebrations, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
@@ -582,12 +941,13 @@ export default function WebChatScreen() {
         scene_id: sceneId,
       });
       if (result.transition_mode === 'scene' && result.target_scene) {
+        activeSceneChangedThisSessionRef.current = true;
         setSceneId(result.target_scene.id);
         setSceneArt(result.target_scene.art_url);
         setSceneName(result.target_scene.name);
         history.appendMessage({
           companion_id: companionId,
-          content: sceneTransitionText(result.target_scene.name),
+          content: sceneTransitionText(result.target_scene.name, chatLanguage),
           created_at: new Date().toISOString(),
           id: `local-story-transition-${Date.now()}`,
           role: 'companion',
@@ -595,8 +955,7 @@ export default function WebChatScreen() {
         });
       }
       if (result.unlocks.length > 0) {
-        setLastUnlocks(result.unlocks);
-        setUnlockToken((token) => token + 1);
+        enqueueCelebrations(result.unlocks);
       }
       setStoryMoment(null);
       notifyNewReply();
@@ -606,7 +965,7 @@ export default function WebChatScreen() {
     } finally {
       setIsResolvingStory(false);
     }
-  }, [activeActivityId, companionId, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, stream.isStreaming]);
+  }, [activeActivityId, chatLanguage, companionId, enqueueCelebrations, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, stream.isStreaming]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -659,138 +1018,198 @@ export default function WebChatScreen() {
   }
 
   const portrait = mediaSource(companion?.art_url ?? null);
+  const stageCompanion = mediaSource(artCutoutUrl ?? companion?.art_url ?? null);
   const currentScene = scenes.find((scene) => scene.id === sceneId) ?? null;
-  const currentSceneText = [
-    currentScene?.id ?? sceneId ?? '',
-    currentScene?.name ?? '',
-    currentScene?.mood ?? '',
-    ...(currentScene?.tags ?? []),
-  ].join(' ').toLowerCase();
-  const canOrderCoffee = Boolean(sceneId) && (currentSceneText.includes('coffee') || currentSceneText.includes('cafe'));
+  const displaySceneName = sceneName ?? currentScene?.name ?? null;
+  const sceneBackdropSource = mediaSource(sceneArt ?? currentScene?.art_url ?? null);
+  const hasSceneBackdrop = Boolean(sceneBackdropSource);
+  const sceneActions = sceneActionsFor(sceneId);
   const canUseQuickAction = Boolean(sceneId) && !stream.isStreaming && remainingSeconds === 0;
   const canSend = !stream.isStreaming && remainingSeconds === 0 && draft.trim().length > 0;
 
   return (
-    <WebAppShell title={companion?.name ?? 'Chat'} subtitle="Streaming conversation workspace.">
-      <View className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_1fr]">
-        {/* Companion info card */}
-        <View className="gap-5">
-          <WebCard padding="md" className="gap-4">
-            <View className="items-center gap-3">
-              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-app-rose-soft shadow-card">
-                <View pointerEvents="none" style={chatPortraitStyles.portraitFloor} />
-                {portrait ? (
-                  <Image
-                    accessibilityLabel={companion?.name ?? 'Companion portrait'}
-                    resizeMode="contain"
-                    source={portrait}
-                    style={chatPortraitStyles.portraitImage}
-                  />
-                ) : (
-                  <View className="flex-1 items-center justify-center">
-                    <Ionicons color="#C9486B" name="person-outline" size={32} />
-                  </View>
-                )}
+    <WebAppShell
+      contentMode="immersive"
+      maxWidth="full"
+      title={companion?.name ?? 'Chat'}
+      subtitle={displaySceneName ? `${displaySceneName} · ${shownEmotion}` : `Chat · ${shownEmotion}`}
+    >
+      <View className="relative min-h-0 flex-1 overflow-hidden bg-[#2A2230]" style={twilightStyles.chatStage}>
+        {hasSceneBackdrop ? (
+          <Image
+            accessibilityLabel={displaySceneName ? `Scene: ${displaySceneName}` : 'Current scene'}
+            resizeMode="cover"
+            source={sceneBackdropSource ?? undefined}
+            style={[StyleSheet.absoluteFill, twilightStyles.backdropBlur, twilightStyles.sceneBackdrop]}
+          />
+        ) : (
+          <View className="absolute inset-0 bg-[#332B3B]" style={twilightStyles.emptyBackdrop} />
+        )}
+        <View pointerEvents="none" style={hasSceneBackdrop ? twilightStyles.stageScrim : twilightStyles.emptyStageScrim} />
+
+        <View className="relative z-10 mx-auto min-h-0 w-full max-w-[1280px] flex-1 flex-col justify-center xl:flex-row xl:items-stretch">
+          <View className="relative min-h-[300px] min-w-0 overflow-hidden px-8 pb-8 pt-8 xl:flex-1">
+            <View className="flex-row flex-wrap items-start justify-between gap-3">
+              <View className="gap-1">
+                <Text className="text-overline text-rose-soft">{displaySceneName ?? 'No scene selected'}</Text>
+                <Text className="font-serif text-title text-white">{companion?.name ?? 'Companion'}</Text>
+                <Text className="text-caption text-white/65">{companion?.relationship_role ?? 'companion'}</Text>
               </View>
-              <View className="items-center gap-1">
-                <Text className="font-serif text-title text-app-ink">{companion?.name ?? 'Companion'}</Text>
-                <Text className="text-overline text-rose-deep">{companion?.relationship_role ?? 'companion'}</Text>
-              </View>
-              <WebTag size="sm" variant="rose">
-                {shownEmotion}
-              </WebTag>
-            </View>
-
-            <View className="overflow-hidden rounded-2xl border border-app-line-soft bg-app-sunken/40">
-              <ChatRelationshipHud goal={relationship.goal} />
-            </View>
-
-            <View className="overflow-hidden rounded-2xl border border-app-line-soft bg-app-sunken/40">
-              <PersonaSelector personas={personas} selectedId={activePersonaId} onSelect={setSelectedPersonaId} />
-            </View>
-
-            <CompanionStoryPanel
-              companionId={companionId}
-              compact
-              onChanged={relationship.refresh}
-              showEditor={false}
-            />
-
-            <WebButton
-              label="View profile"
-              onPress={() => router.push(`/companion/${encodeURIComponent(companionId)}`)}
-              variant="outline"
-              iconLeft={<Ionicons color="#2A1F1A" name="person-circle-outline" size={16} />}
-            />
-          </WebCard>
-        </View>
-
-        {/* Twilight conversation workspace */}
-        <View className="rounded-2xl border border-app-line bg-app-twilight shadow-float">
-          {/* Header strip — pinned to the top of the page scroll so the companion
-              name / status / Live tag stay visible while the conversation scrolls. */}
-          <View
-            className="flex-row items-center justify-between rounded-t-2xl border-b border-white/5 bg-app-twilight-soft px-7 py-4"
-            style={twilightStyles.stickyHeader}
-          >
-            <View className="flex-row items-center gap-3">
-              <View className="h-9 w-9 items-center justify-center rounded-full bg-rose-soft">
-                <Ionicons color="#9A2F4F" name="chatbubbles" size={16} />
-              </View>
-              <View>
-                <Text className="font-serif text-title-sm text-white">{companion?.name ?? 'Companion'}</Text>
-                <Text className="text-caption text-white/60">
-                  {stream.isStreaming
-                    ? 'Composing a reply...'
-                    : remainingSeconds > 0
-                      ? `Slow down — reply in ${remainingSeconds}s`
-                      : 'Tap into the moment.'}
-                </Text>
+              <View className="flex-row flex-wrap items-center gap-2">
+                <WebTag size="sm" variant="rose">{shownEmotion}</WebTag>
               </View>
             </View>
-            <View className="flex-row items-center gap-3">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
-                onPress={autoVoice.toggle}
-                className={`h-9 w-9 items-center justify-center rounded-full ${
-                  autoVoice.enabled ? 'bg-rose shadow-glow' : 'bg-white/10'
-                }`}
-              >
-                <Ionicons
-                  color={autoVoice.enabled ? '#FFFFFF' : 'rgba(255,255,255,0.6)'}
-                  name={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
-                  size={16}
+
+            <View pointerEvents="none" className="absolute inset-x-0 bottom-0 top-0 items-center justify-start pt-16 xl:items-end xl:pr-0">
+              <View pointerEvents="none" style={twilightStyles.stageFloor} />
+              {stageCompanion ? (
+                <Image
+                  accessibilityLabel={companion?.name ?? 'Companion'}
+                  resizeMode="contain"
+                  source={stageCompanion}
+                  style={[twilightStyles.stageCompanion, hasSceneBackdrop ? twilightStyles.stageCompanionEntered : null]}
                 />
-              </Pressable>
-              <WebTag size="sm" variant="rose">
-                Live
-              </WebTag>
+              ) : portrait ? (
+                <Image
+                  accessibilityLabel={companion?.name ?? 'Companion portrait'}
+                  resizeMode="contain"
+                  source={portrait}
+                  style={twilightStyles.stageCompanion}
+                />
+              ) : (
+                <View className="mb-16 h-40 w-40 items-center justify-center rounded-full bg-white/10">
+                  <Ionicons color="#F6C6D6" name="person-outline" size={46} />
+                </View>
+              )}
             </View>
           </View>
 
-          {/* Everything below the pinned header keeps the card's rounded bottom. */}
-          <View className="overflow-hidden rounded-b-2xl">
-          {sceneArt ? (
-            <View className="relative h-28 w-full overflow-hidden border-b border-white/5">
-              <Image
-                accessibilityLabel={sceneName ? `Scene: ${sceneName}` : 'Current scene'}
-                resizeMode="cover"
-                source={mediaSource(sceneArt) ?? undefined}
-                style={StyleSheet.absoluteFill}
-              />
-              <View pointerEvents="none" style={twilightStyles.sceneScrim} />
-              {sceneName ? (
-                <View className="absolute bottom-2 left-4 flex-row items-center gap-1.5 rounded-full bg-black/45 px-3 py-1">
-                  <Ionicons color="#FFFFFF" name="location" size={12} />
-                  <Text className="text-caption font-semibold text-white">{sceneName}</Text>
+          <View
+            className="relative z-20 flex min-h-0 w-full shrink-0 border-t border-white/20 shadow-float backdrop-blur xl:h-full xl:w-[520px] xl:flex-none xl:border-l xl:border-t-0"
+            style={twilightStyles.chatPanel}
+          >
+            <View
+              className="flex-row items-center justify-between border-b border-white/15 px-5 py-4"
+              style={[twilightStyles.stickyHeader, twilightStyles.chatHeader]}
+            >
+              <View className="min-w-0 flex-row items-center gap-3">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={chatLanguage === 'zh' ? '返回' : 'Back'}
+                  onPress={() => router.back()}
+                  className="h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/15"
+                >
+                  <Ionicons color="rgba(255,255,255,0.75)" name="chevron-back" size={17} />
+                </Pressable>
+                <View className="min-w-0">
+                  <Text className="font-serif text-title-sm text-white" numberOfLines={1}>{companion?.name ?? 'Companion'}</Text>
+                  <Text className="text-caption text-white/60" numberOfLines={1}>
+                    {stream.isStreaming
+                      ? (chatLanguage === 'zh' ? '正在组织回复...' : 'Composing a reply...')
+                      : remainingSeconds > 0
+                        ? (chatLanguage === 'zh' ? `请稍等 ${remainingSeconds}s` : `Slow down — reply in ${remainingSeconds}s`)
+                        : (chatLanguage === 'zh' ? '进入这个瞬间。' : 'Tap into the moment.')}
+                  </Text>
                 </View>
-              ) : null}
+              </View>
+              <View className="flex-row items-center gap-3">
+                {pendingArrival ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setArrivalPrompt(pendingArrival)}
+                    className="min-h-9 flex-row items-center justify-center gap-2 rounded-full border border-rose/40 bg-rose px-3"
+                  >
+                    <Ionicons color="#FFFFFF" name="navigate" size={14} />
+                    <Text className="text-center text-caption font-semibold text-white">
+                      {arrivalCopy.pendingLabel(pendingArrival.target.name)}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
-          ) : null}
+
             {inviteNotice ? (
               <View className="border-b border-white/5 bg-rose/15 px-5 py-2">
                 <Text className="text-center text-caption font-semibold text-rose-soft">{inviteNotice}</Text>
+              </View>
+            ) : null}
+            <View className="border-b border-white/10 px-5 py-3" style={twilightStyles.sceneStrip}>
+              <Text className="text-caption text-white/55" numberOfLines={2}>
+                {displaySceneName
+                  ? (chatLanguage === 'zh' ? `场景：${displaySceneName}` : `Scene: ${displaySceneName}`)
+                  : (chatLanguage === 'zh' ? `Intro. ${companion?.greeting ?? '开始一个私人对话。'}` : `Intro. ${companion?.greeting ?? 'Start a private conversation.'}`)}
+              </Text>
+            </View>
+            <View className="absolute -right-[108px] top-20 z-30 hidden gap-2 xl:flex">
+              <ChatRailButton
+                icon="person-circle-outline"
+                label={chatLanguage === 'zh' ? '资料' : 'Profile'}
+                onPress={() => router.push(`/companion/${encodeURIComponent(companionId)}`)}
+              />
+              <ChatRailButton
+                icon="shirt-outline"
+                label={chatLanguage === 'zh' ? '形象' : 'Outfit'}
+                onPress={() => setOutfitDialogVisible(true)}
+              />
+              <ChatRailButton
+                icon={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
+                label={autoVoice.enabled ? (chatLanguage === 'zh' ? '语音开' : 'Voice on') : (chatLanguage === 'zh' ? '语音关' : 'Voice off')}
+                onPress={autoVoice.toggle}
+              />
+              <ChatRailButton
+                icon="time-outline"
+                label={chatLanguage === 'zh' ? '历史' : 'History'}
+                onPress={() => {
+                  if (history.hasMore) {
+                    void handleLoadMore();
+                  } else {
+                    jumpToBottom();
+                  }
+                }}
+              />
+              <ChatRailButton
+                icon="navigate-outline"
+                label={chatLanguage === 'zh' ? '邀请' : 'Invite'}
+                onPress={() => void openInvitePicker()}
+              />
+              {sceneId ? (
+                <ChatRailButton
+                  icon="sparkles-outline"
+                  label={chatLanguage === 'zh' ? '动作' : 'Action'}
+                  selected={actionMenuOpen}
+                  onPress={() => setActionMenuOpen((open) => !open)}
+                />
+              ) : null}
+              <ChatRailButton
+                icon="options-outline"
+                label={chatLanguage === 'zh' ? '人设' : 'Persona'}
+                selected={toolsOpen}
+                onPress={() => setToolsOpen((open) => !open)}
+              />
+            </View>
+            {sceneId && actionMenuOpen ? (
+              <View className="absolute -right-[286px] top-[340px] z-30 hidden w-64 xl:flex">
+                <SceneActionMenu
+                  actions={sceneActions}
+                  canUseAction={canUseQuickAction}
+                  customText={customActionText}
+                  language={chatLanguage}
+                  onChangeCustomText={setCustomActionText}
+                  onSendCustom={() => void sendCustomSceneAction()}
+                  onSelectAction={(action) => void sendSceneAction(action)}
+                />
+              </View>
+            ) : null}
+            {toolsOpen ? (
+              <View className="gap-3 border-b border-white/10 px-4 py-3" style={twilightStyles.toolsPanel}>
+                <View className="gap-2">
+                  <View className="overflow-hidden rounded-xl border border-white/10 bg-black/25">
+                    <ChatRelationshipHud goal={relationship.goal} />
+                  </View>
+                  <View className="overflow-hidden rounded-xl border border-white/10 bg-black/25">
+                    <PersonaSelector personas={personas} selectedId={activePersonaId} onSelect={setSelectedPersonaId} />
+                  </View>
+                </View>
               </View>
             ) : null}
             <StoryActionBar
@@ -801,158 +1220,203 @@ export default function WebChatScreen() {
               }}
             />
             <ActivityContextBanner
-            activity={activity}
-            isMutating={activityActions.isMutating}
-            onCancel={handleCancelActivity}
-            onComplete={handleCompleteActivity}
-          />
-          <SignalFeedback signals={lastSignals} token={signalToken} />
-          <UnlockCelebration
-            unlocks={lastUnlocks}
-            token={unlockToken}
-            onInviteScene={(unlock) => {
-              if (!unlock.scene_id) return;
-              void sendInviteToTarget({
-                art_url: null,
-                id: unlock.scene_id,
-                mood: '',
-                name: unlock.scene_name ?? 'the new place',
-              });
-            }}
-            onViewScene={(unlock) => {
-              if (unlock.scene_id) router.push(`/scene/${encodeURIComponent(unlock.scene_id)}`);
-            }}
-          />
-
-          {/* Messages scroll area */}
-          <View className="relative">
-            <FlatList
-              ref={threadScrollRef}
-              data={items}
-              keyExtractor={keyExtractor}
-              renderItem={renderItem}
-              contentContainerStyle={twilightStyles.threadContent}
-              ListHeaderComponent={
-                history.hasMore ? (
-                  <View className="items-center pb-4 pt-2">
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => void handleLoadMore()}
-                      className="rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
-                    >
-                      <Text className="text-caption font-semibold text-app-rose-deep">
-                        {history.isLoadingMore ? 'Loading…' : 'Load earlier messages'}
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : null
-              }
-              onContentSizeChange={handleContentSizeChange}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-              style={twilightStyles.thread}
+              activity={activity}
+              isMutating={activityActions.isMutating}
+              onCancel={handleCancelActivity}
+              onComplete={handleCompleteActivity}
             />
-            {pendingNotice ? (
-              <ChatScrollNotice
-                label={pendingNotice.label}
-                onPress={() => {
-                  if (pendingNotice.kind === 'moment') {
-                    jumpToMessage(pendingNotice.messageId);
-                  } else {
-                    jumpToBottom();
-                  }
-                }}
-              />
-            ) : null}
-          </View>
+            <SignalFeedback signals={lastSignals} token={signalToken} />
 
-          {/* Composer */}
-          <View className="border-t border-white/5 bg-app-twilight-soft px-5 py-4">
-            <View className="mb-3 flex-row flex-wrap gap-2">
-              {canOrderCoffee ? (
-                <QuickActionButton
-                  disabled={!canUseQuickAction}
-                  icon="cafe-outline"
-                  label="Order coffee"
-                  onPress={() => void sendQuickAction('coffee')}
-                />
-              ) : null}
-              {sceneId ? (
-                <QuickActionButton
-                  disabled={!canUseQuickAction}
-                  icon="flower-outline"
-                  label="Send flowers"
-                  onPress={() => void sendQuickAction('flowers')}
-                />
-              ) : null}
-              <QuickActionButton
-                disabled={stream.isStreaming}
-                icon="navigate-outline"
-                label="Invite somewhere"
-                onPress={() => void openInvitePicker()}
+            <View className="relative min-h-0 flex-1">
+              <FlatList
+                ref={threadScrollRef}
+                data={items}
+                keyExtractor={keyExtractor}
+                renderItem={renderItem}
+                contentContainerStyle={twilightStyles.threadContent}
+                ListHeaderComponent={
+                  history.hasMore ? (
+                    <View className="items-center pb-4 pt-2">
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => void handleLoadMore()}
+                        className="items-center justify-center rounded-full border border-app-rose/30 bg-app-rose-soft px-5 py-2"
+                      >
+                        <Text className="text-center text-caption font-semibold text-app-rose-deep">
+                          {history.isLoadingMore ? 'Loading...' : 'Load earlier messages'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null
+                }
+                onContentSizeChange={handleContentSizeChange}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                style={twilightStyles.thread}
               />
-            </View>
-            <View className="flex-row items-end gap-3">
-              <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
-                <TextInput
-                  multiline
-                  onChangeText={setDraft}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Write a message..."
-                  placeholderTextColor="rgba(255,255,255,0.40)"
-                  value={draft}
-                  className="max-h-32 min-h-10 flex-1 py-1 text-body text-white"
+              {pendingNotice ? (
+                <ChatScrollNotice
+                  label={pendingNotice.label}
+                  onPress={() => {
+                    if (pendingNotice.kind === 'moment') {
+                      jumpToMessage(pendingNotice.messageId);
+                    } else {
+                      jumpToBottom();
+                    }
+                  }}
                 />
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Send message"
-                disabled={!canSend}
-                onPress={() => void handleSend()}
-                className={`h-12 w-12 items-center justify-center rounded-2xl ${
-                  canSend ? 'bg-rose shadow-glow' : 'bg-white/10'
-                }`}
-              >
-                <Ionicons color={canSend ? '#FFFFFF' : 'rgba(255,255,255,0.4)'} name="send" size={18} />
-              </Pressable>
+              ) : null}
             </View>
-            {remainingSeconds > 0 ? (
-              <View className="mt-3 flex-row items-center gap-2 self-start rounded-full border border-ember/30 bg-ember/10 px-3 py-1">
-                <Ionicons color="#D97757" name="hourglass-outline" size={12} />
-                <Text className="text-caption font-semibold text-ember">{`Slow down — try again in ${remainingSeconds}s`}</Text>
+
+            <View className="border-t border-white/15 px-5 py-4" style={twilightStyles.composerBar}>
+              {sceneId ? (
+                <View className="mb-3 gap-2 xl:hidden">
+                  <QuickActionButton
+                    icon="sparkles-outline"
+                    label={chatLanguage === 'zh' ? '动作' : 'Action'}
+                    onPress={() => setActionMenuOpen((open) => !open)}
+                    selected={actionMenuOpen}
+                  />
+                  {actionMenuOpen ? (
+                    <SceneActionMenu
+                      actions={sceneActions}
+                      canUseAction={canUseQuickAction}
+                      customText={customActionText}
+                      language={chatLanguage}
+                      onChangeCustomText={setCustomActionText}
+                      onSendCustom={() => void sendCustomSceneAction()}
+                      onSelectAction={(action) => void sendSceneAction(action)}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+              <View className="flex-row items-end gap-3">
+                <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
+                  <TextInput
+                    multiline
+                    onChangeText={setDraft}
+                    onKeyPress={handleKeyPress}
+                    placeholder={chatLanguage === 'zh' ? '写一条消息...' : 'Write a message...'}
+                    placeholderTextColor="rgba(255,255,255,0.40)"
+                    value={draft}
+                    className="max-h-32 min-h-10 flex-1 py-1 text-body text-white"
+                  />
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Send message"
+                  disabled={!canSend}
+                  onPress={() => void handleSend()}
+                  className={`h-12 w-12 items-center justify-center rounded-2xl ${
+                    canSend ? 'bg-rose shadow-glow' : 'bg-white/10'
+                  }`}
+                >
+                  <Ionicons color={canSend ? '#FFFFFF' : 'rgba(255,255,255,0.4)'} name="send" size={18} />
+                </Pressable>
               </View>
-            ) : null}
+              {remainingSeconds > 0 ? (
+                <View className="mt-3 flex-row items-center gap-2 self-start rounded-full border border-ember/30 bg-ember/10 px-3 py-1">
+                  <Ionicons color="#D97757" name="hourglass-outline" size={12} />
+                  <Text className="text-caption font-semibold text-ember">
+                    {chatLanguage === 'zh' ? `请稍等 ${remainingSeconds}s 后再试` : `Slow down — try again in ${remainingSeconds}s`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-          </View>
+          <View pointerEvents="none" className="hidden min-w-0 xl:block xl:flex-1" />
         </View>
       </View>
 
-      <InvitePopup
-        visible={invitePickerVisible}
-        loading={inviteLoading}
-        targets={inviteTargets}
+      <WebInviteDialog
         companionName={companion?.name ?? 'them'}
-        onSelect={handleInviteSelect}
+        loading={inviteLoading}
         onClose={() => setInvitePickerVisible(false)}
+        onSelect={handleInviteSelect}
+        open={invitePickerVisible}
+        targets={inviteTargets}
       />
 
-      <EventPopup
+      <WebEventDialog
         event={pendingEvents.current}
         isResolving={pendingEvents.isResolving}
-        result={pendingEvents.result}
-        visible={pendingEvents.visible}
         onClose={pendingEvents.close}
         onResolve={(event, optionId) => {
           void pendingEvents.resolve(event, optionId)
             .then((result) => {
               if (result.unlocks.length > 0) {
-                setLastUnlocks(result.unlocks);
-                setUnlockToken((token) => token + 1);
+                enqueueCelebrations(result.unlocks);
+              }
+              if (result.level_changed) {
+                enqueueCelebrations([{
+                  key: `achievement:${result.level_changed}:${Date.now()}`,
+                  kind: 'achievement',
+                  label: result.level_changed,
+                }]);
               }
               void relationship.refresh();
             })
             .catch((err) => pushError(err instanceof Error ? err.message : 'Event could not be resolved.'));
         }}
+        open={pendingEvents.visible}
+        result={pendingEvents.result}
+      />
+
+      <WebDialog
+        onClose={() => setOutfitDialogVisible(false)}
+        open={outfitDialogVisible}
+        size="lg"
+        title={chatLanguage === 'zh' ? '更换形象' : 'Change outfit'}
+      >
+        <ProfileOutfitPanel
+          companionId={companionId}
+          hasOverride={Boolean(companion?.profile_image_override)}
+          name={companion?.name ?? 'Companion'}
+          onChanged={async () => {
+            setArtCutoutUrl(null);
+            await refreshCompanionDetail();
+            setOutfitDialogVisible(false);
+          }}
+          onError={pushError}
+        />
+      </WebDialog>
+
+      <WebDialog
+        description={
+          arrivalPrompt
+            ? arrivalCopy.promptDescription(arrivalPrompt.target.name)
+            : undefined
+        }
+        footer={
+          arrivalPrompt ? (
+            <View className="flex-row items-center justify-end gap-3">
+              <WebButton
+                label={arrivalCopy.later}
+                onPress={() => setArrivalPrompt(null)}
+                variant="ghost"
+              />
+              <WebButton
+                label={arrivalCopy.arriveNow}
+                onPress={() => {
+                  void arriveAtPendingScene(arrivalPrompt);
+                }}
+                variant="primary"
+              />
+            </View>
+          ) : null
+        }
+        onClose={() => setArrivalPrompt(null)}
+        open={Boolean(arrivalPrompt)}
+        size="sm"
+        title={arrivalPrompt ? arrivalCopy.promptTitle(companion?.name ?? 'They', arrivalPrompt.target.name) : ''}
+      />
+
+      <WebUnlockCelebrationOverlay
+        item={celebrationQueue[0] ?? null}
+        language={chatLanguage}
+        onClose={closeCelebration}
+        onViewProfile={() => router.push(`/companion/${encodeURIComponent(companionId)}`)}
+        onViewScene={(targetSceneId) => router.push(`/scene/${encodeURIComponent(targetSceneId)}`)}
       />
 
       <WebDialog
@@ -979,18 +1443,180 @@ export default function WebChatScreen() {
   );
 }
 
+function WebInviteDialog({
+  companionName,
+  loading,
+  onClose,
+  onSelect,
+  open,
+  targets,
+}: {
+  companionName: string;
+  loading: boolean;
+  onClose: () => void;
+  onSelect: (target: InviteTarget) => void;
+  open: boolean;
+  targets: InviteTarget[];
+}) {
+  return (
+    <WebDialog
+      description="Pick a place to send an invitation now. They might say yes, or not."
+      onClose={onClose}
+      open={open}
+      size="md"
+      title={`Invite ${companionName} somewhere`}
+    >
+      {loading ? (
+        <View className="items-center justify-center py-10">
+          <ActivityIndicator color="#9A2F4F" />
+        </View>
+      ) : targets.length === 0 ? (
+        <WebEmptyState
+          description="Grow your relationship to unlock more places, then invite them from chat."
+          icon="map-outline"
+          title="No places yet"
+        />
+      ) : (
+        <ScrollView style={{ maxHeight: 420 }}>
+          <View className="gap-2">
+            {targets.map((target) => {
+              const thumb = mediaSource(target.art_url);
+              return (
+                <Pressable
+                  key={target.id}
+                  accessibilityRole="button"
+                  onPress={() => onSelect(target)}
+                  className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken/45 p-2 transition-colors hover:border-app-rose/30 hover:bg-app-rose-soft/60 active:opacity-75"
+                >
+                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-app-rose-soft">
+                    {thumb ? <Image source={thumb} resizeMode="cover" className="h-full w-full" /> : null}
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-base font-semibold text-app-ink">{target.name}</Text>
+                    <Text className="mt-1 text-body-sm leading-5 text-app-muted" numberOfLines={2}>
+                      {target.mood}
+                    </Text>
+                  </View>
+                  <Ionicons color="#9A2F4F" name="arrow-forward" size={18} />
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      )}
+    </WebDialog>
+  );
+}
+
+function WebEventDialog({
+  event,
+  isResolving,
+  onClose,
+  onResolve,
+  open,
+  result,
+}: {
+  event: EventResponseItem | null;
+  isResolving: boolean;
+  onClose: () => void;
+  onResolve: (event: EventResponseItem, optionId: string) => void;
+  open: boolean;
+  result: EventResolveResponse | null;
+}) {
+  if (!event) return null;
+
+  return (
+    <WebDialog
+      footer={
+        <View className="flex-row items-center justify-end gap-3">
+          <WebButton
+            disabled={isResolving}
+            isLoading={isResolving}
+            label={result ? 'Done' : 'Later'}
+            onPress={onClose}
+            variant="ghost"
+          />
+        </View>
+      }
+      onClose={onClose}
+      open={open}
+      size="md"
+      title={EVENT_TITLES[event.event_type]}
+    >
+      <Text className="text-base leading-7 text-app-ink">{event.payload.description}</Text>
+
+      {result ? (
+        <View className="mt-5 rounded-2xl border border-app-rose/25 bg-app-rose-soft/60 p-4">
+          <Text className="text-body-sm leading-6 text-app-ink">{result.result.description}</Text>
+          {result.level_changed ? (
+            <Text className="mt-3 text-caption font-semibold uppercase text-app-rose-deep">
+              {`Relationship changed: ${result.level_changed}`}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <View className="mt-5 gap-2">
+          {event.payload.options.map((option) => (
+            <Pressable
+              key={option.id}
+              accessibilityRole="button"
+              disabled={isResolving}
+              onPress={() => onResolve(event, option.id)}
+              className={`min-h-12 justify-center rounded-xl border border-app-line bg-app-sunken/45 px-4 py-3 transition-colors hover:border-app-rose/30 hover:bg-app-rose-soft/60 ${
+                isResolving ? 'opacity-50' : 'opacity-100'
+              }`}
+            >
+              <Text className="text-sm font-semibold text-app-ink">{option.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </WebDialog>
+  );
+}
+
 function ChatScrollNotice({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <View pointerEvents="box-none" className="absolute inset-x-0 bottom-4 items-center px-4">
+    <View pointerEvents="box-none" className="absolute bottom-3 right-3 items-end">
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
-        className="min-h-10 flex-row items-center gap-2 rounded-full border border-rose/30 bg-rose px-4 shadow-glow"
+        className="min-h-8 flex-row items-center justify-center gap-1.5 rounded-full border border-white/70 bg-white px-3 shadow-lg"
       >
-        <Ionicons color="#FFFFFF" name="arrow-down" size={16} />
-        <Text className="text-caption font-semibold text-white">{label}</Text>
+        <Ionicons color="#211A24" name="arrow-down" size={13} />
+        <Text className="text-center text-[11px] font-semibold text-[#211A24]">{label}</Text>
       </Pressable>
     </View>
+  );
+}
+
+function ChatRailButton({
+  icon,
+  label,
+  onPress,
+  selected,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  selected?: boolean;
+}) {
+  const labelClass = label.length > 8 ? 'text-[9px] leading-[10px]' : 'text-[10px] leading-3';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      className={`min-h-11 w-[96px] flex-row items-center justify-center gap-1.5 rounded-full border px-3 shadow-card backdrop-blur ${
+        selected ? 'border-rose/50' : 'border-white/20'
+      }`}
+      style={selected ? twilightStyles.railButtonSelected : twilightStyles.railButton}
+    >
+      <Ionicons color="rgba(255,255,255,0.76)" name={icon} size={15} />
+      <Text className={`${labelClass} min-w-0 flex-1 text-center font-semibold text-white`} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -1012,31 +1638,135 @@ function QuickActionButton({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      className={`min-h-9 flex-row items-center gap-1.5 rounded-full border px-3 py-1.5 ${
+      className={`min-h-9 flex-row items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 ${
         selected ? 'border-rose/50 bg-rose/20' : 'border-white/10 bg-white/5'
       } ${disabled ? 'opacity-50' : 'opacity-100'}`}
     >
       <Ionicons color="#F6C6D6" name={icon} size={15} />
-      <Text className="text-caption font-semibold text-white">{label}</Text>
+      <Text className="text-center text-[11px] font-semibold leading-3 text-white" numberOfLines={2}>{label}</Text>
     </Pressable>
   );
 }
 
-const chatPortraitStyles = StyleSheet.create({
-  portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    bottom: 0,
-    height: 56,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
-  portraitImage: {
-    height: '112%',
-    transform: [{ translateY: 10 }],
-    width: '112%',
-  },
-});
+function SceneActionMenu({
+  actions,
+  canUseAction,
+  customText,
+  language,
+  onChangeCustomText,
+  onSelectAction,
+  onSendCustom,
+}: {
+  actions: SceneAction[];
+  canUseAction: boolean;
+  customText: string;
+  language: ChatLanguage;
+  onChangeCustomText: (text: string) => void;
+  onSelectAction: (action: SceneAction) => void;
+  onSendCustom: () => void;
+}) {
+  const canSendCustom = canUseAction && customText.trim().length > 0;
+  return (
+    <View className="gap-3 rounded-2xl border border-white/15 p-3 shadow-float backdrop-blur" style={twilightStyles.actionMenu}>
+      <View className="flex-row items-center justify-between gap-2">
+        <Text className="text-caption font-semibold uppercase text-white/60">
+          {language === 'zh' ? '场景动作' : 'Scene actions'}
+        </Text>
+        <Text className="text-[10px] font-semibold text-white/40">
+          {`${customText.trim().length}/${CUSTOM_SCENE_ACTION_MAX_LENGTH}`}
+        </Text>
+      </View>
+
+      {actions.length > 0 ? (
+        <View className="flex-row flex-wrap gap-2">
+          {actions.map((action) => {
+            const label = sceneActionLabel(action, language);
+            const labelClass = label.length > 8 ? 'text-[9px] leading-[10px]' : 'text-[10px] leading-3';
+            return (
+              <Pressable
+                key={action.id}
+                accessibilityRole="button"
+                disabled={!canUseAction}
+                onPress={() => onSelectAction(action)}
+                className={`min-h-10 w-[112px] flex-row items-center justify-center gap-1.5 rounded-full border border-white/20 px-2 shadow-card ${
+                  canUseAction ? 'opacity-100' : 'opacity-40'
+                }`}
+                style={toneStyleForSceneAction(action)}
+              >
+                <Ionicons color="rgba(255,255,255,0.86)" name={iconForSceneAction(action)} size={14} />
+                <Text className={`${labelClass} min-w-0 flex-1 text-center font-semibold text-white`} numberOfLines={2}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <Text className="text-caption text-white/55">
+          {language === 'zh' ? '这个场景暂无预设动作。' : 'No preset actions for this scene yet.'}
+        </Text>
+      )}
+
+      <View className="gap-2 border-t border-white/10 pt-3">
+        <Text className="text-caption font-semibold text-white/70">
+          {language === 'zh' ? '自定义动作' : 'Custom action'}
+        </Text>
+        <View className="flex-row items-center gap-2">
+          <View className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+            <TextInput
+              maxLength={CUSTOM_SCENE_ACTION_MAX_LENGTH}
+              onChangeText={onChangeCustomText}
+              placeholder={language === 'zh' ? '输入刚刚发生的动作...' : 'Describe what you do...'}
+              placeholderTextColor="rgba(255,255,255,0.38)"
+              value={customText}
+              className="min-h-8 text-body-sm text-white outline-none"
+            />
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            disabled={!canSendCustom}
+            onPress={onSendCustom}
+            className={`h-10 w-10 items-center justify-center rounded-xl ${canSendCustom ? 'bg-rose' : 'bg-white/10'}`}
+          >
+            <Ionicons color={canSendCustom ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} name="send" size={15} />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function iconForSceneAction(action: SceneAction): keyof typeof Ionicons.glyphMap {
+  switch (action.tone) {
+    case 'negative':
+      return 'alert-circle-outline';
+    case 'awkward':
+      return 'help-circle-outline';
+    case 'intimate':
+    case 'romantic':
+      return 'heart-outline';
+    case 'positive':
+      return 'sparkles-outline';
+    case 'neutral':
+      return 'ellipse-outline';
+  }
+}
+
+function toneStyleForSceneAction(action: SceneAction): ViewStyle {
+  switch (action.tone) {
+    case 'negative':
+      return twilightStyles.negativeActionButton;
+    case 'awkward':
+      return twilightStyles.awkwardActionButton;
+    case 'intimate':
+    case 'romantic':
+      return twilightStyles.romanticActionButton;
+    case 'positive':
+      return twilightStyles.positiveActionButton;
+    case 'neutral':
+      return twilightStyles.neutralActionButton;
+  }
+}
 
 const twilightStyles = StyleSheet.create({
   // `position: sticky` is a web-only value react-native-web understands but the
@@ -1046,19 +1776,101 @@ const twilightStyles = StyleSheet.create({
     top: 0,
     zIndex: 20,
   } as unknown as ViewStyle,
-  sceneScrim: {
-    backgroundColor: 'rgba(14,11,20,0.35)',
+  chatStage: {
+    height: '100%',
+    minHeight: 0,
+  } as unknown as ViewStyle,
+  chatPanel: {
+    backgroundColor: 'rgba(58, 49, 68, 0.94)',
+  } as unknown as ViewStyle,
+  chatHeader: {
+    backgroundColor: 'rgba(47, 40, 56, 0.72)',
+  } as unknown as ViewStyle,
+  sceneStrip: {
+    backgroundColor: 'rgba(47, 40, 56, 0.46)',
+  } as unknown as ViewStyle,
+  toolsPanel: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  } as unknown as ViewStyle,
+  composerBar: {
+    backgroundColor: 'rgba(47, 40, 56, 0.92)',
+  } as unknown as ViewStyle,
+  railButton: {
+    backgroundColor: 'rgba(63, 53, 73, 0.64)',
+  } as unknown as ViewStyle,
+  railButtonSelected: {
+    backgroundColor: 'rgba(201, 72, 107, 0.30)',
+  } as unknown as ViewStyle,
+  actionMenu: {
+    backgroundColor: 'rgba(47, 40, 56, 0.94)',
+  } as unknown as ViewStyle,
+  awkwardActionButton: {
+    backgroundColor: 'rgba(126, 94, 58, 0.76)',
+  } as unknown as ViewStyle,
+  negativeActionButton: {
+    backgroundColor: 'rgba(107, 45, 52, 0.82)',
+  } as unknown as ViewStyle,
+  neutralActionButton: {
+    backgroundColor: 'rgba(63, 53, 73, 0.72)',
+  } as unknown as ViewStyle,
+  positiveActionButton: {
+    backgroundColor: 'rgba(62, 93, 82, 0.78)',
+  } as unknown as ViewStyle,
+  romanticActionButton: {
+    backgroundColor: 'rgba(151, 58, 94, 0.78)',
+  } as unknown as ViewStyle,
+  backdropBlur: {
+    filter: 'blur(2px) saturate(1.12) contrast(1.04) brightness(1.08)',
+    transform: [{ scale: 1.01 }],
+  } as unknown as ImageStyle,
+  sceneBackdrop: {
+    opacity: 1,
+    transitionDuration: '420ms',
+    transitionProperty: 'opacity',
+  } as unknown as ImageStyle,
+  emptyBackdrop: {
+    backgroundImage: 'radial-gradient(circle at 28% 18%, rgba(246,198,214,0.30), transparent 34%), radial-gradient(circle at 72% 24%, rgba(146,123,180,0.20), transparent 30%), linear-gradient(180deg, #3B3345 0%, #2A2531 100%)',
+  } as unknown as ViewStyle,
+  stageScrim: {
+    backgroundColor: 'rgba(64,45,68,0.12)',
     bottom: 0,
     left: 0,
     position: 'absolute',
     right: 0,
     top: 0,
   },
+  emptyStageScrim: {
+    backgroundColor: 'rgba(255,235,242,0.06)',
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  stageFloor: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 999,
+    top: 430,
+    height: 58,
+    position: 'absolute',
+    width: 300,
+  },
+  stageCompanion: {
+    height: '62%',
+    maxHeight: 480,
+    maxWidth: 360,
+    minHeight: 300,
+    transform: [{ translateY: -8 }],
+    width: '72%',
+  },
+  stageCompanionEntered: {
+    opacity: 1,
+    transitionDuration: '360ms',
+    transitionProperty: 'opacity, transform',
+  } as unknown as ImageStyle,
   thread: {
-    backgroundColor: '#0E0B14',
     flexGrow: 1,
-    maxHeight: 620,
-    minHeight: 420,
+    minHeight: 0,
   },
   threadContent: {
     gap: 12,

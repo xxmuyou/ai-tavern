@@ -16,6 +16,7 @@ import type {
   BaseArtPromptAssistResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
+  CompanionCutoutResponse,
   ChatMessageInput,
   CompanionCreateInput,
   CompanionDetailResponse,
@@ -186,6 +187,7 @@ const LOCAL_MEDIA: Record<string, ImageSourcePropType> = {
   'scenes/rain_arcade.png': require('../assets/ai-companion/scenes/rain_arcade.png'),
   'scenes/rainfall_window_lounge.png': require('../assets/ai-companion/scenes/rainfall_window_lounge.png'),
   'scenes/rainlit_bookshop.png': require('../assets/ai-companion/scenes/rainlit_bookshop.png'),
+  'scenes/restaurant.png': require('../assets/ai-companion/scenes/restaurant.png'),
   'scenes/riverside_walk.png': require('../assets/ai-companion/scenes/riverside_walk.png'),
   'scenes/shared_laundry_room.png': require('../assets/ai-companion/scenes/shared_laundry_room.png'),
   'scenes/skyline_roof_garden.png': require('../assets/ai-companion/scenes/skyline_roof_garden.png'),
@@ -535,6 +537,16 @@ export async function getInviteTargets(
   return requestJson<InviteTargetsResponse>(
     `/companions/${encodeURIComponent(companionId)}/invite-targets${query}`,
   );
+}
+
+export async function getCompanionCutout(companionId: string): Promise<CompanionCutoutResponse> {
+  return requestJson<CompanionCutoutResponse>(`/companions/${encodeURIComponent(companionId)}/cutout`);
+}
+
+export async function ensureCompanionCutout(companionId: string): Promise<CompanionCutoutResponse> {
+  return requestJson<CompanionCutoutResponse>(`/companions/${encodeURIComponent(companionId)}/cutout/ensure`, {
+    method: 'POST',
+  });
 }
 
 export async function listEvents(status: 'pending' | 'resolved' | 'dismissed' = 'pending'): Promise<EventsListResponse> {

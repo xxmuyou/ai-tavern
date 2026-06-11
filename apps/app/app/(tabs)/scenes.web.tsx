@@ -35,6 +35,13 @@ export default function WebScenesScreen() {
       title="Scenes"
       subtitle="Walk into a room, see who is already there, and let the conversation choose its own direction."
     >
+      <View className="mb-7">
+        <Text className="font-serif text-display-sm text-app-ink">Scenes</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">
+          Walk into a room, see who is already there, and let the conversation choose its own direction.
+        </Text>
+      </View>
+
       <View className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <WebStat eyebrow="Total" value={String(scenes.length)} description="Locations open to you" icon={<Ionicons color="#9A2F4F" name="map-outline" size={16} />} />
         <WebStat eyebrow="Unlocked" value={String(unlocked.length)} description="Free to step into" icon={<Ionicons color="#1E6B52" name="lock-open-outline" size={16} />} />

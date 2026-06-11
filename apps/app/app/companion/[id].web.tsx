@@ -10,7 +10,6 @@ import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, Web
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
-import { CompanionTodayPanel } from '@/components/CompanionTodayPanel';
 import { CompanionUnlocksPanel } from '@/components/CompanionUnlocksPanel';
 import { DimensionBoard } from '@/components/DimensionBoard';
 import { ProfileOutfitPanel } from '@/components/ProfileOutfitPanel';
@@ -25,12 +24,11 @@ import { relationshipGoalFromSummary } from '@/utils/relationship';
 type Tab = { id: string; label: string };
 
 const TABS: Tab[] = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'greeting', label: 'Greeting' },
   { id: 'story', label: 'Story' },
-  { id: 'gallery', label: 'Gallery' },
-  { id: 'today', label: 'Today' },
-  { id: 'unlocks', label: 'Unlocks' },
   { id: 'memories', label: 'Memories' },
+  { id: 'gallery', label: 'Gallery' },
+  { id: 'unlocks', label: 'Unlocks' },
   { id: 'profile', label: 'Profile' },
 ];
 
@@ -41,7 +39,7 @@ export default function WebCompanionDetailScreen() {
   const { data, error, isLoading, refetch } = useCompanion(companionId);
   const { pushError } = useErrorBanner();
   const { me } = useMe();
-  const [tab, setTab] = useState<string>('overview');
+  const [tab, setTab] = useState<string>('greeting');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -104,48 +102,26 @@ export default function WebCompanionDetailScreen() {
 
   return (
     <WebAppShell
-      actions={
-        <View className="flex-row items-center gap-2">
-          <WebButton
-            label="Start chat"
-            onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
-            variant="primary"
-            iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
-          />
-          {canPublish ? (
-            <>
-              <WebButton
-                label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
-                onPress={() => void handleTogglePublish(false)}
-                variant="outline"
-                iconLeft={<Ionicons color="#9A2F4F" name={isPublic ? 'earth' : 'earth-outline'} size={16} />}
-              />
-              {!isPublic ? (
-                <WebButton
-                  label="Publish + story"
-                  onPress={() => void handleTogglePublish(true)}
-                  variant="ghost"
-                  iconLeft={<Ionicons color="#9A2F4F" name="git-branch-outline" size={16} />}
-                />
-              ) : null}
-            </>
-          ) : null}
-          {canEdit ? (
-            <>
-              <WebButton
-                label="Edit"
-                onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
-                variant="outline"
-              />
-              <WebButton label="Delete" onPress={() => setConfirmDelete(true)} variant="ghost" />
-            </>
-          ) : null}
-        </View>
-      }
       title={companion.name}
       subtitle={companion.relationship_role ?? 'Companion profile'}
       breadcrumbs={[{ href: COMPANIONS_ROUTE, label: 'Companions' }, { label: companion.name }]}
     >
+      <View className="mb-7 flex-row flex-wrap items-start justify-between gap-4">
+        <View className="min-w-0 flex-1">
+          <Text className="font-serif text-display-sm text-app-ink">{companion.name}</Text>
+          <Text className="mt-2 text-body-sm leading-6 text-app-muted">
+            {companion.relationship_role ?? companion.greeting ?? 'Open their profile, review the first beat, then start a private chat.'}
+          </Text>
+        </View>
+        <WebButton
+          label="Start chat"
+          onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+          variant="primary"
+          size="lg"
+          iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={18} />}
+        />
+      </View>
+
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_2fr]">
         {/* Profile card */}
         <View className="gap-5">
@@ -209,6 +185,48 @@ export default function WebCompanionDetailScreen() {
                 <Text className="mt-1 text-body-sm text-app-ink-soft text-right">{formatDateTime(companion.relationship.last_interaction_at)}</Text>
               </View>
             </View>
+
+            <View className="gap-2 border-t border-app-line-soft pt-4">
+              <WebButton
+                label="Chat now"
+                onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+                variant="primary"
+                iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
+              />
+              {canPublish || canEdit ? (
+                <View className="flex-row flex-wrap gap-2">
+                  {canPublish ? (
+                    <>
+                      <WebButton
+                        label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
+                        onPress={() => void handleTogglePublish(false)}
+                        size="sm"
+                        variant="outline"
+                      />
+                      {!isPublic ? (
+                        <WebButton
+                          label="Publish + story"
+                          onPress={() => void handleTogglePublish(true)}
+                          size="sm"
+                          variant="ghost"
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                  {canEdit ? (
+                    <>
+                      <WebButton
+                        label="Edit"
+                        onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
+                        size="sm"
+                        variant="outline"
+                      />
+                      <WebButton label="Delete" onPress={() => setConfirmDelete(true)} size="sm" variant="ghost" />
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
           </WebCard>
           <ProfileOutfitPanel
             companionId={companion.id}
@@ -223,26 +241,37 @@ export default function WebCompanionDetailScreen() {
         <View className="gap-6">
           <WebTabs active={tab} onChange={setTab} tabs={TABS} variant="underline" />
 
-          {tab === 'overview' ? (
+          {tab === 'greeting' ? (
             <View className="gap-6">
-              <CompanionGalleryPanel
-                artEmotions={companion.art_emotions}
-                artUrl={companion.art_url}
-                companionId={companion.id}
-                name={companion.name}
-              />
-              <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
+              <WebCard padding="lg" className="gap-5">
+                <View>
+                  <Text className="text-overline text-rose-deep">Greeting</Text>
+                  <Text className="mt-2 font-serif text-title text-app-ink">
+                    {companion.greeting ?? `Start a private thread with ${companion.name}.`}
+                  </Text>
+                </View>
+                <Text className="text-body-sm leading-7 text-app-ink-soft">
+                  {companion.speech_style
+                    ? `Voice: ${companion.speech_style}`
+                    : 'Use this opening beat to decide whether you want to chat, explore their story, or adjust the profile.'}
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <WebButton
+                    label="Start chat"
+                    onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+                    variant="primary"
+                    iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
+                  />
+                  <WebButton label="View story" onPress={() => setTab('story')} variant="outline" />
+                </View>
+              </WebCard>
               <RelationshipGoalPanel goal={relationshipGoal} />
-              <CompanionStoryPanel
-                canEdit={canEdit}
-                companionId={companion.id}
-                onChanged={refetch}
-              />
+              <DimensionBoard dimensions={companion.relationship.dimensions} level={companion.relationship.level} />
               <WebPanel>
                 <Text className="mb-2 text-overline text-rose-deep">Current stage</Text>
                 <Text className="font-serif text-title text-app-ink">{companion.relationship.stage ?? '—'}</Text>
                 <Text className="mt-2 text-body-sm leading-6 text-app-ink-soft">
-                  A snapshot of how this companion is presenting today. It shifts with your conversations, time of day, and story beat.
+                  This profile snapshot updates as conversations, choices, and scene moments change the relationship.
                 </Text>
               </WebPanel>
             </View>
@@ -262,13 +291,6 @@ export default function WebCompanionDetailScreen() {
               artUrl={companion.art_url}
               companionId={companion.id}
               name={companion.name}
-            />
-          ) : null}
-
-          {tab === 'today' ? (
-            <CompanionTodayPanel
-              companionId={companion.id}
-              recommended={relationshipGoal.recommended_activity}
             />
           ) : null}
 
