@@ -15,6 +15,7 @@ export type CompanionForPrompt = {
 };
 
 export type SceneForPrompt = {
+  id?: string;
   name: string;
   mood: string;
   tags: string[];
@@ -23,6 +24,7 @@ export type SceneForPrompt = {
 export type HistoryMessage = {
   role: "user" | "companion";
   content: string;
+  scene_id?: string | null;
 };
 
 export type ActivityForPrompt = {
@@ -306,7 +308,7 @@ function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
 
   input.recentMessages.forEach((msg, index) => {
     pushSegment(segments, {
-      content: msg.content,
+      content: prepareHistoryContent(input, msg),
       id: `recent_history:${String(index).padStart(3, "0")}`,
       position: "in_history",
       priority: 100 + index,
@@ -441,11 +443,15 @@ function buildCurrentScene(input: ChatPromptInput): string {
   if (scene) {
     lines.push("# Current Scene");
     lines.push(`You are currently physically at ${scene.name}. Treat this as the real place where this turn is happening.`);
+    if (scene.id) {
+      lines.push(`Scene id: ${scene.id}`);
+    }
     lines.push(`Mood: ${scene.mood}`);
     if (scene.tags.length > 0) {
       lines.push(`Tags: ${scene.tags.join(", ")}`);
     }
     lines.push("Ground your reply in this place with at least one light <narration> detail from the location or mood. Do not ignore the scene unless the user is explicitly speaking from outside it.");
+    lines.push("This current scene overrides any older physical location in the conversation history. Do not continue old bedroom, home, kitchen, cafe, or street staging unless it is this scene.");
   }
 
   if (activity) {
@@ -627,6 +633,10 @@ function buildPostHistoryGuard(input: ChatPromptInput): string {
   if (input.userPersona?.name) {
     lines.push(`You are speaking to ${input.userPersona.name}. Do not rename them or overwrite who they are.`);
   }
+  if (input.scene) {
+    lines.push(`Current physical scene: ${input.scene.name}. Treat it as fresher and more authoritative than any prior message history.`);
+    lines.push("If older messages mention another place, those are past context only. Do not keep acting in that older place.");
+  }
   lines.push(`Relationship guidance: ${addressGuidanceForStage(input.stage)}`);
   lines.push("Never narrate or decide the user's actions, thoughts, feelings, or words.");
   lines.push("Use <narration>...</narration> for actions/gestures/inner observations; spoken dialogue stays outside tags.");
@@ -634,4 +644,22 @@ function buildPostHistoryGuard(input: ChatPromptInput): string {
   lines.push("Second-person narration inside a user message describes the user/player action, not yours.");
   lines.push("Match the user's current language. Do not output JSON, analysis, system text, or meta-commentary.");
   return lines.join("\n");
+}
+
+function prepareHistoryContent(input: ChatPromptInput, message: HistoryMessage): string {
+  const currentSceneId = input.scene?.id ?? null;
+  if (!currentSceneId || !message.scene_id || message.scene_id === currentSceneId) {
+    return message.content;
+  }
+  return stripNarration(message.content);
+}
+
+function stripNarration(content: string): string {
+  return content
+    .replace(/<narration>[\s\S]*?<\/narration>/gi, " ")
+    .replace(/<narration>[\s\S]*$/gi, " ")
+    .replace(/<\/narration>/gi, " ")
+    .replace(/\*([^*\n][^*]*?)\*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

@@ -70,7 +70,7 @@ type PostBody = {
   quick_action?: unknown;
 };
 
-type HistoryRow = { role: "user" | "companion"; content: string };
+type HistoryRow = { role: "user" | "companion"; content: string; scene_id: string | null };
 
 /**
  * Reserves chat_message credits before an LLM call (spec-021, pure-credits
@@ -119,17 +119,24 @@ export async function handlePostMessage(
   }
   let sceneIdInput = typeof body.scene_id === "string" && body.scene_id.length > 0 ? body.scene_id : null;
   const activityIdInput = typeof body.activity_id === "string" && body.activity_id.length > 0 ? body.activity_id : null;
-  const activity = activityIdInput
+  let activity = activityIdInput
     ? await loadActiveActivityForChat(env, user.id, activityIdInput)
     : null;
   if (activityIdInput && !activity) {
     return jsonResponse({ error: "activity_not_active" }, { status: 422 });
   }
   // When chat is locked to an activity, force the scene to match so the
-  // companion does not "teleport" mid-conversation.
+  // companion does not "teleport" mid-conversation. If the client has already
+  // confirmed a newer scene, ignore the stale activity instead of dragging the
+  // prompt back to the old place.
   if (activity) {
-    sceneIdInput = activity.scene_id;
+    if (sceneIdInput && sceneIdInput !== activity.scene_id) {
+      activity = null;
+    } else {
+      sceneIdInput = activity.scene_id;
+    }
   }
+  const activityIdForChat = activity ? activityIdInput : null;
 
   const companion = await loadCompanionForChat(env, companionId);
   if (!companion) {
@@ -249,7 +256,7 @@ export async function handlePostMessage(
     userPersona: userPersonaForPrompt,
     exampleDialogues: parseExampleDialogues(companion.example_dialogues),
     scene: scene
-      ? { mood: scene.mood, name: scene.name, tags: sceneForContext?.tags ?? [] }
+      ? { id: scene.id, mood: scene.mood, name: scene.name, tags: sceneForContext?.tags ?? [] }
       : null,
     quickAction,
     activity: activity
@@ -307,7 +314,7 @@ export async function handlePostMessage(
   const sse = createSSEStream();
   ctx.waitUntil(
     runChat({
-      activity_id: activityIdInput,
+      activity_id: activityIdForChat,
       chatReservationId,
       companionId,
       ctx,
@@ -647,23 +654,23 @@ async function loadRecentMessages(
   limit: number,
 ): Promise<HistoryRow[]> {
   const { results } = await env.DB.prepare(
-    `SELECT role, content, created_at FROM messages
+    `SELECT role, content, scene_id, created_at FROM messages
      WHERE thread_id = ?
      ORDER BY created_at DESC
      LIMIT ?`,
   )
     .bind(threadId, limit)
-    .all<{ role: string; content: string; created_at: number }>();
+    .all<{ role: string; content: string; scene_id: string | null; created_at: number }>();
 
   const rows = (results ?? []).filter(
-    (r): r is { role: "user" | "companion"; content: string; created_at: number } =>
+    (r): r is { role: "user" | "companion"; content: string; scene_id: string | null; created_at: number } =>
       r.role === "user" || r.role === "companion",
   );
 
   return rows
     .slice()
     .reverse()
-    .map((r) => ({ content: r.content, role: r.role }));
+    .map((r) => ({ content: r.content, role: r.role, scene_id: r.scene_id ?? null }));
 }
 
 function llmFailureResponse(err: unknown): Response {

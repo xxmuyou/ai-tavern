@@ -38,8 +38,8 @@ type WebCompanionDirectoryProps = {
 };
 
 export function WebCompanionDirectory({
-  subtitle = 'Find a character, open their profile, and start a private roleplay thread.',
-  title = 'Discover',
+  subtitle = 'Official cast and your own creations. Open a profile, story beats, or gallery from one place.',
+  title = 'Companions',
 }: WebCompanionDirectoryProps) {
   const router = useRouter();
   const [source, setSource] = useState<CompanionSourceFilter>('all');

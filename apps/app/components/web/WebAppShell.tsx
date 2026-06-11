@@ -34,7 +34,8 @@ type WebAppShellProps = {
 type ShellNavItem = WebNavItem & { activePaths?: string[] };
 
 const BASE_NAV_ITEMS: ShellNavItem[] = [
-  { href: DISCOVER_ROUTE, icon: 'compass-outline', label: 'Discover', activePaths: [String(DISCOVER_ROUTE), String(COMPANIONS_ROUTE), '/companion'] },
+  { href: DISCOVER_ROUTE, icon: 'compass-outline', label: 'Discover', activePaths: [String(DISCOVER_ROUTE)] },
+  { href: COMPANIONS_ROUTE, icon: 'people-outline', label: 'Companions', activePaths: [String(COMPANIONS_ROUTE), '/companion'] },
   { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
   { href: '/companion-create' as Href, icon: 'sparkles-outline', label: 'Create' },
   { href: MEMORIES_ROUTE, icon: 'images-outline', label: 'Memories' },

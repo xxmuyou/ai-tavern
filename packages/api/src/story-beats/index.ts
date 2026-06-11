@@ -287,7 +287,7 @@ export async function buildStoryMoment(
   if (!scene) {
     return null;
   }
-  const unlockedScenes = await loadUnlockedStoryScenes(env, userId);
+  const unlockedScenes = await loadUnlockedStoryScenes(env, userId, companionId);
   return buildMomentFromBeat(beat, scene, unlockedScenes);
 }
 
@@ -482,7 +482,7 @@ async function loadStorySceneTarget(env: Env, sceneId: string): Promise<StorySce
   return scene ? { art_url: scene.art_url, id: scene.id, mood: scene.mood, name: scene.name } : null;
 }
 
-async function loadUnlockedStoryScenes(env: Env, userId: string): Promise<StorySceneRow[]> {
+async function loadUnlockedStoryScenes(env: Env, userId: string, companionId: string): Promise<StorySceneRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT id, name, mood, tags, art_url, unlock_condition, display_order
      FROM scenes
@@ -491,7 +491,7 @@ async function loadUnlockedStoryScenes(env: Env, userId: string): Promise<StoryS
   ).all<StorySceneRow>();
   const out: StorySceneRow[] = [];
   for (const scene of results ?? []) {
-    const { unlocked } = await evaluateUnlock(env, userId, scene.unlock_condition);
+    const { unlocked } = await evaluateUnlock(env, userId, scene.unlock_condition, companionId);
     if (unlocked) out.push(scene);
   }
   return out;

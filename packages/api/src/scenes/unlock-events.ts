@@ -26,7 +26,7 @@ export async function detectNewSceneUnlocks(
   const out: UnlockEvent[] = [];
   for (const row of results ?? []) {
     const condition = parseUnlockCondition(row.unlock_condition);
-    if (!condition || condition.companion_id !== args.companionId) continue;
+    if (!condition) continue;
     if (args.previous[condition.dim] >= condition.value) continue;
     if (args.next[condition.dim] < condition.value) continue;
     out.push({

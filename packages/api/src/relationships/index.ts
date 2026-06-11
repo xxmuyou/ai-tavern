@@ -84,10 +84,10 @@ async function loadCompanionSceneUnlocks(
   const out: SceneUnlockStatus[] = [];
   for (const row of results ?? []) {
     const condition = parseUnlockCondition(row.unlock_condition);
-    if (!condition || condition.companion_id !== companionId) {
+    if (!condition) {
       continue;
     }
-    const res = await evaluateUnlock(env, userId, row.unlock_condition);
+    const res = await evaluateUnlock(env, userId, row.unlock_condition, companionId);
     out.push({ hint: res.hint, id: row.id, name: row.name, unlocked: res.unlocked });
   }
   return out;

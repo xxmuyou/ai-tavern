@@ -29,17 +29,17 @@ export function DiscoverCompanionCard({ companion, className, onPress, rank, siz
       onPress={onPress}
       className={cn(
         'group overflow-hidden rounded-2xl border border-white/10 bg-app-surface shadow-card transition-all duration-200 ease-editorial hover:-translate-y-1 hover:border-app-rose/50 hover:shadow-glow',
-        size === 'lg' ? 'w-[220px]' : '',
+        size === 'lg' ? 'w-[184px]' : '',
         className,
       )}
     >
-      <View className={cn('relative items-stretch justify-end overflow-hidden bg-[#120A16]', size === 'lg' ? 'h-[300px]' : 'aspect-[3/4]')}>
+      <View className={cn('relative items-stretch justify-end overflow-hidden bg-[#120A16]', size === 'lg' ? 'h-[248px]' : 'aspect-[3/4]')}>
         {imageSource ? (
           <Image
             accessibilityLabel={companion.name}
-            resizeMode="cover"
+            resizeMode="contain"
             source={imageSource}
-            className="absolute inset-0 h-full w-full transition-transform duration-300 ease-editorial group-hover:scale-105"
+            className="absolute inset-0 h-full w-full transition-opacity duration-300 ease-editorial"
           />
         ) : (
           <View className="absolute inset-0 items-center justify-center">

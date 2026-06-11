@@ -75,6 +75,7 @@ import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionTe
 
 const STREAMING_ID = '__streaming__';
 const CUSTOM_SCENE_ACTION_MAX_LENGTH = 120;
+const MAINTAIN_VISIBLE_CONTENT_POSITION = { minIndexForVisible: 0 };
 
 const EVENT_TITLES: Record<EventResponseItem['event_type'], string> = {
   confession: 'A confession',
@@ -103,6 +104,8 @@ type StoredCurrentScene = {
   name: string | null;
   savedAt: number;
 };
+
+type SceneSource = 'confirmed' | 'daily' | 'history' | 'stored' | 'url' | null;
 
 const pendingArrivalKey = (companionId: string) => `xtbit.chat.pendingArrival.${companionId}`;
 const currentSceneKey = (companionId: string) => `xtbit.chat.currentScene.${companionId}`;
@@ -159,6 +162,7 @@ export default function WebChatScreen() {
   const [sceneId, setSceneId] = useState<string | undefined>(initialSceneId);
   const [sceneArt, setSceneArt] = useState<string | null>(initialSceneArt);
   const [sceneName, setSceneName] = useState<string | null>(null);
+  const [sceneSource, setSceneSource] = useState<SceneSource>(initialSceneId ? 'url' : null);
   const router = useRouter();
   const { pushError } = useErrorBanner();
   const history = useChatHistory(companionId);
@@ -224,6 +228,7 @@ export default function WebChatScreen() {
   });
   const {
     detachFromBottom,
+    followBottom,
     handleContentSizeChange,
     handleScroll,
     jumpToBottom,
@@ -253,6 +258,7 @@ export default function WebChatScreen() {
     defaultDailySceneRef.current = false;
     historySceneTargetRef.current = null;
     restoredSceneSavedAtRef.current = null;
+    setSceneSource(initialSceneId ? 'url' : null);
   }, [companionId, initialSceneId]);
 
   useEffect(() => {
@@ -303,6 +309,7 @@ export default function WebChatScreen() {
     setSceneId(initialSceneId);
     setSceneArt(initialSceneArt);
     setSceneName(null);
+    setSceneSource('url');
   }, [initialSceneArt, initialSceneId]);
 
   const refreshCompanionDetail = useCallback(async () => {
@@ -363,6 +370,7 @@ export default function WebChatScreen() {
       setSceneId(parsed.id);
       setSceneArt(parsed.art_url ?? null);
       setSceneName(parsed.name ?? null);
+      setSceneSource('stored');
     } catch {
       window.localStorage.removeItem(currentSceneKey(companionId));
       hasCheckedStoredSceneRef.current = true;
@@ -396,6 +404,7 @@ export default function WebChatScreen() {
     setSceneId(latestSceneMessage.scene_id);
     setSceneArt(scene?.art_url ?? null);
     setSceneName(scene?.name ?? null);
+    setSceneSource('history');
     restoredSceneSavedAtRef.current = null;
   }, [history.isLoadingInitial, history.messages, initialSceneId, sceneId, scenes]);
 
@@ -428,6 +437,7 @@ export default function WebChatScreen() {
         setSceneId(dailySceneId);
         setSceneArt(dailyState.scene.art_url ?? catalogScene?.art_url ?? null);
         setSceneName(catalogScene?.name ?? null);
+        setSceneSource('daily');
       })
       .catch(() => {
         // Daily state is a fallback only. If it is unavailable, plain chat still works.
@@ -635,10 +645,14 @@ export default function WebChatScreen() {
   const arriveAtPendingScene = useCallback(async (arrival: PendingArrival) => {
     setArrivalPrompt(null);
     persistPendingArrival(null);
+    if (activeActivityId) {
+      setActivity(null);
+    }
     activeSceneChangedThisSessionRef.current = true;
     setSceneId(arrival.target.id);
     setSceneArt(arrival.target.art_url ?? null);
     setSceneName(arrival.target.name);
+    setSceneSource('confirmed');
     history.appendMessage({
       companion_id: companionId,
       content: sceneTransitionText(arrival.target.name, chatLanguage),
@@ -648,16 +662,15 @@ export default function WebChatScreen() {
       scene_id: arrival.target.id,
     });
     showInviteNotice(arrivalCopy.arrivedNotice(arrival.target.name));
-    notifyNewReply();
+    followBottom(true);
     if (activeActivityId) {
       try {
         await activityActions.complete(activeActivityId);
-        setActivity(null);
       } catch (error) {
         pushError(error instanceof Error ? error.message : 'Activity could not be completed.');
       }
     }
-  }, [activeActivityId, activityActions, arrivalCopy, chatLanguage, companionId, history, notifyNewReply, persistPendingArrival, pushError, setActivity, showInviteNotice]);
+  }, [activeActivityId, activityActions, arrivalCopy, chatLanguage, companionId, followBottom, history, persistPendingArrival, pushError, setActivity, showInviteNotice]);
 
   const handleInviteResult = useCallback(
     (invite: ChatInviteResult, target: InviteTarget | null) => {
@@ -703,6 +716,7 @@ export default function WebChatScreen() {
       id: `local-user-${Date.now()}`,
       role: 'user',
     });
+    followBottom(false);
 
     let serverMessageId = '';
     try {
@@ -755,7 +769,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send invitation.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, enqueueCelebrations, handleInviteResult, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, enqueueCelebrations, followBottom, handleInviteResult, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -774,6 +788,7 @@ export default function WebChatScreen() {
       role: 'user',
     });
     setDraft('');
+    followBottom(false);
 
     let serverMessageId = '';
     try {
@@ -828,7 +843,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, draft, enqueueCelebrations, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, draft, enqueueCelebrations, followBottom, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream]);
 
   const sendSceneAction = useCallback(async (action: SceneAction) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -840,6 +855,7 @@ export default function WebChatScreen() {
       id: `local-user-${Date.now()}`,
       role: 'user',
     });
+    followBottom(false);
 
     let serverMessageId = '';
     try {
@@ -898,7 +914,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Scene action failed.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, enqueueCelebrations, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, enqueueCelebrations, followBottom, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const sendCustomSceneAction = useCallback(async () => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -927,6 +943,7 @@ export default function WebChatScreen() {
       role: 'user',
       scene_id: sceneId,
     });
+    followBottom(false);
 
     let serverMessageId = '';
     try {
@@ -986,7 +1003,7 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Custom action failed.');
       }
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, customActionText, enqueueCelebrations, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activePersonaId, autoVoice.enabled, chatLanguage, companionId, customActionText, enqueueCelebrations, followBottom, history, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
@@ -999,6 +1016,7 @@ export default function WebChatScreen() {
       role: 'user',
       scene_id: sceneId,
     });
+    followBottom(false);
     try {
       const result = await resolveStoryChoice(companionId, choice.id, {
         activity_id: activeActivityId ?? null,
@@ -1017,6 +1035,7 @@ export default function WebChatScreen() {
         setSceneId(result.target_scene.id);
         setSceneArt(result.target_scene.art_url);
         setSceneName(result.target_scene.name);
+        setSceneSource('confirmed');
         history.appendMessage({
           companion_id: companionId,
           content: sceneTransitionText(result.target_scene.name, chatLanguage),
@@ -1030,14 +1049,14 @@ export default function WebChatScreen() {
         enqueueCelebrations(result.unlocks);
       }
       setStoryMoment(null);
-      notifyNewReply();
+      followBottom(true);
       void relationship.refresh();
     } catch (error) {
       pushError(error instanceof Error ? error.message : 'Story moment could not be resolved.');
     } finally {
       setIsResolvingStory(false);
     }
-  }, [activeActivityId, chatLanguage, companionId, enqueueCelebrations, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, stream.isStreaming]);
+  }, [activeActivityId, chatLanguage, companionId, enqueueCelebrations, followBottom, history, isResolvingStory, pushError, relationship, sceneId, stream.isStreaming]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -1093,6 +1112,23 @@ export default function WebChatScreen() {
   const stageCompanion = mediaSource(artCutoutUrl ?? companion?.art_url ?? null);
   const currentScene = scenes.find((scene) => scene.id === sceneId) ?? null;
   const displaySceneName = sceneName ?? currentScene?.name ?? null;
+  const sceneSourceText = sceneSource
+    ? (chatLanguage === 'zh'
+      ? {
+          confirmed: '已确认',
+          daily: '今日状态',
+          history: '历史恢复',
+          stored: '本地恢复',
+          url: '入口指定',
+        }[sceneSource]
+      : {
+          confirmed: 'confirmed',
+          daily: 'daily',
+          history: 'history',
+          stored: 'stored',
+          url: 'entry',
+        }[sceneSource])
+    : null;
   const sceneBackdropSource = mediaSource(sceneArt ?? currentScene?.art_url ?? null);
   const hasSceneBackdrop = Boolean(sceneBackdropSource);
   const sceneActions = sceneActionsFor(sceneId);
@@ -1208,7 +1244,9 @@ export default function WebChatScreen() {
             <View className="border-b border-white/10 px-5 py-3" style={twilightStyles.sceneStrip}>
               <Text className="text-caption text-white/55" numberOfLines={2}>
                 {displaySceneName
-                  ? (chatLanguage === 'zh' ? `场景：${displaySceneName}` : `Scene: ${displaySceneName}`)
+                  ? (chatLanguage === 'zh'
+                    ? `场景：${displaySceneName}${sceneSourceText ? ` · ${sceneSourceText}` : ''}`
+                    : `Scene: ${displaySceneName}${sceneSourceText ? ` · ${sceneSourceText}` : ''}`)
                   : (chatLanguage === 'zh' ? `Intro. ${companion?.greeting ?? '开始一个私人对话。'}` : `Intro. ${companion?.greeting ?? 'Start a private conversation.'}`)}
               </Text>
             </View>
@@ -1324,6 +1362,7 @@ export default function WebChatScreen() {
                 }
                 onContentSizeChange={handleContentSizeChange}
                 onScroll={handleScroll}
+                maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
                 scrollEventThrottle={16}
                 style={twilightStyles.thread}
               />

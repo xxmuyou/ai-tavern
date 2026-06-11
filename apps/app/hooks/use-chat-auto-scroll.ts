@@ -15,6 +15,7 @@ type ChatAutoScrollInput<T extends { id: string }> = {
 
 type ChatAutoScrollResult = {
   detachFromBottom: () => void;
+  followBottom: (animated?: boolean) => void;
   handleContentSizeChange: () => void;
   handleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   jumpToBottom: () => void;
@@ -41,20 +42,40 @@ export function useChatAutoScroll<T extends { id: string }>({
   const getItemsRef = useRef(getItems);
   const isFollowingBottomRef = useRef(true);
   const lastOffsetYRef = useRef(0);
+  const pendingScrollRef = useRef(false);
   const [pendingNotice, setPendingNotice] = useState<ChatAutoScrollNotice | null>(null);
   getItemsRef.current = getItems;
 
   const scrollToBottom = useCallback((animated = false) => {
-    runAfterLayout(() => {
-      listRef.current?.scrollToEnd({ animated });
+    const run = () => {
+      runAfterLayout(() => {
+        listRef.current?.scrollToEnd({ animated });
+      });
+    };
+    if (animated) {
+      run();
+      return;
+    }
+    if (pendingScrollRef.current) {
+      return;
+    }
+    pendingScrollRef.current = true;
+    const raf = globalThis.requestAnimationFrame ?? ((cb: FrameRequestCallback) => globalThis.setTimeout(cb, 16));
+    raf(() => {
+      pendingScrollRef.current = false;
+      run();
     });
   }, [listRef]);
 
-  const jumpToBottom = useCallback(() => {
+  const followBottom = useCallback((animated = false) => {
     isFollowingBottomRef.current = true;
     setPendingNotice(null);
-    scrollToBottom(true);
+    scrollToBottom(animated);
   }, [scrollToBottom]);
+
+  const jumpToBottom = useCallback(() => {
+    followBottom(true);
+  }, [followBottom]);
 
   const detachFromBottom = useCallback(() => {
     isFollowingBottomRef.current = false;
@@ -99,6 +120,7 @@ export function useChatAutoScroll<T extends { id: string }>({
 
   const notifyNewReply = useCallback(() => {
     if (isFollowingBottomRef.current) {
+      scrollToBottom(false);
       return;
     }
     setPendingNotice((current) => (
@@ -108,6 +130,7 @@ export function useChatAutoScroll<T extends { id: string }>({
 
   const notifyMomentReady = useCallback((messageId: string) => {
     if (isFollowingBottomRef.current) {
+      scrollToBottom(false);
       return;
     }
     setPendingNotice((current) => current ?? { kind: 'moment', label: 'Moment image ready', messageId });
@@ -122,6 +145,7 @@ export function useChatAutoScroll<T extends { id: string }>({
 
   return {
     detachFromBottom,
+    followBottom,
     handleContentSizeChange,
     handleScroll,
     jumpToBottom,

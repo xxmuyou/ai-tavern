@@ -125,6 +125,16 @@ describe("loadInviteTargets", () => {
       { art_url: "scenes/restaurant.png", id: "restaurant", name: "Restaurant" },
     ]);
   });
+
+  it("evaluates gates against the current companion, including user-created companions", async () => {
+    const locked = createEnv({ relationships: [{ companion_id: "echo", closeness: 9, user_id: "user-1" }], scenes: [restaurant] });
+    expect(await loadInviteTargets(locked, "user-1", "echo", null)).toEqual([]);
+
+    const unlocked = createEnv({ relationships: [{ companion_id: "echo", closeness: 12, user_id: "user-1" }], scenes: [restaurant] });
+    expect(await loadInviteTargets(unlocked, "user-1", "echo", null)).toMatchObject([
+      { id: "restaurant", name: "Restaurant" },
+    ]);
+  });
 });
 
 describe("resolveInviteTarget", () => {

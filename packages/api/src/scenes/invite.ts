@@ -41,14 +41,14 @@ async function loadCandidateScenes(env: Env): Promise<SceneCandidateRow[]> {
 export async function loadInviteTargets(
   env: Env,
   userId: string,
-  _companionId: string,
+  companionId: string,
   fromSceneId: string | null,
 ): Promise<InviteTarget[]> {
   const candidates = await loadCandidateScenes(env);
   const out: InviteTarget[] = [];
   for (const row of candidates) {
     if (fromSceneId && row.id === fromSceneId) continue;
-    const { unlocked } = await evaluateUnlock(env, userId, row.unlock_condition);
+    const { unlocked } = await evaluateUnlock(env, userId, row.unlock_condition, companionId);
     if (!unlocked) continue;
     out.push({ art_url: row.art_url, id: row.id, mood: row.mood, name: row.name });
   }
@@ -63,13 +63,13 @@ export async function loadInviteTargets(
 export async function resolveInviteTarget(
   env: Env,
   userId: string,
-  _companionId: string,
+  companionId: string,
   sceneId: string,
 ): Promise<InviteTarget | null> {
   const candidates = await loadCandidateScenes(env);
   const row = candidates.find((c) => c.id === sceneId);
   if (!row) return null;
-  const { unlocked } = await evaluateUnlock(env, userId, row.unlock_condition);
+  const { unlocked } = await evaluateUnlock(env, userId, row.unlock_condition, companionId);
   if (!unlocked) return null;
   return { art_url: row.art_url, id: row.id, mood: row.mood, name: row.name };
 }

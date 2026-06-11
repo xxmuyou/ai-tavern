@@ -320,4 +320,35 @@ describe("buildChatPrompt", () => {
     expect(artifacts.segments.find((segment) => segment.id === "post_history_guard")?.included).toBe(true);
     expect(artifacts.segments.some((segment) => segment.id.startsWith("recent_history") && segment.trimReason === "budget")).toBe(true);
   });
+
+  it("strips old-scene narration from cross-scene history while preserving dialogue", () => {
+    const artifacts = buildChatPromptArtifacts({
+      companion,
+      narrative: "Trusted.",
+      recentMessages: [
+        {
+          content: "<narration>Maya sits on the bed in the apartment.</narration>Do you remember this place?",
+          role: "companion",
+          scene_id: "private_apartment_bedroom",
+        },
+        {
+          content: "<narration>You walk through the kitchen.</narration>I do.",
+          role: "user",
+          scene_id: "private_apartment_bedroom",
+        },
+      ],
+      scene: { ...scene, id: "harbor_weekend_market" },
+      secretToReveal: null,
+      stage: "trusted",
+      threadSummary: null,
+      userText: "我们现在在哪？",
+    });
+
+    const history = artifacts.segments.filter((segment) => segment.id.startsWith("recent_history"));
+    expect(history.map((segment) => segment.content)).toEqual(["Do you remember this place?", "I do."]);
+    expect(history.map((segment) => segment.content).join(" ")).not.toContain("bed");
+    const guard = artifacts.segments.find((segment) => segment.id === "post_history_guard");
+    expect(guard?.content).toContain("Current physical scene");
+    expect(guard?.content).toContain("prior message history");
+  });
 });

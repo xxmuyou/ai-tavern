@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 
 import { BRAND_NAME } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
@@ -61,7 +61,7 @@ export function WebAuthControls() {
 
   if (session) {
     return (
-      <View className="relative z-50">
+      <>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Account menu"
@@ -73,50 +73,61 @@ export function WebAuthControls() {
             {session.email.slice(0, 1).toUpperCase()}
           </Text>
         </Pressable>
-        {menuOpen ? (
-          <View className="absolute right-0 top-11 w-56 gap-1 rounded-2xl border border-white/10 bg-white/[0.06] p-2 shadow-float">
-            <View className="border-b border-white/10 px-3 py-2">
-              <Text numberOfLines={1} className="text-caption font-semibold text-white">
-                {session.email}
-              </Text>
-            </View>
-            <AccountMenuItem
-              icon="person-circle-outline"
-              label="Me"
-              onPress={() => {
-                setMenuOpen(false);
-                router.push(ME_ROUTE);
-              }}
-            />
-            <AccountMenuItem
-              icon="card-outline"
-              label="Billing"
-              onPress={() => {
-                setMenuOpen(false);
-                router.push(BILLING_ROUTE);
-              }}
-            />
-            {me?.is_admin ? (
+        <Modal animationType="fade" transparent visible={menuOpen} onRequestClose={() => setMenuOpen(false)}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close account menu"
+            onPress={() => setMenuOpen(false)}
+            className="flex-1 items-end bg-transparent px-5 pt-16"
+          >
+            <Pressable
+              accessibilityRole="none"
+              onPress={(event) => event.stopPropagation?.()}
+              className="w-60 gap-1 rounded-2xl border border-white/10 bg-[#130A18]/95 p-2 shadow-float backdrop-blur"
+            >
+              <View className="border-b border-white/10 px-3 py-2">
+                <Text numberOfLines={1} className="text-caption font-semibold text-white">
+                  {session.email}
+                </Text>
+              </View>
               <AccountMenuItem
-                icon="shield-checkmark-outline"
-                label="Admin"
+                icon="person-circle-outline"
+                label="Me"
                 onPress={() => {
                   setMenuOpen(false);
-                  router.push(ADMIN_ROUTE);
+                  router.push(ME_ROUTE);
                 }}
               />
-            ) : null}
-            <AccountMenuItem
-              icon="log-out-outline"
-              label="Sign out"
-              onPress={() => {
-                setMenuOpen(false);
-                void signOut();
-              }}
-            />
-          </View>
-        ) : null}
-      </View>
+              <AccountMenuItem
+                icon="card-outline"
+                label="Billing"
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push(BILLING_ROUTE);
+                }}
+              />
+              {me?.is_admin ? (
+                <AccountMenuItem
+                  icon="shield-checkmark-outline"
+                  label="Admin"
+                  onPress={() => {
+                    setMenuOpen(false);
+                    router.push(ADMIN_ROUTE);
+                  }}
+                />
+              ) : null}
+              <AccountMenuItem
+                icon="log-out-outline"
+                label="Sign out"
+                onPress={() => {
+                  setMenuOpen(false);
+                  void signOut();
+                }}
+              />
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </>
     );
   }
 

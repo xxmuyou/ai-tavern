@@ -36,6 +36,12 @@ type CompanionPreviewRow = {
   art_cutout_key: string | null;
 };
 
+type CompanionAccessRow = {
+  source: "official" | "user";
+  created_by: string | null;
+  is_active: number;
+};
+
 type ScenesListItem = {
   id: string;
   name: string;
@@ -96,7 +102,11 @@ export async function handleScenesRequest(
     }
 
     const user = await requireAuthUser(env, request);
-    return listScenes(env, user);
+    const companionId = new URL(request.url).searchParams.get("companion_id");
+    if (companionId && !(await canUseCompanionForSceneContext(env, user, companionId))) {
+      return notFound();
+    }
+    return listScenes(env, user, companionId);
   }
 
   const enterMatch = pathname.match(/^\/scenes\/([^/]+)\/enter$/);
@@ -111,13 +121,17 @@ export async function handleScenesRequest(
     }
 
     const user = await requireAuthUser(env, request);
-    return enterScene(env, user, sceneId);
+    const companionId = new URL(request.url).searchParams.get("companion_id");
+    if (companionId && !(await canUseCompanionForSceneContext(env, user, companionId))) {
+      return notFound();
+    }
+    return enterScene(env, user, sceneId, companionId);
   }
 
   return null;
 }
 
-async function listScenes(env: Env, user: UserRecord): Promise<Response> {
+async function listScenes(env: Env, user: UserRecord, companionId: string | null): Promise<Response> {
   const { results } = await env.DB.prepare(
     `SELECT id, name, mood, tags, possible_events, default_companions, unlock_condition, art_url, display_order
      FROM scenes
@@ -129,7 +143,7 @@ async function listScenes(env: Env, user: UserRecord): Promise<Response> {
   const items: ScenesListItem[] = [];
 
   for (const row of results ?? []) {
-    const { hint, unlocked } = await evaluateUnlock(env, user.id, row.unlock_condition);
+    const { hint, unlocked } = await evaluateUnlock(env, user.id, row.unlock_condition, companionId);
     const companions = unlocked
       ? await loadPotentialCompanions(env, user.id, row.default_companions)
       : [];
@@ -149,7 +163,7 @@ async function listScenes(env: Env, user: UserRecord): Promise<Response> {
   return jsonResponse({ scenes: items });
 }
 
-async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<Response> {
+async function enterScene(env: Env, user: UserRecord, sceneId: string, companionId: string | null): Promise<Response> {
   const row = await env.DB.prepare(
     `SELECT id, name, mood, tags, possible_events, default_companions, unlock_condition, art_url, display_order
      FROM scenes
@@ -162,7 +176,7 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
     return notFound();
   }
 
-  const { hint, unlocked } = await evaluateUnlock(env, user.id, row.unlock_condition);
+  const { hint, unlocked } = await evaluateUnlock(env, user.id, row.unlock_condition, companionId);
   if (!unlocked) {
     return jsonResponse(
       { error: "scene_locked", unlock_hint: hint },
@@ -228,6 +242,21 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<
   };
 
   return jsonResponse(body);
+}
+
+async function canUseCompanionForSceneContext(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT source, created_by, is_active FROM companions WHERE id = ?`,
+  )
+    .bind(companionId)
+    .first<CompanionAccessRow>();
+  if (!row || row.is_active === 0) return false;
+  if (row.source === "official") return true;
+  return row.created_by === user.id;
 }
 
 async function loadPotentialCompanions(

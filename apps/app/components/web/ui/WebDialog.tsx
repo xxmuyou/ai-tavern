@@ -28,17 +28,17 @@ export function WebDialog({ children, description, footer, onClose, open, size =
         accessibilityRole="button"
         accessibilityLabel="Close dialog"
         onPress={onClose}
-        className="flex-1 items-center justify-center bg-app-twilight/55 px-6"
+        className="flex-1 items-center justify-center bg-black/72 px-6"
       >
         <Pressable
           accessibilityRole="none"
           onPress={(e) => e.stopPropagation?.()}
-          className={cn('w-full overflow-hidden rounded-2xl bg-white/[0.06] shadow-float', sizeClass[size])}
+          className={cn('w-full overflow-hidden rounded-2xl border border-white/12 bg-[#130A18]/98 shadow-float', sizeClass[size])}
         >
-          <View className="flex-row items-start justify-between gap-4 border-b border-white/8 px-7 py-5">
+          <View className="flex-row items-start justify-between gap-4 border-b border-white/12 bg-[#1B0F22] px-7 py-5">
             <View className="min-w-0 flex-1">
               <Text className="font-serif text-title text-white">{title}</Text>
-              {description ? <Text className="mt-1 text-body-sm text-rose-50/60">{description}</Text> : null}
+              {description ? <Text className="mt-1 text-body-sm text-rose-50/75">{description}</Text> : null}
             </View>
             <Pressable
               accessibilityRole="button"
@@ -50,7 +50,7 @@ export function WebDialog({ children, description, footer, onClose, open, size =
             </Pressable>
           </View>
           <View className="px-7 py-6">{children}</View>
-          {footer ? <View className="border-t border-white/8 bg-white/[0.065] px-7 py-4">{footer}</View> : null}
+          {footer ? <View className="border-t border-white/12 bg-[#1B0F22] px-7 py-4">{footer}</View> : null}
         </Pressable>
       </Pressable>
     </Modal>

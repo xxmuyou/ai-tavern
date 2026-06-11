@@ -65,18 +65,20 @@ export async function evaluateUnlock(
   env: Env,
   userId: string,
   raw: string | null | undefined,
+  companionIdOverride?: string | null,
 ): Promise<UnlockResult> {
   const condition = parseUnlockCondition(raw);
   if (!condition) {
     return { unlocked: true, hint: null };
   }
 
+  const companionId = companionIdOverride || condition.companion_id;
   const row = await env.DB.prepare(
     `SELECT closeness, trust, romance, friendship, hostility, tension, distance
      FROM relationships
      WHERE user_id = ? AND companion_id = ?`,
   )
-    .bind(userId, condition.companion_id)
+    .bind(userId, companionId)
     .first<Record<SingularityDim, number>>();
 
   const current = row?.[condition.dim] ?? 0;
@@ -86,7 +88,9 @@ export async function evaluateUnlock(
   }
 
   return {
-    hint: `Reach ${condition.dim} ${condition.value} with the right person to unlock this place.`,
+    hint: companionIdOverride
+      ? `Reach ${condition.dim} ${condition.value} with this companion to unlock this place.`
+      : `Reach ${condition.dim} ${condition.value} with the right person to unlock this place.`,
     unlocked: false,
   };
 }

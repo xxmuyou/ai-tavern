@@ -19,6 +19,7 @@ type SceneFixture = {
 type CompanionFixture = {
   id: string;
   name: string;
+  created_by?: string | null;
   is_active?: number;
   art_cutout_key?: string | null;
   gender?: "male" | "female" | null;
@@ -145,6 +146,47 @@ describe("scenes module", () => {
     expect(rooftop?.potential_companions).toEqual([]);
   });
 
+  it("evaluates scene locks against the requested companion when companion_id is provided", async () => {
+    const env = createEnv({
+      companions: [
+        { created_by: "user-1", id: "echo", name: "Echo", source: "user" },
+      ],
+      relationships: [
+        { closeness: 12, companion_id: "echo", user_id: "user-1" },
+      ],
+      scenes: [
+        {
+          art_url: null,
+          default_companions: null,
+          display_order: 1,
+          id: "restaurant",
+          mood: "Dinner",
+          name: "Restaurant",
+          tags: null,
+          unlock_condition: JSON.stringify({
+            companion_id: "maya",
+            dim: "closeness",
+            type: "min_relationship",
+            value: 10,
+          }),
+        },
+      ],
+    });
+
+    const token = await issueDevToken(env, "player@example.com", "user-1");
+    const response = await handleScenesRequest(
+      authedRequest("http://localhost/scenes?companion_id=echo", token),
+      env,
+      "/scenes",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { scenes: Array<{ id: string; unlocked: boolean; unlock_hint: string | null }> };
+    expect(body.scenes).toEqual([
+      expect.objectContaining({ id: "restaurant", unlock_hint: null, unlocked: true }),
+    ]);
+  });
+
   it("returns 404 for missing scene on POST /scenes/{id}/enter", async () => {
     const env = createEnv({ companions: [], relationships: [], scenes: [] });
     const token = await issueDevToken(env, "player@example.com");
@@ -191,6 +233,45 @@ describe("scenes module", () => {
     const body = (await response?.json()) as { error: string; unlock_hint: string };
     expect(body.error).toBe("scene_locked");
     expect(body.unlock_hint).toMatch(/trust/);
+  });
+
+  it("allows entering a gated scene with the requested companion's dimensions", async () => {
+    const env = createEnv({
+      companions: [
+        { created_by: "user-1", id: "echo", name: "Echo", source: "user" },
+      ],
+      relationships: [
+        { closeness: 12, companion_id: "echo", user_id: "user-1" },
+      ],
+      scenes: [
+        {
+          art_url: null,
+          default_companions: null,
+          display_order: 1,
+          id: "restaurant",
+          mood: "Dinner",
+          name: "Restaurant",
+          tags: null,
+          unlock_condition: JSON.stringify({
+            companion_id: "maya",
+            dim: "closeness",
+            type: "min_relationship",
+            value: 10,
+          }),
+        },
+      ],
+    });
+
+    const token = await issueDevToken(env, "player@example.com", "user-1");
+    const response = await handleScenesRequest(
+      authedRequest("http://localhost/scenes/restaurant/enter?companion_id=echo", token, "POST"),
+      env,
+      "/scenes/restaurant/enter",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { scene: { id: string } };
+    expect(body.scene.id).toBe("restaurant");
   });
 
   it("returns scene + companions + null event on enter happy path", async () => {
@@ -413,6 +494,17 @@ function queryFirst<T>(
   if (sql.includes("FROM scenes") && sql.includes("WHERE id = ?")) {
     const found = fixtures.scenes.find((s) => s.id === values[0] && (s.is_active ?? 1) === 1);
     return (found ?? null) as T | null;
+  }
+
+  if (sql.includes("FROM companions") && sql.includes("WHERE id = ?")) {
+    const found = fixtures.companions.find((c) => c.id === values[0]);
+    return found
+      ? ({
+          created_by: found.created_by ?? null,
+          is_active: found.is_active ?? 1,
+          source: found.source ?? "official",
+        } as T)
+      : null;
   }
 
   if (sql.includes("FROM relationships") && sql.includes("WHERE user_id = ? AND companion_id = ?")) {
