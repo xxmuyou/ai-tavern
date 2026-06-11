@@ -1267,6 +1267,7 @@ export default function WebChatScreen() {
                   customText={customActionText}
                   language={chatLanguage}
                   onChangeCustomText={setCustomActionText}
+                  onClose={() => setActionMenuOpen(false)}
                   onSendCustom={() => void sendCustomSceneAction()}
                   onSelectAction={(action) => void sendSceneAction(action)}
                 />
@@ -1356,6 +1357,7 @@ export default function WebChatScreen() {
                       customText={customActionText}
                       language={chatLanguage}
                       onChangeCustomText={setCustomActionText}
+                      onClose={() => setActionMenuOpen(false)}
                       onSendCustom={() => void sendCustomSceneAction()}
                       onSelectAction={(action) => void sendSceneAction(action)}
                     />
@@ -1726,6 +1728,7 @@ function SceneActionMenu({
   customText,
   language,
   onChangeCustomText,
+  onClose,
   onSelectAction,
   onSendCustom,
 }: {
@@ -1734,6 +1737,7 @@ function SceneActionMenu({
   customText: string;
   language: ChatLanguage;
   onChangeCustomText: (text: string) => void;
+  onClose: () => void;
   onSelectAction: (action: SceneAction) => void;
   onSendCustom: () => void;
 }) {
@@ -1744,9 +1748,19 @@ function SceneActionMenu({
         <Text className="text-caption font-semibold uppercase text-white/60">
           {language === 'zh' ? '场景动作' : 'Scene actions'}
         </Text>
-        <Text className="text-[10px] font-semibold text-white/40">
-          {`${customText.trim().length}/${CUSTOM_SCENE_ACTION_MAX_LENGTH}`}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="text-[10px] font-semibold text-white/40">
+            {`${customText.trim().length}/${CUSTOM_SCENE_ACTION_MAX_LENGTH}`}
+          </Text>
+          <Pressable
+            accessibilityLabel={language === 'zh' ? '关闭动作菜单' : 'Close action menu'}
+            accessibilityRole="button"
+            onPress={onClose}
+            className="h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/10"
+          >
+            <Ionicons color="rgba(255,255,255,0.78)" name="close" size={14} />
+          </Pressable>
+        </View>
       </View>
 
       {actions.length > 0 ? (
