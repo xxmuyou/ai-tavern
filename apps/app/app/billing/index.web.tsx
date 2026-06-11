@@ -131,6 +131,13 @@ export default function WebBillingScreen() {
   return (
     <WebAppShell title="Billing" subtitle="Plan status, subscription controls, and credits for image generation.">
       <View className="gap-8">
+        <View>
+          <Text className="font-serif text-display-sm text-app-ink">Billing</Text>
+          <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">
+            Plan status, subscription controls, and credits for image generation.
+          </Text>
+        </View>
+
         {isSuccess ? (
           <View className="flex-row items-center gap-3 rounded-2xl border border-app-success/20 bg-app-success/10 px-5 py-4">
             <Ionicons color="#1E8E5C" name="checkmark-circle" size={18} />

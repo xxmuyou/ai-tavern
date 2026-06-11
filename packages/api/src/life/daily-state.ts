@@ -34,13 +34,54 @@ type DailyStateRow = {
   activity_hint: string;
 };
 
-// Fallback scene when neither preferred_scenes nor scenes.default_companions
-// yield a candidate. Picks the first active scene by display_order.
-async function pickFallbackSceneId(env: Env): Promise<string | null> {
-  const row = await env.DB.prepare(
-    `SELECT id FROM scenes WHERE is_active = 1 ORDER BY display_order ASC, id ASC LIMIT 1`,
-  ).first<{ id: string }>();
-  return row?.id ?? null;
+const DEFAULT_ENCOUNTER_SCENE_IDS = [
+  "central_station_plaza",
+  "pier_cafe",
+  "midnight_convenience_store",
+  "rainlit_bookshop",
+  "iron_forge_gym",
+  "rain_arcade",
+  "harbor_weekend_market",
+] as const;
+
+const INTIMATE_SCENE_IDS = new Set([
+  "midnight_hotel_suite",
+  "private_apartment_bedroom",
+  "rainfall_window_lounge",
+  "dawn_balcony",
+]);
+
+type EncounterSceneRow = {
+  id: string;
+  default_companions: string | null;
+};
+
+function placeholdersFor(ids: readonly string[]): string {
+  return ids.map(() => "?").join(",");
+}
+
+function isIntimateSceneId(sceneId: string): boolean {
+  return INTIMATE_SCENE_IDS.has(sceneId);
+}
+
+// Fallback scene when preferred_scenes/default_companions cannot produce a
+// valid daily location. Keep this global-safe: no intimate or locked scenes,
+// because daily rule fields are cached across all users.
+async function pickDefaultEncounterSceneId(env: Env, prng: () => number): Promise<string | null> {
+  const placeholders = placeholdersFor(DEFAULT_ENCOUNTER_SCENE_IDS);
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM scenes
+     WHERE id IN (${placeholders})
+       AND is_active = 1
+       AND unlock_condition IS NULL
+     ORDER BY display_order ASC, id ASC`,
+  )
+    .bind(...DEFAULT_ENCOUNTER_SCENE_IDS)
+    .all<{ id: string }>();
+
+  const pool = (results ?? []).map((row) => row.id).filter((id) => !isIntimateSceneId(id));
+  if (pool.length === 0) return null;
+  return pickFromArray(pool, prng());
 }
 
 async function loadCompanionForState(env: Env, companionId: string): Promise<CompanionRow | null> {
@@ -60,6 +101,24 @@ function parseStringArray(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+async function loadEligiblePreferredScenes(env: Env, sceneIds: string[]): Promise<EncounterSceneRow[]> {
+  const preferred = sceneIds.filter((id) => !isIntimateSceneId(id));
+  if (preferred.length === 0) return [];
+
+  const placeholders = placeholdersFor(preferred);
+  const { results } = await env.DB.prepare(
+    `SELECT id, default_companions FROM scenes
+     WHERE id IN (${placeholders})
+       AND is_active = 1
+       AND unlock_condition IS NULL`,
+  )
+    .bind(...preferred)
+    .all<EncounterSceneRow>();
+
+  const order = new Map(preferred.map((id, index) => [id, index]));
+  return (results ?? []).sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
 
 // FNV-1a 32-bit hash of (companion + date + slot) — fast, deterministic,
@@ -127,7 +186,8 @@ type RuleFields = {
 // Pick a scene for an official companion. Looks at companion.preferred_scenes
 // intersected with `scenes.default_companions` to favour places where the
 // companion is canonically present. Falls back to preferred_scenes alone,
-// then to the global default scene.
+// then to the global default encounter pool. Locked or intimate scenes are
+// never used for global daily placement.
 async function pickOfficialScene(
   env: Env,
   companion: CompanionRow,
@@ -135,21 +195,16 @@ async function pickOfficialScene(
 ): Promise<string | null> {
   const preferred = parseStringArray(companion.preferred_scenes);
   if (preferred.length === 0) {
-    return pickFallbackSceneId(env);
+    return pickDefaultEncounterSceneId(env, prng);
   }
 
   // Find which of the preferred scenes list this companion in default_companions
   // (= the scenes that consider this companion canonical). Weight those higher.
-  const placeholders = preferred.map(() => "?").join(",");
-  const { results } = await env.DB.prepare(
-    `SELECT id, default_companions FROM scenes WHERE id IN (${placeholders}) AND is_active = 1`,
-  )
-    .bind(...preferred)
-    .all<{ id: string; default_companions: string | null }>();
+  const results = await loadEligiblePreferredScenes(env, preferred);
 
   const canonical: string[] = [];
   const acceptable: string[] = [];
-  for (const row of results ?? []) {
+  for (const row of results) {
     const defaults = parseStringArray(row.default_companions);
     if (defaults.includes(companion.id)) canonical.push(row.id);
     else acceptable.push(row.id);
@@ -157,26 +212,31 @@ async function pickOfficialScene(
 
   const pool = canonical.length > 0 ? canonical : acceptable;
   if (pool.length === 0) {
-    return preferred[0] ?? (await pickFallbackSceneId(env));
+    return pickDefaultEncounterSceneId(env, prng);
   }
   return pickFromArray(pool, prng());
 }
 
 // User-created companions have simpler rules per docs/product/daily-life-sim.md:
-//   - preferred_scenes non-empty -> rotate through them by slot index
-//   - preferred_scenes empty     -> fix to a single fallback scene
-async function pickUserScene(env: Env, companion: CompanionRow, slot: TimeSlot): Promise<string | null> {
+//   - eligible preferred_scenes -> rotate through them by slot index
+//   - none/filtered out         -> pick from the global default encounter pool
+async function pickUserScene(
+  env: Env,
+  companion: CompanionRow,
+  slot: TimeSlot,
+  prng: () => number,
+): Promise<string | null> {
   const preferred = parseStringArray(companion.preferred_scenes);
-  if (preferred.length === 0) {
-    return pickFallbackSceneId(env);
-  }
+  const eligible = await loadEligiblePreferredScenes(env, preferred);
+  if (eligible.length === 0) return pickDefaultEncounterSceneId(env, prng);
+
   const slotIndex: Record<TimeSlot, number> = {
     morning: 0,
     afternoon: 1,
     evening: 2,
     night: 3,
   };
-  return preferred[slotIndex[slot] % preferred.length] ?? preferred[0] ?? null;
+  return eligible[slotIndex[slot] % eligible.length]?.id ?? eligible[0]?.id ?? null;
 }
 
 async function computeRuleFields(
@@ -189,7 +249,7 @@ async function computeRuleFields(
   const prng = makePrng(seed);
 
   const sceneId = companion.source === "user"
-    ? await pickUserScene(env, companion, slot)
+    ? await pickUserScene(env, companion, slot, prng)
     : await pickOfficialScene(env, companion, prng);
 
   // If the database has no scenes at all, fall back to a sentinel id; the

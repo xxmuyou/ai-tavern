@@ -231,6 +231,7 @@ export type PushPreferenceResponse = {
 };
 
 export type CompanionListItem = {
+  art_cutout_url?: string | null;
   art_url: string | null;
   current_level: string | null;
   gender: Gender | null;
@@ -259,6 +260,7 @@ export type NonNeutralChatEmotionKey = Exclude<ChatEmotionKey, 'neutral'>;
 export type CompanionDetail = {
   appearance: string | null;
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
+  art_cutout_url?: string | null;
   art_url: string | null;
   background: string | null;
   canonical_art_url?: string | null;
@@ -331,6 +333,17 @@ export type RelationshipSceneUnlock = {
   name: string;
   unlocked: boolean;
   hint: string | null;
+};
+
+export type CompanionCutoutStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled';
+
+export type CompanionCutoutResponse = {
+  companion_id: string;
+  status: CompanionCutoutStatus;
+  art_cutout_url: string | null;
+  job_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
 };
 
 export type RelationshipUnlocksResponse = {
@@ -500,6 +513,7 @@ export type SceneUnlockHint = {
 };
 
 export type SceneCompanionPreview = {
+  art_cutout_url?: string | null;
   art_url: string | null;
   id: string;
   level: string | null;
@@ -664,6 +678,7 @@ export type StoryBeatResponse = {
 
 export type SceneCompanionPresent = {
   active_story_beat: StoryBeat | null;
+  art_cutout_url?: string | null;
   art_url: string | null;
   id: string;
   name: string;
@@ -806,7 +821,10 @@ export type ChatMessageInput = {
   persona_id?: string;
   // spec-036: when set, this turn carries an invitation to go to that scene.
   invite_scene_id?: string;
-  quick_action?: { type: 'gift'; item_id: 'coffee' | 'flowers' };
+  quick_action?:
+    | { type: 'gift'; item_id: 'coffee' | 'flowers' }
+    | { type: 'scene_action'; action_id: string }
+    | { type: 'custom_scene_action'; text: string };
   text: string;
 };
 
@@ -822,8 +840,8 @@ export type InviteTargetsResponse = {
   targets: InviteTarget[];
 };
 
-// spec-036: SSE `invite_result` payload — whether the companion agreed to the
-// invitation and, if so, the scene to switch to.
+// spec-038: SSE `invite_result` payload only records whether the companion
+// agreed. Web asks the user to arrive now/later before switching scenes.
 export type ChatInviteResult = {
   accepted: boolean;
   activity_completed?: boolean;
@@ -835,7 +853,7 @@ export type ChatInviteResult = {
 export type ChatQuickActionResult = {
   activity_id: string | null;
   cooldown_until: number | null;
-  item_id: 'coffee' | 'flowers';
+  item_id: string;
   memory_id: string | null;
   ok: boolean;
 };

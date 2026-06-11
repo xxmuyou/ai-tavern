@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { parseNarration } from '@/utils/narration';
+import { normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
 
 type StreamingBubbleProps = {
   text: string;
+  companionName?: string | null;
 };
 
 const DOT_FRAMES = ['.', '..', '...'];
 
-export function StreamingBubble({ text }: StreamingBubbleProps) {
+export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
@@ -40,12 +41,13 @@ export function StreamingBubble({ text }: StreamingBubbleProps) {
         {segments.map((segment, idx) => {
           const isLast = idx === segments.length - 1;
           if (segment.type === 'narration') {
+            const text = normalizeCompanionNarrationPerspective(segment.text, companionName);
             return (
               <Text
                 key={idx}
                 className="mb-1 px-1 text-sm italic leading-5 text-app-muted"
               >
-                {segment.text}
+                {text}
                 {isLast ? <Text className="text-app-muted">{'▊'}</Text> : null}
               </Text>
             );

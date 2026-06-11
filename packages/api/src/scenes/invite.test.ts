@@ -13,7 +13,7 @@ type SceneRow = {
   is_active?: number;
 };
 
-type RelRow = { user_id: string; companion_id: string; closeness?: number; romance?: number };
+type RelRow = { user_id: string; companion_id: string; closeness?: number; romance?: number; trust?: number };
 
 type Fixtures = { scenes: SceneRow[]; relationships: RelRow[] };
 
@@ -34,7 +34,7 @@ function createEnv(fixtures: Fixtures): Env {
         (r) => r.user_id === userId && r.companion_id === companionId,
       );
       return (rel
-        ? { closeness: rel.closeness ?? 0, romance: rel.romance ?? 0 }
+        ? { closeness: rel.closeness ?? 0, romance: rel.romance ?? 0, trust: rel.trust ?? 0 }
         : null) as T | null;
     },
     async run() {
@@ -69,10 +69,19 @@ const tavern: SceneRow = {
   name: "Tavern",
   unlock_condition: null,
 };
+const restaurant: SceneRow = {
+  art_url: "scenes/restaurant.png",
+  default_companions: '["maya","theo","ryan","iris"]',
+  display_order: 3,
+  id: "restaurant",
+  mood: "Warm dinner conversation",
+  name: "Restaurant",
+  unlock_condition: JSON.stringify({ companion_id: "maya", dim: "closeness", type: "min_relationship", value: 10 }),
+};
 const hotel: SceneRow = {
   art_url: "hotel.png",
   default_companions: '["maya"]',
-  display_order: 3,
+  display_order: 4,
   id: "hotel",
   mood: "Intimate",
   name: "Hotel",
@@ -82,7 +91,7 @@ const hotel: SceneRow = {
 const rooftop: SceneRow = {
   art_url: "rooftop.png",
   default_companions: '["ryan"]', // maya not present here
-  display_order: 4,
+  display_order: 5,
   id: "rooftop",
   mood: "Quiet",
   name: "Rooftop",
@@ -105,6 +114,16 @@ describe("loadInviteTargets", () => {
 
     const unlocked = createEnv({ relationships: [{ companion_id: "maya", romance: 60, user_id: "user-1" }], scenes: [tavern, hotel] });
     expect((await loadInviteTargets(unlocked, "user-1", "maya", null)).map((t) => t.id)).toEqual(["tavern", "hotel"]);
+  });
+
+  it("reveals Restaurant through a low closeness gate, not a romance gate", async () => {
+    const locked = createEnv({ relationships: [{ companion_id: "maya", closeness: 9, romance: 0, user_id: "user-1" }], scenes: [restaurant] });
+    expect(await loadInviteTargets(locked, "user-1", "maya", null)).toEqual([]);
+
+    const unlocked = createEnv({ relationships: [{ companion_id: "maya", closeness: 10, romance: 0, user_id: "user-1" }], scenes: [restaurant] });
+    expect(await loadInviteTargets(unlocked, "user-1", "maya", null)).toMatchObject([
+      { art_url: "scenes/restaurant.png", id: "restaurant", name: "Restaurant" },
+    ]);
   });
 });
 

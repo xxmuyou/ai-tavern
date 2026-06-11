@@ -19,6 +19,7 @@ type SceneRow = {
   default_companions: string | null;
   display_order: number;
   is_active: number;
+  unlock_condition: string | null;
 };
 
 type DailyStateRow = {
@@ -53,9 +54,10 @@ function buildEnv(opts: { companions: CompanionRow[]; scenes: SceneRow[] }): Env
           const c = companions.get(binds[0] as string);
           return (c && c.is_active === 1 ? c : null) as T | null;
         }
-        if (s.startsWith("SELECT id FROM scenes WHERE is_active = 1 ORDER BY display_order")) {
+        if (s.startsWith("SELECT id FROM scenes WHERE id IN")) {
+          const ids = new Set(binds as string[]);
           const list = [...scenes.values()]
-            .filter((sc) => sc.is_active === 1)
+            .filter((sc) => ids.has(sc.id) && sc.is_active === 1 && sc.unlock_condition === null)
             .sort((a, b) => a.display_order - b.display_order || a.id.localeCompare(b.id));
           return (list[0] ? { id: list[0].id } : null) as T | null;
         }
@@ -65,8 +67,16 @@ function buildEnv(opts: { companions: CompanionRow[]; scenes: SceneRow[] }): Env
         if (s.startsWith("SELECT id, default_companions FROM scenes WHERE id IN")) {
           const list = binds
             .map((id) => scenes.get(id as string))
-            .filter((sc): sc is SceneRow => !!sc && sc.is_active === 1)
+            .filter((sc): sc is SceneRow => !!sc && sc.is_active === 1 && sc.unlock_condition === null)
             .map((sc) => ({ id: sc.id, default_companions: sc.default_companions }));
+          return { results: list as unknown as T[] };
+        }
+        if (s.startsWith("SELECT id FROM scenes WHERE id IN")) {
+          const list = binds
+            .map((id) => scenes.get(id as string))
+            .filter((sc): sc is SceneRow => !!sc && sc.is_active === 1 && sc.unlock_condition === null)
+            .sort((a, b) => a.display_order - b.display_order || a.id.localeCompare(b.id))
+            .map((sc) => ({ id: sc.id }));
           return { results: list as unknown as T[] };
         }
         return { results: [] };
@@ -118,7 +128,15 @@ const USER_ALEX: CompanionRow = {
   id: "alex",
   source: "user",
   name: "Alex",
-  preferred_scenes: JSON.stringify(["skyline_roof_garden", "neighborhood_park"]),
+  preferred_scenes: JSON.stringify(["rainlit_bookshop", "pier_cafe"]),
+  is_active: 1,
+};
+
+const USER_LOCKED_PREFS: CompanionRow = {
+  id: "locked_pref",
+  source: "user",
+  name: "LockedPrefs",
+  preferred_scenes: JSON.stringify(["midnight_hotel_suite", "neighborhood_park"]),
   is_active: 1,
 };
 
@@ -131,12 +149,26 @@ const USER_NO_SCENES: CompanionRow = {
 };
 
 const SCENES: SceneRow[] = [
-  { id: "underground_livehouse", default_companions: JSON.stringify(["maya"]), display_order: 1, is_active: 1 },
-  { id: "rainlit_bookshop", default_companions: null, display_order: 2, is_active: 1 },
-  { id: "skyline_roof_garden", default_companions: null, display_order: 3, is_active: 1 },
-  { id: "neighborhood_park", default_companions: null, display_order: 4, is_active: 1 },
-  { id: "pier_cafe", default_companions: null, display_order: 5, is_active: 1 },
+  { id: "midnight_hotel_suite", default_companions: null, display_order: 1, is_active: 1, unlock_condition: null },
+  { id: "neighborhood_park", default_companions: null, display_order: 2, is_active: 1, unlock_condition: JSON.stringify({ type: "min_relationship", dim: "trust", value: 10 }) },
+  { id: "underground_livehouse", default_companions: JSON.stringify(["maya"]), display_order: 3, is_active: 1, unlock_condition: JSON.stringify({ type: "min_relationship", dim: "closeness", value: 20 }) },
+  { id: "rainlit_bookshop", default_companions: null, display_order: 4, is_active: 1, unlock_condition: null },
+  { id: "pier_cafe", default_companions: null, display_order: 5, is_active: 1, unlock_condition: null },
+  { id: "central_station_plaza", default_companions: null, display_order: 6, is_active: 1, unlock_condition: null },
+  { id: "iron_forge_gym", default_companions: null, display_order: 7, is_active: 1, unlock_condition: null },
+  { id: "rain_arcade", default_companions: null, display_order: 8, is_active: 1, unlock_condition: null },
+  { id: "harbor_weekend_market", default_companions: null, display_order: 9, is_active: 1, unlock_condition: null },
 ];
+
+const DEFAULT_ENCOUNTER_POOL = new Set([
+  "central_station_plaza",
+  "pier_cafe",
+  "midnight_convenience_store",
+  "rainlit_bookshop",
+  "iron_forge_gym",
+  "rain_arcade",
+  "harbor_weekend_market",
+]);
 
 describe("getOrComputeDailyState", () => {
   it("returns stable rule fields for same (companion, date, slot)", async () => {
@@ -169,20 +201,37 @@ describe("getOrComputeDailyState", () => {
     }
   });
 
-  it("user-created companion rotates through preferred_scenes by slot", async () => {
+  it("user-created companion rotates through eligible preferred_scenes by slot", async () => {
     const env = buildEnv({ companions: [USER_ALEX], scenes: SCENES });
     const morning = await getOrComputeDailyState(env, "alex", "2026-05-26", "morning");
     const afternoon = await getOrComputeDailyState(env, "alex", "2026-05-26", "afternoon");
-    expect(morning?.scene_id).toBe("skyline_roof_garden");
-    expect(afternoon?.scene_id).toBe("neighborhood_park");
+    expect(morning?.scene_id).toBe("rainlit_bookshop");
+    expect(afternoon?.scene_id).toBe("pier_cafe");
   });
 
-  it("user companion with no preferred_scenes pins to fallback scene", async () => {
+  it("user companion with no preferred_scenes falls back to default encounter pool", async () => {
     const env = buildEnv({ companions: [USER_NO_SCENES], scenes: SCENES });
     const morning = await getOrComputeDailyState(env, "no_pref", "2026-05-26", "morning");
     const night = await getOrComputeDailyState(env, "no_pref", "2026-05-26", "night");
-    expect(morning?.scene_id).toBe("underground_livehouse"); // lowest display_order
-    expect(night?.scene_id).toBe("underground_livehouse");
+    expect(DEFAULT_ENCOUNTER_POOL.has(morning!.scene_id)).toBe(true);
+    expect(DEFAULT_ENCOUNTER_POOL.has(night!.scene_id)).toBe(true);
+    expect(morning?.scene_id).not.toBe("midnight_hotel_suite");
+    expect(night?.scene_id).not.toBe("neighborhood_park");
+  });
+
+  it("filters intimate and locked preferred_scenes before falling back", async () => {
+    const env = buildEnv({ companions: [USER_LOCKED_PREFS], scenes: SCENES });
+    const state = await getOrComputeDailyState(env, "locked_pref", "2026-05-26", "morning");
+    expect(DEFAULT_ENCOUNTER_POOL.has(state!.scene_id)).toBe(true);
+    expect(state?.scene_id).not.toBe("midnight_hotel_suite");
+    expect(state?.scene_id).not.toBe("neighborhood_park");
+  });
+
+  it("official companion ignores locked canonical scenes", async () => {
+    const env = buildEnv({ companions: [OFFICIAL_MAYA], scenes: SCENES });
+    const state = await getOrComputeDailyState(env, "maya", "2026-05-26", "morning");
+    expect(state?.scene_id).toBe("rainlit_bookshop");
+    expect(state?.scene_id).not.toBe("underground_livehouse");
   });
 
   it("inactive companion returns null", async () => {

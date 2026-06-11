@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
@@ -9,7 +9,8 @@ import type { CompanionListItem } from '@/api/types';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebEmptyState, WebLoading, WebTabs, WebTag } from '@/components/web/ui';
 import { useBilling } from '@/hooks/use-billing';
-import { type CompanionSourceFilter, useCompanions } from '@/hooks/use-companions';
+import { type CompanionSourceFilter, useCompanions, usePublicCompanions } from '@/hooks/use-companions';
+import { useSession } from '@/hooks/use-session';
 import { formatLevel } from '@/utils/format';
 
 const FILTERS: { id: CompanionSourceFilter; label: string }[] = [
@@ -19,22 +20,46 @@ const FILTERS: { id: CompanionSourceFilter; label: string }[] = [
   { id: 'public', label: 'Public' },
 ];
 
+type DiscoveryTopic = 'recommended' | 'official' | 'my' | 'relationship' | 'story' | 'new';
+
+const DISCOVERY_TOPICS: { id: DiscoveryTopic; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'recommended', label: 'Recommended', icon: 'sparkles-outline' },
+  { id: 'official', label: 'Official', icon: 'ribbon-outline' },
+  { id: 'my', label: 'My companions', icon: 'person-circle-outline' },
+  { id: 'relationship', label: 'Relationship', icon: 'heart-outline' },
+  { id: 'story', label: 'Story', icon: 'git-branch-outline' },
+  { id: 'new', label: 'New', icon: 'flash-outline' },
+];
+
 type WebCompanionDirectoryProps = {
   subtitle?: string;
   title?: string;
 };
 
 export function WebCompanionDirectory({
-  subtitle = 'Official cast and your own creations. Tap a card to step into their profile, story beats, and gallery.',
-  title = 'Companions',
+  subtitle = 'Find a companion, open their profile, and start a private roleplay thread.',
+  title = 'Discover',
 }: WebCompanionDirectoryProps) {
   const router = useRouter();
   const [source, setSource] = useState<CompanionSourceFilter>('all');
-  const { data, error, isLoading, refetch } = useCompanions(source);
-  const userCompanions = useCompanions('user');
-  const billing = useBilling();
+  const [topic, setTopic] = useState<DiscoveryTopic>('recommended');
+  const { isLoading: isSessionLoading, session } = useSession();
+  const isSignedIn = Boolean(session);
+  const authedCompanions = useCompanions(source, { enabled: isSignedIn });
+  const publicCompanions = usePublicCompanions();
+  const userCompanions = useCompanions('user', { enabled: isSignedIn });
+  const billing = useBilling({ enabled: isSignedIn });
+  const canUseAuthedData = isSignedIn && !isUnauthorizedError(authedCompanions.error);
+  const data = canUseAuthedData ? authedCompanions.data : publicCompanions.data;
+  const error = canUseAuthedData ? authedCompanions.error : publicCompanions.error;
+  const isLoading = isSessionLoading || (canUseAuthedData ? authedCompanions.isLoading : publicCompanions.isLoading);
+  const refetch = canUseAuthedData ? authedCompanions.refetch : publicCompanions.refetch;
 
   function createCompanion() {
+    if (!canUseAuthedData) {
+      router.push('/auth/login' as Href);
+      return;
+    }
     const limit = billing.data?.entitlements.custom_companion_limit;
     const count = userCompanions.data?.items.length ?? 0;
     if (typeof limit === 'number' && count >= limit) {
@@ -44,20 +69,30 @@ export function WebCompanionDirectory({
     router.push('/companion-create' as Href);
   }
 
-  const items = data?.items ?? [];
+  const visibleItems = useMemo(
+    () => filterDiscoveryItems(data?.items ?? [], topic, source, canUseAuthedData),
+    [canUseAuthedData, data?.items, source, topic],
+  );
   const customLimit = billing.data?.entitlements.custom_companion_limit;
   const customCount = userCompanions.data?.items.length ?? 0;
 
   return (
-    <WebAppShell
-      actions={<WebButton label="Create companion" onPress={createCompanion} variant="primary" />}
-      title={title}
-      subtitle={subtitle}
-    >
+    <WebAppShell title={title} subtitle={subtitle}>
+      <View className="mb-7 flex-row flex-wrap items-start justify-between gap-4">
+        <View className="min-w-0 flex-1">
+          <Text className="font-serif text-display-sm text-app-ink">{title}</Text>
+          <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">{subtitle}</Text>
+        </View>
+        <WebButton label="Create companion" onPress={createCompanion} variant="primary" />
+      </View>
+
       <View className="mb-8 flex-row flex-wrap items-center justify-between gap-4">
         <WebTabs
           active={source}
-          onChange={(id) => setSource(id as CompanionSourceFilter)}
+          onChange={(id) => {
+            setSource(id as CompanionSourceFilter);
+            setTopic('recommended');
+          }}
           tabs={FILTERS.map((f) => ({ id: f.id, label: f.label }))}
           variant="pill"
         />
@@ -65,8 +100,30 @@ export function WebCompanionDirectory({
           <View className="h-6 w-6 items-center justify-center rounded-full bg-ember-soft">
             <Ionicons color="#9A4318" name="sparkles-outline" size={12} />
           </View>
-          <Text className="text-caption text-app-muted">{formatCompanionCount(customCount, customLimit)}</Text>
+          <Text className="text-caption text-app-muted">{formatCompanionCount(customCount, customLimit, canUseAuthedData)}</Text>
         </View>
+      </View>
+
+      <View className="mb-8 flex-row flex-wrap gap-2">
+        {DISCOVERY_TOPICS.map((item) => {
+          const active = topic === item.id;
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() => setTopic(item.id)}
+              className={`min-h-10 flex-row items-center gap-2 rounded-full border px-4 ${
+                active ? 'border-app-rose/35 bg-app-rose-soft' : 'border-app-line bg-app-surface hover:bg-app-sunken'
+              }`}
+            >
+              <Ionicons color={active ? '#9A2F4F' : '#7A6A5E'} name={item.icon} size={14} />
+              <Text className={`text-caption font-semibold ${active ? 'text-app-rose-deep' : 'text-app-ink-soft'}`}>
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       {isLoading ? (
@@ -78,16 +135,16 @@ export function WebCompanionDirectory({
           onAction={refetch}
           title="Companions unavailable"
         />
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <WebEmptyState
           actionLabel="Refresh"
-          description="No companions are active yet."
+          description="No companions match this view yet."
           onAction={refetch}
           title="No companions yet"
         />
       ) : (
         <View className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {items.map((companion) => (
+          {visibleItems.map((companion) => (
             <CompanionTile
               key={companion.id}
               companion={companion}
@@ -100,15 +157,52 @@ export function WebCompanionDirectory({
   );
 }
 
-function formatCompanionCount(count: number, limit: number | null | undefined): string {
+function formatCompanionCount(count: number, limit: number | null | undefined, isSignedIn: boolean): string {
+  if (!isSignedIn) {
+    return 'Sign in to create companions';
+  }
   if (limit === null) {
     return `${count} custom companions · unlimited`;
   }
   return `${count}/${limit ?? 3} custom companions`;
 }
 
+function isUnauthorizedError(error: unknown): boolean {
+  return (error as { status?: number } | null)?.status === 401;
+}
+
+function filterDiscoveryItems(
+  items: CompanionListItem[],
+  topic: DiscoveryTopic,
+  source: CompanionSourceFilter,
+  isSignedIn: boolean,
+): CompanionListItem[] {
+  if (!isSignedIn && (source === 'user' || source === 'favorites')) {
+    return [];
+  }
+  switch (topic) {
+    case 'official':
+      return items.filter((item) => item.source === 'official');
+    case 'my':
+      return items.filter((item) => item.source === 'user');
+    case 'relationship':
+      return items.filter((item) => Boolean(item.relationship_role));
+    case 'story':
+      return items.filter((item) => item.preferred_scenes.length > 0 || item.tags.length > 0);
+    case 'new':
+      return [...items].sort((a, b) => (b.last_interaction_at ?? 0) - (a.last_interaction_at ?? 0));
+    case 'recommended':
+    default:
+      return [...items].sort((a, b) => (b.play_count ?? 0) - (a.play_count ?? 0));
+  }
+}
+
 function CompanionTile({ companion, onPress }: { companion: CompanionListItem; onPress: () => void }) {
   const imageSource = mediaSource(companion.art_url);
+  const tags = companion.tags.slice(0, 3);
+  const intro = companion.relationship_role
+    ?? tags[0]
+    ?? (companion.source === 'user' ? 'Your custom companion' : 'Ready for a private conversation');
   return (
     <Pressable
       accessibilityRole="link"
@@ -138,18 +232,34 @@ function CompanionTile({ companion, onPress }: { companion: CompanionListItem; o
           </WebTag>
         </View>
       </View>
-      <View className="flex-1 gap-2 p-5">
+      <View className="flex-1 gap-3 p-5">
         <Text className="font-serif text-title text-app-ink" numberOfLines={1}>{companion.name}</Text>
-        {companion.relationship_role ? (
-          <Text className="text-caption text-rose-deep" numberOfLines={1}>{companion.relationship_role}</Text>
+        <Text className="text-body-sm leading-5 text-app-muted" numberOfLines={2}>{intro}</Text>
+        {tags.length > 0 ? (
+          <View className="flex-row flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <WebTag key={tag} size="sm" variant="neutral">{tag}</WebTag>
+            ))}
+          </View>
         ) : null}
-        <View className="mt-2 flex-row items-center gap-2 text-caption text-app-muted">
-          <Ionicons color="#7A6A5E" name="chatbubble-ellipses-outline" size={12} />
-          <Text className="text-caption text-app-muted">Tap to start a conversation</Text>
+        <View className="mt-auto flex-row items-center justify-between gap-3 pt-2">
+          <View className="flex-row items-center gap-2">
+            <Ionicons color="#7A6A5E" name="chatbubble-ellipses-outline" size={12} />
+            <Text className="text-caption text-app-muted">{formatPlayCount(companion.play_count)}</Text>
+          </View>
+          <View className="rounded-full bg-app-rose-soft px-4 py-2">
+            <Text className="text-caption font-semibold text-app-rose-deep">Chat</Text>
+          </View>
         </View>
       </View>
     </Pressable>
   );
+}
+
+function formatPlayCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M chats`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K chats`;
+  return `${count} chats`;
 }
 
 const tileStyles = StyleSheet.create({

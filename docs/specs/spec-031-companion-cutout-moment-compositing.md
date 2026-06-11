@@ -2,6 +2,8 @@
 
 > **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-020(emotion-art), spec-022(RunningHub), spec-027(moment images)  |  **估时：** 4-6 天  |  **状态：** 📝 draft
 
+> **2026-06-10 口径更新：** 本 spec 原本把 cutout 定位为 moment image 后端管线的内部能力。Web 前端直接消费 companion cutout、`art_cutout_url` 展示字段与 ensure/status 端点，以 [spec-038](./spec-038-web-scene-immersion-and-unlocks.md) 为新权威。
+
 ---
 
 ## Context

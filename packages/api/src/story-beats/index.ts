@@ -350,7 +350,7 @@ function buildMomentFromBeat(
         scene_hint: null,
         target_scene_id: null,
         transition_mode: "stay",
-        user_narration: `<narration>I stay with you in ${scene.name}, giving the moment room.</narration>Tell me what you need.`,
+        user_narration: `<narration>You stay with them in ${scene.name}, giving the moment room.</narration>Tell me what you need.`,
       },
       {
         completes_beat: true,
@@ -361,7 +361,7 @@ function buildMomentFromBeat(
         scene_hint: null,
         target_scene_id: null,
         transition_mode: "stay",
-        user_narration: `<narration>I step into the moment with you instead of letting it pass.</narration>I'm here.`,
+        user_narration: `<narration>You step into the moment instead of letting it pass.</narration>I'm here.`,
       },
       travel,
     ],
@@ -388,7 +388,7 @@ function buildTravelChoice(
       scene_hint: sceneHint,
       target_scene_id: target.id,
       transition_mode: "scene",
-      user_narration: "<narration>I offer to go with you instead of leaving this as words.</narration>Let's do this together.",
+      user_narration: "<narration>You offer to go together instead of leaving this as words.</narration>Let's do this together.",
     };
   }
   return {
@@ -400,7 +400,7 @@ function buildTravelChoice(
     scene_hint: sceneHint,
     target_scene_id: null,
     transition_mode: "offstage",
-    user_narration: "<narration>I offer to go with you instead of leaving this as words.</narration>Let's do this together.",
+    user_narration: "<narration>You offer to go together instead of leaving this as words.</narration>Let's do this together.",
   };
 }
 

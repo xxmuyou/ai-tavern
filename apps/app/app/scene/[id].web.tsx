@@ -103,6 +103,11 @@ export default function WebSceneDetailScreen() {
       subtitle={scene.mood}
       breadcrumbs={[{ href: SCENES_ROUTE, label: 'Scenes' }, { label: scene.name }]}
     >
+      <View className="mb-7">
+        <Text className="font-serif text-display-sm text-app-ink">{scene.name}</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">{scene.mood}</Text>
+      </View>
+
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[1.4fr_1fr]">
         {/* Hero card */}
         <WebCard padding="none" className="overflow-hidden">

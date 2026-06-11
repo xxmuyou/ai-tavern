@@ -335,7 +335,7 @@ describe("buildMomentPrompt", () => {
   it("prioritizes a sanitized visual action without including the user's raw action", () => {
     const prompt = buildMomentPrompt({
       ...sampleContext(),
-      previousUserText: "<narration>I offer you a small bouquet.</narration>These are for you.",
+      previousUserText: "<narration>You offer a small bouquet.</narration>These are for you.",
       sourceReply: "<narration>Maya blushes.</narration>Thank you.",
       visualAction: {
         body_pose: "standing slightly turned toward the viewer",
@@ -352,7 +352,7 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Position in scene: near the cafe table");
     expect(prompt).toContain("The viewer/user is not visible");
     expect(prompt).not.toContain("Render this exact visible moment");
-    expect(prompt).not.toContain("I offer you a small bouquet");
+    expect(prompt).not.toContain("You offer a small bouquet");
     expect(prompt).not.toContain("Maya blushes");
   });
 

@@ -3,7 +3,7 @@ import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
 import { maybeCreateConflictEvent } from "../events/conflict";
-import { completeActiveActivityForChat, loadActiveActivityForChat } from "../life/activity";
+import { loadActiveActivityForChat } from "../life/activity";
 import {
   commitQuickAction,
   validateQuickAction,
@@ -391,7 +391,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
       await releaseReservation(env, chatReservationId, "llm_stream_failed");
     }
     const message = err instanceof Error ? err.message : String(err);
-    sse.writeEvent("error", { code: "LLM_UNAVAILABLE", message });
+    sse.writeEvent("error", { code: err instanceof LLMError ? err.code : "LLM_UNAVAILABLE", message });
     sse.close();
     return;
   }
@@ -511,10 +511,9 @@ async function runChat(args: RunChatArgs): Promise<void> {
         });
   }
 
-  // spec-036: if this turn carried an invitation, decide whether the character
-  // agreed and tell the client. Only `accepted: true` switches the scene; any
-  // failure falls back to "stay put". Relationship damage from an inappropriate
-  // invite already happened above through the normal signal extraction.
+  // spec-038: if this turn carried an invitation, decide whether the character
+  // agreed and tell the client. `accepted: true` now creates a client-side
+  // pending arrival; the scene and activity only change after the user confirms.
   if (inviteTarget) {
     const resolution = await resolveInvite(env, {
       companionReply: replyBuffer,
@@ -524,13 +523,9 @@ async function runChat(args: RunChatArgs): Promise<void> {
       userId: user.id,
       userText,
     });
-    let activityCompleted = false;
-    if (resolution.accepted && activity_id) {
-      activityCompleted = Boolean(await completeActiveActivityForChat(env, user.id, activity_id));
-    }
     sse.writeEvent("invite_result", {
       accepted: resolution.accepted,
-      activity_completed: activityCompleted,
+      activity_completed: false,
       reason: resolution.reason,
       scene_art_url: resolution.accepted ? inviteTarget.art_url : null,
       scene_id: resolution.accepted ? inviteTarget.id : null,

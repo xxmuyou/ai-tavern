@@ -34,6 +34,10 @@ import {
   loadEffectiveCompanionArtUrl,
   setCompanionProfileImageFromGeneration,
 } from "../image-gen/profile-outfit";
+import {
+  handleCompanionCutoutRequest,
+  loadCompanionCutoutStatus,
+} from "./cutout-routes";
 
 const MAX_FREE_USER_COMPANIONS = QUOTA_LIMITS.FREE_CUSTOM_COMPANIONS;
 const NAME_MAX = 80;
@@ -73,6 +77,7 @@ type CompanionRow = {
   art_url: string | null;
   canonical_art_url?: string | null;
   profile_image_override?: string | null;
+  art_cutout_key: string | null;
   art_emotions: string | null;
   gender: string | null;
   initial_dims: string | null;
@@ -186,6 +191,11 @@ export async function handleCompanionsRequest(
   const profileOutfitResponse = await handleProfileOutfitRequest(request, env, pathname);
   if (profileOutfitResponse) {
     return profileOutfitResponse;
+  }
+
+  const cutoutResponse = await handleCompanionCutoutRequest(request, env, pathname);
+  if (cutoutResponse) {
+    return cutoutResponse;
   }
 
   const publishMatch = pathname.match(/^\/companions\/([^/]+)\/publish$/);
@@ -636,6 +646,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
 
   const relationship = await loadRelationship(env, user.id, companionId);
   const effectiveArt = await loadEffectiveCompanionArtUrl(env, user.id, companionId);
+  const cutoutStatus = await loadCompanionCutoutStatus(env, user.id, companionId);
   const dimensions = relationship
     ? {
         closeness: relationship.closeness,
@@ -653,6 +664,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     art_emotions: effectiveArt.profile_image_override
       ? neutralOnlyArtEmotions(effectiveArt.art_url ?? "")
       : serializeArtEmotions(row.art_emotions),
+    art_cutout_url: cutoutStatus?.status === "succeeded" ? cutoutStatus.art_cutout_url : null,
     art_url: effectiveArt.art_url,
     background: row.background,
     canonical_art_url: effectiveArt.canonical_art_url,
@@ -951,7 +963,7 @@ async function loadCompanion(env: Env, companionId: string): Promise<CompanionRo
     `SELECT id, source, created_by, is_active, is_public, name, appearance,
             personality, background, speech_style, relationship_role, want,
             secret, boundary, greeting, example_dialogues, tags, play_count,
-            preferred_scenes, art_url, art_emotions, gender, voice_id, voice_speed,
+            preferred_scenes, art_url, art_cutout_key, art_emotions, gender, voice_id, voice_speed,
             initial_dims, created_at, updated_at
      FROM companions
      WHERE id = ?`,
@@ -988,6 +1000,7 @@ function serializeOwnCompanion(env: Env, row: CompanionRow): Record<string, unkn
   return {
     appearance: row.appearance,
     art_emotions: serializeArtEmotions(row.art_emotions),
+    art_cutout_url: row.art_cutout_key,
     art_url: row.art_url,
     background: row.background,
     created_at: row.created_at,

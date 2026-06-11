@@ -104,6 +104,13 @@ export default function WebMeScreen() {
 
   return (
     <WebAppShell title="Me" subtitle="Account, subscription, usage, and workspace controls.">
+      <View className="mb-7">
+        <Text className="font-serif text-display-sm text-app-ink">Me</Text>
+        <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-app-muted">
+          Account, subscription, usage, and workspace controls.
+        </Text>
+      </View>
+
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[340px_1fr]">
         {/* Profile card */}
         <View className="gap-5">

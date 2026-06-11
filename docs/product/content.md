@@ -1,6 +1,6 @@
 # 内容清单
 
-> 本文档保留 Aurelia City 世界观、官方角色和 V1 legacy 内容记录。当前官方场景权威来源是 [`scene-catalog-v2.md`](./scene-catalog-v2.md)：24 个按关系阶段组织的 scene。
+> 本文档保留 Aurelia City 世界观、官方角色和 V1 legacy 内容记录。当前官方场景权威来源是 [`scene-catalog-v2.md`](./scene-catalog-v2.md)：25 个按关系阶段组织的 scene。
 >
 > **关于"暂定"标注：** 整份文档都是 *(暂定)*，等用户审阅、内容创作打磨后定稿。
 >
@@ -39,10 +39,10 @@
 
 ## 2. 场景清单（V2 current）
 
-每个场景的最终字段对应 `scenes` 表（[data-model.md §3.4](../architecture/data-model.md#34-scenes)）。V2 起，当前官方场景清单改为 24 个，完整字段、prompt、视觉边界以 [`scene-catalog-v2.md`](./scene-catalog-v2.md) 为准。
+每个场景的最终字段对应 `scenes` 表（[data-model.md §3.4](../architecture/data-model.md#34-scenes)）。V2 起，当前官方场景清单改为 25 个，完整字段、prompt、视觉边界以 [`scene-catalog-v2.md`](./scene-catalog-v2.md) 为准。
 
 这些场景同时是日常生活系统的活动容器：
-- daily state 只能从已解锁且适配的 scene 中选择 companion 今日位置
+- 默认 daily state 只从公共、非私密、无门槛的默认偶遇池中选择 companion 今日位置；已解锁场景用于主动进入、邀请、剧情转场和解锁 CTA，不参与全局默认随机
 - activity / date / memory 都发生在 scene 内
 - 场景的 `tags` 与 `possible_events` 决定哪些活动和事件更自然
 - 不为了日常系统修改场景基础属性；如需扩展，只新增玩法映射表
@@ -53,7 +53,7 @@
 |---|---|
 | public | `central_station_plaza`, `pier_cafe`, `midnight_convenience_store`, `rainlit_bookshop` |
 | familiar | `apartment_lobby`, `shared_laundry_room`, `neighborhood_park`, `creative_studio` |
-| casual_date | `indie_cinema`, `dessert_parlor`, `vinyl_record_shop`, `riverside_walk` |
+| casual_date | `restaurant`, `indie_cinema`, `dessert_parlor`, `vinyl_record_shop`, `riverside_walk` |
 | emotional | `skyline_roof_garden`, `last_bus_stop`, `crescent_reading_room`, `rain_arcade` |
 | active | `iron_forge_gym`, `harbor_weekend_market`, `underground_livehouse`, `neon_game_arcade` |
 | intimate | `midnight_hotel_suite`, `private_apartment_bedroom`, `rainfall_window_lounge`, `dawn_balcony` |

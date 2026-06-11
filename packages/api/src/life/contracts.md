@@ -110,25 +110,30 @@ trigger a memory write (see /memories).
 
 Request body adds optional `activity_id` and `quick_action`. When `activity_id`
 is present, chat starts from the activity's `scene_id` and the prompt receives
-the activity context. A scene invite may still be sent from an activity chat; if
-the companion accepts, the activity is completed automatically before the scene
-switch response is emitted.
+the activity context. A scene invite may still be sent from an activity chat.
+Per spec-038, `invite_result.accepted=true` only means the companion agreed; Web
+creates a pending arrival and completes the current activity only after the user
+confirms arrival.
 
 ```jsonc
 {
   "text": "<narration>I set a coffee down near you.</narration>I got this for us.",
   "activity_id": "act_xxx", // optional
   "invite_scene_id": "underground_livehouse", // optional
-  "quick_action": { "type": "gift", "item_id": "coffee" } // optional
+  "quick_action": { "type": "custom_scene_action", "text": "draw a heart on the foggy window" } // optional
 }
 ```
 
-`quick_action` supports `coffee` and `flowers`. Coffee requires the current
-scene name/mood/tags to include `cafe` or `coffee`; flowers are allowed in any
-scene. The same user can use the same item for the same companion once every
-6 hours. Successful quick actions create a completed `gift` activity with
-metadata, apply a small fixed relationship delta, trigger the memory hook, and
-emit SSE `quick_action_result`.
+`quick_action` supports legacy gifts (`coffee`, `flowers`), catalog scene
+actions (`{ "type": "scene_action", "action_id": "..." }`), and one-off custom
+scene actions (`{ "type": "custom_scene_action", "text": "..." }`). Coffee
+requires the current scene name/mood/tags to include `cafe` or `coffee`;
+catalog and custom scene actions require a current scene. Custom action text is
+trimmed and capped at 120 characters. Successful quick actions create a
+completed `gift` activity with metadata, trigger the memory hook, emit SSE
+`quick_action_result`, and may apply relationship deltas for gifts/catalog
+actions. Custom actions do not apply a fixed relationship delta; the companion
+reply and relationship signal extraction carry the emotional consequence.
 
 ---
 

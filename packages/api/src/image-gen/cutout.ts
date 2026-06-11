@@ -265,7 +265,7 @@ async function enqueue(env: Env, jobId: string, now: number): Promise<void> {
   });
 }
 
-async function loadCutoutByCompanionAndSource(
+export async function loadCutoutByCompanionAndSource(
   env: Env,
   companionId: string,
   sourceArtUrl: string,
