@@ -94,6 +94,7 @@ export const EMAIL_STORAGE_KEY = 'xtbit.companion.email';
 export const BILLING_EMAIL_STORAGE_KEY = 'xtbit.billing.email';
 export const AUTH_TOKEN_STORAGE_KEY = 'xtbit.companion.authToken';
 export const AUTH_EXPIRES_STORAGE_KEY = 'xtbit.companion.authExpiresAt';
+export const AUTH_SESSION_CLEARED_EVENT = 'xtbit.auth.sessionCleared';
 
 function resolveApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
@@ -1452,6 +1453,7 @@ export function clearStoredAuthSession(): void {
   window.localStorage.removeItem(BILLING_EMAIL_STORAGE_KEY);
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(AUTH_EXPIRES_STORAGE_KEY);
+  window.dispatchEvent(new Event(AUTH_SESSION_CLEARED_EVENT));
 }
 
 export async function requestJson<T>(
@@ -1479,6 +1481,9 @@ export async function requestJson<T>(
   const payload = (await response.json().catch(() => ({}))) as T & ApiErrorPayload;
 
   if (!response.ok) {
+    if (response.status === 401 && !options?.skipAuth) {
+      clearStoredAuthSession();
+    }
     const error: ApiRequestError = new Error(apiErrorMessage(payload, `HTTP ${response.status}`));
     error.code = payload.code ?? payload.error;
     error.retryAfter = parseRetryAfter(response.headers.get('retry-after'));

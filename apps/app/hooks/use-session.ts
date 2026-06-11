@@ -1,6 +1,7 @@
 import { createContext, createElement, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import {
+  AUTH_SESSION_CLEARED_EVENT,
   applySessionFragment,
   clearStoredAuthSession,
   logout,
@@ -11,7 +12,7 @@ import {
   type AuthSession,
   type MagicLinkResponse,
 } from '@/api/companion-client';
-import { invalidateMeCache } from '@/hooks/use-me';
+import { invalidateMeCache } from '@/hooks/me-cache';
 
 type SessionContextValue = {
   acceptSessionFragment: (hash: string) => AuthSession | null;
@@ -47,6 +48,19 @@ export function SessionProvider({ children }: PropsWithChildren) {
       clearStoredAuthSession();
     }
     setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const handleSessionCleared = () => {
+      invalidateMeCache();
+      setError(null);
+      setSession(null);
+    };
+    window.addEventListener(AUTH_SESSION_CLEARED_EVENT, handleSessionCleared);
+    return () => window.removeEventListener(AUTH_SESSION_CLEARED_EVENT, handleSessionCleared);
   }, []);
 
   const storeSession = useCallback((nextSession: AuthSession) => {
