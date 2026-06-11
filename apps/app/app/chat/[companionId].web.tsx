@@ -1404,7 +1404,7 @@ export default function WebChatScreen() {
                 </View>
               ) : null}
               <View className="flex-row items-end gap-3">
-                <View className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 focus-within:border-rose/60">
+                <View className="flex-1 rounded-2xl border border-white/15 bg-[#21142A] px-4 py-2.5 focus-within:border-rose/60">
                   <TextInput
                     multiline
                     onChangeText={setDraft}
@@ -1599,14 +1599,14 @@ function WebInviteDialog({
                   key={target.id}
                   accessibilityRole="button"
                   onPress={() => onSelect(target)}
-                  className="flex-row items-center gap-3 rounded-xl border border-white/10 bg-white/[0.075] p-2 transition-colors hover:border-app-rose/30 hover:bg-rose-300/16 active:opacity-75"
+                  className="flex-row items-center gap-3 rounded-xl border border-white/15 bg-[#21142A] p-2 transition-colors hover:border-app-rose/40 hover:bg-[#2A1934] active:opacity-80"
                 >
-                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-rose-300/12">
+                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-[#2A1934]">
                     {thumb ? <Image source={thumb} resizeMode="cover" className="h-full w-full" /> : null}
                   </View>
                   <View className="min-w-0 flex-1">
                     <Text className="text-base font-semibold text-white">{target.name}</Text>
-                    <Text className="mt-1 text-body-sm leading-5 text-rose-50/60" numberOfLines={2}>
+                    <Text className="mt-1 text-body-sm leading-5 text-rose-50/75" numberOfLines={2}>
                       {target.mood}
                     </Text>
                   </View>
@@ -1659,7 +1659,7 @@ function WebEventDialog({
       <Text className="text-base leading-7 text-white">{event.payload.description}</Text>
 
       {result ? (
-        <View className="mt-5 rounded-2xl border border-app-rose/25 bg-rose-300/12 p-4">
+        <View className="mt-5 rounded-2xl border border-app-rose/30 bg-[#21142A] p-4">
           <Text className="text-body-sm leading-6 text-white">{result.result.description}</Text>
           {result.level_changed ? (
             <Text className="mt-3 text-caption font-semibold uppercase text-rose-200">
@@ -1675,7 +1675,7 @@ function WebEventDialog({
               accessibilityRole="button"
               disabled={isResolving}
               onPress={() => onResolve(event, option.id)}
-              className={`min-h-12 justify-center rounded-xl border border-white/10 bg-white/[0.075] px-4 py-3 transition-colors hover:border-app-rose/30 hover:bg-rose-300/16 ${
+              className={`min-h-12 justify-center rounded-xl border border-white/15 bg-[#21142A] px-4 py-3 transition-colors hover:border-app-rose/40 hover:bg-[#2A1934] ${
                 isResolving ? 'opacity-50' : 'opacity-100'
               }`}
             >
@@ -1720,7 +1720,7 @@ function ChatRailButton({
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`min-h-11 w-[96px] flex-row items-center justify-center gap-1.5 rounded-full border px-3 shadow-card backdrop-blur ${
+      className={`min-h-11 w-[96px] flex-row items-center justify-center gap-1.5 rounded-full border px-3 shadow-card ${
         selected ? 'border-rose/50' : 'border-white/20'
       }`}
       style={selected ? twilightStyles.railButtonSelected : twilightStyles.railButton}
@@ -1752,7 +1752,7 @@ function QuickActionButton({
       disabled={disabled}
       onPress={onPress}
       className={`min-h-9 flex-row items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 ${
-        selected ? 'border-rose/50 bg-rose/20' : 'border-white/10 bg-white/5'
+        selected ? 'border-rose/50 bg-[#6F2440]' : 'border-white/15 bg-[#2A1934]'
       } ${disabled ? 'opacity-50' : 'opacity-100'}`}
     >
       <Ionicons color="#F6C6D6" name={icon} size={15} />
@@ -1782,7 +1782,7 @@ function SceneActionMenu({
 }) {
   const canSendCustom = canUseAction && customText.trim().length > 0;
   return (
-    <View className="gap-3 rounded-2xl border border-white/15 p-3 shadow-float backdrop-blur" style={twilightStyles.actionMenu}>
+    <View className="gap-3 rounded-2xl border border-white/20 p-3 shadow-float" style={twilightStyles.actionMenu}>
       <View className="flex-row items-center justify-between gap-2">
         <Text className="text-caption font-semibold uppercase text-white/60">
           {language === 'zh' ? '场景动作' : 'Scene actions'}
@@ -1795,7 +1795,7 @@ function SceneActionMenu({
             accessibilityLabel={language === 'zh' ? '关闭动作菜单' : 'Close action menu'}
             accessibilityRole="button"
             onPress={onClose}
-            className="h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/10"
+            className="h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-[#2A1934]"
           >
             <Ionicons color="rgba(255,255,255,0.78)" name="close" size={14} />
           </Pressable>
@@ -1837,7 +1837,7 @@ function SceneActionMenu({
           {language === 'zh' ? '自定义动作' : 'Custom action'}
         </Text>
         <View className="flex-row items-center gap-2">
-          <View className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <View className="min-w-0 flex-1 rounded-xl border border-white/15 bg-[#21142A] px-3 py-2">
             <TextInput
               maxLength={CUSTOM_SCENE_ACTION_MAX_LENGTH}
               onChangeText={onChangeCustomText}
@@ -1851,7 +1851,7 @@ function SceneActionMenu({
             accessibilityRole="button"
             disabled={!canSendCustom}
             onPress={onSendCustom}
-            className={`h-10 w-10 items-center justify-center rounded-xl ${canSendCustom ? 'bg-rose' : 'bg-white/10'}`}
+            className={`h-10 w-10 items-center justify-center rounded-xl ${canSendCustom ? 'bg-rose' : 'bg-[#2A1934]'}`}
           >
             <Ionicons color={canSendCustom ? '#FFFFFF' : 'rgba(255,255,255,0.35)'} name="send" size={15} />
           </Pressable>
@@ -1915,19 +1915,19 @@ const twilightStyles = StyleSheet.create({
     backgroundColor: 'rgba(47, 40, 56, 0.46)',
   } as unknown as ViewStyle,
   toolsPanel: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(19, 10, 24, 0.96)',
   } as unknown as ViewStyle,
   composerBar: {
     backgroundColor: 'rgba(47, 40, 56, 0.92)',
   } as unknown as ViewStyle,
   railButton: {
-    backgroundColor: 'rgba(63, 53, 73, 0.64)',
+    backgroundColor: 'rgba(35, 21, 43, 0.92)',
   } as unknown as ViewStyle,
   railButtonSelected: {
-    backgroundColor: 'rgba(201, 72, 107, 0.30)',
+    backgroundColor: 'rgba(154, 47, 79, 0.88)',
   } as unknown as ViewStyle,
   actionMenu: {
-    backgroundColor: 'rgba(47, 40, 56, 0.94)',
+    backgroundColor: 'rgba(19, 10, 24, 0.98)',
   } as unknown as ViewStyle,
   awkwardActionButton: {
     backgroundColor: 'rgba(126, 94, 58, 0.76)',
@@ -1936,7 +1936,7 @@ const twilightStyles = StyleSheet.create({
     backgroundColor: 'rgba(107, 45, 52, 0.82)',
   } as unknown as ViewStyle,
   neutralActionButton: {
-    backgroundColor: 'rgba(63, 53, 73, 0.72)',
+    backgroundColor: 'rgba(42, 25, 52, 0.94)',
   } as unknown as ViewStyle,
   positiveActionButton: {
     backgroundColor: 'rgba(62, 93, 82, 0.78)',

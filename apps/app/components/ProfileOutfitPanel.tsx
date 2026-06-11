@@ -190,11 +190,11 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
   const canGenerate = customPrompt.trim().length > 0 || selectedRecommendationId !== null;
 
   return (
-    <WebCard padding="md" className="gap-3">
+    <WebCard padding="md" className="gap-3 border-white/12 bg-[#1B0F22]">
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
-          <Text className="text-overline text-app-rose-deep">Profile image</Text>
-          <Text className="mt-1 text-body-sm text-app-muted">Generate a new outfit for {name}, then keep only the one that feels right.</Text>
+          <Text className="text-overline text-rose-200">Profile image</Text>
+          <Text className="mt-1 text-body-sm text-rose-50/75">Generate a new outfit for {name}, then keep only the one that feels right.</Text>
         </View>
         <WebButton
           label={phase === 'generating' ? 'Generating…' : 'Change outfit'}
@@ -206,7 +206,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
       </View>
 
       {phase === 'choosing' || phase === 'generating' || phase === 'ready' || phase === 'applying' || phase === 'error' ? (
-        <View className="gap-3 rounded-2xl border border-app-line-soft bg-app-sunken/40 p-3">
+        <View className="gap-3 rounded-2xl border border-white/12 bg-[#21142A] p-3">
           <View className="flex-row flex-wrap gap-2">
             {isLoadingRecommendations ? (
               <ActivityIndicator color={PALETTE.roseDeep} size="small" />
@@ -221,10 +221,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
                     setSelectedRecommendationId(item.id);
                   }}
                   className={`rounded-full border px-3 py-1.5 ${
-                    selected ? 'border-app-rose bg-app-rose-soft' : 'border-app-line bg-app-canvas/70'
+                    selected ? 'border-app-rose bg-app-rose/25' : 'border-white/15 bg-[#2A1934]'
                   }`}
                 >
-                  <Text className={`text-xs font-semibold ${selected ? 'text-app-rose-deep' : 'text-app-muted'}`}>{item.title}</Text>
+                  <Text className={`text-xs font-semibold ${selected ? 'text-rose-50' : 'text-rose-50/75'}`}>{item.title}</Text>
                 </Pressable>
               );
             })}
@@ -239,11 +239,11 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
             placeholder="Custom outfit..."
             placeholderTextColor={PALETTE.muted}
             value={customPrompt}
-            className="min-h-10 rounded-xl border border-app-line bg-app-canvas px-3 py-2 text-sm text-app-ink"
+            className="min-h-10 rounded-xl border border-white/15 bg-[#130A18] px-3 py-2 text-sm text-white"
           />
 
           {previewSource ? (
-            <View className="overflow-hidden rounded-2xl border border-app-line bg-app-surface">
+            <View className="overflow-hidden rounded-2xl border border-white/12 bg-[#130A18]">
               <Image accessibilityLabel="Generated profile outfit preview" resizeMode="cover" source={previewSource} style={styles.preview} />
             </View>
           ) : null}
@@ -276,7 +276,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
 
       {hasOverride ? (
         <Pressable accessibilityRole="button" onPress={() => void resetProfileImage()} className="self-start">
-          <Text className="text-caption font-semibold text-app-muted">Reset to original profile image</Text>
+          <Text className="text-caption font-semibold text-rose-50/70">Reset to original profile image</Text>
         </Pressable>
       ) : null}
     </WebCard>
