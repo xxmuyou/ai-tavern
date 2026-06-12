@@ -54,7 +54,7 @@ export function AppDropdown<T extends string | null>({
       <Pressable
         accessibilityRole="button"
         onPress={openMenu}
-        className="min-h-9 flex-row items-center justify-between gap-2 rounded-lg border border-app-line bg-app-surface px-3 hover:border-rose/60"
+        className="min-h-9 flex-row items-center justify-between gap-2 rounded-lg border border-app-line bg-app-card px-3 web:bg-app-solid-surface web:hover:border-rose/60"
       >
         <Text numberOfLines={1} className="flex-1 text-sm font-semibold text-app-ink">
           {labelForValue(value)}
@@ -71,7 +71,7 @@ export function AppDropdown<T extends string | null>({
           onPress={() => setOpen(false)}
           style={{ flex: 1 }}
         >
-          <View className="absolute overflow-hidden rounded-lg border border-app-line bg-app-surface shadow-float" style={menuStyle}>
+          <View className="absolute overflow-hidden rounded-lg border border-app-line bg-app-card shadow-float web:bg-app-solid-surface" style={menuStyle}>
             <ScrollView keyboardShouldPersistTaps="handled">
               {options.map((option) => (
                 <Pressable
@@ -82,8 +82,8 @@ export function AppDropdown<T extends string | null>({
                     setOpen(false);
                   }}
                   className={cn(
-                    'border-b border-app-line px-3 py-2 last:border-b-0 hover:bg-rose-soft',
-                    option.value === value ? 'bg-app-sunken/60' : 'bg-app-surface',
+                    'border-b border-app-line px-3 py-2 last:border-b-0 web:hover:bg-app-solid-sunken',
+                    option.value === value ? 'bg-app-sunken web:bg-app-solid-sunken' : 'bg-app-card web:bg-app-solid-surface',
                   )}
                 >
                   <Text className={cn('text-sm font-semibold', option.value === value ? 'text-rose-deep' : 'text-app-ink')}>

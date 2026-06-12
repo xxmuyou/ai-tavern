@@ -114,8 +114,8 @@ export default function WebSceneDetailScreen() {
           <View className="relative aspect-[16/9] w-full overflow-hidden bg-white/[0.075]">
             {imageSource ? (
               <>
-                <Image source={imageSource} resizeMode="cover" blurRadius={16} className="absolute inset-0 h-full w-full opacity-35" />
-                <View pointerEvents="none" className="absolute inset-0 bg-app-twilight/35" />
+                <Image source={imageSource} resizeMode="cover" blurRadius={16} className="absolute inset-0 h-full w-full opacity-30" />
+                <View pointerEvents="none" className="absolute inset-0 bg-app-twilight/25" />
                 <Image source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
               </>
             ) : (
@@ -123,8 +123,13 @@ export default function WebSceneDetailScreen() {
                 <Text className="font-serif text-display-lg text-app-rose-deep/40">{scene.name.slice(0, 1)}</Text>
               </View>
             )}
-            <View className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-app-twilight/70 to-transparent" />
-            <View className="absolute left-7 right-7 bottom-6 flex-row items-center justify-between">
+          </View>
+          <View className="gap-5 p-7">
+            <View>
+              <Text className="text-overline text-app-rose-deep">A place to be</Text>
+              <Text className="mt-2 font-serif text-title text-app-ink">{`"${scene.mood}"`}</Text>
+            </View>
+            <View className="flex-row flex-wrap items-center justify-between gap-3">
               <View className="flex-row flex-wrap gap-1.5">
                 {scene.tags.map((tag) => (
                   <WebTag key={tag} size="sm" variant="rose">
@@ -132,17 +137,11 @@ export default function WebSceneDetailScreen() {
                   </WebTag>
                 ))}
               </View>
-              <View className="rounded-full border border-white/10 bg-black/55 px-3 py-1 backdrop-blur">
+              <View className="rounded-full border border-white/10 bg-black/45 px-3 py-1">
                 <Text className="text-caption font-semibold text-app-ink">
                   {companions.length} here
                 </Text>
               </View>
-            </View>
-          </View>
-          <View className="gap-5 p-7">
-            <View>
-              <Text className="text-overline text-app-rose-deep">A place to be</Text>
-              <Text className="mt-2 font-serif text-title text-app-ink">{`"${scene.mood}"`}</Text>
             </View>
           </View>
         </WebCard>

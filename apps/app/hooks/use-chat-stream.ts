@@ -116,6 +116,27 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       let buffer = '';
       let emotion: ChatEmotion | null = null;
 
+      // Coalesce per-token chunks into ~20 UI updates per second; rendering
+      // each token individually causes visible jank on long replies.
+      let pendingDelta = '';
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const flush = () => {
+        flushTimer = null;
+        if (!activeRef.current || pendingDelta.length === 0) {
+          return;
+        }
+        const delta = pendingDelta;
+        pendingDelta = '';
+        setStreamingText(buffer);
+        options.onChunk?.(delta, buffer);
+      };
+      const flushNow = () => {
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+        }
+        flush();
+      };
+
       try {
         const stream = sendChatMessage(companionId, {
           activity_id: options.activityId,
@@ -131,8 +152,10 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             const delta = typeof data?.text === 'string' ? data.text : '';
             if (delta) {
               buffer += delta;
-              setStreamingText(buffer);
-              options.onChunk?.(delta, buffer);
+              pendingDelta += delta;
+              if (flushTimer === null) {
+                flushTimer = setTimeout(flush, 50);
+              }
             }
           } else if (event.type === 'signals') {
             options.onSignals?.((event.data as Partial<RelationshipDimensions>) ?? {});
@@ -170,6 +193,7 @@ export function useChatStream(companionId: string): UseChatStreamResult {
               options.onEmotion?.(next);
             }
           } else if (event.type === 'done') {
+            flushNow();
             const data = (event.data as { message_id?: string; warning?: string | null }) ?? {};
             if (__DEV__ && data.warning) {
               console.warn('[chat] stream done with warning', data.warning);
@@ -190,10 +214,15 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             throw err;
           }
         }
+        flushNow();
         return { emotion, text: buffer };
       } catch (rawError) {
         throw categorizeStreamError(rawError);
       } finally {
+        if (flushTimer !== null) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
         activeRef.current = false;
         setIsStreaming(false);
         setStreamingText('');

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { View } from 'react-native';
 
 import { normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
@@ -9,11 +10,11 @@ type StreamingBubbleProps = {
 };
 
 export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
+  const segments = useMemo(() => parseNarration(text, { tolerateUnclosed: true }), [text]);
+
   if (text.length === 0) {
     return null;
   }
-
-  const segments = parseNarration(text, { tolerateUnclosed: true });
 
   return (
     <View className="w-full py-1">
@@ -22,7 +23,7 @@ export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
         if (segment.type === 'narration') {
           return (
             <NarrationLine
-              key={idx}
+              key={`narration-${idx}`}
               text={normalizeCompanionNarrationPerspective(segment.text, companionName)}
               trailingCursor={isLast}
             />
@@ -30,7 +31,7 @@ export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
         }
         return (
           <DialogueBubble
-            key={idx}
+            key={`dialogue-${idx}`}
             role="companion"
             text={segment.text}
             trailingCursor={isLast}

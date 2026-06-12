@@ -87,9 +87,10 @@ export function WebPublicCompanionHome() {
     () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url),
     [officialFeatured.data],
   );
+  const officialVisibleCount = Math.min(officialVisible, officialFeaturedItemsAll.length);
   const officialFeaturedItems = useMemo(
-    () => officialFeaturedItemsAll.slice(0, officialVisible),
-    [officialFeaturedItemsAll, officialVisible],
+    () => officialFeaturedItemsAll.slice(0, officialVisibleCount),
+    [officialFeaturedItemsAll, officialVisibleCount],
   );
   const rankedTrendingItems = useMemo(
     () => (rankedTrending.data?.items ?? []).filter((item) => item.art_url),
@@ -125,9 +126,14 @@ export function WebPublicCompanionHome() {
     [favorites.data?.items],
   );
   const trendingItemsAll = rankedTrendingItems.filter((item) => !pinnedIds.has(item.id));
-  const trending = trendingItemsAll.slice(0, trendingVisible);
+  const trendingVisibleCount = Math.min(trendingVisible, trendingItemsAll.length);
+  const trending = trendingItemsAll.slice(0, trendingVisibleCount);
   const newArrivals = recentItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
   const community = popularItems.filter((item) => item.source === 'user' && !pinnedIds.has(item.id));
+  const communityVisibleCount = Math.min(communityVisible, community.length);
+  const officialRemaining = officialFeaturedItemsAll.length - officialVisibleCount;
+  const trendingRemaining = trendingItemsAll.length - trendingVisibleCount;
+  const communityRemaining = community.length - communityVisibleCount;
 
   function openCompanion(companion: CompanionListItem) {
     const target = `/companion/${encodeURIComponent(companion.id)}` as Href;
@@ -306,11 +312,11 @@ export function WebPublicCompanionHome() {
 
               {officialFeaturedItems.length > 0 ? (
                 <DiscoverSection
-                  actionLabel={officialFeaturedItemsAll.length > officialVisible ? 'Show more' : undefined}
+                  actionLabel={officialRemaining > 0 ? `Show more (${officialRemaining} left)` : undefined}
                   icon="ribbon"
                   onAction={
-                    officialFeaturedItemsAll.length > officialVisible
-                      ? () => setOfficialVisible((count) => count + OFFICIAL_PAGE_SIZE)
+                    officialRemaining > 0
+                      ? () => setOfficialVisible((count) => Math.min(count + OFFICIAL_PAGE_SIZE, officialFeaturedItemsAll.length))
                       : undefined
                   }
                   subtitle="Curated by the house"
@@ -326,12 +332,12 @@ export function WebPublicCompanionHome() {
 
               {trending.length > 0 ? (
                 <DiscoverSection
-                  actionLabel={trendingItemsAll.length > trendingVisible ? 'Show more' : undefined}
+                  actionLabel={trendingRemaining > 0 ? `Show more (${trendingRemaining} left)` : undefined}
                   icon="flame"
                   iconColor={PALETTE.ember}
                   onAction={
-                    trendingItemsAll.length > trendingVisible
-                      ? () => setTrendingVisible((count) => count + TRENDING_PAGE_SIZE)
+                    trendingRemaining > 0
+                      ? () => setTrendingVisible((count) => Math.min(count + TRENDING_PAGE_SIZE, trendingItemsAll.length))
                       : undefined
                   }
                   subtitle="Rising picks"
@@ -363,16 +369,16 @@ export function WebPublicCompanionHome() {
                   title="Community creations"
                 >
                   <View className={DISCOVERY_GRID_CLASS}>
-                    {community.slice(0, communityVisible).map((companion) => renderCard(companion))}
+                    {community.slice(0, communityVisibleCount).map((companion) => renderCard(companion))}
                   </View>
-                  {community.length > communityVisible ? (
+                  {communityRemaining > 0 ? (
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => setCommunityVisible((count) => count + COMMUNITY_PAGE_SIZE)}
+                      onPress={() => setCommunityVisible((count) => Math.min(count + COMMUNITY_PAGE_SIZE, community.length))}
                       className="mt-2 min-h-11 items-center justify-center self-center rounded-xl border border-white/15 px-8 hover:border-app-rose/50 hover:bg-app-rose-soft/40"
                     >
                       <Text className="text-body-sm font-semibold text-app-ink-soft">
-                        Show more ({community.length - communityVisible} left)
+                        Show more ({communityRemaining} left)
                       </Text>
                     </Pressable>
                   ) : null}

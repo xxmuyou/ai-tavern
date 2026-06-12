@@ -51,6 +51,8 @@ export function DiscoverCompanionCard({
         {imageUri ? (
           createElement('img', {
             alt: companion.name,
+            decoding: 'async',
+            loading: 'lazy',
             src: imageUri,
             style: {
               display: 'block',

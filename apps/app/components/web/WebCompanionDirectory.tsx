@@ -268,18 +268,17 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
             <Ionicons color="#FF8FAD" name="map-outline" size={28} />
           </View>
         )}
-        {!scene.unlocked ? <View pointerEvents="none" className="absolute inset-0 bg-black/35" /> : null}
-        <View className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
-        <View className="absolute left-3 right-3 bottom-3">
-          <Text className="font-serif text-title-sm text-white" numberOfLines={1}>{scene.name}</Text>
-          <Text className="mt-1 text-caption text-app-ink-soft" numberOfLines={2}>{scene.mood}</Text>
-        </View>
+        {!scene.unlocked ? <View pointerEvents="none" className="absolute inset-0 bg-black/20" /> : null}
         <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-app-sunken px-2.5 py-1">
           <Ionicons color={scene.unlocked ? '#8EF0BD' : '#FFB066'} name={scene.unlocked ? 'lock-open-outline' : 'lock-closed'} size={12} />
           <Text className="text-caption font-semibold text-white">{scene.unlocked ? 'Open' : 'Locked'}</Text>
         </View>
       </View>
       <View className="gap-3 p-3">
+        <View>
+          <Text className="font-serif text-title-sm text-white" numberOfLines={1}>{scene.name}</Text>
+          <Text className="mt-1 text-caption leading-5 text-app-ink-soft" numberOfLines={2}>{scene.mood}</Text>
+        </View>
         {scene.tags.length ? (
           <View className="flex-row flex-wrap gap-1.5">
             {scene.tags.slice(0, 3).map((tag) => (

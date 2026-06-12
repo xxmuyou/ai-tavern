@@ -77,7 +77,6 @@ import { inviteTextForTarget, sceneTransitionText } from '@/utils/chat-actions';
 import { detectChatLanguage, type ChatLanguage } from '@/utils/chat-language';
 import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionText, type SceneAction } from '@/utils/scene-actions';
 
-const STREAMING_ID = '__streaming__';
 const CUSTOM_SCENE_ACTION_MAX_LENGTH = 120;
 const MAINTAIN_VISIBLE_CONTENT_POSITION = { minIndexForVisible: 0 };
 
@@ -88,14 +87,6 @@ const EVENT_TITLES: Record<EventResponseItem['event_type'], string> = {
   invitation: 'An invitation',
   milestone: 'A milestone',
 };
-
-type StreamingItem = {
-  __streaming: true;
-  id: typeof STREAMING_ID;
-  text: string;
-};
-
-type ChatListItem = ChatMessage | StreamingItem;
 
 type PendingArrival = {
   createdAt: number;
@@ -150,10 +141,6 @@ const ARRIVAL_COPY: Record<ChatLanguage, {
     refused: (name) => `${name}没有答应这次邀约。`,
   },
 };
-
-function isStreamingItem(item: ChatListItem): item is StreamingItem {
-  return (item as StreamingItem).__streaming === true;
-}
 
 export default function WebChatScreen() {
   const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneId?: string; sceneArt?: string }>();
@@ -211,7 +198,7 @@ export default function WebChatScreen() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
-  const threadScrollRef = useRef<FlatList<ChatListItem>>(null);
+  const threadScrollRef = useRef<FlatList<ChatMessage>>(null);
   const activeSceneChangedThisSessionRef = useRef(Boolean(initialSceneId));
   const hasReconciledInitialSceneRef = useRef(Boolean(initialSceneId));
   const hasCheckedStoredSceneRef = useRef(Boolean(initialSceneId));
@@ -220,10 +207,9 @@ export default function WebChatScreen() {
   const defaultDailySceneRef = useRef(false);
   const restoredStoredSceneRef = useRef(Boolean(initialSceneId));
   const restoredSceneSavedAtRef = useRef<number | null>(null);
-  const items = useMemo<ChatListItem[]>(() => {
-    if (!stream.isStreaming) return history.messages;
-    return [...history.messages, { __streaming: true, id: STREAMING_ID, text: stream.streamingText }];
-  }, [history.messages, stream.isStreaming, stream.streamingText]);
+  // The streaming bubble lives in ListFooterComponent so per-chunk updates never
+  // rebuild this array — FlatList keeps the same data reference while streaming.
+  const items = history.messages;
   const chatLanguage = useMemo(
     () => detectChatLanguage(history.messages, draft),
     [draft, history.messages],
@@ -576,12 +562,9 @@ export default function WebChatScreen() {
     }
   }, [history.messages, notifyMomentReady, updateHistoryMessage]);
 
-  const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
+  const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
-  const renderItem = useCallback(({ item }: ListRenderItemInfo<ChatListItem>) => {
-    if (isStreamingItem(item)) {
-      return <StreamingBubble text={item.text} companionName={companion?.name} />;
-    }
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<ChatMessage>) => {
     const role = item.role === 'assistant' ? 'companion' : item.role;
     const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
     const isServerUser = role === 'user' && !item.id.startsWith('local-');
@@ -1177,12 +1160,20 @@ export default function WebChatScreen() {
     >
       <View className="relative min-h-0 flex-1 overflow-hidden bg-[#2A2230]" style={twilightStyles.chatStage}>
         {hasSceneBackdrop ? (
-          <Image
-            accessibilityLabel={displaySceneName ? `Scene: ${displaySceneName}` : 'Current scene'}
-            resizeMode="cover"
-            source={sceneBackdropSource ?? undefined}
-            style={[StyleSheet.absoluteFill, twilightStyles.backdropBlur, twilightStyles.sceneBackdrop]}
-          />
+          <>
+            <Image
+              accessibilityLabel={displaySceneName ? `Scene atmosphere: ${displaySceneName}` : 'Current scene atmosphere'}
+              resizeMode="cover"
+              source={sceneBackdropSource ?? undefined}
+              style={[StyleSheet.absoluteFill, twilightStyles.backdropBlur, twilightStyles.sceneBackdrop]}
+            />
+            <Image
+              accessibilityLabel={displaySceneName ? `Scene: ${displaySceneName}` : 'Current scene'}
+              resizeMode="contain"
+              source={sceneBackdropSource ?? undefined}
+              style={[StyleSheet.absoluteFill, twilightStyles.sceneBackdropFull]}
+            />
+          </>
         ) : (
           <View className="absolute inset-0 bg-[#332B3B]" style={twilightStyles.emptyBackdrop} />
         )}
@@ -1416,6 +1407,11 @@ export default function WebChatScreen() {
                         </Text>
                       </Pressable>
                     </View>
+                  ) : null
+                }
+                ListFooterComponent={
+                  stream.isStreaming ? (
+                    <StreamingBubble text={stream.streamingText} companionName={companion?.name} />
                   ) : null
                 }
                 onContentSizeChange={handleContentSizeChange}
@@ -1675,7 +1671,7 @@ function WebInviteDialog({
                   onPress={() => onSelect(target)}
                   className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 transition-colors hover:border-app-rose hover:bg-app-rose-soft active:bg-app-wine-soft"
                 >
-                  <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-app-rose-soft">
+                  <View className="h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-app-rose-soft">
                     {thumb ? <Image source={thumb} resizeMode="contain" className="h-full w-full" /> : null}
                   </View>
                   <View className="min-w-0 flex-1">
@@ -2023,7 +2019,12 @@ const twilightStyles = StyleSheet.create({
     transform: [{ scale: 1.01 }],
   } as unknown as ImageStyle,
   sceneBackdrop: {
-    opacity: 1,
+    opacity: 0.42,
+    transitionDuration: '420ms',
+    transitionProperty: 'opacity',
+  } as unknown as ImageStyle,
+  sceneBackdropFull: {
+    opacity: 0.9,
     transitionDuration: '420ms',
     transitionProperty: 'opacity',
   } as unknown as ImageStyle,

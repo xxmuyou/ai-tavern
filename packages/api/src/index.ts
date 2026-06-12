@@ -336,6 +336,9 @@ async function handleObjectRequest(
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);
+    // Object keys are content-addressed (UUID/hash) and never reused, so
+    // browsers can cache aggressively instead of re-downloading every visit.
+    headers.set("cache-control", "public, max-age=31536000, immutable");
 
     return await withCors(request, env, new Response(object.body, { headers }));
   }

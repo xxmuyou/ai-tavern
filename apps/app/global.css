@@ -167,6 +167,23 @@
     background-color: rgba(43, 24, 36, 0.88);
   }
 
+  /*
+    Functional UI surfaces must be fully opaque. Use these for dialogs,
+    popovers, dropdowns, and settings controls instead of the atmospheric
+    rgba app surface tokens above.
+  */
+  .bg-app-solid-panel {
+    background-color: #130A18;
+  }
+
+  .bg-app-solid-surface {
+    background-color: #1B0F22;
+  }
+
+  .bg-app-solid-sunken {
+    background-color: #21142A;
+  }
+
   .border-app-line,
   .border-app-line-soft {
     border-color: rgba(255, 255, 255, 0.12);

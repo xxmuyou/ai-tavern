@@ -12,7 +12,7 @@ export type WebDialogProps = {
   onClose: () => void;
   open: boolean;
   size?: 'sm' | 'md' | 'lg';
-  surface?: 'default' | 'solid';
+  surface?: 'default' | 'glass' | 'solid';
   title: string;
 };
 
@@ -24,16 +24,22 @@ const sizeClass = {
 
 const surfaceClass = {
   default: {
-    panel: 'border-white/12 bg-[#130A18]/98',
-    chrome: 'border-white/12 bg-[#1B0F22]',
+    panel: 'border-white/12 bg-app-solid-panel',
+    chrome: 'border-white/12 bg-app-solid-surface',
+    description: 'text-rose-50/75',
+    close: 'hover:bg-app-solid-sunken',
+  },
+  glass: {
+    panel: 'border-white/12 bg-white/[0.08] backdrop-blur-md',
+    chrome: 'border-white/12 bg-white/[0.06]',
     description: 'text-rose-50/75',
     close: 'hover:bg-white/[0.075]',
   },
   solid: {
-    panel: 'border-app-line bg-app-surface',
-    chrome: 'border-app-line bg-[#1B0F22]',
+    panel: 'border-app-line bg-app-solid-panel',
+    chrome: 'border-app-line bg-app-solid-surface',
     description: 'text-app-ink-soft',
-    close: 'hover:bg-app-rose-soft',
+    close: 'hover:bg-app-solid-sunken',
   },
 };
 

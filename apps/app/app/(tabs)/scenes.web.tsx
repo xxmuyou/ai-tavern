@@ -121,8 +121,8 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
       <View className="relative aspect-[16/9] overflow-hidden bg-white/[0.075]">
         {imageSource ? (
           <>
-            <Image source={imageSource} resizeMode="cover" blurRadius={16} className="absolute inset-0 h-full w-full opacity-35" />
-            <View pointerEvents="none" className="absolute inset-0 bg-app-twilight/35" />
+            <Image source={imageSource} resizeMode="cover" blurRadius={16} className="absolute inset-0 h-full w-full opacity-30" />
+            <View pointerEvents="none" className="absolute inset-0 bg-app-twilight/25" />
             <Image
               accessibilityLabel={scene.name}
               source={imageSource}
@@ -136,22 +136,17 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
           </View>
         )}
         {!scene.unlocked ? (
-          <View pointerEvents="none" className="absolute inset-0 bg-app-brand-soft/55" />
+          <View pointerEvents="none" className="absolute inset-0 bg-app-brand-soft/25" />
         ) : null}
-        <View className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-app-twilight/70 via-app-twilight/20 to-transparent" />
-        <View className="absolute left-5 right-5 bottom-4 flex-row items-end justify-between gap-3">
-          <View className="min-w-0 flex-1">
-            <Text className="font-serif text-title text-white" numberOfLines={1}>{scene.name}</Text>
-            <Text className="mt-1 text-caption text-white/80" numberOfLines={1}>{scene.mood}</Text>
-          </View>
+        <View className="absolute right-4 top-4">
           {scene.unlocked ? (
-            <View className="rounded-full border border-white/10 bg-black/55 px-3 py-1 backdrop-blur">
+            <View className="rounded-full border border-white/10 bg-black/65 px-3 py-1">
               <Text className="text-caption font-semibold text-white">
                 {scene.potential_companions.length} companion{scene.potential_companions.length === 1 ? '' : 's'}
               </Text>
             </View>
           ) : (
-            <View className="flex-row items-center gap-1.5 rounded-full bg-app-twilight/85 px-3 py-1 backdrop-blur">
+            <View className="flex-row items-center gap-1.5 rounded-full bg-app-twilight px-3 py-1">
               <Ionicons color={PALETTE.ember} name="lock-closed" size={12} />
               <Text className="text-caption font-semibold text-white">Locked</Text>
             </View>

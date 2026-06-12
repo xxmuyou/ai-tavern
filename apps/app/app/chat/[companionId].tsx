@@ -67,13 +67,6 @@ import { VoiceSettingsPanel } from '@/components/VoiceSettingsPanel';
 import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
 
 const BILLING_ROUTE = '/billing' as Href;
-const STREAMING_ID = '__streaming__';
-
-type StreamingItem = {
-  __streaming: true;
-  id: typeof STREAMING_ID;
-  text: string;
-};
 
 type CompanionPortraitState = {
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
@@ -81,12 +74,6 @@ type CompanionPortraitState = {
   gender: 'female' | 'male' | null;
   name: string;
 };
-
-type ChatListItem = ChatMessage | StreamingItem;
-
-function isStreamingItem(item: ChatListItem): item is StreamingItem {
-  return (item as StreamingItem).__streaming === true;
-}
 
 export default function ChatScreen() {
   return (
@@ -138,21 +125,13 @@ function ChatScreenInner() {
   const [voiceSettings, setVoiceSettings] = useState<ChatVoiceSettingsResponse | null>(null);
   const [isSavingVoiceSettings, setIsSavingVoiceSettings] = useState(false);
 
-  const listRef = useRef<FlatList<ChatListItem>>(null);
+  const listRef = useRef<FlatList<ChatMessage>>(null);
 
   const history = useChatHistory(companionId);
   const stream = useChatStream(companionId);
-  const items = useMemo<ChatListItem[]>(() => {
-    if (!stream.isStreaming) {
-      return history.messages;
-    }
-    const placeholder: StreamingItem = {
-      __streaming: true,
-      id: STREAMING_ID,
-      text: stream.streamingText,
-    };
-    return [...history.messages, placeholder];
-  }, [history.messages, stream.isStreaming, stream.streamingText]);
+  // The streaming bubble lives in ListFooterComponent so per-chunk updates never
+  // rebuild this array — FlatList keeps the same data reference while streaming.
+  const items = history.messages;
   const autoScroll = useChatAutoScroll({
     getItems: () => items,
     listRef,
@@ -692,10 +671,7 @@ function ChatScreenInner() {
     }
   }, [history.messages, notifyMomentReady, updateHistoryMessage]);
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
-  const renderItem = useCallback(({ item }: { item: ChatListItem }) => {
-    if (isStreamingItem(item)) {
-      return <StreamingBubble text={item.text} />;
-    }
+  const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     const role = item.role === 'assistant' ? 'companion' : item.role;
     const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
     const isServerUser = role === 'user' && !item.id.startsWith('local-');
@@ -749,7 +725,7 @@ function ChatScreenInner() {
     );
   }, [editMessage, handleMomentReady, messageActions]);
 
-  const keyExtractor = useCallback((item: ChatListItem) => item.id, []);
+  const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
   if (!companionId) {
     return (
@@ -913,6 +889,9 @@ function ChatScreenInner() {
                     </Pressable>
                   </View>
                 ) : null
+              }
+              ListFooterComponent={
+                stream.isStreaming ? <StreamingBubble text={stream.streamingText} /> : null
               }
             />
           )}

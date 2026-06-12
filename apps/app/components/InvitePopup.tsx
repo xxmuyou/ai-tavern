@@ -61,7 +61,7 @@ export function InvitePopup({
                         onPress={() => onSelect(target)}
                         className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 active:bg-app-rose-soft"
                       >
-                        <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-app-primarySoft">
+                        <View className="h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-app-primarySoft">
                           {thumb ? (
                             <Image source={thumb} resizeMode="contain" className="h-full w-full" />
                           ) : null}

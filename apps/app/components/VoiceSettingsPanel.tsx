@@ -170,7 +170,9 @@ export function VoiceSettingsPanel({ initialGender, initialValue, isSaving, onSa
               disabled={!selectedVoice || isPreviewing}
               onPress={() => void previewVoice()}
               className={`h-9 w-9 items-center justify-center rounded-lg border ${
-                selectedVoice && !isPreviewing ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-sunken'
+                selectedVoice && !isPreviewing
+                  ? 'border-rose bg-rose-soft web:bg-app-solid-sunken'
+                  : 'border-app-line bg-app-sunken web:bg-app-solid-surface'
               }`}
             >
               <Ionicons color={selectedVoice && !isPreviewing ? PALETTE.roseDeep : PALETTE.muted} name={isPreviewing ? 'hourglass-outline' : 'volume-medium-outline'} size={16} />
@@ -193,7 +195,7 @@ export function VoiceSettingsPanel({ initialGender, initialValue, isSaving, onSa
         </View>
       </View>
 
-      <View>
+      <View className="rounded-lg border border-app-line bg-app-card p-3 web:bg-app-solid-surface">
         <Text className="mb-1 text-sm font-semibold text-app-text web:text-rose-50">Selected voice</Text>
         <Text className="text-xs text-app-muted web:text-rose-50/65">
           {selectedVoice ? `${selectedVoice.id} · ${voiceLanguageDisplayLabel(selectedVoice)}` : 'Choose a voice to enable preview.'}
@@ -254,7 +256,11 @@ function Choice({ active, label, onPress }: { active: boolean; label: string; on
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70 web:bg-app-rose-soft/60' : 'border-app-line bg-white web:border-white/15 web:bg-white/[0.04]'}`}
+      className={`rounded-full border px-3 py-2 ${
+        active
+          ? 'border-app-rose/70 bg-app-canvas/70 web:bg-app-solid-sunken'
+          : 'border-app-line bg-white web:border-white/15 web:bg-app-solid-surface'
+      }`}
     >
       <Text className={`text-sm font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted web:text-rose-50/70'}`}>{label}</Text>
     </Pressable>

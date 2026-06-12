@@ -17,6 +17,9 @@ module.exports = {
           canvas: '#0B0710',        // page background — deep purple-black
           surface: '#15101D',       // elevated card surface
           sunken: '#070409',        // recessed surface / input wells
+          'solid-panel': '#130A18',  // opaque modal/dialog panel
+          'solid-surface': '#1B0F22', // opaque controls and popovers
+          'solid-sunken': '#21142A', // opaque selected/recessed controls
           line: '#2C2138',          // hairline / border
           lineSoft: '#1E1628',      // softer hairline
           'line-soft': '#1E1628',   // alias — some callers use the kebab name

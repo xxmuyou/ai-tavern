@@ -34,12 +34,20 @@ export function PortraitBar({ artEmotions, artUrl, emotion, name, sceneArt }: Po
       style={{ height: CONTAINER_HEIGHT, overflow: 'hidden', backgroundColor: tint }}
     >
       {sceneSource ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          source={sceneSource}
-          resizeMode="cover"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-        />
+        <>
+          <Image
+            accessibilityIgnoresInvertColors
+            source={sceneSource}
+            resizeMode="cover"
+            style={{ opacity: 0.35, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <Image
+            accessibilityIgnoresInvertColors
+            source={sceneSource}
+            resizeMode="contain"
+            style={{ opacity: 0.82, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+        </>
       ) : null}
 
       <View
