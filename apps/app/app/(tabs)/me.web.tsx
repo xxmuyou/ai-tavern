@@ -328,7 +328,7 @@ function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDele
                 accessibilityLabel="Saved image asset"
                 resizeMode="cover"
                 source={source}
-                className="aspect-[4/5] w-full"
+                style={{ aspectRatio: 4 / 5, width: '100%' }}
               />
             ) : (
               <View className="aspect-[4/5] w-full items-center justify-center bg-app-sunken">

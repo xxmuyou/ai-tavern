@@ -19,7 +19,7 @@ export function MemoryCard({ memory, portraitUrl }: MemoryCardProps) {
     <View className="overflow-hidden rounded-lg border border-app-line bg-app-card">
       {hasCg && sceneImage ? (
         <View className="aspect-video overflow-hidden bg-app-primarySoft">
-          <Image source={sceneImage} resizeMode="cover" className="h-full w-full" />
+          <Image source={sceneImage} resizeMode="cover" style={{ height: '100%', width: '100%' }} />
           <View className="absolute inset-0 bg-black/15" />
           {portrait ? (
             <Image source={portrait} resizeMode="contain" style={styles.portrait} />

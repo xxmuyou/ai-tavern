@@ -238,7 +238,7 @@ function SceneActionCard({
       <View className="flex-row gap-4">
         <View className="h-28 w-24 items-center justify-end overflow-hidden rounded-2xl bg-app-rose-soft">
           {portrait ? (
-            <Image source={portrait} resizeMode="contain" className="h-full w-full" />
+            <Image source={portrait} resizeMode="contain" style={{ height: '100%', width: '100%' }} />
           ) : (
             <Text className="font-serif text-title text-app-rose-deep">
               {companion.name.slice(0, 1).toUpperCase()}

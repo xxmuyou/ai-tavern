@@ -99,7 +99,14 @@ function TodayCard({
             onPress={onOpenCompanion}
             className="h-20 w-20 items-center justify-end overflow-hidden rounded-lg bg-app-primarySoft"
           >
-            {portrait ? <Image source={portrait} resizeMode="contain" className="h-full w-full" /> : null}
+            {portrait ? (
+              <Image
+                source={portrait}
+                resizeMode="contain"
+                // style, not className: RNW inline intrinsic size beats CSS classes
+                style={{ height: '100%', width: '100%' }}
+              />
+            ) : null}
           </Pressable>
           <View className="min-w-0 flex-1">
             <Text numberOfLines={1} className="text-xl font-semibold text-app-text">{recommendation.companion.name}</Text>

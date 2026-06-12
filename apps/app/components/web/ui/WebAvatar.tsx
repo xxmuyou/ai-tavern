@@ -48,7 +48,12 @@ export function WebAvatar({ className, fallback, ring = 'none', size = 'md', sou
       )}
     >
       {source ? (
-        <Image accessibilityLabel={fallback} resizeMode="cover" source={source} className="h-full w-full" />
+        <Image
+          accessibilityLabel={fallback}
+          resizeMode="cover"
+          source={source}
+          style={{ height: '100%', width: '100%' }}
+        />
       ) : (
         <Text className={cn('font-serif font-semibold text-app-rose-deep', textSize[size])}>{initials}</Text>
       )}

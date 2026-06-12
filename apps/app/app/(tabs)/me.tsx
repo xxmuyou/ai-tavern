@@ -223,7 +223,12 @@ function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
         return (
           <View key={asset.id} className="w-[30%] min-w-[92px] overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
             {source ? (
-              <Image accessibilityLabel="Saved image asset" resizeMode="cover" source={source} className="aspect-[4/5] w-full" />
+              <Image
+                accessibilityLabel="Saved image asset"
+                resizeMode="cover"
+                source={source}
+                style={{ aspectRatio: 4 / 5, width: '100%' }}
+              />
             ) : (
               <View className="aspect-[4/5] w-full items-center justify-center">
                 <Text className="text-xs text-app-muted">Image</Text>

@@ -1,7 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
 import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
-import { Image, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
+
+const imageStyles = StyleSheet.create({
+  fill: { height: '100%', width: '100%' },
+});
 
 type SceneArtworkProps = {
   children?: ReactNode;
@@ -30,7 +34,9 @@ export function SceneArtwork({
           accessibilityLabel={label}
           source={source}
           resizeMode="contain"
-          className="h-full w-full"
+          // Size via style, not className: react-native-web writes the image's
+          // intrinsic dimensions as inline styles, which override CSS classes.
+          style={imageStyles.fill}
         />
       ) : (
         <SceneArtworkFallback label={fallbackLabel ?? label} />
@@ -54,7 +60,7 @@ export function SceneStageBackdrop({
           accessibilityLabel={label}
           source={source}
           resizeMode="contain"
-          className="h-full w-full"
+          style={imageStyles.fill}
         />
       ) : (
         <View className="h-full w-full bg-[#332B3B]" />
