@@ -358,6 +358,30 @@ describe("companions module", () => {
     expect(body).toEqual({ id: "maya", is_favorite: true });
   });
 
+  it("GET /companions/:id includes favorite state and count", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya")],
+      favorites: [
+        { companion_id: "maya", user_id: "user-1" },
+        { companion_id: "maya", user_id: "user-2" },
+      ],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya", token),
+      env,
+      "/companions/maya",
+    );
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { favorite_count: number; id: string; is_favorite: boolean };
+    expect(body).toEqual(expect.objectContaining({
+      favorite_count: 2,
+      id: "maya",
+      is_favorite: true,
+    }));
+  });
+
   it("POST /companions/import creates a companion from a V2 card", async () => {
     const env = createEnv({ companions: [], relationships: [] });
     const token = await issueDevToken(env, "player@example.com");
@@ -1472,7 +1496,7 @@ function queryFirst<T>(
   values: unknown[],
   state: MockState,
 ): T | null {
-  const { companions, cutoutJobs, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
+  const { companions, cutoutJobs, favorites, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
   if (sql.includes("FROM admin_user_allowlist")) {
     return { email: values[0] as string } as T;
   }
@@ -1488,6 +1512,16 @@ function queryFirst<T>(
 
   if (sql.includes("FROM companions") && sql.includes("WHERE id = ?") && !sql.includes("LEFT JOIN")) {
     return (companions.get(values[0] as string) ?? null) as T | null;
+  }
+
+  if (sql.includes("FROM companion_favorites") && sql.includes("COUNT(*) AS favorite_count")) {
+    const [userId, companionId] = values as [string, string];
+    return {
+      favorite_count: favoriteCountFor(favorites, companionId),
+      is_favorite: favorites.some((favorite) => (
+        favorite.user_id === userId && favorite.companion_id === companionId
+      )) ? 1 : 0,
+    } as unknown as T;
   }
 
   if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN companion_profile_images p")) {

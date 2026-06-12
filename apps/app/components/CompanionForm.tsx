@@ -93,6 +93,9 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
 
   const imageSource = mediaSource(values.art_url);
   const submitLabel = mode === 'create' ? 'Create companion' : 'Save changes';
+  const layoutClass = mode === 'create'
+    ? 'mx-auto w-full max-w-6xl gap-5 px-4 py-6 web:grid web:grid-cols-[minmax(360px,520px)_1fr] web:px-0 web:py-0'
+    : 'mx-auto w-full max-w-5xl gap-5 px-4 py-6 web:grid web:grid-cols-[minmax(240px,320px)_1fr] web:px-0 web:py-0';
 
   function changeGender(gender: Gender) {
     setValues((current) => ({ ...current, gender }));
@@ -100,7 +103,7 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
 
   return (
     <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
-      <View className="mx-auto w-full max-w-5xl gap-5 px-4 py-6 web:grid web:grid-cols-[minmax(240px,320px)_1fr] web:px-0 web:py-0">
+      <View className={layoutClass}>
         <View className="rounded-lg border border-app-line bg-app-card p-4 web:bg-white">
           <Pressable
             accessibilityRole="button"

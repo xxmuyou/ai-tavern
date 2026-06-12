@@ -271,8 +271,10 @@ export type CompanionDetail = {
   art_url: string | null;
   background: string | null;
   canonical_art_url?: string | null;
+  favorite_count?: number;
   gender: Gender | null;
   id: string;
+  is_favorite?: boolean;
   is_public?: boolean;
   name: string;
   personality: string | null;

@@ -3,9 +3,8 @@ import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { PALETTE } from '@/constants/palette';
 
-import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
+import { deleteCompanion, favoriteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, WebTabs, WebTag } from '@/components/web/ui';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
@@ -43,6 +42,7 @@ export default function WebCompanionDetailScreen() {
   const [tab, setTab] = useState<string>('greeting');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isFavoriteBusy, setIsFavoriteBusy] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
   if (isLoading) {
@@ -74,6 +74,7 @@ export default function WebCompanionDetailScreen() {
   const canEdit = isOwner;
   const canPublish = isOwner && Boolean(me?.is_admin);
   const isPublic = companion.is_public === true;
+  const isFavorite = companion.is_favorite === true;
   const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
   const traits = (companion.personality ?? '').split(/[.,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4);
 
@@ -86,6 +87,18 @@ export default function WebCompanionDetailScreen() {
       pushError(nextError instanceof Error ? nextError.message : 'Publish state could not be updated.');
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  async function handleToggleFavorite() {
+    setIsFavoriteBusy(true);
+    try {
+      await favoriteCompanion(companion.id, !isFavorite);
+      await refetch();
+    } catch (nextError) {
+      pushError(nextError instanceof Error ? nextError.message : 'Favorite state could not be updated.');
+    } finally {
+      setIsFavoriteBusy(false);
     }
   }
 
@@ -114,13 +127,23 @@ export default function WebCompanionDetailScreen() {
             {companion.relationship_role ?? companion.greeting ?? 'Open their profile, review the first beat, then start a private chat.'}
           </Text>
         </View>
-        <WebButton
-          label="Start chat"
-          onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
-          variant="primary"
-          size="lg"
-          iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={18} />}
-        />
+        <View className="flex-row flex-wrap items-center gap-2">
+          <WebButton
+            label={isFavorite ? 'Favorited' : 'Favorite'}
+            onPress={() => void handleToggleFavorite()}
+            variant="outline"
+            size="lg"
+            isLoading={isFavoriteBusy}
+            iconLeft={<Ionicons color={isFavorite ? '#FF4D7E' : '#F5EDF3'} name={isFavorite ? 'heart' : 'heart-outline'} size={18} />}
+          />
+          <WebButton
+            label="Start chat"
+            onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+            variant="primary"
+            size="lg"
+            iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={18} />}
+          />
+        </View>
       </View>
 
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[1fr_2fr]">
@@ -283,6 +306,7 @@ export default function WebCompanionDetailScreen() {
               canEdit={canEdit}
               companionId={companion.id}
               onChanged={refetch}
+              tone="dark"
             />
           ) : null}
 
@@ -296,7 +320,7 @@ export default function WebCompanionDetailScreen() {
           ) : null}
 
           {tab === 'unlocks' ? (
-            <CompanionUnlocksPanel companionId={companion.id} />
+            <CompanionUnlocksPanel companionId={companion.id} tone="dark" />
           ) : null}
 
           {tab === 'memories' ? (

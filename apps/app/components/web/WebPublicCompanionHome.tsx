@@ -4,14 +4,15 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
-import { API_BASE_URL, isApiRequestError } from '@/api/companion-client';
+import { API_BASE_URL, favoriteCompanion, isApiRequestError } from '@/api/companion-client';
 import type { CompanionListItem } from '@/api/types';
 import { DiscoverCompanionCard } from '@/components/web/discover/DiscoverCompanionCard';
 import { DiscoverRail, DiscoverSection } from '@/components/web/discover/DiscoverSection';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
-import { usePublicCompanions } from '@/hooks/use-companions';
+import { DISCOVER_ROUTE } from '@/constants/routes';
+import { useCompanions, usePublicCompanions } from '@/hooks/use-companions';
 import { useSession } from '@/hooks/use-session';
 
 type GenderFilter = 'female' | 'male';
@@ -37,6 +38,7 @@ export function WebPublicCompanionHome() {
   const [communityVisible, setCommunityVisible] = useState(COMMUNITY_PAGE_SIZE);
   const [officialVisible, setOfficialVisible] = useState(OFFICIAL_PAGE_SIZE);
   const [trendingVisible, setTrendingVisible] = useState(TRENDING_PAGE_SIZE);
+  const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -67,6 +69,7 @@ export function WebPublicCompanionHome() {
     source: 'official',
   });
   const recent = usePublicCompanions({ gender, sort: 'recent' });
+  const favorites = useCompanions('favorites', { enabled: Boolean(session) });
 
   const popularItems = useMemo(
     () => (popular.data?.items ?? []).filter((item) => item.art_url),
@@ -114,8 +117,12 @@ export function WebPublicCompanionHome() {
   }, [isFiltering, popularItems, selectedTag]);
 
   const pinnedIds = useMemo(
-    () => new Set([...mostFavoritedItems, ...officialFeaturedItems].map((item) => item.id)),
-    [mostFavoritedItems, officialFeaturedItems],
+    () => new Set([...mostFavoritedItems, ...officialFeaturedItemsAll].map((item) => item.id)),
+    [mostFavoritedItems, officialFeaturedItemsAll],
+  );
+  const favoriteIds = useMemo(
+    () => new Set((favorites.data?.items ?? []).map((item) => item.id)),
+    [favorites.data?.items],
   );
   const trendingItemsAll = rankedTrendingItems.filter((item) => !pinnedIds.has(item.id));
   const trending = trendingItemsAll.slice(0, trendingVisible);
@@ -131,8 +138,41 @@ export function WebPublicCompanionHome() {
     router.push(`/auth/login?redirect=${encodeURIComponent(String(target))}` as Href);
   }
 
-  const renderCard = (companion: CompanionListItem) => (
-    <DiscoverCompanionCard key={companion.id} companion={companion} onPress={() => openCompanion(companion)} />
+  async function toggleFavorite(id: string, next: boolean) {
+    if (!session) {
+      router.push(`/auth/login?redirect=${encodeURIComponent(String(DISCOVER_ROUTE))}` as Href);
+      return;
+    }
+    if (favoriteBusyId) return;
+    setFavoriteBusyId(id);
+    try {
+      await favoriteCompanion(id, next);
+      await Promise.all([
+        favorites.refetch(),
+        popular.refetch(),
+        mostFavorited.refetch(),
+        officialFeatured.refetch(),
+        rankedTrending.refetch(),
+        recent.refetch(),
+      ]);
+    } finally {
+      setFavoriteBusyId(null);
+    }
+  }
+
+  const renderCard = (
+    companion: CompanionListItem,
+    options: { rank?: number; size?: 'md' | 'lg' } = {},
+  ) => (
+    <DiscoverCompanionCard
+      key={companion.id}
+      companion={companion}
+      isFavorite={favoriteIds.has(companion.id)}
+      onPress={() => openCompanion(companion)}
+      onToggleFavorite={() => void toggleFavorite(companion.id, !favoriteIds.has(companion.id))}
+      rank={options.rank}
+      size={options.size}
+    />
   );
 
   return (
@@ -244,7 +284,7 @@ export function WebPublicCompanionHome() {
                 }}
               >
                 <View className={DISCOVERY_GRID_CLASS}>
-                  {filteredItems.map(renderCard)}
+                  {filteredItems.map((companion) => renderCard(companion))}
                 </View>
               </DiscoverSection>
             )
@@ -265,13 +305,7 @@ export function WebPublicCompanionHome() {
                 >
                   <DiscoverRail>
                     {mostFavoritedItems.map((companion, index) => (
-                      <DiscoverCompanionCard
-                        key={companion.id}
-                        companion={companion}
-                        onPress={() => openCompanion(companion)}
-                        rank={index + 1}
-                        size="lg"
-                      />
+                      renderCard(companion, { rank: index + 1, size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -291,13 +325,7 @@ export function WebPublicCompanionHome() {
                 >
                   <DiscoverRail>
                     {officialFeaturedItems.map((companion, index) => (
-                      <DiscoverCompanionCard
-                        key={companion.id}
-                        companion={companion}
-                        onPress={() => openCompanion(companion)}
-                        rank={index + 1}
-                        size="lg"
-                      />
+                      renderCard(companion, { rank: index + 1, size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -318,13 +346,7 @@ export function WebPublicCompanionHome() {
                 >
                   <DiscoverRail>
                     {trending.map((companion, index) => (
-                      <DiscoverCompanionCard
-                        key={companion.id}
-                        companion={companion}
-                        onPress={() => openCompanion(companion)}
-                        rank={index + 1}
-                        size="lg"
-                      />
+                      renderCard(companion, { rank: index + 1, size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -334,12 +356,7 @@ export function WebPublicCompanionHome() {
                 <DiscoverSection icon="sparkles" iconColor={PALETTE.brand} subtitle="Fresh faces" title="New arrivals">
                   <DiscoverRail>
                     {newArrivals.map((companion) => (
-                      <DiscoverCompanionCard
-                        key={companion.id}
-                        companion={companion}
-                        onPress={() => openCompanion(companion)}
-                        size="lg"
-                      />
+                      renderCard(companion, { size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -353,7 +370,7 @@ export function WebPublicCompanionHome() {
                   title="Community creations"
                 >
                   <View className={DISCOVERY_GRID_CLASS}>
-                    {community.slice(0, communityVisible).map(renderCard)}
+                    {community.slice(0, communityVisible).map((companion) => renderCard(companion))}
                   </View>
                   {community.length > communityVisible ? (
                     <Pressable

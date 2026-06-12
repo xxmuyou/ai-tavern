@@ -21,7 +21,9 @@ function prettyStage(stage: string): string {
  * still to reach. Secret text is gated: Pro (or the owner) sees it; free users
  * see that it's unlocked plus an upgrade prompt.
  */
-export function CompanionUnlocksPanel({ companionId }: { companionId: string }) {
+type UnlocksPanelTone = 'default' | 'dark';
+
+export function CompanionUnlocksPanel({ companionId, tone = 'default' }: { companionId: string; tone?: UnlocksPanelTone }) {
   const router = useRouter();
   const { data } = useCompanionUnlocks(companionId);
   if (!data) {
@@ -30,31 +32,34 @@ export function CompanionUnlocksPanel({ companionId }: { companionId: string }) 
 
   const secretItem = data.items.find((i) => i.key === 'secret');
   const moments = data.items.filter((i) => i.key !== 'secret');
+  const isDark = tone === 'dark';
+  const titleClass = isDark ? 'text-white' : 'text-app-text';
+  const mutedClass = isDark ? 'text-rose-50/60' : 'text-app-muted';
 
   return (
-    <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
-      <Text className="text-xl font-semibold text-app-text">Unlocked</Text>
+    <View className={`gap-4 rounded-lg border p-5 ${isDark ? 'border-white/10 bg-app-surface' : 'border-app-line bg-app-card web:bg-white'}`}>
+      <Text className={`text-xl font-semibold ${titleClass}`}>Unlocked</Text>
 
       {secretItem ? (
-        <SecretRow item={secretItem} data={data} onUpgrade={() => router.push(BILLING_ROUTE)} />
+        <SecretRow item={secretItem} data={data} onUpgrade={() => router.push(BILLING_ROUTE)} tone={tone} />
       ) : null}
 
       {moments.map((item) => (
-        <UnlockRow key={item.key} item={item} />
+        <UnlockRow key={item.key} item={item} tone={tone} />
       ))}
 
       {data.scenes.length > 0 ? (
-        <View className="gap-3 border-t border-app-line pt-4">
-          <Text className="text-sm font-semibold text-app-text">Places</Text>
+        <View className={`gap-3 border-t pt-4 ${isDark ? 'border-white/10' : 'border-app-line'}`}>
+          <Text className={`text-sm font-semibold ${titleClass}`}>Places</Text>
           {data.scenes.map((scene) => (
             <View key={scene.id} className="flex-row items-start gap-2">
               <Text className="text-base">{scene.unlocked ? '✓' : '🔒'}</Text>
               <View className="flex-1">
-                <Text className={`text-sm font-medium ${scene.unlocked ? 'text-app-text' : 'text-app-muted'}`}>
+                <Text className={`text-sm font-medium ${scene.unlocked ? titleClass : mutedClass}`}>
                   {scene.name}
                 </Text>
                 {!scene.unlocked && scene.hint ? (
-                  <Text className="mt-0.5 text-xs text-app-muted">{scene.hint}</Text>
+                  <Text className={`mt-0.5 text-xs ${mutedClass}`}>{scene.hint}</Text>
                 ) : null}
               </View>
             </View>
@@ -65,16 +70,18 @@ export function CompanionUnlocksPanel({ companionId }: { companionId: string }) 
   );
 }
 
-function UnlockRow({ item }: { item: RelationshipUnlockItem }) {
+function UnlockRow({ item, tone }: { item: RelationshipUnlockItem; tone: UnlocksPanelTone }) {
+  const titleClass = tone === 'dark' ? 'text-white' : 'text-app-text';
+  const mutedClass = tone === 'dark' ? 'text-rose-50/60' : 'text-app-muted';
   return (
     <View className="flex-row items-start gap-2">
       <Text className="text-base">{item.unlocked ? '✓' : '🔒'}</Text>
       <View className="flex-1">
-        <Text className={`text-sm font-medium ${item.unlocked ? 'text-app-text' : 'text-app-muted'}`}>
+        <Text className={`text-sm font-medium ${item.unlocked ? titleClass : mutedClass}`}>
           {item.label}
         </Text>
         {!item.unlocked ? (
-          <Text className="mt-0.5 text-xs text-app-muted">
+          <Text className={`mt-0.5 text-xs ${mutedClass}`}>
             Reach the {prettyStage(item.required_stage)} stage
           </Text>
         ) : null}
@@ -87,19 +94,23 @@ function SecretRow({
   item,
   data,
   onUpgrade,
+  tone,
 }: {
   item: RelationshipUnlockItem;
   data: RelationshipUnlocksResponse;
   onUpgrade: () => void;
+  tone: UnlocksPanelTone;
 }) {
+  const titleClass = tone === 'dark' ? 'text-white' : 'text-app-text';
+  const mutedClass = tone === 'dark' ? 'text-rose-50/60' : 'text-app-muted';
   // Not yet unlocked: show the locked goal.
   if (!data.secret_unlocked) {
     return (
       <View className="flex-row items-start gap-2">
         <Text className="text-base">🔒</Text>
         <View className="flex-1">
-          <Text className="text-sm font-medium text-app-muted">{item.label}</Text>
-          <Text className="mt-0.5 text-xs text-app-muted">
+          <Text className={`text-sm font-medium ${mutedClass}`}>{item.label}</Text>
+          <Text className={`mt-0.5 text-xs ${mutedClass}`}>
             Reach the {prettyStage(item.required_stage)} stage
           </Text>
         </View>
@@ -114,7 +125,7 @@ function SecretRow({
         <Text className="text-xs font-semibold uppercase tracking-wide text-app-primary">
           Their secret
         </Text>
-        <Text className="text-sm leading-6 text-app-text">{data.secret}</Text>
+        <Text className={`text-sm leading-6 ${titleClass}`}>{data.secret}</Text>
       </View>
     );
   }
@@ -122,8 +133,8 @@ function SecretRow({
   // Unlocked but gated behind Pro for free users.
   return (
     <View className="gap-2 rounded-lg border border-app-primary/30 bg-app-primarySoft px-3 py-3">
-      <Text className="text-sm font-semibold text-app-text">✦ {item.label}</Text>
-      <Text className="text-xs text-app-muted">Upgrade to Pro to read what they trusted you with.</Text>
+      <Text className={`text-sm font-semibold ${titleClass}`}>✦ {item.label}</Text>
+      <Text className={`text-xs ${mutedClass}`}>Upgrade to Pro to read what they trusted you with.</Text>
       <Button label="Upgrade to Pro" onPress={onUpgrade} />
     </View>
   );

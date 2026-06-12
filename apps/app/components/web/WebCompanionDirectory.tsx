@@ -42,7 +42,7 @@ export function WebCompanionDirectory({
   const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
   const { isLoading: isSessionLoading, session } = useSession();
   const isSignedIn = Boolean(session);
-  const companionSource = source === 'scenes' ? 'favorites' : source;
+  const companionSource = source === 'scenes' || source === 'official' ? 'favorites' : source;
   const companions = useCompanions(companionSource, { enabled: isSignedIn && source !== 'scenes' });
   const userCompanions = useCompanions('user', { enabled: isSignedIn });
   const scenes = useScenes({ enabled: isSignedIn });
@@ -72,6 +72,9 @@ export function WebCompanionDirectory({
 
   const customLimit = billing.data?.entitlements.custom_companion_limit;
   const customCount = userCompanions.data?.items.length ?? 0;
+  const companionItems = source === 'official'
+    ? (companions.data?.items ?? []).filter((companion) => companion.source === 'official')
+    : companions.data?.items ?? [];
 
   if (isSessionLoading) {
     return (
@@ -150,11 +153,11 @@ export function WebCompanionDirectory({
           onAction={companions.refetch}
           title="Companions unavailable"
         />
-      ) : (companions.data?.items ?? []).length === 0 ? (
+      ) : companionItems.length === 0 ? (
         <EmptyLibraryState onCreate={createCompanion} onRefresh={companions.refetch} source={source} />
       ) : (
         <View className={DISCOVERY_GRID_CLASS}>
-          {(companions.data?.items ?? []).map((companion) => (
+          {companionItems.map((companion) => (
             <DiscoverCompanionCard
               key={companion.id}
               companion={companion}
@@ -323,9 +326,9 @@ function EmptyLibraryState({
   return (
     <WebEmptyState
       actionLabel="Refresh"
-      description="Official companions could not be found right now."
+      description="Favorite official companions from Discover, then they will appear here."
       onAction={onRefresh}
-      title="No official companions"
+      title="No official favorites yet"
     />
   );
 }
