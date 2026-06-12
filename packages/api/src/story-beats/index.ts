@@ -10,7 +10,7 @@ import { ZERO_DIMENSIONS } from "../relationships/level";
 import { loadRelationship } from "../relationships/engine";
 import { deriveStage } from "../relationships/stage";
 import { STAGE_RANK } from "../relationships/unlocks";
-import { evaluateUnlock } from "../scenes/unlock";
+import { evaluateUserSceneUnlock } from "../scenes/unlock";
 
 export type StoryBeatStatus = "active" | "waiting_stage" | "completed";
 export type StoryArcSourceType = "official_seed" | "template" | "user_written" | "ai_assisted";
@@ -482,7 +482,7 @@ async function loadStorySceneTarget(env: Env, sceneId: string): Promise<StorySce
   return scene ? { art_url: scene.art_url, id: scene.id, mood: scene.mood, name: scene.name } : null;
 }
 
-async function loadUnlockedStoryScenes(env: Env, userId: string, companionId: string): Promise<StorySceneRow[]> {
+async function loadUnlockedStoryScenes(env: Env, userId: string, _companionId: string): Promise<StorySceneRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT id, name, mood, tags, art_url, unlock_condition, display_order
      FROM scenes
@@ -491,7 +491,7 @@ async function loadUnlockedStoryScenes(env: Env, userId: string, companionId: st
   ).all<StorySceneRow>();
   const out: StorySceneRow[] = [];
   for (const scene of results ?? []) {
-    const { unlocked } = await evaluateUnlock(env, userId, scene.unlock_condition, companionId);
+    const { unlocked } = await evaluateUserSceneUnlock(env, userId, scene);
     if (unlocked) out.push(scene);
   }
   return out;

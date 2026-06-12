@@ -1,6 +1,6 @@
 import type { DimensionValues } from "../relationships/level";
 import type { UnlockEvent } from "../relationships/unlocks";
-import { parseUnlockCondition } from "./unlock";
+import { parseUnlockCondition, recordUserSceneUnlock } from "./unlock";
 
 type SceneUnlockRow = {
   id: string;
@@ -12,8 +12,10 @@ export async function detectNewSceneUnlocks(
   env: Env,
   args: {
     companionId: string;
+    now?: number;
     previous: DimensionValues;
     next: DimensionValues;
+    userId: string;
   },
 ): Promise<UnlockEvent[]> {
   const { results } = await env.DB.prepare(
@@ -29,6 +31,13 @@ export async function detectNewSceneUnlocks(
     if (!condition) continue;
     if (args.previous[condition.dim] >= condition.value) continue;
     if (args.next[condition.dim] < condition.value) continue;
+    const recorded = await recordUserSceneUnlock(env, {
+      sceneId: row.id,
+      sourceCompanionId: args.companionId,
+      unlockedAt: args.now ?? Date.now(),
+      userId: args.userId,
+    });
+    if (!recorded) continue;
     out.push({
       key: `scene:${row.id}`,
       kind: "scene",

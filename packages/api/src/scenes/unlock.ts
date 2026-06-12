@@ -21,6 +21,11 @@ export type UnlockResult = {
   hint: string | null;
 };
 
+export type SceneUnlockInput = {
+  id: string;
+  unlock_condition: string | null | undefined;
+};
+
 const ALL_DIMS: ReadonlySet<SingularityDim> = new Set([
   "closeness",
   "trust",
@@ -91,6 +96,87 @@ export async function evaluateUnlock(
     hint: companionIdOverride
       ? `Reach ${condition.dim} ${condition.value} with this companion to unlock this place.`
       : `Reach ${condition.dim} ${condition.value} with the right person to unlock this place.`,
+    unlocked: false,
+  };
+}
+
+type UserSceneUnlockRow = {
+  one: number;
+};
+
+type RelationshipDimensionRow = Record<SingularityDim, number> & {
+  companion_id: string;
+};
+
+export async function recordUserSceneUnlock(
+  env: Env,
+  args: {
+    userId: string;
+    sceneId: string;
+    unlockedAt: number;
+    sourceCompanionId?: string | null;
+  },
+): Promise<boolean> {
+  const existing = await env.DB.prepare(
+    `SELECT 1 AS one FROM user_scene_unlocks WHERE user_id = ? AND scene_id = ?`,
+  )
+    .bind(args.userId, args.sceneId)
+    .first<UserSceneUnlockRow>();
+  if (existing) {
+    return false;
+  }
+
+  const result = await env.DB.prepare(
+    `INSERT OR IGNORE INTO user_scene_unlocks (user_id, scene_id, unlocked_at, source_companion_id)
+     VALUES (?, ?, ?, ?)`,
+  )
+    .bind(args.userId, args.sceneId, args.unlockedAt, args.sourceCompanionId ?? null)
+    .run();
+  const changes = (result as { meta?: { changes?: number } } | undefined)?.meta?.changes;
+  return changes === undefined ? true : changes > 0;
+}
+
+export async function evaluateUserSceneUnlock(
+  env: Env,
+  userId: string,
+  scene: SceneUnlockInput,
+  now = Date.now(),
+): Promise<UnlockResult> {
+  const condition = parseUnlockCondition(scene.unlock_condition);
+  if (!condition) {
+    return { hint: null, unlocked: true };
+  }
+
+  const existing = await env.DB.prepare(
+    `SELECT 1 AS one FROM user_scene_unlocks WHERE user_id = ? AND scene_id = ?`,
+  )
+    .bind(userId, scene.id)
+    .first<UserSceneUnlockRow>();
+  if (existing) {
+    return { hint: null, unlocked: true };
+  }
+
+  const { results } = await env.DB.prepare(
+    `SELECT companion_id, closeness, trust, romance, friendship, hostility, tension, distance
+     FROM relationships
+     WHERE user_id = ?`,
+  )
+    .bind(userId)
+    .all<RelationshipDimensionRow>();
+
+  const source = (results ?? []).find((row) => (row[condition.dim] ?? 0) >= condition.value);
+  if (source) {
+    await recordUserSceneUnlock(env, {
+      sceneId: scene.id,
+      sourceCompanionId: source.companion_id,
+      unlockedAt: now,
+      userId,
+    });
+    return { hint: null, unlocked: true };
+  }
+
+  return {
+    hint: `Reach ${condition.dim} ${condition.value} with any companion to unlock this place.`,
     unlocked: false,
   };
 }

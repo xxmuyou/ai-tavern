@@ -58,6 +58,7 @@ type Fixtures = {
   companions: CompanionFixture[];
   relationships: RelationshipFixture[];
   storyBeats?: StoryBeatFixture[];
+  userSceneUnlocks?: Array<{ user_id: string; scene_id: string; source_companion_id?: string | null }>;
 };
 
 describe("scenes module", () => {
@@ -184,6 +185,47 @@ describe("scenes module", () => {
     const body = (await response?.json()) as { scenes: Array<{ id: string; unlocked: boolean; unlock_hint: string | null }> };
     expect(body.scenes).toEqual([
       expect.objectContaining({ id: "restaurant", unlock_hint: null, unlocked: true }),
+    ]);
+  });
+
+  it("unlocks a gated scene for the user when any companion relationship meets the gate", async () => {
+    const env = createEnv({
+      companions: [
+        { id: "maya", name: "Maya" },
+        { created_by: "user-1", id: "echo", name: "Echo", source: "user" },
+      ],
+      relationships: [
+        { closeness: 12, companion_id: "echo", user_id: "user-1" },
+      ],
+      scenes: [
+        {
+          art_url: null,
+          default_companions: null,
+          display_order: 1,
+          id: "restaurant",
+          mood: "Dinner",
+          name: "Restaurant",
+          tags: null,
+          unlock_condition: JSON.stringify({
+            companion_id: "maya",
+            dim: "closeness",
+            type: "min_relationship",
+            value: 10,
+          }),
+        },
+      ],
+    });
+
+    const token = await issueDevToken(env, "player@example.com", "user-1");
+    const response = await handleScenesRequest(
+      authedRequest("http://localhost/scenes/restaurant/enter?companion_id=maya", token, "POST"),
+      env,
+      "/scenes/restaurant/enter",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(fixturesUserSceneUnlocks(env)).toEqual([
+      expect.objectContaining({ scene_id: "restaurant", source_companion_id: "echo", user_id: "user-1" }),
     ]);
   });
 
@@ -424,6 +466,7 @@ function createEnv(fixtures: Fixtures): Env {
         return buildStatement(sql, fixtures, users, sessionsStore);
       },
     },
+    __fixtures: fixtures,
   } as unknown as Env;
 }
 
@@ -453,6 +496,13 @@ function buildStatement(
         const [id, email] = values as [string, string];
         if (id && email && !users.has(email)) {
           users.set(email, { email, id });
+        }
+      }
+      if (sql.includes("INSERT OR IGNORE INTO user_scene_unlocks")) {
+        const [user_id, scene_id, , source_companion_id] = values as [string, string, number, string | null];
+        fixtures.userSceneUnlocks ??= [];
+        if (!fixtures.userSceneUnlocks.some((row) => row.user_id === user_id && row.scene_id === scene_id)) {
+          fixtures.userSceneUnlocks.push({ scene_id, source_companion_id, user_id });
         }
       }
       return { meta: { changes: 1 } };
@@ -494,6 +544,12 @@ function queryFirst<T>(
   if (sql.includes("FROM scenes") && sql.includes("WHERE id = ?")) {
     const found = fixtures.scenes.find((s) => s.id === values[0] && (s.is_active ?? 1) === 1);
     return (found ?? null) as T | null;
+  }
+
+  if (sql.includes("FROM user_scene_unlocks")) {
+    const [userId, sceneId] = values as [string, string];
+    const found = (fixtures.userSceneUnlocks ?? []).find((row) => row.user_id === userId && row.scene_id === sceneId);
+    return (found ? { one: 1 } : null) as T | null;
   }
 
   if (sql.includes("FROM companions") && sql.includes("WHERE id = ?")) {
@@ -563,6 +619,22 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
     return results as unknown as T[];
   }
 
+  if (sql.includes("FROM relationships") && sql.includes("WHERE user_id = ?")) {
+    const userId = values[0] as string;
+    return fixtures.relationships
+      .filter((r) => r.user_id === userId)
+      .map((r) => ({
+        closeness: r.closeness ?? 0,
+        companion_id: r.companion_id,
+        distance: r.distance ?? 0,
+        friendship: r.friendship ?? 0,
+        hostility: r.hostility ?? 0,
+        romance: r.romance ?? 0,
+        tension: r.tension ?? 0,
+        trust: r.trust ?? 0,
+      })) as unknown as T[];
+  }
+
   if (sql.includes("FROM companion_story_beats")) {
     const companionId = values[0] as string;
     return (fixtures.storyBeats ?? [])
@@ -571,4 +643,8 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
   }
 
   return [];
+}
+
+function fixturesUserSceneUnlocks(env: Env) {
+  return (env as unknown as { __fixtures?: Fixtures }).__fixtures?.userSceneUnlocks ?? [];
 }

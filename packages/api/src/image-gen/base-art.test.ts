@@ -305,7 +305,7 @@ describe("base-art job pipeline", () => {
     await processBaseArtJob(env, sceneJob);
 
     expect(captured[0]).toContain("STYLE_PREAMBLE");
-    expect(captured[0]).toContain("Soft studio portrait");
+    expect(captured[0]).toContain("solo, 1 character");
     expect(captured[0]).toContain("a calm girl");
     expect(captured[1]).toBe("empty seaside cafe, no people");
   });

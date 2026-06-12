@@ -274,7 +274,9 @@ export async function commitQuickAction(
     const sceneUnlocks = await detectNewSceneUnlocks(env, {
       companionId: args.companionId,
       next: newState.dimensions,
+      now: args.now,
       previous: previousDims,
+      userId: args.userId,
     });
     return {
       activity_id: activityId,

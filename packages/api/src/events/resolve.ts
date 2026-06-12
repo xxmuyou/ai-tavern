@@ -63,7 +63,9 @@ export async function resolveEvent(
     const sceneUnlocks = await detectNewSceneUnlocks(env, {
       companionId: event.companion_id,
       next: newState.dimensions,
+      now,
       previous: oldState?.dimensions ?? { ...ZERO_DIMENSIONS },
+      userId: user.id,
     });
     unlocks = [...unlockResult.newlyUnlocked, ...sceneUnlocks];
   } catch {

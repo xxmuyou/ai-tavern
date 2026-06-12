@@ -465,7 +465,9 @@ async function runChat(args: RunChatArgs): Promise<void> {
         const sceneUnlocks = await detectNewSceneUnlocks(env, {
           companionId,
           next: newState.dimensions,
+          now,
           previous: previousDimensions,
+          userId: user.id,
         });
         unlockEvents = [...unlockResult.newlyUnlocked, ...sceneUnlocks];
       } catch {

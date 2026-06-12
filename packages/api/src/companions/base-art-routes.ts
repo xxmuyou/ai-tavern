@@ -114,6 +114,52 @@ function optionMatchesStyle(model: ImageModelOption, style: BaseArtStyle): boole
   return haystack.includes(style);
 }
 
+const GENERATE_PROMPT_ENHANCE_SYSTEM =
+  "You convert a character description into a Stable Diffusion XL image prompt. " +
+  "Output ONLY comma-separated English danbooru-style tags, no explanations. " +
+  "Start with subject count and gender inferred from the description (e.g. `1girl, solo` or `1boy, solo`; default `1girl, solo` if unclear). " +
+  "Faithfully translate every detail the user describes: hair, eyes, face, body, outfit, accessories, pose, expression, and any background, props or scene they mention. " +
+  "Do not invent details the user did not imply, and do not remove any. " +
+  "Do not name copyrighted characters or real people. Keep under 60 tags.";
+
+/**
+ * Generate-path counterpart of handlePromptAssist: the SDXL checkpoints only
+ * understand English tag prompts, so the user's description (often Chinese)
+ * is converted before the job is created. Falls back to the raw text so an
+ * LLM outage never blocks generation.
+ */
+async function enhanceGeneratePrompt(
+  env: Env,
+  user: UserRecord,
+  prompt: string,
+  modelLabel?: string | null,
+): Promise<string> {
+  try {
+    const response = await llmCall(
+      env,
+      {
+        task: "image_prompt_assist",
+        temperature: 0.3,
+        max_tokens: 300,
+        messages: [
+          { role: "system", content: GENERATE_PROMPT_ENHANCE_SYSTEM },
+          {
+            role: "user",
+            content: `Character description: ${prompt}${modelLabel ? `\nSelected model/style: ${modelLabel}` : ""}`,
+          },
+        ],
+      },
+      { user_id: user.id },
+    );
+    return cleanPrompt(response.text) || prompt;
+  } catch (err) {
+    if (err instanceof LLMError || err instanceof LLMRouterError) {
+      return prompt;
+    }
+    throw err;
+  }
+}
+
 async function handlePromptAssist(
   env: Env,
   user: UserRecord,
@@ -212,6 +258,11 @@ async function handleGenerate(
     return jsonResponse({ error: "upload_key_required" }, { status: 400 });
   }
 
+  const finalPrompt =
+    source === "text" && prompt
+      ? await enhanceGeneratePrompt(env, user, prompt, selection.model.label)
+      : prompt;
+
   // Reserve image-generation credits before creating the job (spec-021 §F);
   // insufficient balance returns 402 and no job is created.
   const reservation = await reserveImageGenerationCredits(env, user.id);
@@ -222,7 +273,7 @@ async function handleGenerate(
   let jobId: string;
   try {
     jobId = await createBaseArtJob(env, {
-      prompt: prompt || undefined,
+      prompt: finalPrompt || undefined,
       source: source as BaseArtSource,
       workflowKey,
       modelId: selection.model.id,

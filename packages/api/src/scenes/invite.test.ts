@@ -15,12 +15,32 @@ type SceneRow = {
 
 type RelRow = { user_id: string; companion_id: string; closeness?: number; romance?: number; trust?: number };
 
-type Fixtures = { scenes: SceneRow[]; relationships: RelRow[] };
+type Fixtures = {
+  scenes: SceneRow[];
+  relationships: RelRow[];
+  userSceneUnlocks?: Array<{ user_id: string; scene_id: string; source_companion_id?: string | null }>;
+};
 
 function createEnv(fixtures: Fixtures): Env {
-  const statementFor = (values: unknown[]) => ({
+  const statementFor = (sql: string, values: unknown[]) => ({
     async all<T>(): Promise<{ results: T[] }> {
-      // loadCandidateScenes: all active scenes ordered.
+      if (sql.includes("FROM relationships") && sql.includes("WHERE user_id = ?")) {
+        const userId = values[0] as string;
+        return {
+          results: fixtures.relationships
+            .filter((r) => r.user_id === userId)
+            .map((r) => ({
+              closeness: r.closeness ?? 0,
+              companion_id: r.companion_id,
+              distance: 0,
+              friendship: 0,
+              hostility: 0,
+              romance: r.romance ?? 0,
+              tension: 0,
+              trust: r.trust ?? 0,
+            })) as unknown as T[],
+        };
+      }
       return {
         results: fixtures.scenes
           .filter((s) => (s.is_active ?? 1) === 1)
@@ -28,24 +48,30 @@ function createEnv(fixtures: Fixtures): Env {
       };
     },
     async first<T>(): Promise<T | null> {
-      // evaluateUnlock: relationship row for (userId, companionId).
-      const [userId, companionId] = values as [string, string];
-      const rel = fixtures.relationships.find(
-        (r) => r.user_id === userId && r.companion_id === companionId,
-      );
-      return (rel
-        ? { closeness: rel.closeness ?? 0, romance: rel.romance ?? 0, trust: rel.trust ?? 0 }
-        : null) as T | null;
+      if (sql.includes("FROM user_scene_unlocks")) {
+        const [userId, sceneId] = values as [string, string];
+        const found = (fixtures.userSceneUnlocks ?? []).find((row) => row.user_id === userId && row.scene_id === sceneId);
+        return (found ? { one: 1 } : null) as T | null;
+      }
+      return null;
     },
     async run() {
+      if (sql.includes("INSERT OR IGNORE INTO user_scene_unlocks")) {
+        const [user_id, scene_id, , source_companion_id] = values as [string, string, number, string | null];
+        fixtures.userSceneUnlocks ??= [];
+        if (!fixtures.userSceneUnlocks.some((row) => row.user_id === user_id && row.scene_id === scene_id)) {
+          fixtures.userSceneUnlocks.push({ scene_id, source_companion_id, user_id });
+          return { meta: { changes: 1 } };
+        }
+      }
       return { meta: { changes: 0 } };
     },
   });
   return {
     DB: {
-      prepare() {
-        const unbound = statementFor([]);
-        return { ...unbound, bind: (...v: unknown[]) => statementFor(v) };
+      prepare(sql: string) {
+        const unbound = statementFor(sql, []);
+        return { ...unbound, bind: (...v: unknown[]) => statementFor(sql, v) };
       },
     },
   } as unknown as Env;
@@ -132,6 +158,13 @@ describe("loadInviteTargets", () => {
 
     const unlocked = createEnv({ relationships: [{ companion_id: "echo", closeness: 12, user_id: "user-1" }], scenes: [restaurant] });
     expect(await loadInviteTargets(unlocked, "user-1", "echo", null)).toMatchObject([
+      { id: "restaurant", name: "Restaurant" },
+    ]);
+  });
+
+  it("allows inviting any companion to a scene unlocked through another companion", async () => {
+    const env = createEnv({ relationships: [{ companion_id: "echo", closeness: 12, user_id: "user-1" }], scenes: [restaurant] });
+    expect(await loadInviteTargets(env, "user-1", "maya", null)).toMatchObject([
       { id: "restaurant", name: "Restaurant" },
     ]);
   });

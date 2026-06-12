@@ -79,8 +79,11 @@ export type BaseArtQueuePayload = {
 
 const TASK_BASE_ART = "companion_base_art";
 const OUTPUT_PREFIX = "companion-base-art";
-const PORTRAIT_CREATE_CLEAN_BACKGROUND_PROMPT =
-  "Soft studio portrait, clean gradient or gentle bokeh background, centered subject, uncluttered composition, no props, no complex scenery.";
+// Subject anchor only — background/framing stay under the user's control. The
+// old clean-background wording drowned out the (untranslated) user prompt and
+// produced empty-background images.
+const PORTRAIT_CREATE_SUBJECT_PROMPT =
+  "solo, 1 character, centered composition, full face visible, detailed face, detailed eyes";
 
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -381,7 +384,7 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
     // prepend it for portrait_create so other workflows aren't
     // polluted with portrait-specific styling.
     const basePrompt = workflowKey === PORTRAIT_CREATE_WORKFLOW_KEY || workflowKey === PORTRAIT_CREATE_LORA_WORKFLOW_KEY
-      ? [cfg.portraitCreateBasePrompt?.trim(), PORTRAIT_CREATE_CLEAN_BACKGROUND_PROMPT].filter(Boolean).join("\n")
+      ? [cfg.portraitCreateBasePrompt?.trim(), PORTRAIT_CREATE_SUBJECT_PROMPT].filter(Boolean).join("\n")
       : undefined;
     const request: ImageGenRequest = {
       mode: "create",

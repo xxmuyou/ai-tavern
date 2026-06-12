@@ -12,7 +12,7 @@ import type { EventResponseItem } from "../events/types";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 import { buildStoryMoment, loadStoryBeatForScene, type StoryBeatPublic, type StoryMomentPublic } from "../story-beats";
-import { evaluateUnlock } from "./unlock";
+import { evaluateUserSceneUnlock } from "./unlock";
 
 type SceneRow = {
   id: string;
@@ -106,7 +106,7 @@ export async function handleScenesRequest(
     if (companionId && !(await canUseCompanionForSceneContext(env, user, companionId))) {
       return notFound();
     }
-    return listScenes(env, user, companionId);
+    return listScenes(env, user);
   }
 
   const enterMatch = pathname.match(/^\/scenes\/([^/]+)\/enter$/);
@@ -125,13 +125,13 @@ export async function handleScenesRequest(
     if (companionId && !(await canUseCompanionForSceneContext(env, user, companionId))) {
       return notFound();
     }
-    return enterScene(env, user, sceneId, companionId);
+    return enterScene(env, user, sceneId);
   }
 
   return null;
 }
 
-async function listScenes(env: Env, user: UserRecord, companionId: string | null): Promise<Response> {
+async function listScenes(env: Env, user: UserRecord): Promise<Response> {
   const { results } = await env.DB.prepare(
     `SELECT id, name, mood, tags, possible_events, default_companions, unlock_condition, art_url, display_order
      FROM scenes
@@ -143,7 +143,7 @@ async function listScenes(env: Env, user: UserRecord, companionId: string | null
   const items: ScenesListItem[] = [];
 
   for (const row of results ?? []) {
-    const { hint, unlocked } = await evaluateUnlock(env, user.id, row.unlock_condition, companionId);
+    const { hint, unlocked } = await evaluateUserSceneUnlock(env, user.id, row);
     const companions = unlocked
       ? await loadPotentialCompanions(env, user.id, row.default_companions)
       : [];
@@ -163,7 +163,7 @@ async function listScenes(env: Env, user: UserRecord, companionId: string | null
   return jsonResponse({ scenes: items });
 }
 
-async function enterScene(env: Env, user: UserRecord, sceneId: string, companionId: string | null): Promise<Response> {
+async function enterScene(env: Env, user: UserRecord, sceneId: string): Promise<Response> {
   const row = await env.DB.prepare(
     `SELECT id, name, mood, tags, possible_events, default_companions, unlock_condition, art_url, display_order
      FROM scenes
@@ -176,7 +176,7 @@ async function enterScene(env: Env, user: UserRecord, sceneId: string, companion
     return notFound();
   }
 
-  const { hint, unlocked } = await evaluateUnlock(env, user.id, row.unlock_condition, companionId);
+  const { hint, unlocked } = await evaluateUserSceneUnlock(env, user.id, row);
   if (!unlocked) {
     return jsonResponse(
       { error: "scene_locked", unlock_hint: hint },

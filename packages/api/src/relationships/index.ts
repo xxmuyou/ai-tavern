@@ -4,7 +4,7 @@ import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 
 import { maybeEmitAnniversaries } from "../life/anniversary";
-import { evaluateUnlock, parseUnlockCondition } from "../scenes/unlock";
+import { evaluateUserSceneUnlock, parseUnlockCondition } from "../scenes/unlock";
 import { applyCommittedDecayIfDue } from "./decay";
 import { loadRelationship } from "./engine";
 import { ZERO_DIMENSIONS, computeLevel } from "./level";
@@ -73,7 +73,6 @@ type SceneUnlockStatus = { id: string; name: string; unlocked: boolean; hint: st
 async function loadCompanionSceneUnlocks(
   env: Env,
   userId: string,
-  companionId: string,
 ): Promise<SceneUnlockStatus[]> {
   const { results } = await env.DB.prepare(
     `SELECT id, name, unlock_condition FROM scenes
@@ -87,7 +86,7 @@ async function loadCompanionSceneUnlocks(
     if (!condition) {
       continue;
     }
-    const res = await evaluateUnlock(env, userId, row.unlock_condition, companionId);
+    const res = await evaluateUserSceneUnlock(env, userId, row);
     out.push({ hint: res.hint, id: row.id, name: row.name, unlocked: res.unlocked });
   }
   return out;
@@ -125,7 +124,7 @@ async function getRelationshipUnlocks(
   // user-created companion always sees their own secret. Free users see that
   // the secret is unlocked but not its text.
   const canViewSecret = secretUnlocked && (isOwner || pro);
-  const scenes = await loadCompanionSceneUnlocks(env, user.id, companionId);
+  const scenes = await loadCompanionSceneUnlocks(env, user.id);
 
   return jsonResponse({
     companion_id: companionId,
