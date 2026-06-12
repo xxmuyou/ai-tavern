@@ -1631,6 +1631,7 @@ function WebInviteDialog({
       onClose={onClose}
       open={open}
       size="md"
+      surface="solid"
       title={`Invite ${companionName} somewhere`}
     >
       {loading ? (
@@ -1653,18 +1654,18 @@ function WebInviteDialog({
                   key={target.id}
                   accessibilityRole="button"
                   onPress={() => onSelect(target)}
-                  className="flex-row items-center gap-3 rounded-xl border border-white/15 bg-[#21142A] p-2 transition-colors hover:border-app-rose/40 hover:bg-[#2A1934] active:opacity-80"
+                  className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 transition-colors hover:border-app-rose hover:bg-app-rose-soft active:bg-app-wine-soft"
                 >
-                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-[#2A1934]">
+                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-app-rose-soft">
                     {thumb ? <Image source={thumb} resizeMode="cover" className="h-full w-full" /> : null}
                   </View>
                   <View className="min-w-0 flex-1">
                     <Text className="text-base font-semibold text-white">{target.name}</Text>
-                    <Text className="mt-1 text-body-sm leading-5 text-rose-50/75" numberOfLines={2}>
+                    <Text className="mt-1 text-body-sm leading-5 text-app-ink-soft" numberOfLines={2}>
                       {target.mood}
                     </Text>
                   </View>
-                  <Ionicons color="#9A2F4F" name="arrow-forward" size={18} />
+                  <Ionicons color="#FF8FAD" name="arrow-forward" size={18} />
                 </Pressable>
               );
             })}

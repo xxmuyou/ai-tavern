@@ -30,11 +30,11 @@ export function InvitePopup({
     <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
       <Pressable className="flex-1 items-center justify-center bg-black/40 px-6" onPress={onClose}>
         <Pressable
-          className="w-full max-w-md rounded-2xl bg-app-card p-5"
+          className="w-full max-w-md rounded-2xl border border-app-line bg-app-card p-5"
           onPress={(e) => e.stopPropagation()}
         >
           <Text className="text-lg font-semibold text-app-text">Invite {companionName} somewhere</Text>
-          <Text className="mt-1 text-sm text-app-muted">
+          <Text className="mt-1 text-sm text-app-ink-soft">
             Pick a place to send an invitation now. They might say yes — or not.
           </Text>
 
@@ -59,16 +59,16 @@ export function InvitePopup({
                         key={target.id}
                         accessibilityRole="button"
                         onPress={() => onSelect(target)}
-                        className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-bg p-2 active:opacity-70"
+                        className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 active:bg-app-rose-soft"
                       >
-                        <View className="h-14 w-14 overflow-hidden rounded-lg bg-app-primarySoft">
+                        <View className="h-16 w-16 overflow-hidden rounded-lg bg-app-primarySoft">
                           {thumb ? (
                             <Image source={thumb} resizeMode="cover" className="h-full w-full" />
                           ) : null}
                         </View>
                         <View className="flex-1">
                           <Text className="text-base font-medium text-app-text">{target.name}</Text>
-                          <Text numberOfLines={1} className="text-xs text-app-muted">
+                          <Text numberOfLines={1} className="text-xs text-app-ink-soft">
                             {target.mood}
                           </Text>
                         </View>
@@ -83,9 +83,9 @@ export function InvitePopup({
           <Pressable
             accessibilityRole="button"
             onPress={onClose}
-            className="mt-4 items-center rounded-xl border border-app-line py-2.5"
+            className="mt-4 items-center rounded-xl border border-app-line bg-app-sunken py-2.5 active:bg-app-rose-soft"
           >
-            <Text className="text-sm font-medium text-app-muted">Cancel</Text>
+            <Text className="text-sm font-medium text-app-ink-soft">Cancel</Text>
           </Pressable>
         </Pressable>
       </Pressable>

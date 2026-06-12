@@ -26,6 +26,7 @@ const FILTERS: { id: CompanionDirectoryTab; label: string }[] = [
 ];
 
 const DISCOVERY_GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9';
+const SCENE_GRID_CLASS = 'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4';
 
 type WebCompanionDirectoryProps = {
   subtitle?: string;
@@ -219,7 +220,7 @@ function SceneDirectory({
             <Text className="text-overline text-app-rose-deep">Unlocked</Text>
             <Text className="mt-1 font-serif text-title-sm text-white">Scenes you can enter</Text>
           </View>
-          <View className={DISCOVERY_GRID_CLASS}>
+          <View className={SCENE_GRID_CLASS}>
             {unlocked.map((scene) => (
               <SceneDirectoryCard key={scene.id} scene={scene} onPress={() => onOpenScene(scene)} />
             ))}
@@ -233,7 +234,7 @@ function SceneDirectory({
             <Text className="text-overline text-rose-50/60">Locked</Text>
             <Text className="mt-1 font-serif text-title-sm text-white">Scenes waiting for a relationship</Text>
           </View>
-          <View className={DISCOVERY_GRID_CLASS}>
+          <View className={SCENE_GRID_CLASS}>
             {locked.map((scene) => (
               <SceneDirectoryCard key={scene.id} scene={scene} onPress={() => onLockedScene(scene)} />
             ))}
@@ -251,11 +252,11 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`overflow-hidden rounded-xl border bg-white/[0.04] transition-colors ${
-        scene.unlocked ? 'border-white/10 hover:border-app-rose/50' : 'border-white/10 opacity-80 hover:border-app-ember/50'
+      className={`overflow-hidden rounded-xl border bg-app-surface transition-colors ${
+        scene.unlocked ? 'border-app-line hover:border-app-rose' : 'border-app-line hover:border-app-ember'
       }`}
     >
-      <View className="relative aspect-[4/5] overflow-hidden bg-white/[0.06]">
+      <View className="relative aspect-[3/2] overflow-hidden bg-app-sunken">
         {imageSource ? (
           <Image accessibilityLabel={scene.name} source={imageSource} resizeMode="cover" className="h-full w-full" />
         ) : (
@@ -263,13 +264,13 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
             <Ionicons color="#FF8FAD" name="map-outline" size={28} />
           </View>
         )}
-        {!scene.unlocked ? <View pointerEvents="none" className="absolute inset-0 bg-black/45" /> : null}
+        {!scene.unlocked ? <View pointerEvents="none" className="absolute inset-0 bg-black/35" /> : null}
         <View className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
         <View className="absolute left-3 right-3 bottom-3">
           <Text className="font-serif text-title-sm text-white" numberOfLines={1}>{scene.name}</Text>
-          <Text className="mt-1 text-caption text-white/75" numberOfLines={2}>{scene.mood}</Text>
+          <Text className="mt-1 text-caption text-app-ink-soft" numberOfLines={2}>{scene.mood}</Text>
         </View>
-        <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-black/65 px-2.5 py-1">
+        <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-app-sunken px-2.5 py-1">
           <Ionicons color={scene.unlocked ? '#8EF0BD' : '#FFB066'} name={scene.unlocked ? 'lock-open-outline' : 'lock-closed'} size={12} />
           <Text className="text-caption font-semibold text-white">{scene.unlocked ? 'Open' : 'Locked'}</Text>
         </View>
@@ -284,7 +285,7 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
             ))}
           </View>
         ) : null}
-        <Text className="text-caption text-rose-50/60" numberOfLines={2}>
+        <Text className="text-caption text-app-ink-soft" numberOfLines={2}>
           {scene.unlocked
             ? `${scene.potential_companions.length} companion${scene.potential_companions.length === 1 ? '' : 's'} nearby`
             : hint || 'Reach a relationship threshold'}
