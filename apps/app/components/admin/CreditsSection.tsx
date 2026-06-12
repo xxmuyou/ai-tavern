@@ -67,7 +67,7 @@ export function CreditsSection() {
                   accessibilityRole="button"
                   onPress={() => void selectUser(user)}
                   className={`flex-row items-center justify-between rounded-xl border p-3 ${
-                    isSelected ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-surface'
+                    isSelected ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-surface'
                   }`}
                 >
                   <Text numberOfLines={1} className="min-w-0 flex-1 text-body-sm font-semibold text-app-ink">

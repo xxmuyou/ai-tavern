@@ -8,8 +8,8 @@ import { API_BASE_URL, isApiRequestError } from '@/api/companion-client';
 import type { CompanionListItem } from '@/api/types';
 import { DiscoverCompanionCard } from '@/components/web/discover/DiscoverCompanionCard';
 import { DiscoverRail, DiscoverSection } from '@/components/web/discover/DiscoverSection';
-import { WebAuthControls } from '@/components/web/WebAuthControls';
-import { BRAND_MONOGRAM, BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
+import { WebAppShell } from '@/components/web/WebAppShell';
+import { BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
 import { usePublicCompanions, type CompanionDiscoveryStyle } from '@/hooks/use-companions';
 import { useSession } from '@/hooks/use-session';
@@ -28,6 +28,7 @@ const STYLE_OPTIONS: { id: CompanionDiscoveryStyle; label: string }[] = [
 
 const COMMUNITY_PAGE_SIZE = 30;
 const TOP_TAG_COUNT = 10;
+const DISCOVERY_GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9';
 
 export function WebPublicCompanionHome() {
   const router = useRouter();
@@ -100,44 +101,14 @@ export function WebPublicCompanionHome() {
   );
 
   return (
-    <View className="h-screen overflow-hidden bg-app-canvas">
-      <View pointerEvents="none" className="absolute inset-0 bg-app-canvas" />
-      <View pointerEvents="none" className="absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(255,77,126,0.16)_0%,rgba(80,28,82,0.12)_40%,transparent_72%)]" />
-      <View pointerEvents="none" className="absolute inset-x-0 bottom-0 h-[360px] bg-[radial-gradient(ellipse_at_bottom,rgba(166,107,250,0.08)_0%,transparent_70%)]" />
+    <WebAppShell contentMode="immersive" requireAuth={false} title={BRAND_NAME}>
+      <View className="h-full overflow-hidden bg-app-canvas">
+        <View pointerEvents="none" className="absolute inset-0 bg-app-canvas" />
+        <View pointerEvents="none" className="absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(ellipse_at_top,rgba(255,77,126,0.16)_0%,rgba(80,28,82,0.12)_40%,transparent_72%)]" />
+        <View pointerEvents="none" className="absolute inset-x-0 bottom-0 h-[360px] bg-[radial-gradient(ellipse_at_bottom,rgba(166,107,250,0.08)_0%,transparent_70%)]" />
 
-      <ScrollView className="editorial-scroll h-full" contentContainerStyle={{ minHeight: '100%' }}>
-        <View className="relative mx-auto w-full max-w-[1600px] px-8 pb-16 pt-4">
-          {/* ── Top bar ─────────────────────────────────────────── */}
-          <View className="sticky top-0 z-20 mb-6 flex-row items-center justify-between gap-6 border-b border-white/10 bg-app-canvas/88 px-1 py-3.5 backdrop-blur">
-            <View className="flex-row items-center gap-3">
-              <View className="h-10 w-10 items-center justify-center rounded-xl border border-app-rose/30 bg-app-rose-soft shadow-glow-soft">
-                <Text className="font-serif text-title-sm text-app-rose-deep">{BRAND_MONOGRAM}</Text>
-              </View>
-              <View>
-                <Text className="font-serif text-title-sm text-app-ink">{BRAND_NAME}</Text>
-                <Text className="text-caption text-app-muted">{BRAND_TAGLINE}</Text>
-              </View>
-            </View>
-
-            <View className="hidden max-w-md flex-1 flex-row items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3.5 md:flex">
-              <Ionicons color={PALETTE.muted} name="search-outline" size={16} />
-              <TextInput
-                className="min-h-10 flex-1 text-body-sm text-app-ink"
-                placeholder="Search by name or vibe..."
-                placeholderTextColor={PALETTE.mutedSoft}
-                value={query}
-                onChangeText={setQuery}
-              />
-              {query ? (
-                <Pressable accessibilityRole="button" onPress={() => setQuery('')}>
-                  <Ionicons color={PALETTE.muted} name="close-circle" size={16} />
-                </Pressable>
-              ) : null}
-            </View>
-
-            <WebAuthControls />
-          </View>
-
+        <ScrollView className="editorial-scroll h-full" contentContainerStyle={{ minHeight: '100%' }}>
+          <View className="relative mx-auto w-full max-w-[1600px] px-8 pb-16 pt-8">
           {/* ── Hero ────────────────────────────────────────────── */}
           {!isFiltering ? (
             <View className="mb-8 overflow-hidden rounded-3xl border border-white/10 bg-gradient-hero px-10 py-12">
@@ -156,6 +127,21 @@ export function WebPublicCompanionHome() {
           {/* ── Filters ─────────────────────────────────────────── */}
           <View className="mb-8 gap-4">
             <View className="flex-row flex-wrap items-center gap-3">
+              <View className="min-w-[260px] flex-1 flex-row items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3.5">
+                <Ionicons color={PALETTE.muted} name="search-outline" size={16} />
+                <TextInput
+                  className="min-h-10 flex-1 text-body-sm text-app-ink"
+                  placeholder="Search by name or vibe..."
+                  placeholderTextColor={PALETTE.mutedSoft}
+                  value={query}
+                  onChangeText={setQuery}
+                />
+                {query ? (
+                  <Pressable accessibilityRole="button" onPress={() => setQuery('')}>
+                    <Ionicons color={PALETTE.muted} name="close-circle" size={16} />
+                  </Pressable>
+                ) : null}
+              </View>
               <SegmentedControl
                 options={GENDER_OPTIONS}
                 value={gender}
@@ -179,7 +165,7 @@ export function WebPublicCompanionHome() {
                       onPress={() => setSelectedTag(active ? null : tag)}
                       className={`rounded-full border px-3 py-1.5 transition-colors ${
                         active
-                          ? 'border-app-rose/60 bg-app-rose-soft'
+                          ? 'border-app-rose/70 bg-app-canvas/70'
                           : 'border-white/10 bg-white/[0.04] hover:border-app-rose/40 hover:bg-app-rose-soft/50'
                       }`}
                     >
@@ -227,7 +213,7 @@ export function WebPublicCompanionHome() {
                   setSelectedTag(null);
                 }}
               >
-                <View className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                <View className={DISCOVERY_GRID_CLASS}>
                   {filteredItems.map(renderCard)}
                 </View>
               </DiscoverSection>
@@ -275,7 +261,7 @@ export function WebPublicCompanionHome() {
 
               {officialPicks.length > 0 ? (
                 <DiscoverSection icon="ribbon" subtitle="Curated by the house" title="Official picks">
-                  <View className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                  <View className={DISCOVERY_GRID_CLASS}>
                     {officialPicks.map(renderCard)}
                   </View>
                 </DiscoverSection>
@@ -288,7 +274,7 @@ export function WebPublicCompanionHome() {
                   subtitle="Published by players"
                   title="Community creations"
                 >
-                  <View className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                  <View className={DISCOVERY_GRID_CLASS}>
                     {community.slice(0, communityVisible).map(renderCard)}
                   </View>
                   {community.length > communityVisible ? (
@@ -306,9 +292,10 @@ export function WebPublicCompanionHome() {
               ) : null}
             </View>
           )}
-        </View>
-      </ScrollView>
-    </View>
+          </View>
+        </ScrollView>
+      </View>
+    </WebAppShell>
   );
 }
 
@@ -344,11 +331,11 @@ function SegmentedControl({
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             onPress={() => onChange(option.id)}
-            className={`min-h-10 items-center justify-center rounded-lg px-5 transition-colors ${
-              active ? 'bg-app-rose shadow-glow' : 'hover:bg-white/[0.06]'
+            className={`min-h-10 items-center justify-center rounded-lg border px-5 transition-colors ${
+              active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-transparent hover:bg-white/[0.06]'
             }`}
           >
-            <Text className={`text-body-sm font-semibold ${active ? 'text-white' : 'text-app-ink-soft'}`}>
+            <Text className={`text-body-sm font-semibold ${active ? 'text-app-rose-deep' : 'text-app-ink-soft'}`}>
               {option.label}
             </Text>
           </Pressable>

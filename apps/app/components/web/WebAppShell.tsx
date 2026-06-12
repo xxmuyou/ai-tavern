@@ -4,7 +4,8 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import { BILLING_ROUTE, COMPANIONS_ROUTE, DISCOVER_ROUTE, MEMORIES_ROUTE, SCENES_ROUTE } from '@/constants/routes';
+import { BRAND_NAME } from '@/constants/brand';
+import { BILLING_ROUTE, COMPANIONS_ROUTE, DISCOVER_ROUTE, MEMORIES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
 import { WebAuthControls } from './WebAuthControls';
@@ -35,8 +36,7 @@ type ShellNavItem = WebNavItem & { activePaths?: string[] };
 
 const BASE_NAV_ITEMS: ShellNavItem[] = [
   { href: DISCOVER_ROUTE, icon: 'compass-outline', label: 'Discover', activePaths: [String(DISCOVER_ROUTE)] },
-  { href: COMPANIONS_ROUTE, icon: 'people-outline', label: 'Companions', activePaths: [String(COMPANIONS_ROUTE), '/companion'] },
-  { href: SCENES_ROUTE, icon: 'map-outline', label: 'Scenes' },
+  { href: COMPANIONS_ROUTE, icon: 'people-outline', label: 'Companions', activePaths: [String(COMPANIONS_ROUTE), '/companion', '/scene', '/scenes'] },
   { href: '/companion-create' as Href, icon: 'sparkles-outline', label: 'Create' },
   { href: MEMORIES_ROUTE, icon: 'images-outline', label: 'Memories' },
 ];
@@ -71,7 +71,7 @@ export function WebAppShell({
               <Ionicons color="#FBE6EC" name="sparkles" size={15} />
             </View>
             <View>
-              <Text className="font-serif text-title-sm text-white">AI Apps Box</Text>
+              <Text className="font-serif text-title-sm text-white">{BRAND_NAME}</Text>
             </View>
           </Pressable>
 
@@ -84,12 +84,14 @@ export function WebAppShell({
                   accessibilityRole="link"
                   accessibilityState={{ selected: active }}
                   onPress={() => router.push(item.href)}
-                  className={`min-h-10 flex-row items-center gap-2 rounded-full px-3 ${
-                    active ? 'bg-rose-200/18' : 'bg-transparent hover:bg-white/8'
+                  className={`min-h-10 flex-row items-center gap-2 rounded-full border px-3 transition-colors ${
+                    active
+                      ? 'border-app-rose/70 bg-[#10070d]/70'
+                      : 'border-transparent bg-transparent hover:bg-white/8'
                   }`}
                 >
-                  <Ionicons color={active ? '#fecdd3' : '#d6b7bd'} name={item.icon} size={16} />
-                  <Text className={`text-caption font-semibold ${active ? 'text-rose-100' : 'text-white/68'}`}>
+                  <Ionicons color={active ? '#FF8FAD' : '#F6D6E0'} name={item.icon} size={16} />
+                  <Text className={`text-caption font-semibold ${active ? 'text-app-rose-deep' : 'text-rose-50/80'}`}>
                     {item.label}
                   </Text>
                 </Pressable>

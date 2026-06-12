@@ -62,9 +62,9 @@ export default function CompanionImportScreen() {
                     key={value}
                     accessibilityRole="button"
                     onPress={() => setGender(value)}
-                    className={`rounded-full border px-4 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-app-surface'}`}
+                    className={`rounded-full border px-4 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-surface'}`}
                   >
-                    <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-muted'}`}>
+                    <Text className={`text-sm font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>
                       {value === 'female' ? 'Female' : 'Male'}
                     </Text>
                   </Pressable>

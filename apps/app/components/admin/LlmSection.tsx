@@ -504,7 +504,7 @@ function Chip({ active, label, onPress }: { active: boolean; label: string; onPr
       accessibilityRole="button"
       onPress={onPress}
       className={`min-h-9 items-center justify-center rounded-full border px-3 ${
-        active ? 'border-app-rose bg-app-rose-soft' : 'border-app-line bg-app-surface'
+        active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-surface'
       }`}
     >
       <Text className={`text-xs font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>

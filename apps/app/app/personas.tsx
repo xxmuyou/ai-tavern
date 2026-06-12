@@ -152,10 +152,10 @@ export default function PersonasScreen() {
               >
                 <View
                   className={`h-5 w-5 items-center justify-center rounded border ${
-                    draft.isDefault ? 'border-app-primary bg-app-primary' : 'border-app-line bg-app-surface'
+                    draft.isDefault ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-surface'
                   }`}
                 >
-                  {draft.isDefault ? <Text className="text-xs font-bold text-white">✓</Text> : null}
+                  {draft.isDefault ? <Text className="text-xs font-bold text-app-rose-deep">✓</Text> : null}
                 </View>
                 <Text className="text-sm text-app-text">Use as my default persona</Text>
               </Pressable>

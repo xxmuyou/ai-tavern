@@ -39,7 +39,7 @@ export function AdminSectionTabs({
             accessibilityRole="button"
             onPress={() => onChange(tab.id)}
             className={`rounded-full border px-4 py-2 ${
-              isActive ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
+              isActive ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
             }`}
           >
             <Text className={`text-sm font-semibold ${isActive ? 'text-rose-deep' : 'text-app-muted'}`}>

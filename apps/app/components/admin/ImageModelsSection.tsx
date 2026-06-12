@@ -338,7 +338,7 @@ function ArchitecturePicker({ onChange, value }: { onChange: (value: string) => 
             key={architecture}
             accessibilityRole="button"
             onPress={() => onChange(architecture)}
-            className={`rounded-full border px-3 py-2 ${active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
+            className={`rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
           >
             <Text className={`text-sm font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>{architecture}</Text>
           </Pressable>
@@ -478,7 +478,7 @@ function WorkflowFields({
             key={mode}
             accessibilityRole="button"
             onPress={() => setDraft({ ...draft, mode })}
-            className={`rounded-full border px-3 py-2 ${draft.mode === mode ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
+            className={`rounded-full border px-3 py-2 ${draft.mode === mode ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
           >
             <Text className={`text-sm font-semibold ${draft.mode === mode ? 'text-rose-deep' : 'text-app-muted'}`}>{mode}</Text>
           </Pressable>
@@ -597,7 +597,7 @@ function LoraAllowlistPicker({
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: enabled }}
                     onPress={() => toggle(model.id, lora.id)}
-                    className={`rounded-full border px-3 py-2 ${enabled ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
+                    className={`rounded-full border px-3 py-2 ${enabled ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
                   >
                     <Text className={`text-sm font-semibold ${enabled ? 'text-rose-deep' : 'text-app-muted'}`}>{lora.label}</Text>
                   </Pressable>
@@ -632,7 +632,7 @@ function ModelPicker({ draft, models, setDraft }: { draft: ImageWorkflowInput; m
               accessibilityRole="checkbox"
               accessibilityState={{ checked: active }}
               onPress={() => toggle(model.id)}
-              className={`rounded-full border px-3 py-2 ${active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
+              className={`rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
             >
               <Text className={`text-sm font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>{model.label}</Text>
             </Pressable>
@@ -658,7 +658,7 @@ function ActiveToggle({ active, onPress }: { active: boolean; onPress: () => voi
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`mt-5 rounded-full border px-3 py-2 ${active ? 'border-rose bg-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
+      className={`mt-5 rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'}`}
     >
       <Text className={`text-sm font-semibold ${active ? 'text-rose-deep' : 'text-app-muted'}`}>{active ? 'Active' : 'Inactive'}</Text>
     </Pressable>

@@ -70,8 +70,8 @@ export function WebSidebar({
                   else router.push(item.href);
                 }}
                 className={cn(
-                  'relative flex-row items-center gap-3 rounded-xl px-3 py-2.5 transition-colors',
-                  active ? 'bg-app-rose-soft' : 'bg-transparent hover:bg-white/[0.05]',
+                  'relative flex-row items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors',
+                  active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-transparent bg-transparent hover:bg-white/[0.05]',
                 )}
               >
                 {active ? (

@@ -221,10 +221,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
                     setSelectedRecommendationId(item.id);
                   }}
                   className={`rounded-full border px-3 py-1.5 ${
-                    selected ? 'border-app-rose bg-app-rose/25' : 'border-white/15 bg-[#2A1934]'
+                    selected ? 'border-app-rose/70 bg-app-canvas/70' : 'border-white/15 bg-[#2A1934]'
                   }`}
                 >
-                  <Text className={`text-xs font-semibold ${selected ? 'text-rose-50' : 'text-rose-50/75'}`}>{item.title}</Text>
+                  <Text className={`text-xs font-semibold ${selected ? 'text-app-rose-deep' : 'text-rose-50/75'}`}>{item.title}</Text>
                 </Pressable>
               );
             })}

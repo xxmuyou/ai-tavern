@@ -10,8 +10,27 @@ import type { ImageModelOption, ImageStylePreset } from '@/api/types';
 type Phase = 'idle' | 'generating' | 'preview' | 'error';
 type ArtSource = 'generated' | 'upload';
 
+type PendingBaseArtJob = {
+  batchSize: string;
+  createdAt: number;
+  jobId: string;
+  loraId: string | null;
+  model: string;
+  prompt: string;
+  seed: string;
+  sizePresetId: string | null;
+  styleId: ImageStylePreset['id'] | null;
+};
+
+const CHOICE_PANEL_CLASS = 'gap-4 rounded-lg border border-white/10 bg-app-surface p-5 shadow-card';
+const ACTIVE_CHOICE_CLASS = 'border-app-rose/70 bg-app-canvas/70';
+const INACTIVE_CHOICE_CLASS = 'border-app-line bg-app-sunken/80';
+const DARK_INPUT_CLASS = 'rounded-lg border border-app-line bg-app-sunken px-3 py-2 text-base text-app-text';
+const PREVIEW_WIDTH_CLASS = 'w-full max-w-[180px]';
+
+const PENDING_BASE_ART_JOB_STORAGE_KEY = 'xtbit.companionCreate.pendingBaseArtJob';
 const POLL_INTERVAL_MS = 2500;
-const MAX_POLLS = 120;
+const MAX_POLLS = 288;
 
 type BaseArtPanelProps = {
   onConfirm: (artKey: string, modelId?: string) => void;
@@ -46,6 +65,8 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   const [assetSaved, setAssetSaved] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const activeRef = useRef(true);
+  const pollingJobIdRef = useRef<string | null>(null);
+  const isRestoringPendingJobRef = useRef(false);
 
   useEffect(() => {
     activeRef.current = true;
@@ -82,6 +103,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     null;
 
   useEffect(() => {
+    if (isRestoringPendingJobRef.current) return;
     setLoraId(null);
     if (defaultSizePresetId) {
       setSizePresetId(defaultSizePresetId);
@@ -92,6 +114,26 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     }
     setSeed('');
   }, [model, defaultSizePresetId, defaultBatchSize]);
+
+  useEffect(() => {
+    const pendingJob = readPendingBaseArtJob();
+    if (!pendingJob || pollingJobIdRef.current === pendingJob.jobId) return;
+    isRestoringPendingJobRef.current = true;
+    setBatchSize(pendingJob.batchSize);
+    setErrorCode(null);
+    setErrorDetail(null);
+    setLoraId(pendingJob.loraId);
+    setModel(pendingJob.model);
+    setPrompt(pendingJob.prompt);
+    setSeed(pendingJob.seed);
+    setSizePresetId(pendingJob.sizePresetId);
+    setStyleId(pendingJob.styleId);
+    setArtKey(null);
+    setArtSource(null);
+    setAssetSaved(false);
+    setPhase('generating');
+    void pollJob(pendingJob.jobId);
+  }, []);
 
   function selectStyle(preset: ImageStylePreset) {
     setStyleId(preset.id);
@@ -106,9 +148,11 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   }
 
   async function pollJob(jobId: string) {
+    pollingJobIdRef.current = jobId;
     for (let i = 0; i < MAX_POLLS; i += 1) {
       if (!activeRef.current) return;
       const res = await getBaseArtJob(jobId);
+      if (pollingJobIdRef.current !== jobId) return;
       if (res.status === 'succeeded' && res.art_key) {
         if (activeRef.current) {
           setArtKey(res.art_key);
@@ -116,6 +160,9 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
           setAssetSaved(false);
           setPhase('preview');
         }
+        clearPendingBaseArtJob(jobId);
+        pollingJobIdRef.current = null;
+        isRestoringPendingJobRef.current = false;
         return;
       }
       if (res.status === 'failed' || res.status === 'cancelled') {
@@ -124,6 +171,9 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
           setErrorDetail(res.error_message ?? null);
           setPhase('error');
         }
+        clearPendingBaseArtJob(jobId);
+        pollingJobIdRef.current = null;
+        isRestoringPendingJobRef.current = false;
         return;
       }
       await delay(POLL_INTERVAL_MS);
@@ -133,6 +183,11 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
       setErrorDetail(null);
       setPhase('error');
     }
+    clearPendingBaseArtJob(jobId);
+    if (pollingJobIdRef.current === jobId) {
+      pollingJobIdRef.current = null;
+    }
+    isRestoringPendingJobRef.current = false;
   }
 
   async function generate() {
@@ -155,6 +210,8 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     setArtKey(null);
     setArtSource(null);
     setAssetSaved(false);
+    isRestoringPendingJobRef.current = false;
+    let startedJobId: string | null = null;
     try {
       const seedText = seed.trim();
       const seedValue = seedText ? Number(seedText) : null;
@@ -171,8 +228,24 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
         size_preset: sizePresetId ?? undefined,
         source: 'text',
       });
+      startedJobId = job_id;
+      writePendingBaseArtJob({
+        batchSize,
+        createdAt: Date.now(),
+        jobId: job_id,
+        loraId,
+        model,
+        prompt: trimmed,
+        seed,
+        sizePresetId,
+        styleId,
+      });
       await pollJob(job_id);
     } catch {
+      if (startedJobId && pollingJobIdRef.current === startedJobId) {
+        pollingJobIdRef.current = null;
+      }
+      isRestoringPendingJobRef.current = false;
       if (activeRef.current) {
         setErrorCode('request_failed');
         setErrorDetail(null);
@@ -263,7 +336,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
   return (
     <View className="mx-auto w-full max-w-5xl gap-5 px-4 py-6">
       <View className="gap-5 web:grid web:grid-cols-[minmax(0,1fr)_280px]">
-        <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
+        <View className={CHOICE_PANEL_CLASS}>
           <Text className="text-lg font-semibold text-app-text">1. Choose a style</Text>
           <View className="flex-row flex-wrap gap-2">
             {modelsLoading ? <Text className="text-sm text-app-muted">Loading models…</Text> : null}
@@ -277,10 +350,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                 disabled={isBusy}
                 onPress={() => selectStyle(preset)}
                 className={`rounded-full border px-3 py-2 ${
-                  styleId === preset.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                  styleId === preset.id ? ACTIVE_CHOICE_CLASS : INACTIVE_CHOICE_CLASS
                 }`}
               >
-                <Text className={`text-sm font-semibold ${styleId === preset.id ? 'text-white' : 'text-app-muted'}`}>
+                <Text className={`text-sm font-semibold ${styleId === preset.id ? 'text-app-rose-deep' : 'text-app-muted'}`}>
                   {preset.label}
                 </Text>
               </Pressable>
@@ -299,13 +372,13 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                     onPress={() => setSizePresetId(preset.id)}
                     className={`rounded-full border px-3 py-2 ${
                       (sizePresetId ?? generationControls.defaultSizePresetId) === preset.id
-                        ? 'border-app-primary bg-app-primary'
-                        : 'border-app-line bg-white'
+                        ? ACTIVE_CHOICE_CLASS
+                        : INACTIVE_CHOICE_CLASS
                     }`}
                   >
                     <Text
                       className={`text-sm font-semibold ${
-                        (sizePresetId ?? generationControls.defaultSizePresetId) === preset.id ? 'text-white' : 'text-app-muted'
+                        (sizePresetId ?? generationControls.defaultSizePresetId) === preset.id ? 'text-app-rose-deep' : 'text-app-muted'
                       }`}
                     >
                       {preset.label}
@@ -340,10 +413,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                         disabled={isBusy}
                         onPress={() => selectAdvancedModel(item.id)}
                         className={`rounded-full border px-3 py-2 ${
-                          model === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                          model === item.id ? ACTIVE_CHOICE_CLASS : INACTIVE_CHOICE_CLASS
                         }`}
                       >
-                        <Text className={`text-sm font-semibold ${model === item.id ? 'text-white' : 'text-app-muted'}`}>
+                        <Text className={`text-sm font-semibold ${model === item.id ? 'text-app-rose-deep' : 'text-app-muted'}`}>
                           {item.label}
                         </Text>
                       </Pressable>
@@ -360,10 +433,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                         disabled={isBusy}
                         onPress={() => setLoraId(null)}
                         className={`rounded-full border px-3 py-2 ${
-                          !loraId ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                          !loraId ? ACTIVE_CHOICE_CLASS : INACTIVE_CHOICE_CLASS
                         }`}
                       >
-                        <Text className={`text-sm font-semibold ${!loraId ? 'text-white' : 'text-app-muted'}`}>No LoRA</Text>
+                        <Text className={`text-sm font-semibold ${!loraId ? 'text-app-rose-deep' : 'text-app-muted'}`}>No LoRA</Text>
                       </Pressable>
                       {loraOptions.map((item) => (
                         <Pressable
@@ -372,10 +445,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                           disabled={isBusy}
                           onPress={() => setLoraId(item.id)}
                           className={`rounded-full border px-3 py-2 ${
-                            loraId === item.id ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'
+                            loraId === item.id ? ACTIVE_CHOICE_CLASS : INACTIVE_CHOICE_CLASS
                           }`}
                         >
-                          <Text className={`text-sm font-semibold ${loraId === item.id ? 'text-white' : 'text-app-muted'}`}>
+                          <Text className={`text-sm font-semibold ${loraId === item.id ? 'text-app-rose-deep' : 'text-app-muted'}`}>
                             {item.label}
                           </Text>
                         </Pressable>
@@ -389,7 +462,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                     <View className="web:flex-1">
                       <Text className="mb-1 text-xs font-semibold text-app-muted">Batch size</Text>
                       <TextInput
-                        className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
+                        className={DARK_INPUT_CLASS}
                         editable={!isBusy}
                         keyboardType="number-pad"
                         onChangeText={setBatchSize}
@@ -401,7 +474,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
                     <View className="web:flex-1">
                       <Text className="mb-1 text-xs font-semibold text-app-muted">Seed</Text>
                       <TextInput
-                        className="rounded-lg border border-app-line bg-white px-3 py-2 text-base text-app-text"
+                        className={DARK_INPUT_CLASS}
                         editable={!isBusy}
                         keyboardType="number-pad"
                         onChangeText={setSeed}
@@ -418,7 +491,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
 
           <Text className="mt-2 text-lg font-semibold text-app-text">2. Describe the portrait</Text>
           <TextInput
-            className="min-h-24 rounded-lg border border-app-line bg-white px-3 py-3 text-base text-app-text"
+            className="min-h-24 rounded-lg border border-app-line bg-app-sunken px-3 py-3 text-base text-app-text"
             editable={!isBusy}
             multiline
             onChangeText={setPrompt}
@@ -460,10 +533,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
           </View>
         </View>
 
-        <View className="gap-3 rounded-lg border border-app-line bg-app-card p-4 web:bg-white">
+        <View className="gap-3 rounded-lg border border-white/10 bg-app-surface p-4 shadow-card">
           <Text className="text-base font-semibold text-app-text">Not sure what kind of portrait you want? Ask me.</Text>
           <TextInput
-            className="min-h-24 rounded-lg border border-app-line bg-white px-3 py-3 text-sm text-app-text"
+            className="min-h-24 rounded-lg border border-app-line bg-app-sunken px-3 py-3 text-sm text-app-text"
             editable={!isAssisting}
             multiline
             onChangeText={setAssistantInput}
@@ -483,7 +556,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
       </View>
 
       {isBusy ? (
-        <View className="items-center gap-3 rounded-lg border border-app-line bg-app-card p-8 web:bg-white">
+        <View className="items-center gap-3 rounded-lg border border-white/10 bg-app-surface p-8 shadow-card">
           <ActivityIndicator color={PALETTE.rose} />
           <Text className="text-sm text-app-muted">
             {isUploading ? 'Uploading portrait...' : 'Generating portrait... this can take up to a minute.'}
@@ -492,9 +565,9 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
       ) : null}
 
       {phase === 'preview' && previewSource ? (
-        <View className="items-center gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
+        <View className="items-center gap-4 rounded-lg border border-white/10 bg-app-surface p-5 shadow-card">
           <Text className="text-lg font-semibold text-app-text">3. Preview</Text>
-          <View className="w-full max-w-[320px] items-center overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
+          <View className={`${PREVIEW_WIDTH_CLASS} items-center overflow-hidden rounded-lg border border-app-line bg-app-primarySoft`}>
             <Image
               accessibilityLabel="Generated portrait"
               resizeMode="contain"
@@ -502,7 +575,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
               style={[styles.preview, selectedPreset ? { aspectRatio: selectedPreset.width / selectedPreset.height } : null]}
             />
           </View>
-          <View className="w-full max-w-[320px] gap-3">
+          <View className={`${PREVIEW_WIDTH_CLASS} gap-3`}>
             <Button label="Use this portrait" onPress={() => artKey && onConfirm(artKey, artSource === 'generated' ? model ?? undefined : undefined)} />
             {artSource === 'generated' ? (
               <>
@@ -572,11 +645,76 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function readPendingBaseArtJob(): PendingBaseArtJob | null {
+  const storage = getBrowserStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(PENDING_BASE_ART_JOB_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<PendingBaseArtJob>;
+    if (!value.jobId || !value.model || typeof value.prompt !== 'string') {
+      storage.removeItem(PENDING_BASE_ART_JOB_STORAGE_KEY);
+      return null;
+    }
+    if (typeof value.createdAt === 'number' && Date.now() - value.createdAt > 24 * 60 * 60 * 1000) {
+      storage.removeItem(PENDING_BASE_ART_JOB_STORAGE_KEY);
+      return null;
+    }
+    return {
+      batchSize: typeof value.batchSize === 'string' ? value.batchSize : '1',
+      createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
+      jobId: value.jobId,
+      loraId: typeof value.loraId === 'string' ? value.loraId : null,
+      model: value.model,
+      prompt: value.prompt,
+      seed: typeof value.seed === 'string' ? value.seed : '',
+      sizePresetId: typeof value.sizePresetId === 'string' ? value.sizePresetId : null,
+      styleId: value.styleId === 'anime' || value.styleId === 'realistic' ? value.styleId : null,
+    };
+  } catch {
+    storage.removeItem(PENDING_BASE_ART_JOB_STORAGE_KEY);
+    return null;
+  }
+}
+
+function writePendingBaseArtJob(job: PendingBaseArtJob): void {
+  const storage = getBrowserStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(PENDING_BASE_ART_JOB_STORAGE_KEY, JSON.stringify(job));
+  } catch {
+    // Storage can be unavailable in private browsing or constrained webviews.
+  }
+}
+
+function clearPendingBaseArtJob(jobId?: string): void {
+  const storage = getBrowserStorage();
+  if (!storage) return;
+  try {
+    if (jobId) {
+      const current = readPendingBaseArtJob();
+      if (current && current.jobId !== jobId) return;
+    }
+    storage.removeItem(PENDING_BASE_ART_JOB_STORAGE_KEY);
+  } catch {
+    storage.removeItem(PENDING_BASE_ART_JOB_STORAGE_KEY);
+  }
+}
+
+function getBrowserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const styles = StyleSheet.create({
   preview: {
     aspectRatio: 0.7,
-    height: 320,
-    maxHeight: 320,
+    height: 180,
+    maxHeight: 180,
     width: '100%',
   },
 });

@@ -430,10 +430,10 @@ function ModeButton({
       accessibilityRole="button"
       onPress={onPress}
       className={`${small ? 'min-h-8 px-2 py-1' : 'min-h-10 px-3 py-2'} rounded-lg border ${
-        active ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-app-card'
+        active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-card'
       }`}
     >
-      <Text className={`${small ? 'text-xs' : 'text-sm'} font-semibold ${active ? 'text-app-primary' : 'text-app-muted'}`}>
+      <Text className={`${small ? 'text-xs' : 'text-sm'} font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>
         {label}
       </Text>
     </Pressable>

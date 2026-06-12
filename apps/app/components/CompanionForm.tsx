@@ -667,9 +667,9 @@ function Choice({ active, label, onPress }: { active: boolean; label: string; on
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`rounded-full border px-3 py-2 ${active ? 'border-app-primary bg-app-primary' : 'border-app-line bg-white'}`}
+      className={`rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-white'}`}
     >
-      <Text className={`text-sm font-semibold ${active ? 'text-white' : 'text-app-muted'}`}>{label}</Text>
+      <Text className={`text-sm font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>{label}</Text>
     </Pressable>
   );
 }

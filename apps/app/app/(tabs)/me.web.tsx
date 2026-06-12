@@ -198,7 +198,7 @@ export default function WebMeScreen() {
                         });
                       }}
                       className={`min-w-[100px] rounded-full border px-5 py-2.5 ${
-                        active ? 'border-rose bg-app-rose-soft shadow-glow-soft' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
+                        active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-canvas/70 hover:bg-app-brand-soft/70'
                       }`}
                     >
                       <Text
