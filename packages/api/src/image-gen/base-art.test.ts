@@ -22,6 +22,25 @@ function createEnv(extra: Record<string, unknown> = {}): {
       return { results: [...settings.entries()].map(([key, value]) => ({ key, value })) };
     }
 
+    if (sql.includes("FROM image_workflow_model_loras wml")) {
+      const [workflowKey, modelId, loraId] = values as [string, string, string];
+      if (
+        workflowKey === "portrait_create_lora" &&
+        modelId === "anime_default" &&
+        loraId === "anime_detail"
+      ) {
+        return {
+          clip_strength: 0.6,
+          default_clip_strength: 0.6,
+          default_model_strength: 0.8,
+          id: "anime_detail",
+          label: "Anime Detail",
+          lora_name: "detail.safetensors",
+        };
+      }
+      return null;
+    }
+
     if (sql.startsWith("INSERT INTO image_generation_jobs")) {
       const [
         id,
@@ -39,6 +58,7 @@ function createEnv(extra: Record<string, unknown> = {}): {
         generation_params_json,
         input_keys,
         output_prefix,
+        billing_ref,
         created_at,
         updated_at,
       ] = values as [
@@ -57,10 +77,12 @@ function createEnv(extra: Record<string, unknown> = {}): {
         string | null,
         string | null,
         string,
+        string | null,
         number,
         number,
       ];
       jobs.set(id, {
+        billing_ref,
         checkpoint_field_name,
         ckpt_name,
         completed_at: null,
@@ -180,6 +202,60 @@ describe("base-art job pipeline", () => {
     ]);
   });
 
+  it("createBaseArtJob stores the selected checkpoint and generation params", async () => {
+    const { env, jobs } = createEnv();
+
+    const jobId = await createBaseArtJob(env, {
+      checkpointFieldName: "ckpt_name",
+      ckptName: "animagine.safetensors",
+      generationParams: {
+        batch_size: 2,
+        height: 1280,
+        seed: 42,
+        size_preset: "portrait_3_5",
+        width: 768,
+      },
+      modelId: "anime_default",
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "portrait_create",
+      userId: "usr_1",
+    });
+
+    const row = jobs.get(jobId)!;
+    expect(row.workflow_key).toBe("portrait_create");
+    expect(row.ckpt_name).toBe("animagine.safetensors");
+    expect(row.checkpoint_field_name).toBe("ckpt_name");
+    expect(JSON.parse(String(row.generation_params_json))).toMatchObject({
+      batch_size: 2,
+      height: 1280,
+      seed: 42,
+      width: 768,
+    });
+  });
+
+  it("createBaseArtJob resolves and stores the selected LoRA", async () => {
+    const { env, jobs } = createEnv();
+
+    const jobId = await createBaseArtJob(env, {
+      checkpointFieldName: "ckpt_name",
+      ckptName: "animagine.safetensors",
+      loraId: "anime_detail",
+      modelId: "anime_default",
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "portrait_create_lora",
+      userId: "usr_1",
+    });
+
+    const row = jobs.get(jobId)!;
+    expect(row.workflow_key).toBe("portrait_create_lora");
+    expect(row.lora_id).toBe("anime_detail");
+    expect(row.lora_name).toBe("detail.safetensors");
+    expect(row.lora_model_strength).toBe(0.8);
+    expect(row.lora_clip_strength).toBe(0.6);
+  });
+
   it("processBaseArtJob with mock provider writes R2 and marks succeeded", async () => {
     const { env, assets } = createEnv(); // no IMAGE_GEN_PROVIDER -> mock
 
@@ -267,5 +343,84 @@ describe("base-art job pipeline", () => {
     expect(job.status).toBe("processing");
     expect(job.provider_task_id).toBe("rh-async-1");
     expect(job.output_key).toBeNull();
+  });
+
+  it("processBaseArtJob sends checkpoint, LoRA, and generation params to RunningHub", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-lora-params-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { env, settings } = createEnv({
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "k",
+      RUNNINGHUB_WEBHOOK_URL: "https://dev.aiappsbox.com/api/webhooks/runninghub",
+    });
+    settings.set(
+      "image_gen.workflows",
+      JSON.stringify({
+        portrait_create_lora: {
+          checkpointFieldName: "ckpt_name",
+          checkpointNodeId: "1",
+          generationParams: {
+            batchSizeDefault: 1,
+            batchSizeMax: 4,
+            batchSizeMin: 1,
+            batchSizeFieldName: "batch_size",
+            defaultSizePresetId: "portrait_3_5",
+            heightFieldName: "height",
+            ksamplerNodeId: "6",
+            latentNodeId: "5",
+            seedFieldName: "seed",
+            sizePresets: [{ height: 1280, id: "portrait_3_5", label: "Portrait 3:5", width: 768 }],
+            widthFieldName: "width",
+          },
+          loraClipStrengthFieldName: "strength_clip",
+          loraModelStrengthFieldName: "strength_model",
+          loraNameFieldName: "file_name",
+          loraNodeId: "2",
+          mode: "create",
+          promptFieldName: "text",
+          promptNodeId: "3",
+          workflowId: "portrait-lora-workflow",
+        },
+      }),
+    );
+
+    const jobId = await createBaseArtJob(env, {
+      checkpointFieldName: "ckpt_name",
+      ckptName: "animagine.safetensors",
+      generationParams: {
+        batch_size: 2,
+        height: 1280,
+        seed: 123,
+        size_preset: "portrait_3_5",
+        width: 768,
+      },
+      loraId: "anime_detail",
+      modelId: "anime_default",
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "portrait_create_lora",
+      userId: "usr_1",
+    });
+    await processBaseArtJob(env, jobId);
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.workflowId).toBe("portrait-lora-workflow");
+    expect(body.nodeInfoList).toEqual(expect.arrayContaining([
+      { fieldName: "ckpt_name", fieldValue: "animagine.safetensors", nodeId: "1" },
+      { fieldName: "file_name", fieldValue: "detail.safetensors", nodeId: "2" },
+      { fieldName: "strength_model", fieldValue: 0.8, nodeId: "2" },
+      { fieldName: "strength_clip", fieldValue: 0.6, nodeId: "2" },
+      { fieldName: "width", fieldValue: 768, nodeId: "5" },
+      { fieldName: "height", fieldValue: 1280, nodeId: "5" },
+      { fieldName: "batch_size", fieldValue: 2, nodeId: "5" },
+      { fieldName: "seed", fieldValue: 123, nodeId: "6" },
+    ]));
   });
 });

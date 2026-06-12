@@ -127,8 +127,8 @@ export function getWorkflowConfig(
 
 /**
  * Does the workflow for `key` declare a checkpoint node? When it does not, a
- * model's `ckpt_name` is silently ignored at generation time (the workflow's
- * built-in checkpoint is used). The admin workspace surfaces this as a warning.
+ * selected model's `ckpt_name` cannot be injected safely. Runtime create jobs
+ * fail fast instead of falling back to the workflow's built-in checkpoint.
  */
 export function workflowHasCheckpointNode(
   raw: string | null | undefined,

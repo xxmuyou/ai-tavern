@@ -725,8 +725,7 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
-  it("ignores ckpt_name without throwing when checkpointNodeId is missing", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("fails create when ckpt_name is selected but checkpointNodeId is missing", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
         JSON.stringify({ code: 0, data: { taskId: "rh-create-3", taskStatus: "QUEUED" } }),
@@ -744,15 +743,13 @@ describe("runningHubImageGenProvider", () => {
       },
     );
 
-    await (await getImageGenProvider(env, "create")).generate(
-      { mode: "create", prompt: "x", workflow_key: "portrait_create", ckpt_name: "myCustom.safetensors" },
-      env,
-    );
-
-    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    const body = JSON.parse(String(calls[0]![1].body));
-    expect(body.nodeInfoList).toEqual([{ fieldName: "text", fieldValue: "x", nodeId: "6" }]);
-    expect(warn).toHaveBeenCalledOnce();
+    await expect(
+      (await getImageGenProvider(env, "create")).generate(
+        { mode: "create", prompt: "x", workflow_key: "portrait_create", ckpt_name: "myCustom.safetensors" },
+        env,
+      ),
+    ).rejects.toMatchObject({ code: "provider_not_configured", retryable: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("fails create when the workflow is not configured", async () => {

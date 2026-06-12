@@ -85,7 +85,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
     const initialStyle = simpleStylePresets[0];
     if (initialStyle) {
       setStyleId(initialStyle.id);
-      setModel(initialStyle.default_model);
+      setModel(pickSimpleStyleModel(models, initialStyle.id)?.id ?? initialStyle.default_model);
     } else if (models.length > 0) {
       setModel(models[0].id);
     }
@@ -93,9 +93,10 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
 
   const selectedModel = models.find((item) => item.id === model) ?? null;
   const generationControls = selectedModel?.generation_controls ?? null;
-  const loraOptions = selectedModel?.loras ?? [];
+  const loraOptions = selectedModel?.workflow_key === 'portrait_create_lora' ? selectedModel.loras ?? [] : [];
   const defaultSizePresetId = generationControls?.defaultSizePresetId ?? null;
   const defaultBatchSize = generationControls?.batchSizeDefault ?? 1;
+  const advancedModelGroups = useMemo(() => groupAdvancedModels(models), [models]);
   const selectedPreset =
     generationControls?.sizePresets.find((preset) => preset.id === sizePresetId) ??
     generationControls?.sizePresets.find((preset) => preset.id === generationControls.defaultSizePresetId) ??
@@ -137,7 +138,7 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
 
   function selectStyle(preset: ImageStylePreset) {
     setStyleId(preset.id);
-    setModel(preset.default_model);
+    setModel(pickSimpleStyleModel(models, preset.id)?.id ?? preset.default_model);
     setLoraId(null);
     setSeed('');
   }
@@ -405,23 +406,28 @@ export function BaseArtPanel({ onConfirm, onUploadArt }: BaseArtPanelProps) {
               <View className="gap-4">
                 <View className="gap-2">
                   <Text className="text-xs font-semibold text-app-muted">Model and workflow</Text>
-                  <View className="flex-row flex-wrap gap-2">
-                    {models.map((item) => (
-                      <Pressable
-                        key={item.id}
-                        accessibilityRole="button"
-                        disabled={isBusy}
-                        onPress={() => selectAdvancedModel(item.id)}
-                        className={`rounded-full border px-3 py-2 ${
-                          model === item.id ? ACTIVE_CHOICE_CLASS : INACTIVE_CHOICE_CLASS
-                        }`}
-                      >
-                        <Text className={`text-sm font-semibold ${model === item.id ? 'text-app-rose-deep' : 'text-app-muted'}`}>
-                          {item.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  {advancedModelGroups.map((group) => (
+                    <View key={group.id} className="gap-2">
+                      <Text className="text-xs font-semibold text-app-muted-soft">{group.label}</Text>
+                      <View className="flex-row flex-wrap gap-2">
+                        {group.models.map((item) => (
+                          <Pressable
+                            key={item.id}
+                            accessibilityRole="button"
+                            disabled={isBusy}
+                            onPress={() => selectAdvancedModel(item.id)}
+                            className={`rounded-full border px-3 py-2 ${
+                              model === item.id ? ACTIVE_CHOICE_CLASS : INACTIVE_CHOICE_CLASS
+                            }`}
+                          >
+                            <Text className={`text-sm font-semibold ${model === item.id ? 'text-app-rose-deep' : 'text-app-muted'}`}>
+                              {item.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
                 </View>
 
                 {loraOptions.length > 0 ? (
@@ -615,6 +621,38 @@ function errorLabel(code: string | null): string {
     default:
       return 'Generation failed. Please try again.';
   }
+}
+
+type AdvancedModelGroup = {
+  id: string;
+  label: string;
+  models: ImageModelOption[];
+};
+
+function pickSimpleStyleModel(
+  models: ImageModelOption[],
+  style: ImageStylePreset['id'],
+): ImageModelOption | null {
+  const candidates = models.filter(
+    (item) => item.workflow_key === 'portrait_create' && optionMatchesStyle(item, style),
+  );
+  const ckptOnly = candidates.filter((item) => (item.loras?.length ?? 0) === 0);
+  const pool = ckptOnly.length > 0 ? ckptOnly : candidates;
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)] ?? null;
+}
+
+function groupAdvancedModels(models: ImageModelOption[]): AdvancedModelGroup[] {
+  const ckptOnly = models.filter((item) => item.workflow_key === 'portrait_create');
+  const withLora = models.filter((item) => item.workflow_key === 'portrait_create_lora');
+  const other = models.filter(
+    (item) => item.workflow_key !== 'portrait_create' && item.workflow_key !== 'portrait_create_lora',
+  );
+  return [
+    { id: 'portrait_create', label: 'Checkpoint only', models: ckptOnly },
+    { id: 'portrait_create_lora', label: 'Checkpoint + LoRA', models: withLora },
+    { id: 'other', label: 'Other workflows', models: other },
+  ].filter((group) => group.models.length > 0);
 }
 
 function fallbackStylePresets(models: ImageModelOption[]): ImageStylePreset[] {

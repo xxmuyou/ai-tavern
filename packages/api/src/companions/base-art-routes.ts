@@ -198,6 +198,13 @@ async function handleGenerate(
     return jsonResponse({ error: "invalid_generation_params" }, { status: 400 });
   }
 
+  if (source === "text" && ckptName && !selection.workflow.checkpoint_node_id?.trim()) {
+    return jsonResponse({ error: "invalid_model_workflow_config" }, { status: 400 });
+  }
+  if (loraId && !selection.workflow.lora_node_id?.trim()) {
+    return jsonResponse({ error: "invalid_model_lora_combination" }, { status: 400 });
+  }
+
   if (source === "text" && !prompt) {
     return jsonResponse({ error: "prompt_required" }, { status: 400 });
   }
