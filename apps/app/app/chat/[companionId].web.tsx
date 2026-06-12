@@ -1658,7 +1658,7 @@ function WebInviteDialog({
                   onPress={() => onSelect(target)}
                   className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 transition-colors hover:border-app-rose hover:bg-app-rose-soft active:bg-app-wine-soft"
                 >
-                  <SceneArtwork className="h-16 w-28 rounded-lg" label={target.name} source={thumb} />
+                  <SceneArtwork className="rounded-lg" fixedHeight={64} label={target.name} source={thumb} />
                   <View className="min-w-0 flex-1">
                     <Text className="text-base font-semibold text-white">{target.name}</Text>
                     <Text className="mt-1 text-body-sm leading-5 text-app-ink-soft" numberOfLines={2}>

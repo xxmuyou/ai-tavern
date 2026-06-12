@@ -3,14 +3,21 @@ import type { ReactNode } from 'react';
 import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
+import { DEFAULT_IMAGE_ASPECT_RATIO, useImageAspectRatio } from '@/hooks/use-image-aspect-ratio';
+
 const imageStyles = StyleSheet.create({
   fill: { height: '100%', width: '100%' },
 });
 
+const THUMB_MAX_WIDTH = 160;
+
 type SceneArtworkProps = {
   children?: ReactNode;
   className?: string;
+  fallbackAspectRatio?: number;
   fallbackLabel?: string;
+  /** Thumbnail mode: fixed height, width follows the image ratio. */
+  fixedHeight?: number;
   label: string;
   source: ImageSourcePropType | null;
   style?: StyleProp<ViewStyle>;
@@ -19,15 +26,25 @@ type SceneArtworkProps = {
 export function SceneArtwork({
   children,
   className = '',
+  fallbackAspectRatio = DEFAULT_IMAGE_ASPECT_RATIO,
   fallbackLabel,
+  fixedHeight,
   label,
   source,
   style,
 }: SceneArtworkProps) {
+  const { ratio } = useImageAspectRatio(source, fallbackAspectRatio);
+  // The container hugs the artwork's real ratio, so contain never letterboxes
+  // or crops regardless of how the image was generated.
+  const sizing: StyleProp<ViewStyle> =
+    fixedHeight != null
+      ? { height: fixedHeight, width: Math.min(Math.round(fixedHeight * ratio), THUMB_MAX_WIDTH) }
+      : { aspectRatio: ratio, width: '100%' };
+
   return (
     <View
-      className={`relative aspect-video w-full overflow-hidden bg-[#18111F] ${className}`}
-      style={style}
+      className={`relative overflow-hidden bg-[#18111F] ${className}`}
+      style={[sizing, style]}
     >
       {source ? (
         <Image

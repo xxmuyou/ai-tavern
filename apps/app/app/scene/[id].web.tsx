@@ -19,6 +19,8 @@ import {
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useDailyState } from '@/hooks/use-daily-state';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { useImageAspectRatio } from '@/hooks/use-image-aspect-ratio';
+import { PORTRAIT_ASPECT } from '@/utils/portrait';
 import { useSceneEntry } from '@/hooks/use-scenes';
 import { usePendingEvents } from '@/hooks/use-pending-events';
 import { deriveGuidedAction } from '@/utils/guided-action';
@@ -221,6 +223,7 @@ function SceneActionCard({
   const router = useRouter();
   const daily = useDailyState(companion.id);
   const portrait = mediaSource(companion.art_url);
+  const { ratio: portraitRatio } = useImageAspectRatio(portrait, PORTRAIT_ASPECT);
   const guided = deriveGuidedAction({
     activityHint: daily.data?.activity_hint ?? companion.opener,
     availability: daily.data?.availability ?? 'available',
@@ -236,7 +239,10 @@ function SceneActionCard({
   return (
     <WebCard padding="lg" className="gap-5">
       <View className="flex-row gap-4">
-        <View className="h-28 w-24 items-center justify-end overflow-hidden rounded-2xl bg-app-rose-soft">
+        <View
+          className="items-center justify-end overflow-hidden rounded-2xl bg-app-rose-soft"
+          style={{ height: 112, width: Math.round(112 * portraitRatio) }}
+        >
           {portrait ? (
             <Image source={portrait} resizeMode="contain" style={{ height: '100%', width: '100%' }} />
           ) : (
