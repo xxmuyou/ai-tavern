@@ -62,8 +62,19 @@ Companions persist their voice settings:
 - `companions.voice_id`
 - `companions.voice_speed`
 
-When a companion does not have a stored `voice_id`, the backend falls back by
-gender:
+These companion-level fields are defaults and legacy/backfill data. The chat UI
+stores the active user choice separately in `user_companion_voice_settings`, so
+each user can tune official and user-created companions without changing the
+companion record for everyone else.
+
+Runtime voice resolution is:
+
+1. `user_companion_voice_settings` for `(user_id, companion_id)`
+2. `companions.voice_id` / `companions.voice_speed`
+3. gender defaults from `config/minimax-voices.<env>.json`
+
+When neither a user override nor a companion voice id exists, the backend falls
+back by gender:
 
 - female or unknown: `defaults.female_voice_id`
 - male: `defaults.male_voice_id`
@@ -81,20 +92,21 @@ Voice output is cached in R2. The cache key includes the render version, voice
 id, speed preset, and spoken text so changing voice settings does not reuse old
 clips.
 
-## Companion Voice Selection
+## Chat Voice Selection
 
-Companion create/edit uses a cascading picker in the `Opening & voice` section:
+Chat uses a voice settings dialog next to the chat voice toggle. The dialog uses
+a cascading picker:
 
 1. `Gender`: starts from the companion gender and drives recommendation order.
 2. `Language/Region`: derived from MiniMax `language_label`.
 3. `Voice`: filtered by the selected language/region and sorted with matching
    `gender_hint` first.
 
-Changing gender or language/region selects the first recommended valid voice in
-that slice. Gender remains recommendation metadata only; the UI must still allow
-any listed voice for any companion.
+Changing gender hint or language/region selects the first recommended valid
+voice in that slice. Gender remains recommendation metadata only; the UI must
+still allow any listed voice for any companion.
 
-After a concrete voice is selected, the form shows a speaker preview button.
+After a concrete voice is selected, the dialog shows a speaker preview button.
 Preview uses this fixed English line:
 
 ```text
@@ -102,10 +114,16 @@ Hi, I’m here with you. Let’s take this one moment at a time.
 ```
 
 Preview always renders at the `medium` speed preset, even when the companion is
-configured for `slow` or `fast`. This keeps the global preview cache to one clip
-per voice id. The preview cache key includes the render version, MiniMax model,
-fixed preview text, voice id, and `medium`; repeated previews reuse R2 without
-calling MiniMax again.
+configured for `slow` or `fast`. Preview is not billed as chat voice generation.
+This keeps the global preview cache to one clip per voice id. The preview cache
+key includes the render version, MiniMax model, fixed preview text, voice id, and
+`medium`; repeated previews reuse R2 without calling MiniMax again.
+
+Chat reply voice generation is billed separately from chat messages. The first
+successful voice request for a `(user_id, companion_id, message_id, voice_id,
+voice_speed)` combination consumes `voice_generation` credits. Replaying the
+same generated clip is free for that user. Changing voice or speed for the same
+message creates a different billable combination. Admin users are exempt.
 
 ## Public API Surface
 
@@ -113,10 +131,13 @@ calling MiniMax again.
   speed presets. It does not return `group_id`.
 - `POST /voice/preview` returns a signed URL for the globally cached medium-speed
   preview of a selected voice id.
-- `POST /companions` and `PUT /companions/{id}` accept `voice_id` and
-  `voice_speed`.
-- `POST /chat/{companion_id}/messages/{message_id}/voice` uses the companion's
-  persisted voice settings.
+- `GET /chat/{companion_id}/voice-settings` returns the current user's effective
+  voice setting for that companion.
+- `PATCH /chat/{companion_id}/voice-settings` saves the current user's
+  `voice_id` and `voice_speed` override.
+- `POST /chat/{companion_id}/messages/{message_id}/voice` uses user override →
+  companion default → gender default, bills first successful generation, and
+  returns a signed MP3 URL.
 
 ## References
 

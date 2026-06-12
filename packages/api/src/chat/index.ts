@@ -6,6 +6,7 @@ import { handleEditMessage } from "./edit";
 import { handleRegenerateMessage } from "./regenerate";
 import { handleSelectVariant } from "./select-variant";
 import { handleMessageVoice } from "./voice";
+import { handleGetVoiceSettings, handlePatchVoiceSettings } from "./voice-settings";
 
 export async function handleChatRequest(
   request: Request,
@@ -53,6 +54,22 @@ export async function handleChatRequest(
     }
     const user = await requireAuthUser(env, request);
     return handleMessageVoice(request, env, user, companionId, messageId);
+  }
+
+  const voiceSettingsMatch = pathname.match(/^\/chat\/([^/]+)\/voice-settings$/);
+  if (voiceSettingsMatch) {
+    const companionId = decodeURIComponent(voiceSettingsMatch[1] ?? "");
+    if (!companionId) {
+      return jsonResponse({ error: "invalid_companion_id" }, { status: 400 });
+    }
+    const user = await requireAuthUser(env, request);
+    if (request.method === "GET") {
+      return handleGetVoiceSettings(env, user, companionId);
+    }
+    if (request.method === "PATCH") {
+      return handlePatchVoiceSettings(request, env, user, companionId);
+    }
+    return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
   }
 
   const variantMatch = pathname.match(/^\/chat\/([^/]+)\/messages\/([^/]+)\/variant$/);

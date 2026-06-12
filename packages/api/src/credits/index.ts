@@ -124,5 +124,5 @@ export {
 } from "./ledger";
 export { ensureMonthlyGrant } from "./grants";
 export { handleCreditsCheckoutCompleted, isCreditsCheckoutSession } from "./webhooks";
-export { TASK_CREDIT_COST } from "./pricing";
+export { TASK_CREDIT_COST, voiceGenerationCreditCost } from "./pricing";
 export { CreditsError } from "./types";

@@ -55,7 +55,7 @@ DB 覆盖 (app_settings 表)  →  env 兜底 (wrangler vars / secret)  →  uns
 | `Chat models` | companion 对话/相关 LLM task 的 provider/model 路由、MiniMax/DeepSeek/OpenAI key 配置状态 | `llm_config`、`llm.*` |
 | `Portrait generation` | 生图 provider、RunningHub/OpenAI/R2 key 配置状态、workflow contract、checkpoint/LoRA catalog、semantic workflow 的 Anime/Realistic asset lanes、`View logs` 出图诊断浮窗 | `image_gen.*`、`image_models`、`image_loras`、`image_workflows`、lane membership tables、`image_generation_jobs` |
 | `Prompts` | expression 立绘系统提示词；后续其他 prompt 也放这里 | `expression_prompts` |
-| `Settings` | auth、billing、email、limits 等通用运营项 | `auth.*`、`billing.*`、`email.*`、`limits.*` |
+| `Settings` | auth、billing、credits、email、limits 等通用运营项 | `auth.*`、`billing.*`、`credits.*`、`email.*`、`limits.*` |
 
 新增通用配置项仍然只改 registry；如果它属于 LLM 或生图，应放入对应业务模块的过滤列表，而不是重新塞回 Settings。
 

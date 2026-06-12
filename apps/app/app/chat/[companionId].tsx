@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -15,12 +16,13 @@ import {
   type TextInputKeyPressEventData,
 } from 'react-native';
 
-import { clearChatHistory, getCompanion, getInviteTargets, getScenes, getStoryMoment, resolveStoryChoice } from '@/api/companion-client';
+import { clearChatHistory, getChatVoiceSettings, getCompanion, getInviteTargets, getScenes, getStoryMoment, resolveStoryChoice, updateChatVoiceSettings } from '@/api/companion-client';
 import type {
   ChatEmotionKey,
   ChatInviteResult,
   ChatMessage,
   ChatMomentImage,
+  ChatVoiceSettingsResponse,
   ChatUnlock,
   InviteTarget,
   RelationshipDimensions,
@@ -61,6 +63,7 @@ import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
 import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
+import { VoiceSettingsPanel } from '@/components/VoiceSettingsPanel';
 import { inviteTextForTarget, quickActionTextForItem, sceneTransitionText, type QuickGiftItemId } from '@/utils/chat-actions';
 
 const BILLING_ROUTE = '/billing' as Href;
@@ -75,6 +78,7 @@ type StreamingItem = {
 type CompanionPortraitState = {
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
   art_url: string | null;
+  gender: 'female' | 'male' | null;
   name: string;
 };
 
@@ -108,6 +112,7 @@ function ChatScreenInner() {
   const [companion, setCompanion] = useState<CompanionPortraitState>({
     art_emotions: null,
     art_url: null,
+    gender: null,
     name: 'Chat',
   });
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
@@ -129,6 +134,9 @@ function ChatScreenInner() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
+  const [voiceSettingsVisible, setVoiceSettingsVisible] = useState(false);
+  const [voiceSettings, setVoiceSettings] = useState<ChatVoiceSettingsResponse | null>(null);
+  const [isSavingVoiceSettings, setIsSavingVoiceSettings] = useState(false);
 
   const listRef = useRef<FlatList<ChatListItem>>(null);
 
@@ -166,7 +174,7 @@ function ChatScreenInner() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const activePersonaId =
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
-  const messageActions = useMessageActions(companionId, history, pushError);
+  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true));
   const autoVoice = useAutoVoice();
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
@@ -248,18 +256,45 @@ function ChatScreenInner() {
           setCompanion({
             art_emotions: detail.art_emotions ?? null,
             art_url: detail.art_url ?? null,
+            gender: detail.gender ?? null,
             name: detail.name ?? 'Chat',
           });
         }
       } catch {
         if (!cancelled) {
-          setCompanion({ art_emotions: null, art_url: null, name: 'Chat' });
+          setCompanion({ art_emotions: null, art_url: null, gender: null, name: 'Chat' });
         }
       }
     })();
     return () => {
       cancelled = true;
     };
+  }, [companionId]);
+
+  useEffect(() => {
+    if (!companionId) return;
+    let cancelled = false;
+    getChatVoiceSettings(companionId)
+      .then((settings) => {
+        if (!cancelled) setVoiceSettings(settings);
+      })
+      .catch(() => {
+        if (!cancelled) setVoiceSettings(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companionId]);
+
+  const saveVoiceSettings = useCallback(async (value: { voice_id: string; voice_speed: ChatVoiceSettingsResponse['voice_speed'] }) => {
+    setIsSavingVoiceSettings(true);
+    try {
+      const next = await updateChatVoiceSettings(companionId, value);
+      setVoiceSettings(next);
+      setVoiceSettingsVisible(false);
+    } finally {
+      setIsSavingVoiceSettings(false);
+    }
   }, [companionId]);
 
   useEffect(() => {
@@ -770,6 +805,14 @@ function ChatScreenInner() {
               />
             </Pressable>
             <Pressable
+              accessibilityLabel="Voice settings"
+              accessibilityRole="button"
+              onPress={() => setVoiceSettingsVisible(true)}
+              className="h-10 w-10 items-center justify-center rounded-lg"
+            >
+              <Ionicons color="#687076" name="settings-outline" size={20} />
+            </Pressable>
+            <Pressable
               accessibilityLabel="Clear conversation"
               accessibilityRole="button"
               onPress={() => setClearConfirmVisible(true)}
@@ -988,6 +1031,42 @@ function ChatScreenInner() {
             .catch((err) => pushError(err instanceof Error ? err.message : 'Event could not be resolved.'));
         }}
       />
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setVoiceSettingsVisible(false)}
+        transparent
+        visible={voiceSettingsVisible}
+      >
+        <View className="flex-1 justify-center bg-black/50 px-4 py-8">
+          <View className="max-h-full rounded-2xl bg-app-card">
+            <View className="flex-row items-start justify-between gap-4 border-b border-app-line px-5 py-4">
+              <View className="min-w-0 flex-1">
+                <Text className="text-xl font-semibold text-app-text">Voice settings</Text>
+                <Text className="mt-1 text-sm leading-5 text-app-muted">
+                  First voice generation for a reply costs credits. Replays with the same voice are free.
+                </Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Close voice settings"
+                accessibilityRole="button"
+                onPress={() => setVoiceSettingsVisible(false)}
+                className="h-10 w-10 items-center justify-center rounded-lg"
+              >
+                <Ionicons color="#687076" name="close" size={20} />
+              </Pressable>
+            </View>
+            <ScrollView className="px-5 py-5" keyboardShouldPersistTaps="handled">
+              <VoiceSettingsPanel
+                initialGender={companion.gender}
+                initialValue={voiceSettings}
+                isSaving={isSavingVoiceSettings}
+                onSave={saveVoiceSettings}
+              />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         animationType="fade"

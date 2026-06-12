@@ -22,17 +22,20 @@ import {
   ensureCompanionCutout,
   getCompanion,
   getCompanionCutout,
+  getChatVoiceSettings,
   getDailyState,
   getInviteTargets,
   getScenes,
   getStoryMoment,
   mediaSource,
   resolveStoryChoice,
+  updateChatVoiceSettings,
 } from '@/api/companion-client';
 import type {
   ChatInviteResult,
   ChatMessage,
   ChatMomentImage,
+  ChatVoiceSettingsResponse,
   CompanionDetail,
   EventResponseItem,
   EventResolveResponse,
@@ -69,6 +72,7 @@ import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
 import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
+import { VoiceSettingsPanel } from '@/components/VoiceSettingsPanel';
 import { inviteTextForTarget, sceneTransitionText } from '@/utils/chat-actions';
 import { detectChatLanguage, type ChatLanguage } from '@/utils/chat-language';
 import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionText, type SceneAction } from '@/utils/scene-actions';
@@ -173,7 +177,6 @@ export default function WebChatScreen() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const activePersonaId =
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
-  const messageActions = useMessageActions(companionId, history, pushError);
   const autoVoice = useAutoVoice();
   const activityState = useActivity(activityId);
   const activityActions = useActivities();
@@ -185,6 +188,7 @@ export default function WebChatScreen() {
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
+  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true));
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [lastSignals, setLastSignals] = useState<Partial<RelationshipDimensions> | null>(null);
@@ -197,6 +201,9 @@ export default function WebChatScreen() {
   const [pendingArrival, setPendingArrival] = useState<PendingArrival | null>(null);
   const [arrivalPrompt, setArrivalPrompt] = useState<PendingArrival | null>(null);
   const [outfitDialogVisible, setOutfitDialogVisible] = useState(false);
+  const [voiceDialogVisible, setVoiceDialogVisible] = useState(false);
+  const [voiceSettings, setVoiceSettings] = useState<ChatVoiceSettingsResponse | null>(null);
+  const [isSavingVoiceSettings, setIsSavingVoiceSettings] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [customActionText, setCustomActionText] = useState('');
@@ -296,6 +303,21 @@ export default function WebChatScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!companionId) return;
+    let cancelled = false;
+    getChatVoiceSettings(companionId)
+      .then((settings) => {
+        if (!cancelled) setVoiceSettings(settings);
+      })
+      .catch(() => {
+        if (!cancelled) setVoiceSettings(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companionId]);
 
   useEffect(() => {
     if (!initialSceneId) return;
@@ -705,6 +727,17 @@ export default function WebChatScreen() {
       setInviteLoading(false);
     }
   }, [companionId, sceneId]);
+
+  const saveVoiceSettings = useCallback(async (value: { voice_id: string; voice_speed: ChatVoiceSettingsResponse['voice_speed'] }) => {
+    setIsSavingVoiceSettings(true);
+    try {
+      const next = await updateChatVoiceSettings(companionId, value);
+      setVoiceSettings(next);
+      setVoiceDialogVisible(false);
+    } finally {
+      setIsSavingVoiceSettings(false);
+    }
+  }, [companionId]);
 
   const sendInviteToTarget = useCallback(async (target: InviteTarget) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -1267,6 +1300,12 @@ export default function WebChatScreen() {
                 onPress={autoVoice.toggle}
               />
               <ChatRailButton
+                icon="settings-outline"
+                label={chatLanguage === 'zh' ? '声音' : 'Voice set'}
+                selected={voiceDialogVisible}
+                onPress={() => setVoiceDialogVisible(true)}
+              />
+              <ChatRailButton
                 icon="time-outline"
                 label={chatLanguage === 'zh' ? '历史' : 'History'}
                 onPress={() => {
@@ -1491,6 +1530,21 @@ export default function WebChatScreen() {
             setOutfitDialogVisible(false);
           }}
           onError={pushError}
+        />
+      </WebDialog>
+
+      <WebDialog
+        description={chatLanguage === 'zh' ? '为这个角色选择你自己的聊天语音。首次生成每条回复的语音会消耗 credits，重复播放同一声音免费。' : 'Choose your own chat voice for this companion. The first voice generation for a reply costs credits; replaying the same voice is free.'}
+        onClose={() => setVoiceDialogVisible(false)}
+        open={voiceDialogVisible}
+        size="lg"
+        title={chatLanguage === 'zh' ? '声音设置' : 'Voice settings'}
+      >
+        <VoiceSettingsPanel
+          initialGender={companion?.gender ?? null}
+          initialValue={voiceSettings}
+          isSaving={isSavingVoiceSettings}
+          onSave={saveVoiceSettings}
         />
       </WebDialog>
 

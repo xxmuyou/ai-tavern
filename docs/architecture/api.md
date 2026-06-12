@@ -352,9 +352,7 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
   "personality": "...",
   "background": "...",
   "speech_style": "...",
-  "relationship_role": "friend",
-  "voice_id": "Arrogant_Miss",
-  "voice_speed": "slow" | "medium" | "fast"
+  "relationship_role": "friend"
   // 不传 source（强制 'user'）, preferred_scenes 默认空
 }
 
@@ -364,8 +362,6 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 // 错误
 // 400 gender_required 当未传 gender 字段
 // 400 invalid_gender 当 gender 不是 'male'/'female'
-// 400 invalid_voice_id 当 voice_id 不在当前 MiniMax voice catalog 中
-// 400 invalid_voice_speed 当 voice_speed 不是 slow/medium/fast
 // 402 QUOTA_EXCEEDED 当 active companion 数 >= 3 且非订阅用户
 ```
 
@@ -374,18 +370,14 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 修改自创角色（官方角色不可改）。
 
 ```json
-// Request 可部分更新 POST /companions 的字段，也包括:
-{
-  "voice_id": "English_Graceful_Lady",
-  "voice_speed": "fast"
-}
+// Request 可部分更新 POST /companions 的字段
 
 // Response 200 / 403 FORBIDDEN
 ```
 
 ### `GET /voice/options`
 
-返回 MiniMax voice catalog、默认 voice 和语速档位，供创建/编辑 companion 时选择。
+返回 MiniMax voice catalog、默认 voice 和语速档位，供 chat 内声音设置使用。
 `group_id` 属于服务端 TTS 调用配置，不在此响应中返回。
 
 ```json
@@ -418,9 +410,9 @@ profile 图覆盖按 `(user_id, companion_id)` 隔离，不修改官方 companio
 
 ### `POST /voice/preview`
 
-为创建/编辑 companion 表单中选定的 voice id 生成或复用试听音频 URL。试听文本固定为
+为 chat 声音设置中选定的 voice id 生成或复用试听音频 URL。试听文本固定为
 `Hi, I’m here with you. Let’s take this one moment at a time.`，试听语速固定为
-`medium`，不读取 companion 表单中的 `voice_speed`。试听音频是全局 R2 缓存，不按用户、
+`medium`，不读取 chat voice settings 中的 `voice_speed`。试听音频是全局 R2 缓存，不按用户、
 companion 或 message 分桶。
 
 ```json
@@ -566,20 +558,43 @@ companion 或 message 分桶。
 
 为一条 companion 回复生成或复用语音 URL。
 
-服务端根据 companion 的 `voice_id` 与 `voice_speed` 调用 MiniMax T2A；旧角色缺少
-voice 设置时按 `config/minimax-voices.<env>.json` 的默认值回退。生成结果以 voice id、
-speed、文本和 render version 参与缓存 key，避免改声音后复用旧音频。
+服务端按 `user_companion_voice_settings` → companion 默认 `voice_id/voice_speed` →
+`config/minimax-voices.<env>.json` 性别默认值解析声音。生成结果以 voice id、speed、文本和
+render version 参与缓存 key，避免改声音后复用旧音频。
 
-**服务端处理：**
-1. 校验 auth + 订阅
-2. 检查 free quota（KV read/write 计数，v1 接受小竞态）
-3. 加载 thread + 关系 + 场景 + 角色卡
-4. 构造 prompt，调用 LLM（流式）
-5. 流式回传 text
-6. 流结束时返回 signals + emotion
-7. 更新 relationships 数值
-8. 写入 messages 表
-9. 成功持久化消息后 increment quota，并异步触发 usage_log + llm_logs
+首次成功获取某个 `(user_id, companion_id, message_id, voice_id, voice_speed)` 组合会消耗
+`voice_generation` credits；同一用户重复播放同一组合免费。已有 R2 缓存但该用户未生成过该组合时仍会扣首次生成费用。余额不足返回 `402 credits_insufficient`，不会调用 MiniMax。
+
+### `GET /chat/{companion_id}/voice-settings`
+
+返回当前用户对该 companion 的 effective voice 设置。官方和自创 companion 都按当前用户单独保存。
+
+```json
+{
+  "source": "user" | "companion" | "default",
+  "voice_id": "Arrogant_Miss",
+  "voice_speed": "slow" | "medium" | "fast"
+}
+```
+
+### `PATCH /chat/{companion_id}/voice-settings`
+
+保存当前用户对该 companion 的声音设置，不修改 companion 全局记录。
+
+```json
+// Request
+{
+  "voice_id": "English_Graceful_Lady",
+  "voice_speed": "fast"
+}
+
+// Response 200，同 GET 响应格式
+
+// 错误
+// 400 invalid_voice_id 当 voice_id 不在当前 MiniMax voice catalog 中
+// 400 invalid_voice_speed 当 voice_speed 不是 slow/medium/fast
+// 404 not_found 当 companion 不存在或当前用户不可聊天
+```
 
 ### `GET /chat/{companion_id}/history`
 
@@ -960,7 +975,8 @@ D1 连通性诊断（仅 admin / 内部）。
 
 - `POST /chat/{companion_id}/messages/{message_id}/regenerate` — 重生成回复。
 - `POST /chat/{companion_id}/messages/{message_id}/edit` — 编辑消息。
-- `POST /chat/{companion_id}/messages/{message_id}/voice` — 生成语音。
+- `GET/PATCH /chat/{companion_id}/voice-settings` — 当前用户的 companion 声音设置。
+- `POST /chat/{companion_id}/messages/{message_id}/voice` — 生成或复用语音，按首次成功生成扣 `voice_generation` credits。
 - `POST /chat/{companion_id}/messages/{message_id}/variant` — 候选回复切换。
 
 ### 11.6 Companions 扩展

@@ -77,6 +77,12 @@ export type VoicePreviewResponse = {
   url: string;
 };
 
+export type ChatVoiceSettingsResponse = {
+  source: 'user' | 'companion' | 'default';
+  voice_id: string;
+  voice_speed: VoiceSpeed;
+};
+
 export type TimeSlot = 'morning' | 'afternoon' | 'evening' | 'night';
 
 export type ActivityType = 'check_in' | 'hang_out' | 'invite' | 'date' | 'gift' | 'repair';
@@ -301,8 +307,6 @@ export type CompanionCreateInput = {
   preferred_scenes?: string[];
   relationship_role?: string;
   speech_style?: string;
-  voice_id?: string;
-  voice_speed?: VoiceSpeed;
   greeting?: string;
   example_dialogues?: string[];
   tags?: string[];

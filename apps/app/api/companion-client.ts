@@ -16,6 +16,7 @@ import type {
   BaseArtPromptAssistResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
+  ChatVoiceSettingsResponse,
   CompanionCutoutResponse,
   ChatMessageInput,
   CompanionCreateInput,
@@ -649,6 +650,21 @@ export async function getVoicePreview(voiceId: string): Promise<VoicePreviewResp
     body: JSON.stringify({ voice_id: voiceId }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
+  });
+}
+
+export async function getChatVoiceSettings(companionId: string): Promise<ChatVoiceSettingsResponse> {
+  return requestJson<ChatVoiceSettingsResponse>(`/chat/${encodeURIComponent(companionId)}/voice-settings`);
+}
+
+export async function updateChatVoiceSettings(
+  companionId: string,
+  input: Pick<ChatVoiceSettingsResponse, 'voice_id' | 'voice_speed'>,
+): Promise<ChatVoiceSettingsResponse> {
+  return requestJson<ChatVoiceSettingsResponse>(`/chat/${encodeURIComponent(companionId)}/voice-settings`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'PATCH',
   });
 }
 

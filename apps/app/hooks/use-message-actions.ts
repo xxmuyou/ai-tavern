@@ -24,6 +24,7 @@ export function useMessageActions(
   companionId: string,
   history: HistoryLike,
   onError?: (message: string) => void,
+  onQuotaExceeded?: () => void,
 ): UseMessageActionsResult {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
@@ -92,12 +93,17 @@ export function useMessageActions(
         const { url } = await getMessageVoice(companionId, messageId);
         await playAudioUrl(url);
       } catch (error) {
-        onError?.(error instanceof Error ? error.message : 'Could not play the voice.');
+        const status = (error as Error & { status?: number }).status;
+        if (status === 402 && onQuotaExceeded) {
+          onQuotaExceeded?.();
+        } else {
+          onError?.(error instanceof Error ? error.message : 'Could not play the voice.');
+        }
       } finally {
         setSpeakingId(null);
       }
     },
-    [companionId, onError, speakingId],
+    [companionId, onError, onQuotaExceeded, speakingId],
   );
 
   return { regenerate, regeneratingId, selectVariant, speak, speakingId };

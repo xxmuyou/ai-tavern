@@ -13,6 +13,7 @@ export type CreditLedgerType =
 export type CreditTaskType =
   | "chat_message"
   | "image_generation"
+  | "voice_generation"
   | "signal_extract"
   | "summary"
   | "admin_prewarm";

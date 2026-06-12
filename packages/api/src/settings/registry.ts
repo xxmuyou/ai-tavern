@@ -20,6 +20,7 @@ export type SettingAdminMode = "editable" | "status_only";
 export type SettingGroup =
   | "auth"
   | "billing"
+  | "credits"
   | "email"
   | "image_gen"
   | "limits"
@@ -189,6 +190,16 @@ export const SETTINGS: readonly SettingDef[] = [
     label: "Credits checkout cancel URL",
     type: "text",
     envKey: "STRIPE_CREDITS_CANCEL_URL",
+  },
+
+  // --- credits ---
+  {
+    key: "credits.voice_generation_cost",
+    group: "credits",
+    label: "Voice generation cost",
+    type: "number",
+    description:
+      "Credits charged the first time a user generates a voice clip for a message with a selected voice/speed. Defaults to chat message cost.",
   },
 
   // --- image_gen ---
@@ -454,6 +465,7 @@ export const SETTINGS_BY_KEY: Record<string, SettingDef> = Object.fromEntries(
 export const SETTING_GROUPS: readonly SettingGroup[] = [
   "auth",
   "billing",
+  "credits",
   "image_gen",
   "llm",
   "limits",

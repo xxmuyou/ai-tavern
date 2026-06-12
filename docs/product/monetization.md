@@ -56,10 +56,12 @@
 | 任务 | 积分 | 折美元 | 说明 |
 |---|---:|---:|---|
 | `chat_message` | 1 / 条 | ≈$0.001 | 用户发送并成功获得回复 |
+| `voice_generation` | 1 / 首次语音 | ≈$0.001 | 同一用户同一回复同一 voice/speed 首次生成语音；重复播放免费 |
 | `image_generation` | 50 / 张 | ≈$0.05 | 每生成 1 张图（表情立绘 / 瞬间图 / 服装图 / 主形象） |
 | `signal_extract` / `summary` / `admin_prewarm` | 0 | — | 系统任务，不向用户扣费 |
 
-- **扣费模型**：reserve → commit/release。生图与聊天发送前先预占，成功后确认、失败后释放（异步生图同理，见 spec-021 §F）。
+- **扣费模型**：reserve → commit/release。生图、聊天发送、聊天语音首次生成先预占，成功后确认、失败后释放（异步生图同理，见 spec-021 §F）。
+- **语音试听**：voice preview 使用固定试听文本和全局缓存，不扣 `voice_generation` credits。
 - **余额不足**：返回 `402 credits_insufficient`，前端弹付费墙（充值入口 + Pro 升级入口）。
 - **成本健康度**：生图真实成本（RunningHub）<$0.01/张，用户侧 $0.05/张 有 5 倍以上毛利；聊天 LLM 成本约 $0.001~0.005/条（见 [`architecture/llm.md`](../architecture/llm.md)）。
 

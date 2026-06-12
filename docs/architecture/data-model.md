@@ -40,6 +40,8 @@
 | `admin_users` | admin 邮箱白名单（继承 `admin@aiappsbox.com` 设计） |
 | `credit_accounts` | 积分余额缓存（available / reserved） |
 | `credit_ledger_entries` | 积分流水不可变账本（发放 / 购买 / 预占 / 结算 / 退款 / 调整） |
+| `user_companion_voice_settings` | 用户对单个 companion 的聊天语音设置 |
+| `voice_generation_charges` | 聊天语音首次生成扣费记录 |
 | `image_generation_jobs` | 通用生图任务（未绑定 companion 的生图，如创建前 base-art 草稿） |
 
 ---
@@ -489,7 +491,7 @@ CREATE TABLE credit_ledger_entries (
   amount               INTEGER NOT NULL,        -- 有符号：正=增加可用/释放预占，负=减少可用/确认消费
   balance_after        INTEGER,
   reserved_after       INTEGER,
-  task_type            TEXT,                    -- chat_message / image_generation / ...
+  task_type            TEXT,                    -- chat_message / image_generation / voice_generation / ...
   reference_type       TEXT,                    -- monthly_grant / signup_grant / stripe_session / reservation / ...
   reference_id         TEXT,
   stripe_session_id    TEXT,
@@ -509,7 +511,49 @@ CREATE INDEX idx_credit_ledger_expiry ON credit_ledger_entries(expires_at);
 
 不可变流水账本（spec-021，migration `0017`）。`idx_credit_ledger_reference` 唯一索引保证**幂等**：同一 `(type, reference_type, reference_id)` 重复写入返回已存在条目而非二次入账（月度/注册赠送、Stripe 购买、reserve 都依赖它去重）。reserve→commit/release 模型：`reserve` 把 available 转入 reserved，`commit` 确认扣除，`release`/`refund` 退回 available。
 
-### 3.18 `image_generation_jobs`
+### 3.18 `user_companion_voice_settings`
+
+```sql
+CREATE TABLE user_companion_voice_settings (
+  user_id       TEXT NOT NULL REFERENCES users(id),
+  companion_id  TEXT NOT NULL REFERENCES companions(id),
+  voice_id      TEXT NOT NULL,
+  voice_speed   TEXT NOT NULL DEFAULT 'medium',
+  created_at    INTEGER NOT NULL,
+  updated_at    INTEGER NOT NULL,
+  PRIMARY KEY (user_id, companion_id)
+);
+
+CREATE INDEX idx_user_companion_voice_settings_companion
+  ON user_companion_voice_settings(companion_id);
+```
+
+聊天内声音设置表（migration `0058`）。声音是用户偏好，不是 companion 全局编辑；官方 companion 和用户自创 companion 都通过这张表存当前用户的 override。运行时解析顺序为 user override → companion default → MiniMax gender default。
+
+### 3.19 `voice_generation_charges`
+
+```sql
+CREATE TABLE voice_generation_charges (
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES users(id),
+  companion_id    TEXT NOT NULL REFERENCES companions(id),
+  message_id      TEXT NOT NULL REFERENCES messages(id),
+  voice_id        TEXT NOT NULL,
+  voice_speed     TEXT NOT NULL,
+  reservation_id  TEXT,
+  created_at      INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_voice_generation_charges_unique
+  ON voice_generation_charges(user_id, companion_id, message_id, voice_id, voice_speed);
+
+CREATE INDEX idx_voice_generation_charges_user_time
+  ON voice_generation_charges(user_id, created_at);
+```
+
+聊天语音扣费记录（migration `0058`）。同一用户、同一 message、同一 voice/speed 的成功语音只扣一次；重复播放走 R2 缓存和这张表免重复扣费。`reservation_id` 指向对应 credit ledger reserve，成功后 commit，provider 失败 release。
+
+### 3.20 `image_generation_jobs`
 
 ```sql
 CREATE TABLE image_generation_jobs (

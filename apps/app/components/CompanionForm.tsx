@@ -1,13 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
-import { getVoiceOptions, getVoicePreview, mediaSource } from '@/api/companion-client';
-import type { CompanionCreateInput, CompanionDetail, Gender, Scene, VoiceOption, VoiceOptionsResponse, VoiceSpeed } from '@/api/types';
-import { AppDropdown } from '@/components/AppDropdown';
+import { mediaSource } from '@/api/companion-client';
+import type { CompanionCreateInput, CompanionDetail, Gender, Scene } from '@/api/types';
 import { Button } from '@/components/Button';
-import { playAudioUrl } from '@/utils/play-audio';
 
 const ROLES = ['friend', 'crush', 'stranger', 'colleague', 'neighbor', 'family'] as const;
 const PERSONALITY_PRESETS = ['warm', 'reserved', 'playful', 'protective', 'ambitious', 'mysterious'];
@@ -30,8 +27,6 @@ type CompanionFormValues = {
   secret: string;
   speech_style: string;
   tags: string;
-  voice_id: string;
-  voice_speed: VoiceSpeed;
   want: string;
 };
 
@@ -47,31 +42,8 @@ type CompanionFormProps = {
 
 export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPickArt, onSubmit, scenes = [] }: CompanionFormProps) {
   const [values, setValues] = useCompanionFormValues(initial, initialArtUrl);
-  const [voiceOptions, setVoiceOptions] = useState<VoiceOptionsResponse | null>(null);
-  const [voiceRegion, setVoiceRegion] = useState<string>('zh-mandarin');
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getVoiceOptions()
-      .then((options) => {
-        if (cancelled) return;
-        setVoiceOptions(options);
-        const initialVoiceId = initial?.voice_id || defaultVoiceId(options, initial?.gender ?? 'female');
-        setVoiceRegion(languageForVoice(options.voices, initialVoiceId) ?? 'zh-mandarin');
-        setValues((current) => {
-          const voiceId = current.voice_id || defaultVoiceId(options, current.gender);
-          return { ...current, voice_id: voiceId, voice_speed: current.voice_speed || options.defaults.speed };
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setVoiceOptions(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [initial, setValues]);
 
   async function pickArt() {
     setError(null);
@@ -115,8 +87,6 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
       secret: cleanText(values.secret),
       speech_style: cleanText(values.speech_style),
       tags: parseTags(values.tags),
-      voice_id: values.voice_id || undefined,
-      voice_speed: values.voice_speed,
       want: cleanText(values.want),
     });
   }
@@ -125,10 +95,7 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
   const submitLabel = mode === 'create' ? 'Create companion' : 'Save changes';
 
   function changeGender(gender: Gender) {
-    const voiceId = voiceOptions
-      ? recommendedVoiceForLanguage(voiceOptions.voices, voiceRegion, gender)?.id ?? defaultVoiceId(voiceOptions, gender)
-      : defaultVoiceId(voiceOptions, gender);
-    setValues((current) => ({ ...current, gender, voice_id: voiceId }));
+    setValues((current) => ({ ...current, gender }));
   }
 
   return (
@@ -229,24 +196,7 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
             />
           </FormPanel>
 
-          <FormPanel title="Opening & voice">
-            {voiceOptions ? (
-              <VoicePicker
-                gender={values.gender}
-                language={voiceRegion}
-                onChangeGender={changeGender}
-                onChangeLanguage={(language) => {
-                  setVoiceRegion(language);
-                  const voice = recommendedVoiceForLanguage(voiceOptions.voices, language, values.gender);
-                  if (voice) setValues((current) => ({ ...current, voice_id: voice.id }));
-                }}
-                onChangeSpeed={(voice_speed) => setValues((current) => ({ ...current, voice_speed }))}
-                onChangeVoice={(voice_id) => setValues((current) => ({ ...current, voice_id }))}
-                options={voiceOptions}
-                selectedSpeed={values.voice_speed}
-                selectedVoiceId={values.voice_id}
-              />
-            ) : null}
+          <FormPanel title="Opening">
             <Field
               hint="The first thing they say when a new chat begins."
               label="Greeting"
@@ -360,181 +310,8 @@ function initialValues(initial?: CompanionDetail | null, initialArtUrl?: string)
     secret: initial?.secret ?? '',
     speech_style: initial?.speech_style ?? '',
     tags: (initial?.tags ?? []).join(', '),
-    voice_id: initial?.voice_id ?? '',
-    voice_speed: initial?.voice_speed ?? 'medium',
     want: initial?.want ?? '',
   };
-}
-
-function defaultVoiceId(options: VoiceOptionsResponse | null, gender: Gender): string {
-  if (!options) return gender === 'male' ? 'male-qn-qingse' : 'Arrogant_Miss';
-  return gender === 'male' ? options.defaults.male_voice_id : options.defaults.female_voice_id;
-}
-
-function languageForVoice(voices: VoiceOption[], voiceId: string): string | null {
-  return voices.find((voice) => voice.id === voiceId)?.language ?? null;
-}
-
-function languageChoices(voices: VoiceOption[]): { id: string; label: string }[] {
-  const seen = new Set<string>();
-  const choices: { id: string; label: string }[] = [];
-  for (const voice of voices) {
-    if (seen.has(voice.language)) continue;
-    seen.add(voice.language);
-    choices.push({ id: voice.language, label: voiceLanguageDisplayLabel(voice) });
-  }
-  return choices;
-}
-
-function sortedVoices(voices: VoiceOption[], gender: Gender): VoiceOption[] {
-  const rank = (voice: VoiceOption) => {
-    if (voice.gender_hint === gender) return 0;
-    if (voice.gender_hint === 'neutral' || !voice.gender_hint) return 1;
-    return 2;
-  };
-  return [...voices].sort((a, b) => rank(a) - rank(b) || voiceDisplayLabel(a).localeCompare(voiceDisplayLabel(b)));
-}
-
-function recommendedVoiceForLanguage(voices: VoiceOption[], language: string, gender: Gender): VoiceOption | undefined {
-  return sortedVoices(
-    voices.filter((voice) => voice.language === language),
-    gender,
-  )[0];
-}
-
-function voiceDisplayLabel(voice: VoiceOption): string {
-  return voice.display_label ?? voice.label;
-}
-
-function voiceLanguageDisplayLabel(voice: VoiceOption): string {
-  return voice.display_language_label ?? voice.language_label;
-}
-
-function VoicePicker({
-  gender,
-  language,
-  onChangeGender,
-  onChangeLanguage,
-  onChangeSpeed,
-  onChangeVoice,
-  options,
-  selectedSpeed,
-  selectedVoiceId,
-}: {
-  gender: Gender;
-  language: string;
-  onChangeGender: (gender: Gender) => void;
-  onChangeLanguage: (language: string) => void;
-  onChangeSpeed: (speed: VoiceSpeed) => void;
-  onChangeVoice: (voiceId: string) => void;
-  options: VoiceOptionsResponse;
-  selectedSpeed: VoiceSpeed;
-  selectedVoiceId: string;
-}) {
-  const [isPreviewing, setIsPreviewing] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const languages = languageChoices(options.voices);
-  const voices = sortedVoices(
-    options.voices.filter((voice) => voice.language === language),
-    gender,
-  );
-  const genderOptions: { label: string; value: Gender }[] = [
-    { label: 'Female', value: 'female' },
-    { label: 'Male', value: 'male' },
-  ];
-  const speedLabels = new Map(options.speed_presets.map((preset) => [preset.id, preset.label]));
-  const voiceById = new Map(options.voices.map((voice) => [voice.id, voice]));
-  const selectedVoice = voiceById.get(selectedVoiceId);
-
-  async function previewVoice() {
-    if (!selectedVoiceId || isPreviewing) return;
-    setPreviewError(null);
-    setIsPreviewing(true);
-    try {
-      const preview = await getVoicePreview(selectedVoiceId);
-      await playAudioUrl(preview.url);
-    } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : 'Voice preview failed.');
-    } finally {
-      setIsPreviewing(false);
-    }
-  }
-
-  return (
-    <View className="gap-4">
-      <View className="gap-3 web:grid web:grid-cols-3">
-        <View>
-          <Text className="mb-2 text-sm font-semibold text-app-text">Gender</Text>
-          <AppDropdown<Gender>
-            labelForValue={(value) => genderOptions.find((option) => option.value === value)?.label ?? 'Select gender'}
-            onChange={onChangeGender}
-            options={genderOptions}
-            value={gender}
-          />
-        </View>
-
-        <View>
-          <Text className="mb-2 text-sm font-semibold text-app-text">Language/Region</Text>
-          <AppDropdown
-            labelForValue={(value) => languages.find((option) => option.id === value)?.label ?? 'Select language'}
-            onChange={onChangeLanguage}
-            options={languages.map((item) => ({ label: item.label, value: item.id }))}
-            value={language}
-          />
-        </View>
-
-        <View>
-          <Text className="mb-2 text-sm font-semibold text-app-text">Voice</Text>
-          <View className="flex-row items-center gap-2">
-            <View className="flex-1">
-              <AppDropdown
-                labelForValue={(value) => {
-                  const voice = voiceById.get(value);
-                  return voice ? voiceDisplayLabel(voice) : 'Select voice';
-                }}
-                onChange={onChangeVoice}
-                options={voices.map((voice) => ({ label: voiceDisplayLabel(voice), value: voice.id }))}
-                value={selectedVoiceId}
-              />
-            </View>
-            <Pressable
-              accessibilityLabel={isPreviewing ? 'Loading voice preview' : 'Preview voice'}
-              accessibilityRole="button"
-              disabled={!selectedVoice || isPreviewing}
-              onPress={() => void previewVoice()}
-              className={`h-9 w-9 items-center justify-center rounded-lg border ${
-                selectedVoice && !isPreviewing ? 'border-rose bg-rose-soft' : 'border-app-line bg-app-sunken'
-              }`}
-            >
-              <Ionicons color={selectedVoice && !isPreviewing ? PALETTE.roseDeep : PALETTE.muted} name={isPreviewing ? 'hourglass-outline' : 'volume-medium-outline'} size={16} />
-            </Pressable>
-          </View>
-        </View>
-      </View>
-
-      <View>
-        <Text className="mb-2 text-sm font-semibold text-app-text">Selected voice</Text>
-        <Text className="text-xs text-app-muted">
-          {selectedVoice ? `${selectedVoice.id} · ${voiceLanguageDisplayLabel(selectedVoice)}` : 'Choose a voice to enable preview.'}
-        </Text>
-        {previewError ? <Text className="mt-1 text-xs font-semibold text-red-600">{previewError}</Text> : null}
-      </View>
-
-      <View>
-        <Text className="mb-2 text-sm font-semibold text-app-text">Speed</Text>
-        <View className="flex-row flex-wrap gap-2">
-          {options.speed_presets.map((preset) => (
-            <Choice
-              key={preset.id}
-              active={selectedSpeed === preset.id}
-              label={speedLabels.get(preset.id) ?? preset.label}
-              onPress={() => onChangeSpeed(preset.id)}
-            />
-          ))}
-        </View>
-      </View>
-    </View>
-  );
 }
 
 function cleanText(value: string): string | undefined {

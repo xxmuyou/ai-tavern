@@ -10,7 +10,7 @@ vi.mock("../credits", () => ({
   reserveCredits: async () => ({ available_credits: 0, reservation_id: "res_1", reserved_credits: 0 }),
   commitReservation: async () => {},
   releaseReservation: async () => {},
-  TASK_CREDIT_COST: { admin_prewarm: 0, chat_message: 1, image_generation: 50, signal_extract: 0, summary: 0 },
+  TASK_CREDIT_COST: { admin_prewarm: 0, chat_message: 1, image_generation: 50, signal_extract: 0, summary: 0, voice_generation: 1 },
   CreditsError: class CreditsError extends Error {},
 }));
 
