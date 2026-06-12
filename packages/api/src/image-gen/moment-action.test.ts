@@ -15,14 +15,29 @@ const mockLlmCall = vi.mocked(llmCall);
 function sampleInput() {
   return {
     activity: { activity_hint: "sharing coffee", activity_type: "gift", mood: "warm" },
+    companionGender: "female",
     companionName: "Maya",
     emotion: "warm",
     previousUserText: "<narration>You set a coffee down nearby.</narration>I got this for us.",
     sceneMood: "warm cafe",
     sceneName: "Pier Coffee Shop",
+    scenePrivacy: "public" as const,
+    sceneVenue: "dining" as const,
     sourceReply: "<narration>Maya wraps her hands around the cup.</narration>Thank you.",
     stage: "familiar" as const,
     userId: "usr_1",
+  };
+}
+
+function llmResponse(structured: Record<string, unknown>) {
+  return {
+    cost_usd: 0.0001,
+    latency_ms: 12,
+    model: "deepseek-chat",
+    provider: "deepseek" as const,
+    structured,
+    text: "",
+    usage: { input_tokens: 100, output_tokens: 20 },
   };
 }
 
@@ -49,6 +64,22 @@ describe("parseMomentVisualAction", () => {
     });
   });
 
+  it("keeps hairstyle and makeup fields", () => {
+    expect(
+      parseMomentVisualAction({
+        body_pose: "standing alone near the bar counter",
+        hairstyle: "glamorous styled curls",
+        makeup: "smoky eyes with red lips",
+        outfit: "off-shoulder bodycon party dress",
+      }),
+    ).toEqual({
+      body_pose: "standing alone near the bar counter",
+      hairstyle: "glamorous styled curls",
+      makeup: "smoky eyes with red lips",
+      outfit: "off-shoulder bodycon party dress",
+    });
+  });
+
   it("keeps a scene-appropriate outfit without tripping the multi-subject guard", () => {
     expect(
       parseMomentVisualAction({
@@ -67,11 +98,21 @@ describe("parseMomentVisualAction", () => {
         body_pose: "standing alone near the doorway",
         expression: "",
         gaze: "  ",
+        hairstyle: "",
         hand_action: "",
+        makeup: "   ",
       }),
     ).toEqual({
       body_pose: "standing alone near the doorway",
     });
+  });
+
+  it("truncates overlong styling fields to 120 characters", () => {
+    const action = parseMomentVisualAction({
+      body_pose: "standing alone",
+      hairstyle: "x".repeat(200),
+    });
+    expect(action?.hairstyle).toHaveLength(120);
   });
 
   it("rejects output that would summon a second person", () => {
@@ -83,6 +124,12 @@ describe("parseMomentVisualAction", () => {
     expect(
       parseMomentVisualAction({
         body_pose: "a couple holding hands together",
+      }),
+    ).toBeNull();
+    expect(
+      parseMomentVisualAction({
+        body_pose: "standing alone",
+        hairstyle: "hair styled together with someone",
       }),
     ).toBeNull();
   });
@@ -107,29 +154,27 @@ describe("extractMomentVisualAction", () => {
   });
 
   it("uses the cheap image prompt assist route with strict JSON settings", async () => {
-    mockLlmCall.mockResolvedValue({
-      cost_usd: 0.0001,
-      latency_ms: 12,
-      model: "deepseek-chat",
-      provider: "deepseek",
-      structured: {
+    mockLlmCall.mockResolvedValue(
+      llmResponse({
         body_pose: "Maya sits alone at the cafe table",
+        hairstyle: "soft curled hair",
         hand_action: "both hands around a coffee cup",
-      },
-      text: "",
-      usage: { input_tokens: 100, output_tokens: 20 },
-    });
+        outfit: "stylish fitted midi dress",
+      }),
+    );
 
     const action = await extractMomentVisualAction({} as Env, sampleInput());
 
     expect(action).toMatchObject({
       body_pose: "Maya sits alone at the cafe table",
-      hand_action: "both hands around a coffee cup",
+      hairstyle: "soft curled hair",
+      outfit: "stylish fitted midi dress",
     });
+    expect(mockLlmCall).toHaveBeenCalledTimes(1);
     expect(mockLlmCall).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        max_tokens: 200,
+        max_tokens: 260,
         messages: expect.arrayContaining([
           expect.objectContaining({
             content: expect.stringContaining("pose-and-styling planner"),
@@ -137,7 +182,7 @@ describe("extractMomentVisualAction", () => {
           }),
           expect.objectContaining({
             content: expect.stringContaining(
-              "Plan a safe solo pose and a scene-appropriate outfit for the companion",
+              "Plan a safe solo pose and a full venue-appropriate restyle (outfit, hairstyle, makeup) for the companion",
             ),
             role: "user",
           }),
@@ -151,14 +196,69 @@ describe("extractMomentVisualAction", () => {
     const request = mockLlmCall.mock.calls[0]?.[1] as {
       messages: Array<{ content: string; role: string }>;
     };
-    expect(request.messages[0]?.content).toContain("receiving flowers becomes");
-    expect(request.messages[0]?.content).toContain("receiving coffee becomes");
-    expect(request.messages[0]?.content).toContain("leaving someone's lap or bed contact becomes");
+    const system = request.messages[0]?.content ?? "";
+    expect(system).toContain("receiving flowers becomes");
+    expect(system).toContain("receiving coffee becomes");
+    expect(system).toContain("leaving someone's lap or bed contact becomes");
+    // The restyle mandate, the nudity ceiling and the fixed-background rule.
+    expect(system).toContain("Always restyle");
+    expect(system).toContain("never nude");
+    expect(system).toContain("The background location is already fixed");
+
+    const user = request.messages[1]?.content ?? "";
+    expect(user).toContain("Companion gender: female");
+    expect(user).toContain("Venue type: dining; setting: public");
+    expect(user).toContain("Styling boldness:");
+    expect(user).toContain("no sleepwear"); // familiar -> reserved tier guidance
   });
 
-  it("falls back silently when the LLM route is unavailable", async () => {
+  it("retries once with a nudge and higher temperature when the first attempt errors", async () => {
+    mockLlmCall
+      .mockRejectedValueOnce(new Error("llm_config missing entry"))
+      .mockResolvedValueOnce(
+        llmResponse({
+          body_pose: "standing alone by the window",
+          hairstyle: "loose curled hair",
+          outfit: "flowy short dress",
+        }),
+      );
+
+    const action = await extractMomentVisualAction({} as Env, sampleInput());
+
+    expect(action).toMatchObject({ body_pose: "standing alone by the window" });
+    expect(mockLlmCall).toHaveBeenCalledTimes(2);
+    const retry = mockLlmCall.mock.calls[1]?.[1] as {
+      messages: Array<{ content: string; role: string }>;
+      temperature: number;
+    };
+    expect(retry.temperature).toBe(0.5);
+    expect(retry.messages).toHaveLength(3);
+    expect(retry.messages[2]?.content).toContain("previous answer was rejected");
+  });
+
+  it("retries when the first output trips the multi-subject guard", async () => {
+    mockLlmCall
+      .mockResolvedValueOnce(
+        llmResponse({ body_pose: "Maya sits on the user's lap" }),
+      )
+      .mockResolvedValueOnce(
+        llmResponse({
+          body_pose: "seated alone at the bed edge",
+          hairstyle: "soft tousled hair",
+          outfit: "elegant silk slip nightdress",
+        }),
+      );
+
+    const action = await extractMomentVisualAction({} as Env, sampleInput());
+
+    expect(action).toMatchObject({ body_pose: "seated alone at the bed edge" });
+    expect(mockLlmCall).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null after both attempts fail", async () => {
     mockLlmCall.mockRejectedValue(new Error("llm_config missing entry"));
 
     await expect(extractMomentVisualAction({} as Env, sampleInput())).resolves.toBeNull();
+    expect(mockLlmCall).toHaveBeenCalledTimes(2);
   });
 });

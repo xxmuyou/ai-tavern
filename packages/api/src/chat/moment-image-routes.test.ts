@@ -220,6 +220,15 @@ describe("moment image routes", () => {
       workflow_key: "chat_moment",
     });
     expect(jobs[0]?.prompt).toContain("Change the background to: Private chat");
+    // Sceneless moments are private: strict no-other-people wording, and the
+    // LLM extractor (unavailable in this test env) falls back to the
+    // home_private/reserved styling preset instead of a vague default.
+    expect(jobs[0]?.prompt).toContain("The background is empty of other people");
+    expect(jobs[0]?.prompt).toContain(
+      "Outfit (overrides any clothing mentioned in the reference): comfortable knit cardigan and lounge pants",
+    );
+    expect(jobs[0]?.prompt).toContain("Change the hairstyle to: casual messy bun");
+    expect(jobs[0]?.prompt).not.toContain("an outfit that naturally fits the scene");
     expect(moments[0]).toMatchObject({
       message_id: "msg_private",
       scene_id: null,

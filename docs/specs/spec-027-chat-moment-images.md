@@ -67,14 +67,15 @@ v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由
 - `scene`：`name / mood / tags / art_url`；prompt 使用 name、mood、tags，不依赖 art_url 合成。
 - `time`：用户本地 `time_slot`，如 `morning / afternoon / evening / night`。
 - `companion`：`name / appearance / personality / relationship_role / gender`。其中**仅 `gender`** 进最终图片 prompt（作单词锚点 `Companion gender: …`）；`appearance` **不进**最终图片 prompt（脸由参考图锁定，文字会带回旧造型）；`name / personality / relationship_role` 仅作 pose planner 输入。注意 `appearance` 字段本身不删，它在 profile_outfit / emotion_art / 聊天文本人设 / story-beats 等链路仍正常使用——只是不进 chat_moment 这一条 prompt。
-- `relationship`：当前 stage，仅作 pose planner 输入（影响亲密程度、距离感、姿态氛围），不再以 `Relationship stage: …` 行进入最终图片 prompt。
+- `relationship`：当前 stage，仅作 pose planner 输入（影响亲密程度、距离感、姿态氛围），不再以 `Relationship stage: …` 行进入最终图片 prompt。v1.5 起 stage 同时映射为 4 档造型尺度（`reserved / warm / romantic / intimate`，见 `moment-style.ts`）：正向阶段递进（first_contact/familiar→reserved，trusted/close_friend→warm，romantic_tension/dating→romantic，committed→intimate），负向阶段（strained/hostile/estranged）一律 reserved；尺度只作为 `Styling boldness:` 指令进入 planner 输入，硬上限为"性感不露点"（never nude / never topless / 不透视 / 公共场所不内衣）。
+- `scene privacy / venue`（v1.5）：由 scene tags 推断、无 DB 改动。tags 含 `intimate / bedroom / hotel / home` 或无 scene（Private chat）→ private，否则 public；场所分 8 桶（nightlife / bedroom / home_private / dining / beach(预留) / active / outdoor_public / indoor_quiet），驱动 LLM 场所化换装与预设兜底造型。
 - `emotion/status`：来源 message 的 emotion，如 `warm / playful / guarded / tense / annoyed`，映射为画面状态。
 - `activity`：若聊天来自 activity，加入 `activity_type`、`activity_hint`、daily mood/availability。
 - `story_beat`：若当前 scene 有 active story beat，加入 `title / objective`，但不强行剧透未完成内容。
 
 ### Visual Action Extraction
 
-`visual action extractor` 优先复用现有 `image_prompt_assist` LLM task。默认模型配置为最低成本 DeepSeek 路径：`deepseek / deepseek-chat`；调用参数使用 `temperature: 0`，`max_tokens` 控制在 160-220 左右，并要求结构化 JSON 输出。若 dev/prod 环境缺少 `image_prompt_assist` 的 `llm_config`，实现阶段补 seed/migration；当前迁移已包含默认 DeepSeek 配置。
+`visual action extractor` 优先复用现有 `image_prompt_assist` LLM task。默认模型配置为最低成本 DeepSeek 路径：`deepseek / deepseek-chat`；首次调用 `temperature: 0`、`max_tokens: 260`，并要求结构化 JSON 输出。若 dev/prod 环境缺少 `image_prompt_assist` 的 `llm_config`，实现阶段补 seed/migration；当前迁移已包含默认 DeepSeek 配置。
 
 内部输出形状：
 
@@ -84,7 +85,9 @@ type MomentVisualAction = {
   hand_action?: string;
   gaze?: string;
   expression?: string;
-  outfit?: string; // 贴合场景/季节/活动的单人服装，覆盖参考图原服装
+  outfit?: string; // 贴合场所/季节/活动的单人服装，覆盖参考图原服装（schema 层 required）
+  hairstyle?: string; // v1.5：随场景换发型，命令式行注入（schema 层 required）
+  makeup?: string; // v1.5：可选妆容
   held_or_nearby_props?: string;
   scene_position?: string;
 };
@@ -96,8 +99,9 @@ type MomentVisualAction = {
 - 用户动作要转译成 companion 的单人反应：用户送花 → `she holds a small bouquet close to her chest`；用户点咖啡 → `she sits with a coffee cup near her hands`；用户邀请去某处 → `she stands near the doorway, turning back toward the viewer`。
 - 亲密互动不画第二个人，也不逐字保留身体接触：牵手、拥抱、靠近、从某人腿上起身等动作转译成 viewer 视角的单人姿态，例如 `she reaches one hand slightly toward the viewer`、`she leans a little closer while looking at the viewer`、`she sits alone near the bed edge, adjusting fabric with one hand`。
 - companion narration 只作为上下文，不允许原样复制；用户消息只补足 props、触发动作和可见反应。
-- `outfit` 输出一句贴合场景/季节/活动的单人服装（海滩=轻便泳装/夏裙、雪夜=厚外套围巾、卧室=居家睡衣等），对关系阶段保持得体；它会以覆盖措辞拼进最终 prompt，替换参考图原服装。extractor 失败时使用 `an outfit that naturally fits the scene` 兜底。
-- extractor 失败、超时、JSON 不合法，或输出含风险词时，最终 prompt 使用安全单人姿态 fallback；图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
+- **强制换装（v1.5）**：`outfit` 与 `hairstyle` 必须是为当前场所刻意选择的新造型，禁止默认素色便装（cardigan/sweater/jeans 仅限寒冷户外）；场所→造型映射示例写入 system prompt（夜店→裙装+妆发、白天广场/公园→俏皮街拍、卧室→居家/睡衣、海滩→泳装/夏裙、健身房→运动装），尺度按 `Styling boldness:`（stage 4 档）执行，硬上限不露点。
+- **背景锁定（v1.5）**：背景位置已固定并单独渲染，extractor 不得迁移场景；`body_pose` / `scene_position` 必须发生在给定 scene 内。
+- **重试与预设兜底（v1.5）**：首次调用失败（异常/JSON 不合法/风险词命中）时升温重试一次（`temperature: 0.5` + 追加 strict reminder user message；temp=0 重复相同输入会复现同样的坏输出）。两次均失败时使用按 场所×尺度档 的预设造型表（`presetMomentStyle`，女表 8×4 + 男装精简表）拼出 fallback action，保证任何路径出图都换装换发型；旧的 `an outfit that naturally fits the scene` 泛化兜底已废弃。extractor 成功但缺 outfit/hairstyle 时由 `ensureRestyle` 用同一预设表补齐。图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
 
 最终 prompt 示例结构（v1.4：脸靠参考图锁定；无 appearance/名字/relationship/personality，仅留 gender 锚点）：
 
@@ -109,6 +113,8 @@ The companion looks directly at the viewer, ...; do not render any camera, phone
 Moment pose: sits alone at the cafe table.
 Hands/props: one hand near a coffee cup, coffee cup.
 Outfit (overrides any clothing mentioned in the reference): light summer dress.
+Change the hairstyle to: soft curled hair.
+Makeup: natural date makeup.
 Gaze: eyes toward the viewer.
 Expression: shy warm smile.
 Position in scene: near the cafe window.
@@ -116,6 +122,17 @@ Exactly one person: this companion only. The viewer/user is not visible. No seco
 Companion gender: female.
 Change the background to: Pier Coffee Shop, morning, warm cafe atmosphere, ...tags. The background is empty of other people.
 Single companion only, natural composition, no other people, ..., no text, no UI, no speech bubbles, no visible camera or photographic device.
+```
+
+**背景路人双措辞（v1.5）**：上面示例是 private 场景的严格措辞。public 场景（如 Plaza/Livehouse）为真实感放宽为远景虚化路人，但单主体守卫保留：
+
+```text
+Keep exactly one person in focus — this companion only. Do not add a second main subject, the user, an opponent, or anyone near the companion; no duplicate bodies.
+...
+Exactly one person in focus: this companion only. The viewer/user is not visible. No second main subject, no hand from another person.
+...
+Change the background to: ... A few distant passersby may appear far behind, small and blurred, none near the companion, no other face in focus.
+Single companion in focus, natural composition, no crowd, no second main character, no one near the companion, no text, no UI, no speech bubbles, no visible camera or photographic device.
 ```
 
 ## API / Data Model
@@ -176,7 +193,8 @@ CREATE TABLE story_moment_images (
    - message 不属于当前用户时返回 404/403。
    - 同一 message 重复点击返回已有 pending/succeeded 记录。
    - `prompt_snapshot` 包含 scene、time slot、companion、emotion 和净化后的单人姿态，不直接包含会引入第二人的 user action 原文。
-   - DeepSeek / `image_prompt_assist` 不可用或返回非法 JSON 时仍能创建 job，并使用安全单人姿态 fallback，不回退旧 narration 抽取。
+   - 任何路径（extractor 成功/失败/兜底）的 `prompt_snapshot` 都必须含 `Outfit (overrides...)` 与 `Change the hairstyle to:` 行（v1.5 强制换装保证）。
+   - DeepSeek / `image_prompt_assist` 不可用或返回非法 JSON 时先升温重试一次，仍失败则使用 场所×尺度 预设造型 fallback，不回退旧 narration 抽取。
 2. Job：
    - `chat_moment_image` job 入队并调用 image-gen provider，RunningHub 请求包含 signed URL 和 prompt。
    - job succeeded 后更新 `story_moment_images.output_key/status`。
@@ -185,6 +203,8 @@ CREATE TABLE story_moment_images (
    - 咖啡场景最终 prompt 捕捉杯子、手部、桌前姿态。
    - 邀请换场景最终 prompt 捕捉 companion 的单人转身、门口或回望动作。
    - LLM 输出多人风险词时 validator 拦截并 fallback。
+   - public 场景措辞允许远景虚化路人但保留单主体守卫；private 场景维持严格无人措辞。
+   - committed + 卧室/酒店类 private 场景兜底造型为浴巾/真丝睡裙档；first_contact 同场景为居家保守档。
 3. 前端：
    - 最新 companion message 有 scene context 时显示小相机按钮。
    - queued/processing/succeeded/failed 状态展示正确。

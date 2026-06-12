@@ -21,6 +21,7 @@ import {
   type StoryMomentImageRow,
 } from "../image-gen/moment-image";
 import { extractMomentVisualAction } from "../image-gen/moment-action";
+import { classifyMomentScene } from "../image-gen/moment-style";
 import { loadCompanionForChat, loadSceneForChat, parseSceneTags } from "./loaders";
 
 /**
@@ -203,6 +204,10 @@ async function composePrompt(
 
   const stage = deriveStage(relationship?.dimensions ?? { ...ZERO_DIMENSIONS }).stage;
   const tz = await loadUserTimezone(env, user.id);
+  const sceneTags = parseSceneTags(scene?.tags ?? null);
+  const { venue, privacy } = classifyMomentScene(
+    scene ? { name: scene.name, tags: sceneTags } : null,
+  );
 
   const ctx: MomentPromptContext = {
     activity: activity
@@ -220,10 +225,11 @@ async function composePrompt(
     },
     emotion: message.emotion,
     previousUserText: previousUser,
+    privacy,
     scene: {
       mood: scene?.mood ?? "private conversation",
       name: scene?.name ?? "Private chat",
-      tags: parseSceneTags(scene?.tags ?? null),
+      tags: sceneTags,
     },
     sourceReply: message.content,
     stage,
@@ -233,11 +239,14 @@ async function composePrompt(
 
   const visualAction = await extractMomentVisualAction(env, {
     activity: ctx.activity,
+    companionGender: ctx.companion.gender,
     companionName: ctx.companion.name,
     emotion: ctx.emotion,
     previousUserText: ctx.previousUserText,
     sceneMood: ctx.scene.mood,
     sceneName: ctx.scene.name,
+    scenePrivacy: privacy,
+    sceneVenue: venue,
     sourceReply: ctx.sourceReply,
     stage: ctx.stage,
     userId: user.id,

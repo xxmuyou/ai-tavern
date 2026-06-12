@@ -19,6 +19,13 @@ import {
 } from "./cutout";
 import { CHAT_MOMENT_WORKFLOW_KEY } from "./workflow-keys";
 import type { MomentVisualAction } from "./moment-action";
+import {
+  classifyMomentVenue,
+  presetMomentStyle,
+  stageStyleTier,
+  type MomentScenePrivacy,
+  type MomentVenue,
+} from "./moment-style";
 
 /**
  * Chat moment image pipeline (spec-027).
@@ -65,6 +72,8 @@ export type MomentPromptContext = {
     relationship_role: string | null;
   };
   scene: { name: string; mood: string; tags: string[] };
+  /** public scenes allow distant blurred passersby; private scenes stay empty. */
+  privacy: MomentScenePrivacy;
   timeSlot: string;
   stage: RelationshipStage;
   emotion: string | null;
@@ -78,12 +87,43 @@ export type MomentPromptContext = {
   storyBeat: { title: string; objective: string } | null;
 };
 
-function fallbackMomentPose(ctx: MomentPromptContext): MomentVisualAction {
+function resolveMomentVenue(ctx: MomentPromptContext): MomentVenue {
+  return classifyMomentVenue(ctx.scene.name, ctx.scene.tags, ctx.privacy);
+}
+
+function presetFallbackAction(ctx: MomentPromptContext): MomentVisualAction {
+  const style = presetMomentStyle(
+    resolveMomentVenue(ctx),
+    stageStyleTier(ctx.stage),
+    ctx.companion.gender,
+  );
   return {
     body_pose: "standing or seated alone in the scene, posture matching the emotional tone",
     expression: `${ctx.emotion ?? "neutral"} expression`,
     gaze: "eyes toward the viewer",
-    outfit: "an outfit that naturally fits the scene",
+    hairstyle: style.hairstyle,
+    ...(style.makeup ? { makeup: style.makeup } : {}),
+    outfit: style.outfit,
+  };
+}
+
+// The restyle is the whole point of the moment image (spec-027): even when the
+// extractor succeeded but under-delivered, missing outfit/hairstyle fall back
+// to the venue/stage preset so the look always changes from the reference.
+function ensureRestyle(
+  action: MomentVisualAction,
+  ctx: MomentPromptContext,
+): MomentVisualAction {
+  if (action.outfit?.trim() && action.hairstyle?.trim()) return action;
+  const style = presetMomentStyle(
+    resolveMomentVenue(ctx),
+    stageStyleTier(ctx.stage),
+    ctx.companion.gender,
+  );
+  return {
+    ...action,
+    hairstyle: action.hairstyle?.trim() ? action.hairstyle : style.hairstyle,
+    outfit: action.outfit?.trim() ? action.outfit : style.outfit,
   };
 }
 
@@ -100,6 +140,12 @@ function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void 
     lines.push(
       `Outfit (overrides any clothing mentioned in the reference): ${action.outfit.trim()}.`,
     );
+  }
+  if (action.hairstyle?.trim()) {
+    lines.push(`Change the hairstyle to: ${action.hairstyle.trim()}.`);
+  }
+  if (action.makeup?.trim()) {
+    lines.push(`Makeup: ${action.makeup.trim()}.`);
   }
   if (action.gaze?.trim()) {
     lines.push(`Gaze: ${action.gaze.trim()}.`);
@@ -124,17 +170,24 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   // not a caption-driven generator: it must read as a short, imperative edit of
   // the companion's reference image. The old verbose, multi-paragraph form (plus
   // free-form user/story text) was what summoned background crowds.
+  // Public scenes relax the absolute "no other people" rule to distant blurred
+  // passersby for realism; private scenes keep the original strict wording.
+  const isPublic = ctx.privacy === "public";
   lines.push(
     "Edit the input image into a single-character scene image of the same companion.",
     "Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene.",
-    "Keep exactly one person in the image — this companion only. Do not add any other people, a second person, the user, an opponent, a crowd, bystanders, reflections of another person, or duplicate bodies.",
+    isPublic
+      ? "Keep exactly one person in focus — this companion only. Do not add a second main subject, the user, an opponent, or anyone near the companion; no duplicate bodies."
+      : "Keep exactly one person in the image — this companion only. Do not add any other people, a second person, the user, an opponent, a crowd, bystanders, reflections of another person, or duplicate bodies.",
     "The companion looks directly at the viewer, both eyes meeting the viewer's gaze; do not render any camera, phone, or photographic device.",
   );
 
-  const momentPose = ctx.visualAction ?? fallbackMomentPose(ctx);
+  const momentPose = ensureRestyle(ctx.visualAction ?? presetFallbackAction(ctx), ctx);
   pushMomentPoseLines(lines, momentPose);
   lines.push(
-    "Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.",
+    isPublic
+      ? "Exactly one person in focus: this companion only. The viewer/user is not visible. No second main subject, no hand from another person."
+      : "Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.",
   );
 
   // The companion's face is locked by the reference image the edit model holds,
@@ -149,7 +202,11 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
 
   const sceneTags = scene.tags.length ? `, ${scene.tags.join(", ")}` : "";
   lines.push(
-    `Change the background to: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}. The background is empty of other people.`,
+    `Change the background to: ${scene.name}, ${ctx.timeSlot}, ${scene.mood} atmosphere${sceneTags}. ${
+      isPublic
+        ? "A few distant passersby may appear far behind, small and blurred, none near the companion, no other face in focus."
+        : "The background is empty of other people."
+    }`,
   );
 
   if (ctx.emotion && !momentPose.expression?.trim()) {
@@ -166,7 +223,9 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   }
 
   lines.push(
-    "Single companion only, natural composition, no other people, no crowd, no second person, no extra characters, no text, no UI, no speech bubbles, no visible camera or photographic device.",
+    isPublic
+      ? "Single companion in focus, natural composition, no crowd, no second main character, no one near the companion, no text, no UI, no speech bubbles, no visible camera or photographic device."
+      : "Single companion only, natural composition, no other people, no crowd, no second person, no extra characters, no text, no UI, no speech bubbles, no visible camera or photographic device.",
   );
 
   return lines.join("\n");

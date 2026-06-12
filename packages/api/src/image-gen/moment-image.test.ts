@@ -257,6 +257,7 @@ function sampleContext(): MomentPromptContext {
     },
     emotion: "warm",
     previousUserText: "I ordered us two coffees",
+    privacy: "public" as const,
     scene: { mood: "warm cafe", name: "Pier Coffee Shop", tags: ["cozy", "harbor"] },
     sourceReply: "<narration>Maya wraps her hands around the cup.</narration> Thank you.",
     stage: "familiar",
@@ -280,7 +281,14 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
     expect(prompt).toContain("Gaze: eyes toward the viewer");
     expect(prompt).toContain("Expression: warm expression");
-    expect(prompt).toContain("Outfit (overrides any clothing mentioned in the reference): an outfit that naturally fits the scene");
+    // Fallback styling comes from the venue/stage preset (harbor tags ->
+    // outdoor_public, familiar stage -> reserved tier), never a vague default.
+    expect(prompt).toContain(
+      "Outfit (overrides any clothing mentioned in the reference): playful sundress with sneakers",
+    );
+    expect(prompt).toContain("Change the hairstyle to: high ponytail with a ribbon");
+    expect(prompt).toContain("Makeup: fresh light makeup");
+    expect(prompt).not.toContain("an outfit that naturally fits the scene");
     expect(prompt).not.toContain("Maya wraps her hands around the cup");
     expect(prompt).toContain("no text, no UI");
   });
@@ -308,15 +316,58 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("decide whether to show her sketch");
   });
 
-  it("constrains scene moments to the companion only, looking at viewer", () => {
+  it("constrains public scene moments to one companion in focus, looking at viewer", () => {
     const prompt = buildMomentPrompt(sampleContext());
     expect(prompt).toContain("single-character scene image");
-    expect(prompt).toContain("Keep exactly one person in the image — this companion only");
-    expect(prompt).toContain("Do not add any other people, a second person, the user, an opponent");
+    expect(prompt).toContain("Keep exactly one person in focus — this companion only");
+    expect(prompt).toContain("Do not add a second main subject, the user, an opponent");
     expect(prompt).toContain("looks directly at the viewer");
     expect(prompt).toContain("do not render any camera, phone, or photographic device");
-    expect(prompt).toContain("no extra characters");
+    expect(prompt).toContain("no second main character");
     expect(prompt).not.toContain("first-person perspective from the user's point of view");
+  });
+
+  it("allows distant blurred passersby in public scenes only", () => {
+    const prompt = buildMomentPrompt(sampleContext());
+    expect(prompt).toContain(
+      "A few distant passersby may appear far behind, small and blurred, none near the companion",
+    );
+    expect(prompt).not.toContain("The background is empty of other people");
+  });
+
+  it("keeps the strict no-other-people wording for private scenes", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      privacy: "private",
+      scene: {
+        mood: "hushed night suite",
+        name: "Hotel Suite",
+        tags: ["hotel", "bedroom", "intimate", "night"],
+      },
+    });
+    expect(prompt).toContain("Keep exactly one person in the image — this companion only");
+    expect(prompt).toContain("Do not add any other people, a second person, the user, an opponent");
+    expect(prompt).toContain("The background is empty of other people");
+    expect(prompt).toContain("no extra characters");
+    expect(prompt).not.toContain("distant passersby");
+  });
+
+  it("unlocks bolder fallback styling for intimate stages in private bedroom scenes", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      privacy: "private",
+      scene: {
+        mood: "hushed night suite",
+        name: "Hotel Suite",
+        tags: ["hotel", "bedroom", "intimate", "night"],
+      },
+      stage: "committed",
+      visualAction: null,
+    });
+    expect(prompt).toContain(
+      "Outfit (overrides any clothing mentioned in the reference): white bath towel wrapped around the body",
+    );
+    expect(prompt).toContain("Change the hairstyle to: damp tousled hair");
   });
 
   it("renders a scene-appropriate outfit from the visual action", () => {
@@ -330,6 +381,25 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain(
       "Outfit (overrides any clothing mentioned in the reference): light summer dress",
     );
+    // The extractor delivered no hairstyle, so the preset fills it in to make
+    // sure the look still visibly changes from the reference image.
+    expect(prompt).toContain("Change the hairstyle to: high ponytail with a ribbon");
+  });
+
+  it("keeps extractor styling untouched when outfit and hairstyle are present", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      visualAction: {
+        body_pose: "leaning against the pier railing",
+        hairstyle: "wind-blown loose waves",
+        outfit: "flowy white sundress",
+      },
+    });
+    expect(prompt).toContain(
+      "Outfit (overrides any clothing mentioned in the reference): flowy white sundress",
+    );
+    expect(prompt).toContain("Change the hairstyle to: wind-blown loose waves");
+    expect(prompt).not.toContain("playful sundress with sneakers");
   });
 
   it("prioritizes a sanitized visual action without including the user's raw action", () => {
@@ -365,6 +435,9 @@ describe("buildMomentPrompt", () => {
     });
 
     expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
+    expect(prompt).toContain(
+      "Outfit (overrides any clothing mentioned in the reference): playful sundress with sneakers",
+    );
     expect(prompt).not.toContain("slid off");
     expect(prompt).not.toContain("lap");
     expect(prompt).not.toContain("sheet ar");
