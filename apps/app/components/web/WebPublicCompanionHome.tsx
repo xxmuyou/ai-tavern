@@ -11,7 +11,7 @@ import { DiscoverRail, DiscoverSection } from '@/components/web/discover/Discove
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
-import { usePublicCompanions, type CompanionDiscoveryStyle } from '@/hooks/use-companions';
+import { usePublicCompanions } from '@/hooks/use-companions';
 import { useSession } from '@/hooks/use-session';
 
 type GenderFilter = 'female' | 'male';
@@ -19,11 +19,6 @@ type GenderFilter = 'female' | 'male';
 const GENDER_OPTIONS: { id: GenderFilter; label: string }[] = [
   { id: 'female', label: 'Female' },
   { id: 'male', label: 'Male' },
-];
-
-const STYLE_OPTIONS: { id: CompanionDiscoveryStyle; label: string }[] = [
-  { id: 'anime', label: 'Anime' },
-  { id: 'realistic', label: 'Realistic' },
 ];
 
 const COMMUNITY_PAGE_SIZE = 30;
@@ -34,7 +29,6 @@ export function WebPublicCompanionHome() {
   const router = useRouter();
   const { session } = useSession();
   const [gender, setGender] = useState<GenderFilter>('female');
-  const [artStyle, setArtStyle] = useState<CompanionDiscoveryStyle>('anime');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -46,12 +40,11 @@ export function WebPublicCompanionHome() {
   }, [query]);
 
   const popular = usePublicCompanions({
-    artStyle,
     gender,
     q: debouncedQuery || undefined,
     sort: 'popular',
   });
-  const recent = usePublicCompanions({ artStyle, gender, sort: 'recent' });
+  const recent = usePublicCompanions({ gender, sort: 'recent' });
 
   const popularItems = useMemo(
     () => (popular.data?.items ?? []).filter((item) => item.art_url),
@@ -147,11 +140,6 @@ export function WebPublicCompanionHome() {
                 value={gender}
                 onChange={(value) => setGender(value as GenderFilter)}
               />
-              <SegmentedControl
-                options={STYLE_OPTIONS}
-                value={artStyle}
-                onChange={(value) => setArtStyle(value as CompanionDiscoveryStyle)}
-              />
             </View>
             {topTags.length > 0 ? (
               <View className="flex-row flex-wrap items-center gap-2">
@@ -220,10 +208,8 @@ export function WebPublicCompanionHome() {
             )
           ) : popularItems.length === 0 ? (
             <DarkState
-              actionLabel="Switch style"
               description="No companions match this combination yet."
               icon="moon-outline"
-              onAction={() => setArtStyle(artStyle === 'anime' ? 'realistic' : 'anime')}
               title="No one in this room"
             />
           ) : (

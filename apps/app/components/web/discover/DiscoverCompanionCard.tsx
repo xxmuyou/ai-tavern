@@ -12,6 +12,8 @@ import { cn } from '../ui/cn';
 export type DiscoverCompanionCardProps = {
   companion: CompanionListItem;
   className?: string;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
   onPress: () => void;
   /** Large fixed-width variant for horizontal scrollers. */
   size?: 'md' | 'lg';
@@ -21,7 +23,16 @@ export type DiscoverCompanionCardProps = {
   topLeftLabel?: string;
 };
 
-export function DiscoverCompanionCard({ companion, className, onPress, rank, size = 'md', topLeftLabel }: DiscoverCompanionCardProps) {
+export function DiscoverCompanionCard({
+  companion,
+  className,
+  isFavorite,
+  onPress,
+  onToggleFavorite,
+  rank,
+  size = 'md',
+  topLeftLabel,
+}: DiscoverCompanionCardProps) {
   const imageSource = mediaSource(companion.art_url);
   const imageUri = resolveImageUri(imageSource);
   const tags = (companion.tags ?? []).slice(0, 2);
@@ -74,6 +85,21 @@ export function DiscoverCompanionCard({ companion, className, onPress, rank, siz
             <Ionicons color={PALETTE.ember} name="flame" size={11} />
             <Text className="font-mono text-[11px] font-medium text-app-ink/85">{formatCount(companion.play_count)}</Text>
           </View>
+        ) : null}
+
+        {onToggleFavorite ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation?.();
+              onToggleFavorite();
+            }}
+            className="absolute bottom-2 right-2 h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/55 backdrop-blur hover:border-app-rose/50"
+          >
+            <Ionicons color={isFavorite ? '#FF4D7E' : '#F5EDF3'} name={isFavorite ? 'heart' : 'heart-outline'} size={16} />
+          </Pressable>
         ) : null}
       </View>
 
