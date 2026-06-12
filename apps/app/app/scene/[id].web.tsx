@@ -5,6 +5,7 @@ import { Image, Text, View } from 'react-native';
 
 import { mediaSource, resolveStoryChoice } from '@/api/companion-client';
 import type { SceneCompanionPresent, StoryChoice, StoryChoiceResolveResponse } from '@/api/types';
+import { SceneArtwork } from '@/components/SceneArtwork';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { ActivityButtons } from '@/components/ActivityButtons';
 import { DailyStateSummary } from '@/components/DailyStateSummary';
@@ -111,19 +112,7 @@ export default function WebSceneDetailScreen() {
       <View className="grid grid-cols-1 gap-8 xl:grid-cols-[1.4fr_1fr]">
         {/* Hero card */}
         <WebCard padding="none" className="overflow-hidden">
-          <View className="relative aspect-[16/9] w-full overflow-hidden bg-white/[0.075]">
-            {imageSource ? (
-              <>
-                <Image source={imageSource} resizeMode="cover" blurRadius={16} className="absolute inset-0 h-full w-full opacity-30" />
-                <View pointerEvents="none" className="absolute inset-0 bg-app-twilight/25" />
-                <Image source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
-              </>
-            ) : (
-              <View className="h-full w-full items-center justify-center bg-gradient-warm">
-                <Text className="font-serif text-display-lg text-app-rose-deep/40">{scene.name.slice(0, 1)}</Text>
-              </View>
-            )}
-          </View>
+          <SceneArtwork label={scene.name} source={imageSource} />
           <View className="gap-5 p-7">
             <View>
               <Text className="text-overline text-app-rose-deep">A place to be</Text>
@@ -247,9 +236,9 @@ function SceneActionCard({
   return (
     <WebCard padding="lg" className="gap-5">
       <View className="flex-row gap-4">
-        <View className="h-24 w-20 items-center justify-end overflow-hidden rounded-2xl bg-app-rose-soft">
+        <View className="h-28 w-24 items-center justify-end overflow-hidden rounded-2xl bg-app-rose-soft">
           {portrait ? (
-            <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" />
+            <Image source={portrait} resizeMode="contain" className="h-full w-full" />
           ) : (
             <Text className="font-serif text-title text-app-rose-deep">
               {companion.name.slice(0, 1).toUpperCase()}

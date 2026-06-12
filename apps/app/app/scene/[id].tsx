@@ -1,7 +1,7 @@
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { mediaSource, resolveStoryChoice } from '@/api/companion-client';
 import type { StoryChoice, StoryChoiceResolveResponse } from '@/api/types';
@@ -9,6 +9,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { EventPopup } from '@/components/EventPopup';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { SceneArtwork } from '@/components/SceneArtwork';
 import { SceneCompanionCard } from '@/components/SceneCompanionCard';
 import { SceneDailyCompanion } from '@/components/SceneDailyCompanion';
 import { StoryMomentPopup } from '@/components/StoryMomentPopup';
@@ -103,19 +104,7 @@ export default function SceneDetailScreen() {
       <ScrollView className="flex-1">
         <View className="mx-auto w-full max-w-4xl gap-5 px-4 py-6">
           <View className="overflow-hidden rounded-lg border border-app-line bg-app-card">
-            <View className="relative aspect-video w-full overflow-hidden bg-app-primarySoft">
-              {imageSource ? (
-                <>
-                  <Image source={imageSource} resizeMode="cover" blurRadius={14} className="absolute inset-0 h-full w-full opacity-35" />
-                  <View pointerEvents="none" className="absolute inset-0 bg-app-bg/35" />
-                  <Image source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
-                </>
-              ) : (
-                <View className="h-full w-full items-center justify-center bg-app-primarySoft">
-                  <Text className="text-lg font-semibold text-app-primary">Scene artwork pending</Text>
-                </View>
-              )}
-            </View>
+            <SceneArtwork fallbackLabel="Scene artwork pending" label={scene.name} source={imageSource} />
             <View className="gap-3 p-5">
               <Text className="text-3xl font-semibold text-app-text">{scene.name}</Text>
               <Text className="text-base leading-6 text-app-muted">{scene.mood}</Text>

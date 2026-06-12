@@ -7,6 +7,7 @@ import type { TodayRecommendation } from '@/api/types';
 import { ActivityButtons } from '@/components/ActivityButtons';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { SceneArtwork } from '@/components/SceneArtwork';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useToday } from '@/hooks/use-today';
 import { deriveGuidedAction } from '@/utils/guided-action';
@@ -88,8 +89,8 @@ function TodayCard({
 
   return (
     <View className="overflow-hidden rounded-lg border border-app-line bg-app-card">
-      <Pressable accessibilityRole="button" onPress={onOpenScene} className="aspect-video bg-app-primarySoft">
-        {scene ? <Image source={scene} resizeMode="cover" className="h-full w-full" /> : null}
+      <Pressable accessibilityRole="button" onPress={onOpenScene}>
+        <SceneArtwork label={recommendation.scene.name} source={scene} />
       </Pressable>
       <View className="gap-4 p-4">
         <View className="flex-row gap-3">
@@ -98,7 +99,7 @@ function TodayCard({
             onPress={onOpenCompanion}
             className="h-20 w-20 items-center justify-end overflow-hidden rounded-lg bg-app-primarySoft"
           >
-            {portrait ? <Image source={portrait} resizeMode="contain" className="h-[112%] w-[112%]" /> : null}
+            {portrait ? <Image source={portrait} resizeMode="contain" className="h-full w-full" /> : null}
           </Pressable>
           <View className="min-w-0 flex-1">
             <Text numberOfLines={1} className="text-xl font-semibold text-app-text">{recommendation.companion.name}</Text>

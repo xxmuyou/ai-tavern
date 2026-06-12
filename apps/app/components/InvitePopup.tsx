@@ -1,8 +1,9 @@
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
 import { mediaSource } from '@/api/companion-client';
 import type { InviteTarget } from '@/api/types';
+import { SceneArtwork } from '@/components/SceneArtwork';
 
 type InvitePopupProps = {
   visible: boolean;
@@ -61,11 +62,7 @@ export function InvitePopup({
                         onPress={() => onSelect(target)}
                         className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 active:bg-app-rose-soft"
                       >
-                        <View className="h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-app-primarySoft">
-                          {thumb ? (
-                            <Image source={thumb} resizeMode="contain" className="h-full w-full" />
-                          ) : null}
-                        </View>
+                        <SceneArtwork className="h-16 w-28 rounded-lg" label={target.name} source={thumb} />
                         <View className="flex-1">
                           <Text className="text-base font-medium text-app-text">{target.name}</Text>
                           <Text numberOfLines={1} className="text-xs text-app-ink-soft">

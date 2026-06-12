@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { favoriteCompanion, mediaSource } from '@/api/companion-client';
 import type { Scene } from '@/api/types';
 
+import { SceneArtwork } from '@/components/SceneArtwork';
 import { DiscoverCompanionCard } from '@/components/web/discover/DiscoverCompanionCard';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebEmptyState, WebLoading, WebTabs, WebTag } from '@/components/web/ui';
@@ -256,24 +257,13 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
         scene.unlocked ? 'border-app-line hover:border-app-rose' : 'border-app-line hover:border-app-ember'
       }`}
     >
-      <View className="relative aspect-[3/2] overflow-hidden bg-app-sunken">
-        {imageSource ? (
-          <>
-            <Image source={imageSource} resizeMode="cover" blurRadius={14} className="absolute inset-0 h-full w-full opacity-35" />
-            <View pointerEvents="none" className="absolute inset-0 bg-black/25" />
-            <Image accessibilityLabel={scene.name} source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
-          </>
-        ) : (
-          <View className="h-full w-full items-center justify-center bg-app-rose-soft">
-            <Ionicons color="#FF8FAD" name="map-outline" size={28} />
-          </View>
-        )}
+      <SceneArtwork label={scene.name} source={imageSource}>
         {!scene.unlocked ? <View pointerEvents="none" className="absolute inset-0 bg-black/20" /> : null}
         <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-app-sunken px-2.5 py-1">
           <Ionicons color={scene.unlocked ? '#8EF0BD' : '#FFB066'} name={scene.unlocked ? 'lock-open-outline' : 'lock-closed'} size={12} />
           <Text className="text-caption font-semibold text-white">{scene.unlocked ? 'Open' : 'Locked'}</Text>
         </View>
-      </View>
+      </SceneArtwork>
       <View className="gap-3 p-3">
         <View>
           <Text className="font-serif text-title-sm text-white" numberOfLines={1}>{scene.name}</Text>

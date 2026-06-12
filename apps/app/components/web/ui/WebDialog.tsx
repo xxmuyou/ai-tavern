@@ -11,7 +11,7 @@ export type WebDialogProps = {
   footer?: ReactNode;
   onClose: () => void;
   open: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   surface?: 'default' | 'glass' | 'solid';
   title: string;
 };
@@ -20,6 +20,7 @@ const sizeClass = {
   sm: 'max-w-sm',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  xl: 'max-w-5xl',
 };
 
 const surfaceClass = {

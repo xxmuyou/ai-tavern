@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { mediaSource } from '@/api/companion-client';
 import type { Scene } from '@/api/types';
+import { SceneArtwork } from '@/components/SceneArtwork';
 
 type SceneCardProps = {
   onPress: () => void;
@@ -15,25 +16,14 @@ export function SceneCard({ onPress, scene }: SceneCardProps) {
 
   return (
     <Pressable accessibilityRole="button" onPress={onPress} className="overflow-hidden rounded-lg border border-app-line bg-app-card">
-      <View className="relative aspect-video w-full overflow-hidden bg-app-primarySoft">
-        {imageSource ? (
-          <>
-            <Image source={imageSource} resizeMode="cover" blurRadius={14} className="absolute inset-0 h-full w-full opacity-35" />
-            <View pointerEvents="none" className="absolute inset-0 bg-app-bg/35" />
-            <Image source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
-          </>
-        ) : (
-          <View className="h-full w-full items-center justify-center bg-app-primarySoft">
-            <Ionicons color="#1E6B52" name="map-outline" size={40} />
-          </View>
-        )}
+      <SceneArtwork label={scene.name} source={imageSource}>
         {!scene.unlocked ? (
           <View className="absolute right-3 top-3 flex-row items-center gap-1 rounded-full bg-app-text px-3 py-1">
             <Ionicons color="#FFFFFF" name="lock-closed" size={14} />
             <Text className="text-xs font-semibold text-white">Locked</Text>
           </View>
         ) : null}
-      </View>
+      </SceneArtwork>
 
       <View className="gap-3 p-4">
         <View>

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import { API_BASE_URL, favoriteCompanion, isApiRequestError } from '@/api/companion-client';
@@ -9,6 +9,7 @@ import type { CompanionListItem } from '@/api/types';
 import { DiscoverCompanionCard } from '@/components/web/discover/DiscoverCompanionCard';
 import { DiscoverRail, DiscoverSection } from '@/components/web/discover/DiscoverSection';
 import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebDialog } from '@/components/web/ui';
 import { BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
 import { DISCOVER_ROUTE } from '@/constants/routes';
@@ -16,6 +17,7 @@ import { useCompanions, usePublicCompanions } from '@/hooks/use-companions';
 import { useSession } from '@/hooks/use-session';
 
 type GenderFilter = 'female' | 'male';
+type DiscoverBrowseDialog = 'community' | 'official' | 'trending';
 
 const GENDER_OPTIONS: { id: GenderFilter; label: string }[] = [
   { id: 'female', label: 'Female' },
@@ -26,7 +28,7 @@ const COMMUNITY_PAGE_SIZE = 30;
 const OFFICIAL_PAGE_SIZE = 12;
 const TRENDING_PAGE_SIZE = 10;
 const TOP_TAG_COUNT = 10;
-const DISCOVERY_GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9';
+const DISCOVERY_GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
 
 export function WebPublicCompanionHome() {
   const router = useRouter();
@@ -35,9 +37,7 @@ export function WebPublicCompanionHome() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [communityVisible, setCommunityVisible] = useState(COMMUNITY_PAGE_SIZE);
-  const [officialVisible, setOfficialVisible] = useState(OFFICIAL_PAGE_SIZE);
-  const [trendingVisible, setTrendingVisible] = useState(TRENDING_PAGE_SIZE);
+  const [browseDialog, setBrowseDialog] = useState<DiscoverBrowseDialog | null>(null);
   const [favoriteBusyId, setFavoriteBusyId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,9 +46,7 @@ export function WebPublicCompanionHome() {
   }, [query]);
 
   useEffect(() => {
-    setCommunityVisible(COMMUNITY_PAGE_SIZE);
-    setOfficialVisible(OFFICIAL_PAGE_SIZE);
-    setTrendingVisible(TRENDING_PAGE_SIZE);
+    setBrowseDialog(null);
   }, [debouncedQuery, gender, selectedTag]);
 
   const popular = usePublicCompanions({
@@ -87,10 +85,9 @@ export function WebPublicCompanionHome() {
     () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url),
     [officialFeatured.data],
   );
-  const officialVisibleCount = Math.min(officialVisible, officialFeaturedItemsAll.length);
   const officialFeaturedItems = useMemo(
-    () => officialFeaturedItemsAll.slice(0, officialVisibleCount),
-    [officialFeaturedItemsAll, officialVisibleCount],
+    () => officialFeaturedItemsAll.slice(0, OFFICIAL_PAGE_SIZE),
+    [officialFeaturedItemsAll],
   );
   const rankedTrendingItems = useMemo(
     () => (rankedTrending.data?.items ?? []).filter((item) => item.art_url),
@@ -126,14 +123,39 @@ export function WebPublicCompanionHome() {
     [favorites.data?.items],
   );
   const trendingItemsAll = rankedTrendingItems.filter((item) => !pinnedIds.has(item.id));
-  const trendingVisibleCount = Math.min(trendingVisible, trendingItemsAll.length);
-  const trending = trendingItemsAll.slice(0, trendingVisibleCount);
+  const trending = trendingItemsAll.slice(0, TRENDING_PAGE_SIZE);
   const newArrivals = recentItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
   const community = popularItems.filter((item) => item.source === 'user' && !pinnedIds.has(item.id));
-  const communityVisibleCount = Math.min(communityVisible, community.length);
-  const officialRemaining = officialFeaturedItemsAll.length - officialVisibleCount;
-  const trendingRemaining = trendingItemsAll.length - trendingVisibleCount;
-  const communityRemaining = community.length - communityVisibleCount;
+  const communityPreview = community.slice(0, COMMUNITY_PAGE_SIZE);
+  const officialRemaining = Math.max(officialFeaturedItemsAll.length - officialFeaturedItems.length, 0);
+  const trendingRemaining = Math.max(trendingItemsAll.length - trending.length, 0);
+  const communityRemaining = Math.max(community.length - communityPreview.length, 0);
+
+  const activeDialog = useMemo(() => {
+    if (!browseDialog) return null;
+    if (browseDialog === 'official') {
+      return {
+        description: 'Every official public companion in this filter.',
+        icon: 'ribbon' as const,
+        items: officialFeaturedItemsAll,
+        title: 'Official Picks',
+      };
+    }
+    if (browseDialog === 'trending') {
+      return {
+        description: 'The full rising list for the current gender filter.',
+        icon: 'flame' as const,
+        items: trendingItemsAll,
+        title: 'Trending',
+      };
+    }
+    return {
+      description: 'All public companions published by players in this filter.',
+      icon: 'planet-outline' as const,
+      items: community,
+      title: 'Community creations',
+    };
+  }, [browseDialog, community, officialFeaturedItemsAll, trendingItemsAll]);
 
   function openCompanion(companion: CompanionListItem) {
     const target = `/companion/${encodeURIComponent(companion.id)}` as Href;
@@ -312,13 +334,9 @@ export function WebPublicCompanionHome() {
 
               {officialFeaturedItems.length > 0 ? (
                 <DiscoverSection
-                  actionLabel={officialRemaining > 0 ? `Show more (${officialRemaining} left)` : undefined}
+                  actionLabel={officialRemaining > 0 ? `Show all (${officialFeaturedItemsAll.length})` : undefined}
                   icon="ribbon"
-                  onAction={
-                    officialRemaining > 0
-                      ? () => setOfficialVisible((count) => Math.min(count + OFFICIAL_PAGE_SIZE, officialFeaturedItemsAll.length))
-                      : undefined
-                  }
+                  onAction={officialRemaining > 0 ? () => setBrowseDialog('official') : undefined}
                   subtitle="Curated by the house"
                   title="Official Picks"
                 >
@@ -332,14 +350,10 @@ export function WebPublicCompanionHome() {
 
               {trending.length > 0 ? (
                 <DiscoverSection
-                  actionLabel={trendingRemaining > 0 ? `Show more (${trendingRemaining} left)` : undefined}
+                  actionLabel={trendingRemaining > 0 ? `Show all (${trendingItemsAll.length})` : undefined}
                   icon="flame"
                   iconColor={PALETTE.ember}
-                  onAction={
-                    trendingRemaining > 0
-                      ? () => setTrendingVisible((count) => Math.min(count + TRENDING_PAGE_SIZE, trendingItemsAll.length))
-                      : undefined
-                  }
+                  onAction={trendingRemaining > 0 ? () => setBrowseDialog('trending') : undefined}
                   subtitle="Rising picks"
                   title="Trending"
                 >
@@ -369,16 +383,16 @@ export function WebPublicCompanionHome() {
                   title="Community creations"
                 >
                   <View className={DISCOVERY_GRID_CLASS}>
-                    {community.slice(0, communityVisibleCount).map((companion) => renderCard(companion))}
+                    {communityPreview.map((companion) => renderCard(companion))}
                   </View>
                   {communityRemaining > 0 ? (
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => setCommunityVisible((count) => Math.min(count + COMMUNITY_PAGE_SIZE, community.length))}
+                      onPress={() => setBrowseDialog('community')}
                       className="mt-2 min-h-11 items-center justify-center self-center rounded-xl border border-white/15 px-8 hover:border-app-rose/50 hover:bg-app-rose-soft/40"
                     >
                       <Text className="text-body-sm font-semibold text-app-ink-soft">
-                        Show more ({communityRemaining} left)
+                        Show all ({community.length})
                       </Text>
                     </Pressable>
                   ) : null}
@@ -388,8 +402,52 @@ export function WebPublicCompanionHome() {
           )}
           </View>
         </ScrollView>
+        <PublicCompanionDialog
+          dialog={activeDialog}
+          onClose={() => setBrowseDialog(null)}
+          renderCard={renderCard}
+        />
       </View>
     </WebAppShell>
+  );
+}
+
+function PublicCompanionDialog({
+  dialog,
+  onClose,
+  renderCard,
+}: {
+  dialog: {
+    description: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    items: CompanionListItem[];
+    title: string;
+  } | null;
+  onClose: () => void;
+  renderCard: (companion: CompanionListItem) => ReactNode;
+}) {
+  return (
+    <WebDialog
+      description={dialog ? `${dialog.description} ${dialog.items.length} total.` : undefined}
+      onClose={onClose}
+      open={Boolean(dialog)}
+      size="xl"
+      title={dialog?.title ?? 'Companions'}
+    >
+      {dialog ? (
+        <View className="gap-4">
+          <View className="flex-row items-center gap-2 rounded-xl border border-app-line bg-app-solid-surface px-4 py-3">
+            <Ionicons color={PALETTE.roseDeep} name={dialog.icon} size={18} />
+            <Text className="text-body-sm font-semibold text-app-ink">{dialog.items.length} public companions</Text>
+          </View>
+          <ScrollView className="-mx-1 max-h-[70vh] px-1" contentContainerStyle={{ paddingBottom: 8 }}>
+            <View className={DISCOVERY_GRID_CLASS}>
+              {dialog.items.map((companion) => renderCard(companion))}
+            </View>
+          </ScrollView>
+        </View>
+      ) : null}
+    </WebDialog>
   );
 }
 

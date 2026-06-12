@@ -49,6 +49,7 @@ import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
+import { SceneArtwork, SceneStageBackdrop } from '@/components/SceneArtwork';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StoryActionBar } from '@/components/StoryActionBar';
 import { StreamingBubble } from '@/components/StreamingBubble';
@@ -1159,24 +1160,10 @@ export default function WebChatScreen() {
       subtitle={displaySceneName ? `${displaySceneName} · ${shownEmotion}` : `Chat · ${shownEmotion}`}
     >
       <View className="relative min-h-0 flex-1 overflow-hidden bg-[#2A2230]" style={twilightStyles.chatStage}>
-        {hasSceneBackdrop ? (
-          <>
-            <Image
-              accessibilityLabel={displaySceneName ? `Scene atmosphere: ${displaySceneName}` : 'Current scene atmosphere'}
-              resizeMode="cover"
-              source={sceneBackdropSource ?? undefined}
-              style={[StyleSheet.absoluteFill, twilightStyles.backdropBlur, twilightStyles.sceneBackdrop]}
-            />
-            <Image
-              accessibilityLabel={displaySceneName ? `Scene: ${displaySceneName}` : 'Current scene'}
-              resizeMode="contain"
-              source={sceneBackdropSource ?? undefined}
-              style={[StyleSheet.absoluteFill, twilightStyles.sceneBackdropFull]}
-            />
-          </>
-        ) : (
-          <View className="absolute inset-0 bg-[#332B3B]" style={twilightStyles.emptyBackdrop} />
-        )}
+        <SceneStageBackdrop
+          label={displaySceneName ? `Scene: ${displaySceneName}` : 'Current scene'}
+          source={sceneBackdropSource}
+        />
         <View pointerEvents="none" style={hasSceneBackdrop ? twilightStyles.stageScrim : twilightStyles.emptyStageScrim} />
 
         <View className="relative z-10 mx-auto min-h-0 w-full max-w-[1280px] flex-1 flex-col justify-center xl:flex-row xl:items-stretch">
@@ -1671,9 +1658,7 @@ function WebInviteDialog({
                   onPress={() => onSelect(target)}
                   className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 transition-colors hover:border-app-rose hover:bg-app-rose-soft active:bg-app-wine-soft"
                 >
-                  <View className="h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-app-rose-soft">
-                    {thumb ? <Image source={thumb} resizeMode="contain" className="h-full w-full" /> : null}
-                  </View>
+                  <SceneArtwork className="h-16 w-28 rounded-lg" label={target.name} source={thumb} />
                   <View className="min-w-0 flex-1">
                     <Text className="text-base font-semibold text-white">{target.name}</Text>
                     <Text className="mt-1 text-body-sm leading-5 text-app-ink-soft" numberOfLines={2}>
@@ -2013,23 +1998,6 @@ const twilightStyles = StyleSheet.create({
   } as unknown as ViewStyle,
   romanticActionButton: {
     backgroundColor: 'rgba(151, 58, 94, 0.78)',
-  } as unknown as ViewStyle,
-  backdropBlur: {
-    filter: 'blur(2px) saturate(1.12) contrast(1.04) brightness(1.08)',
-    transform: [{ scale: 1.01 }],
-  } as unknown as ImageStyle,
-  sceneBackdrop: {
-    opacity: 0.42,
-    transitionDuration: '420ms',
-    transitionProperty: 'opacity',
-  } as unknown as ImageStyle,
-  sceneBackdropFull: {
-    opacity: 0.9,
-    transitionDuration: '420ms',
-    transitionProperty: 'opacity',
-  } as unknown as ImageStyle,
-  emptyBackdrop: {
-    backgroundImage: 'radial-gradient(circle at 28% 18%, rgba(246,198,214,0.30), transparent 34%), radial-gradient(circle at 72% 24%, rgba(146,123,180,0.20), transparent 30%), linear-gradient(180deg, #3B3345 0%, #2A2531 100%)',
   } as unknown as ViewStyle,
   stageScrim: {
     backgroundColor: 'rgba(64,45,68,0.12)',
