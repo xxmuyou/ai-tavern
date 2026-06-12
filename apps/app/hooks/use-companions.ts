@@ -21,7 +21,7 @@ import { useApi } from './use-api';
 
 export type CompanionSourceFilter = CompanionSource | 'all' | 'public' | 'favorites';
 export type CompanionSort = 'recent' | 'popular';
-export type CompanionDiscoverySort = CompanionSort | 'favorites' | 'featured';
+export type CompanionDiscoverySort = CompanionSort | 'favorites' | 'featured' | 'trending';
 export type CompanionDiscoveryStyle = 'anime' | 'realistic';
 
 export function useCompanions(

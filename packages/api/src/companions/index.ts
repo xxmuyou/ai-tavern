@@ -81,6 +81,7 @@ type CompanionRow = {
   art_cutout_key: string | null;
   art_emotions: string | null;
   featured_rank?: number | null;
+  trend_rank?: number | null;
   gender: string | null;
   initial_dims: string | null;
   created_at: number;
@@ -366,6 +367,9 @@ async function listPublicCompanions(env: Env, opts: PublicListOptions): Promise<
     case "featured":
       orderBy = "c.featured_rank IS NULL ASC, c.featured_rank ASC, c.created_at ASC";
       break;
+    case "trending":
+      orderBy = "c.trend_rank IS NULL ASC, c.trend_rank ASC, c.play_count DESC, c.created_at ASC";
+      break;
     case "popular":
       orderBy = "c.play_count DESC, c.created_at ASC";
       break;
@@ -381,7 +385,7 @@ async function listPublicCompanions(env: Env, opts: PublicListOptions): Promise<
             c.appearance, c.personality, c.background, c.speech_style,
             c.relationship_role, c.tags, c.play_count, c.preferred_scenes,
             c.art_url, c.gender, c.initial_dims, c.created_at, c.updated_at,
-            c.featured_rank,
+            c.featured_rank, c.trend_rank,
             COALESCE(fav.favorite_count, 0) AS favorite_count
      FROM companions c
      LEFT JOIN (

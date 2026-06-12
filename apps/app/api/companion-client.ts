@@ -584,7 +584,7 @@ export async function listPublicCompanions(
     featured?: boolean;
     gender?: 'male' | 'female';
     q?: string;
-    sort?: 'recent' | 'popular' | 'favorites' | 'featured';
+    sort?: 'recent' | 'popular' | 'favorites' | 'featured' | 'trending';
     source?: 'official' | 'all';
   } = {},
 ): Promise<CompanionsListResponse> {

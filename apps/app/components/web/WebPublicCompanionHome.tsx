@@ -22,6 +22,8 @@ const GENDER_OPTIONS: { id: GenderFilter; label: string }[] = [
 ];
 
 const COMMUNITY_PAGE_SIZE = 30;
+const OFFICIAL_PAGE_SIZE = 12;
+const TRENDING_PAGE_SIZE = 10;
 const TOP_TAG_COUNT = 10;
 const DISCOVERY_GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 2xl:grid-cols-9';
 
@@ -33,11 +35,19 @@ export function WebPublicCompanionHome() {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [communityVisible, setCommunityVisible] = useState(COMMUNITY_PAGE_SIZE);
+  const [officialVisible, setOfficialVisible] = useState(OFFICIAL_PAGE_SIZE);
+  const [trendingVisible, setTrendingVisible] = useState(TRENDING_PAGE_SIZE);
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => clearTimeout(handle);
   }, [query]);
+
+  useEffect(() => {
+    setCommunityVisible(COMMUNITY_PAGE_SIZE);
+    setOfficialVisible(OFFICIAL_PAGE_SIZE);
+    setTrendingVisible(TRENDING_PAGE_SIZE);
+  }, [debouncedQuery, gender, selectedTag]);
 
   const popular = usePublicCompanions({
     gender,
@@ -49,6 +59,11 @@ export function WebPublicCompanionHome() {
     featured: true,
     gender,
     sort: 'featured',
+    source: 'official',
+  });
+  const rankedTrending = usePublicCompanions({
+    gender,
+    sort: 'trending',
     source: 'official',
   });
   const recent = usePublicCompanions({ gender, sort: 'recent' });
@@ -65,9 +80,17 @@ export function WebPublicCompanionHome() {
     () => (mostFavorited.data?.items ?? []).filter((item) => item.art_url).slice(0, 10),
     [mostFavorited.data],
   );
-  const officialFeaturedItems = useMemo(
-    () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url).slice(0, 12),
+  const officialFeaturedItemsAll = useMemo(
+    () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url),
     [officialFeatured.data],
+  );
+  const officialFeaturedItems = useMemo(
+    () => officialFeaturedItemsAll.slice(0, officialVisible),
+    [officialFeaturedItemsAll, officialVisible],
+  );
+  const rankedTrendingItems = useMemo(
+    () => (rankedTrending.data?.items ?? []).filter((item) => item.art_url),
+    [rankedTrending.data],
   );
 
   const topTags = useMemo(() => {
@@ -94,7 +117,8 @@ export function WebPublicCompanionHome() {
     () => new Set([...mostFavoritedItems, ...officialFeaturedItems].map((item) => item.id)),
     [mostFavoritedItems, officialFeaturedItems],
   );
-  const trending = popularItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
+  const trendingItemsAll = rankedTrendingItems.filter((item) => !pinnedIds.has(item.id));
+  const trending = trendingItemsAll.slice(0, trendingVisible);
   const newArrivals = recentItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
   const community = popularItems.filter((item) => item.source === 'user' && !pinnedIds.has(item.id));
 
@@ -254,7 +278,17 @@ export function WebPublicCompanionHome() {
               ) : null}
 
               {officialFeaturedItems.length > 0 ? (
-                <DiscoverSection icon="ribbon" subtitle="Curated by the house" title="Official Picks">
+                <DiscoverSection
+                  actionLabel={officialFeaturedItemsAll.length > officialVisible ? 'Show more' : undefined}
+                  icon="ribbon"
+                  onAction={
+                    officialFeaturedItemsAll.length > officialVisible
+                      ? () => setOfficialVisible((count) => count + OFFICIAL_PAGE_SIZE)
+                      : undefined
+                  }
+                  subtitle="Curated by the house"
+                  title="Official Picks"
+                >
                   <DiscoverRail>
                     {officialFeaturedItems.map((companion, index) => (
                       <DiscoverCompanionCard
@@ -270,7 +304,18 @@ export function WebPublicCompanionHome() {
               ) : null}
 
               {trending.length > 0 ? (
-                <DiscoverSection icon="flame" iconColor={PALETTE.ember} subtitle="Most played right now" title="Trending">
+                <DiscoverSection
+                  actionLabel={trendingItemsAll.length > trendingVisible ? 'Show more' : undefined}
+                  icon="flame"
+                  iconColor={PALETTE.ember}
+                  onAction={
+                    trendingItemsAll.length > trendingVisible
+                      ? () => setTrendingVisible((count) => count + TRENDING_PAGE_SIZE)
+                      : undefined
+                  }
+                  subtitle="Rising picks"
+                  title="Trending"
+                >
                   <DiscoverRail>
                     {trending.map((companion, index) => (
                       <DiscoverCompanionCard

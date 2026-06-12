@@ -29,6 +29,7 @@ type CompanionRow = {
   art_emotions: string | null;
   art_cutout_key?: string | null;
   featured_rank?: number | null;
+  trend_rank?: number | null;
   gender: string | null;
   initial_dims: string | null;
   created_at: number;
@@ -203,6 +204,33 @@ describe("companions module", () => {
     expect(body.items).toEqual([
       expect.objectContaining({ favorite_count: 0, id: "ryan" }),
       expect.objectContaining({ favorite_count: 0, id: "maya" }),
+    ]);
+  });
+
+  it("sorts public discovery by manual trend rank without changing play count semantics", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", { play_count: 99, trend_rank: 3 }),
+        officialCompanion("ryan", "female", { play_count: 1, trend_rank: 1 }),
+        officialCompanion("lila", "female", { play_count: 50, trend_rank: 2 }),
+        officialCompanion("sora", "female", { play_count: 1000 }),
+      ],
+      relationships: [],
+    });
+
+    const response = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public?sort=trending"),
+      env,
+      "/companions/public",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { items: Array<{ id: string; play_count: number }> };
+    expect(body.items.map((item) => [item.id, item.play_count])).toEqual([
+      ["ryan", 1],
+      ["lila", 50],
+      ["maya", 99],
+      ["sora", 1000],
     ]);
   });
 
@@ -1152,6 +1180,7 @@ function officialCompanion(
     secret: null,
     source: "official",
     speech_style: null,
+    trend_rank: null,
     voice_id: null,
     voice_speed: "medium",
     updated_at: 1747000000000,
@@ -1190,6 +1219,7 @@ function userCompanion(
     secret: null,
     source: "user",
     speech_style: null,
+    trend_rank: null,
     voice_id: null,
     voice_speed: "medium",
     updated_at: 1747000000000,
@@ -1367,6 +1397,12 @@ function queryAll<T>(
     } else if (sql.includes("c.featured_rank ASC")) {
       rowsWithCounts.sort((a, b) => (
         (a.featured_rank ?? Number.MAX_SAFE_INTEGER) - (b.featured_rank ?? Number.MAX_SAFE_INTEGER)
+        || a.created_at - b.created_at
+      ));
+    } else if (sql.includes("c.trend_rank ASC")) {
+      rowsWithCounts.sort((a, b) => (
+        (a.trend_rank ?? Number.MAX_SAFE_INTEGER) - (b.trend_rank ?? Number.MAX_SAFE_INTEGER)
+        || b.play_count - a.play_count
         || a.created_at - b.created_at
       ));
     } else if (sql.includes("c.play_count DESC")) {

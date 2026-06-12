@@ -6,6 +6,7 @@ tmp/
 dist/
 build/
 coverage/
+/previews/
 *.local
 .env
 .env.*
