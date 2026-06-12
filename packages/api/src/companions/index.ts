@@ -101,6 +101,11 @@ type RelationshipRow = {
   last_interaction_at: number;
 };
 
+type FavoriteSummaryRow = {
+  favorite_count: number;
+  is_favorite: number;
+};
+
 type CompanionListItem = {
   id: string;
   source: "official" | "user";
@@ -689,6 +694,7 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
   }
 
   const relationship = await loadRelationship(env, user.id, companionId);
+  const favoriteSummary = await loadFavoriteSummary(env, user.id, companionId);
   const effectiveArt = await loadEffectiveCompanionArtUrl(env, user.id, companionId);
   const cutoutStatus = await loadCompanionCutoutStatus(env, user.id, companionId);
   const dimensions = relationship
@@ -714,7 +720,9 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
     canonical_art_url: effectiveArt.canonical_art_url,
     gender: normalizeGender(row.gender),
     greeting: row.greeting,
+    favorite_count: favoriteSummary.favorite_count,
     id: row.id,
+    is_favorite: favoriteSummary.is_favorite === 1,
     is_public: row.is_public === 1,
     name: row.name,
     personality: row.personality,
@@ -747,6 +755,25 @@ async function getCompanion(env: Env, user: UserRecord, companionId: string): Pr
   }
 
   return jsonResponse(body);
+}
+
+async function loadFavoriteSummary(
+  env: Env,
+  userId: string,
+  companionId: string,
+): Promise<FavoriteSummaryRow> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS favorite_count,
+            MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS is_favorite
+     FROM companion_favorites
+     WHERE companion_id = ?`,
+  )
+    .bind(userId, companionId)
+    .first<{ favorite_count: number | null; is_favorite: number | null }>();
+  return {
+    favorite_count: Number(row?.favorite_count ?? 0),
+    is_favorite: Number(row?.is_favorite ?? 0),
+  };
 }
 
 async function importCard(env: Env, user: UserRecord, body: unknown): Promise<Response> {

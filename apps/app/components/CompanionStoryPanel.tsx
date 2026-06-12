@@ -19,9 +19,12 @@ type CompanionStoryPanelProps = {
   canEdit?: boolean;
   companionId: string;
   compact?: boolean;
+  tone?: PanelTone;
   showEditor?: boolean;
   onChanged?: () => void | Promise<void>;
 };
+
+type PanelTone = 'default' | 'dark';
 
 const STAGES = [
   'first_contact',
@@ -39,6 +42,7 @@ export function CompanionStoryPanel({
   compact = false,
   onChanged,
   showEditor = true,
+  tone = 'default',
 }: CompanionStoryPanelProps) {
   const arcs = useCompanionStoryArcs(companionId);
   const templates = useStoryArcTemplates();
@@ -60,6 +64,10 @@ export function CompanionStoryPanel({
   );
   const activeBeat = useMemo(() => firstActionableBeat(storyArcs), [storyArcs]);
   const hasStory = storyArcs.some((arc) => arc.beats.length > 0);
+  const isDark = tone === 'dark';
+  const titleClass = isDark ? 'text-white' : 'text-app-text';
+  const mutedClass = isDark ? 'text-rose-50/65' : 'text-app-muted';
+  const insetClass = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-app-line bg-app-bg';
 
   async function refreshAll() {
     await arcs.refetch();
@@ -152,33 +160,33 @@ export function CompanionStoryPanel({
 
   if (arcs.isLoading || templates.isLoading || scenes.isLoading) {
     return (
-      <Panel compact={compact}>
+      <Panel compact={compact} tone={tone}>
         <View className="flex-row items-center gap-2">
           <ActivityIndicator color={PALETTE.roseDeep} />
-          <Text className="text-sm text-app-muted">Loading story...</Text>
+          <Text className={`text-sm ${mutedClass}`}>Loading story...</Text>
         </View>
       </Panel>
     );
   }
 
   return (
-    <Panel compact={compact}>
+    <Panel compact={compact} tone={tone}>
       <View className="gap-2">
-        <Text className="text-lg font-semibold text-app-text">Story</Text>
-        <Text className="text-sm leading-5 text-app-muted">
+        <Text className={`text-lg font-semibold ${titleClass}`}>Story</Text>
+        <Text className={`text-sm leading-5 ${mutedClass}`}>
           {activeBeat ? activeBeat.objective : hasStory ? 'All current story beats are complete.' : 'Set a clear next step for this companion.'}
         </Text>
       </View>
 
       {activeBeat ? (
-        <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-4">
+        <View className={`gap-3 rounded-lg border p-4 ${insetClass}`}>
           <View className="flex-row flex-wrap items-center gap-2">
-            <Pill label={activeBeat.status === 'waiting_stage' ? `Reach ${prettyStage(activeBeat.stage_gate)}` : `Beat ${activeBeat.beat_order}`} />
-            <Pill label={activeBeat.completion_mode === 'auto' ? 'Legacy auto' : 'Manual'} tone="muted" />
+            <Pill label={activeBeat.status === 'waiting_stage' ? `Reach ${prettyStage(activeBeat.stage_gate)}` : `Beat ${activeBeat.beat_order}`} panelTone={tone} />
+            <Pill label={activeBeat.completion_mode === 'auto' ? 'Legacy auto' : 'Manual'} panelTone={tone} tone="muted" />
           </View>
           <View>
-            <Text className="text-base font-semibold text-app-text">{activeBeat.title}</Text>
-            <Text className="mt-1 text-sm leading-5 text-app-muted">{activeBeat.opener}</Text>
+            <Text className={`text-base font-semibold ${titleClass}`}>{activeBeat.title}</Text>
+            <Text className={`mt-1 text-sm leading-5 ${mutedClass}`}>{activeBeat.opener}</Text>
           </View>
           <View className="flex-row flex-wrap gap-2">
             {activeBeat.status === 'completed' ? (
@@ -193,7 +201,7 @@ export function CompanionStoryPanel({
       {canEdit && showEditor ? (
         <View className="gap-4">
           <View className="flex-row flex-wrap gap-2">
-            <ModeButton active={mode === 'packs'} label="Story packs" onPress={() => setMode('packs')} />
+            <ModeButton active={mode === 'packs'} label="Story packs" onPress={() => setMode('packs')} tone={tone} />
             <ModeButton
               active={mode === 'write'}
               label="Write"
@@ -201,8 +209,9 @@ export function CompanionStoryPanel({
                 setDraftSource('user_written');
                 setMode('write');
               }}
+              tone={tone}
             />
-            <ModeButton active={mode === 'ai'} label="AI draft" onPress={() => setMode('ai')} />
+            <ModeButton active={mode === 'ai'} label="AI draft" onPress={() => setMode('ai')} tone={tone} />
           </View>
 
           {mode === 'packs' ? (
@@ -212,6 +221,7 @@ export function CompanionStoryPanel({
                   key={template.id}
                   disabled={isSaving}
                   onPress={() => void saveFromTemplate(template.id)}
+                  tone={tone}
                   template={template}
                 />
               ))}
@@ -220,12 +230,13 @@ export function CompanionStoryPanel({
 
           {mode === 'write' ? (
             <View className="gap-4">
-              <Field label="Arc title" onChangeText={setTitle} value={title} />
+              <Field label="Arc title" onChangeText={setTitle} tone={tone} value={title} />
               <Field
                 label="Outline"
                 multiline
                 onChangeText={setOutline}
                 placeholder="A guarded friend slowly learns they can ask for help."
+                tone={tone}
                 value={outline}
               />
               {beats.map((beat, index) => (
@@ -234,6 +245,7 @@ export function CompanionStoryPanel({
                   beat={beat}
                   index={index}
                   scenes={sceneOptions}
+                  tone={tone}
                   onChange={(next) => {
                     setBeats((current) => current.map((item, itemIndex) => itemIndex === index ? next : item));
                   }}
@@ -250,10 +262,11 @@ export function CompanionStoryPanel({
                 multiline
                 onChangeText={setOutline}
                 placeholder="One sentence is enough. Example: a stranger keeps appearing at the wrong moments."
+                tone={tone}
                 value={outline}
               />
               <View className="gap-3">
-                <Text className="text-sm font-semibold text-app-text">Optional pack direction</Text>
+                <Text className={`text-sm font-semibold ${titleClass}`}>Optional pack direction</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {storyTemplates.map((template) => (
                     <ModeButton
@@ -261,6 +274,7 @@ export function CompanionStoryPanel({
                       active={selectedTemplateId === template.id}
                       label={template.title}
                       onPress={() => setSelectedTemplateId(selectedTemplateId === template.id ? null : template.id)}
+                      tone={tone}
                     />
                   ))}
                 </View>
@@ -270,20 +284,20 @@ export function CompanionStoryPanel({
           ) : null}
         </View>
       ) : !hasStory && showEditor ? (
-        <Text className="text-sm leading-5 text-app-muted">This companion has no shared story arc yet.</Text>
+        <Text className={`text-sm leading-5 ${mutedClass}`}>This companion has no shared story arc yet.</Text>
       ) : null}
 
       {storyArcs.length > 0 && showEditor ? (
-        <View className="gap-2 border-t border-app-line pt-4">
-          <Text className="text-sm font-semibold text-app-text">Arc list</Text>
+        <View className={`gap-2 border-t pt-4 ${isDark ? 'border-white/10' : 'border-app-line'}`}>
+          <Text className={`text-sm font-semibold ${titleClass}`}>Arc list</Text>
           {storyArcs.map((arc) => (
-            <View key={arc.id} className="rounded-lg border border-app-line bg-app-bg p-3">
+            <View key={arc.id} className={`rounded-lg border p-3 ${insetClass}`}>
               <View className="flex-row flex-wrap items-center gap-2">
-                <Text className="text-sm font-semibold text-app-text">{arc.title}</Text>
-                <Pill label={arc.source_type.replace('_', ' ')} tone="muted" />
-                {arc.shared_with_public ? <Pill label="Shared" /> : null}
+                <Text className={`text-sm font-semibold ${titleClass}`}>{arc.title}</Text>
+                <Pill label={arc.source_type.replace('_', ' ')} panelTone={tone} tone="muted" />
+                {arc.shared_with_public ? <Pill label="Shared" panelTone={tone} /> : null}
               </View>
-              <Text className="mt-1 text-xs text-app-muted">{arc.beats.length} beats</Text>
+              <Text className={`mt-1 text-xs ${mutedClass}`}>{arc.beats.length} beats</Text>
             </View>
           ))}
         </View>
@@ -294,27 +308,40 @@ export function CompanionStoryPanel({
   );
 }
 
-function Panel({ children, compact }: { children: ReactNode; compact?: boolean }) {
+function Panel({ children, compact, tone }: { children: ReactNode; compact?: boolean; tone: PanelTone }) {
   return (
-    <View className={`gap-4 rounded-lg border border-app-line bg-app-card ${compact ? 'p-4' : 'p-5'} web:bg-white`}>
+    <View className={`gap-4 rounded-lg border ${compact ? 'p-4' : 'p-5'} ${
+      tone === 'dark' ? 'border-white/10 bg-app-surface' : 'border-app-line bg-app-card web:bg-white'
+    }`}>
       {children}
     </View>
   );
 }
 
-function StoryPackRow({ disabled, onPress, template }: { disabled?: boolean; onPress: () => void; template: StoryArcTemplate }) {
+function StoryPackRow({
+  disabled,
+  onPress,
+  template,
+  tone,
+}: {
+  disabled?: boolean;
+  onPress: () => void;
+  template: StoryArcTemplate;
+  tone: PanelTone;
+}) {
+  const isDark = tone === 'dark';
   return (
     <Pressable
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      className={`rounded-lg border border-app-line bg-app-bg p-4 ${disabled ? 'opacity-50' : 'opacity-100'}`}
+      className={`rounded-lg border p-4 ${isDark ? 'border-white/10 bg-white/[0.04]' : 'border-app-line bg-app-bg'} ${disabled ? 'opacity-50' : 'opacity-100'}`}
     >
       <View className="flex-row flex-wrap items-center gap-2">
-        <Text className="text-base font-semibold text-app-text">{template.title}</Text>
-        {template.relationship_role ? <Pill label={template.relationship_role} tone="muted" /> : null}
+        <Text className={`text-base font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>{template.title}</Text>
+        {template.relationship_role ? <Pill label={template.relationship_role} panelTone={tone} tone="muted" /> : null}
       </View>
-      <Text className="mt-1 text-sm leading-5 text-app-muted">{template.description}</Text>
+      <Text className={`mt-1 text-sm leading-5 ${isDark ? 'text-rose-50/65' : 'text-app-muted'}`}>{template.description}</Text>
       <Text className="mt-2 text-xs font-semibold text-app-primary">Use this pack</Text>
     </Pressable>
   );
@@ -325,16 +352,19 @@ function DraftBeatEditor({
   index,
   onChange,
   scenes,
+  tone,
 }: {
   beat: StoryBeatDraft;
   index: number;
   onChange: (beat: StoryBeatDraft) => void;
   scenes: Scene[];
+  tone: PanelTone;
 }) {
+  const isDark = tone === 'dark';
   return (
-    <View className="gap-3 rounded-lg border border-app-line bg-app-bg p-3">
+    <View className={`gap-3 rounded-lg border p-3 ${isDark ? 'border-white/10 bg-white/[0.04]' : 'border-app-line bg-app-bg'}`}>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="text-sm font-semibold text-app-text">Beat {index + 1}</Text>
+        <Text className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>Beat {index + 1}</Text>
         <View className="flex-row flex-wrap gap-2">
           {STAGES.map((stage) => (
             <ModeButton
@@ -343,22 +373,24 @@ function DraftBeatEditor({
               label={prettyStage(stage)}
               onPress={() => onChange({ ...beat, stage_gate: stage })}
               small
+              tone={tone}
             />
           ))}
         </View>
       </View>
-      <Field label="Title" onChangeText={(title) => onChange({ ...beat, title })} value={beat.title} />
-      <Field label="Opener" multiline onChangeText={(opener) => onChange({ ...beat, opener })} value={beat.opener} />
-      <Field label="Objective" multiline onChangeText={(objective) => onChange({ ...beat, objective })} value={beat.objective} />
+      <Field label="Title" onChangeText={(title) => onChange({ ...beat, title })} tone={tone} value={beat.title} />
+      <Field label="Opener" multiline onChangeText={(opener) => onChange({ ...beat, opener })} tone={tone} value={beat.opener} />
+      <Field label="Objective" multiline onChangeText={(objective) => onChange({ ...beat, objective })} tone={tone} value={beat.objective} />
       {scenes.length ? (
         <View className="gap-2">
-          <Text className="text-sm font-semibold text-app-text">Scene</Text>
+          <Text className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>Scene</Text>
           <View className="flex-row flex-wrap gap-2">
             <ModeButton
               active={!beat.scene_id}
               label="Any scene"
               onPress={() => onChange({ ...beat, scene_id: null })}
               small
+              tone={tone}
             />
             {scenes.map((scene) => (
               <ModeButton
@@ -367,6 +399,7 @@ function DraftBeatEditor({
                 label={scene.name}
                 onPress={() => onChange({ ...beat, scene_id: scene.id, scene_hint: scene.name })}
                 small
+                tone={tone}
               />
             ))}
           </View>
@@ -376,6 +409,7 @@ function DraftBeatEditor({
           label="Scene hint"
           onChangeText={(scene_hint) => onChange({ ...beat, scene_hint })}
           placeholder="Cafe, park, workplace..."
+          tone={tone}
           value={beat.scene_hint ?? ''}
         />
       )}
@@ -388,19 +422,24 @@ function Field({
   multiline,
   onChangeText,
   placeholder,
+  tone,
   value,
 }: {
   label: string;
   multiline?: boolean;
   onChangeText: (value: string) => void;
   placeholder?: string;
+  tone: PanelTone;
   value: string;
 }) {
+  const isDark = tone === 'dark';
   return (
     <View>
-      <Text className="mb-2 text-sm font-semibold text-app-text">{label}</Text>
+      <Text className={`mb-2 text-sm font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>{label}</Text>
       <TextInput
-        className={`rounded-lg border border-app-line bg-white px-3 py-3 text-base text-app-text ${
+        className={`rounded-lg border px-3 py-3 text-base ${
+          isDark ? 'border-white/10 bg-app-sunken text-app-ink' : 'border-app-line bg-white text-app-text'
+        } ${
           multiline ? 'min-h-20 text-top' : ''
         }`}
         multiline={multiline}
@@ -419,31 +458,39 @@ function ModeButton({
   label,
   onPress,
   small,
+  tone,
 }: {
   active: boolean;
   label: string;
   onPress: () => void;
   small?: boolean;
+  tone: PanelTone;
 }) {
+  const isDark = tone === 'dark';
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       className={`${small ? 'min-h-8 px-2 py-1' : 'min-h-10 px-3 py-2'} rounded-lg border ${
-        active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-card'
+        active
+          ? 'border-app-rose/70 bg-app-canvas/70'
+          : isDark
+            ? 'border-white/10 bg-white/[0.05]'
+            : 'border-app-line bg-app-card'
       }`}
     >
-      <Text className={`${small ? 'text-xs' : 'text-sm'} font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>
+      <Text className={`${small ? 'text-xs' : 'text-sm'} font-semibold ${active ? 'text-app-rose-deep' : isDark ? 'text-rose-50/65' : 'text-app-muted'}`}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-function Pill({ label, tone = 'primary' }: { label: string; tone?: 'primary' | 'muted' }) {
+function Pill({ label, panelTone, tone = 'primary' }: { label: string; panelTone: PanelTone; tone?: 'primary' | 'muted' }) {
+  const isDark = panelTone === 'dark';
   return (
-    <View className={`rounded-full px-2.5 py-1 ${tone === 'primary' ? 'bg-app-primarySoft' : 'bg-app-sunken'}`}>
-      <Text className={`text-xs font-semibold ${tone === 'primary' ? 'text-app-primary' : 'text-app-muted'}`}>{label}</Text>
+    <View className={`rounded-full px-2.5 py-1 ${tone === 'primary' ? 'bg-app-primarySoft' : isDark ? 'bg-white/[0.07]' : 'bg-app-sunken'}`}>
+      <Text className={`text-xs font-semibold ${tone === 'primary' ? 'text-app-primary' : isDark ? 'text-rose-50/65' : 'text-app-muted'}`}>{label}</Text>
     </View>
   );
 }

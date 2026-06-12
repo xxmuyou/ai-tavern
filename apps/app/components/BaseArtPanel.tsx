@@ -26,7 +26,7 @@ const CHOICE_PANEL_CLASS = 'gap-4 rounded-lg border border-white/10 bg-app-surfa
 const ACTIVE_CHOICE_CLASS = 'border-app-rose/70 bg-app-canvas/70';
 const INACTIVE_CHOICE_CLASS = 'border-app-line bg-app-sunken/80';
 const DARK_INPUT_CLASS = 'rounded-lg border border-app-line bg-app-sunken px-3 py-2 text-base text-app-text';
-const PREVIEW_WIDTH_CLASS = 'w-full max-w-[180px]';
+const PREVIEW_WIDTH_CLASS = 'w-full max-w-[360px]';
 
 const PENDING_BASE_ART_JOB_STORAGE_KEY = 'xtbit.companionCreate.pendingBaseArtJob';
 const POLL_INTERVAL_MS = 2500;
