@@ -28,6 +28,7 @@ type CompanionRow = {
   art_url: string | null;
   art_emotions: string | null;
   art_cutout_key?: string | null;
+  featured_rank?: number | null;
   gender: string | null;
   initial_dims: string | null;
   created_at: number;
@@ -53,6 +54,12 @@ type ProfileImageFixture = {
   art_key: string;
   companion_id: string;
   source_generation_id?: string | null;
+  user_id: string;
+};
+
+type CompanionFavoriteFixture = {
+  companion_id: string;
+  created_at?: number;
   user_id: string;
 };
 
@@ -87,6 +94,7 @@ type CutoutJobFixture = {
 type Fixtures = {
   companions: CompanionRow[];
   cutoutJobs?: CutoutJobFixture[];
+  favorites?: CompanionFavoriteFixture[];
   imageJobs?: ImageJobFixture[];
   profileImages?: ProfileImageFixture[];
   profileOutfits?: ProfileOutfitFixture[];
@@ -136,6 +144,66 @@ describe("companions module", () => {
     expect(response?.status).toBe(200);
     const body = (await response?.json()) as { items: Array<{ id: string }> };
     expect(body.items.map((item) => item.id).sort()).toEqual(["maya", "published"]);
+  });
+
+  it("sorts public discovery by favorite count", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", { play_count: 1 }),
+        officialCompanion("lila", "female", { play_count: 9 }),
+        userCompanion("published", "user-2", "female", { is_public: 1, play_count: 3 }),
+        userCompanion("private-to-other", "user-2", "female"),
+      ],
+      favorites: [
+        { companion_id: "maya", user_id: "user-1" },
+        { companion_id: "maya", user_id: "user-2" },
+        { companion_id: "published", user_id: "user-1" },
+      ],
+      relationships: [],
+      users: [
+        { email: "player@example.com", id: "user-1" },
+        { email: "other@example.com", id: "user-2" },
+      ],
+    });
+
+    const response = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public?sort=favorites"),
+      env,
+      "/companions/public",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { items: Array<{ favorite_count: number; id: string }> };
+    expect(body.items.map((item) => [item.id, item.favorite_count])).toEqual([
+      ["maya", 2],
+      ["published", 1],
+      ["lila", 0],
+    ]);
+  });
+
+  it("lists featured official companions by manual rank", async () => {
+    const env = createEnv({
+      companions: [
+        officialCompanion("maya", "female", { featured_rank: 2 }),
+        officialCompanion("ryan", "female", { featured_rank: 1 }),
+        officialCompanion("lila", "female"),
+        userCompanion("published", "user-2", "female", { featured_rank: 0, is_public: 1 }),
+      ],
+      relationships: [],
+    });
+
+    const response = await handleCompanionsRequest(
+      new Request("http://localhost/companions/public?source=official&featured=1&sort=featured"),
+      env,
+      "/companions/public",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { items: Array<{ favorite_count: number; id: string }> };
+    expect(body.items).toEqual([
+      expect.objectContaining({ favorite_count: 0, id: "ryan" }),
+      expect.objectContaining({ favorite_count: 0, id: "maya" }),
+    ]);
   });
 
   it("filters public discovery by gender and style bucket", async () => {
@@ -1166,6 +1234,10 @@ function createEnv(fixtures: Fixtures): Env {
 
   const companions = new Map<string, CompanionRow>();
   for (const c of fixtures.companions) companions.set(c.id, { ...c });
+  const favorites = (fixtures.favorites ?? []).map((favorite) => ({
+    created_at: favorite.created_at ?? 1747000000000,
+    ...favorite,
+  }));
 
   const profileImages = new Map<string, ProfileImageFixture>();
   for (const item of fixtures.profileImages ?? []) {
@@ -1194,6 +1266,7 @@ function createEnv(fixtures: Fixtures): Env {
         return buildStatement(sql, {
           companions,
           cutoutJobs,
+          favorites,
           imageJobs,
           profileImages,
           profileOutfits,
@@ -1214,6 +1287,7 @@ function createEnv(fixtures: Fixtures): Env {
 type MockState = {
   companions: Map<string, CompanionRow>;
   cutoutJobs: Map<string, CutoutJobFixture>;
+  favorites: CompanionFavoriteFixture[];
   imageJobs: Map<string, ImageJobFixture>;
   profileImages: Map<string, ProfileImageFixture>;
   profileOutfits: Map<string, ProfileOutfitFixture>;
@@ -1259,13 +1333,19 @@ function queryAll<T>(
   values: unknown[],
   state: MockState,
 ): T[] {
-  const { companions, profileImages, relationships } = state;
+  const { companions, favorites, profileImages, relationships } = state;
   if (sql.includes("FROM companions c") && !sql.includes("LEFT JOIN relationships r")) {
     let valueIndex = 0;
     let rows = [...companions.values()].filter((c) => (
       c.is_active === 1 && (c.source === "official" || c.is_public === 1)
     ));
 
+    if (sql.includes("AND c.source = 'official'")) {
+      rows = rows.filter((c) => c.source === "official");
+    }
+    if (sql.includes("c.featured_rank IS NOT NULL")) {
+      rows = rows.filter((c) => c.featured_rank !== null && c.featured_rank !== undefined);
+    }
     if (sql.includes("c.gender = ?")) {
       const gender = values[valueIndex++] as string;
       rows = rows.filter((c) => c.gender === gender);
@@ -1275,15 +1355,29 @@ function queryAll<T>(
       valueIndex += 1;
       rows = rows.filter((c) => c.name.toLowerCase().includes(query) || (c.tags ?? "").toLowerCase().includes(query));
     }
-    if (sql.includes("c.play_count DESC")) {
-      rows.sort((a, b) => b.play_count - a.play_count || a.created_at - b.created_at);
+
+    const rowsWithCounts = rows.map((c) => ({
+      ...c,
+      favorite_count: favoriteCountFor(favorites, c.id),
+    }));
+    if (sql.includes("favorite_count DESC")) {
+      rowsWithCounts.sort((a, b) => (
+        b.favorite_count - a.favorite_count || b.play_count - a.play_count || a.created_at - b.created_at
+      ));
+    } else if (sql.includes("c.featured_rank ASC")) {
+      rowsWithCounts.sort((a, b) => (
+        (a.featured_rank ?? Number.MAX_SAFE_INTEGER) - (b.featured_rank ?? Number.MAX_SAFE_INTEGER)
+        || a.created_at - b.created_at
+      ));
+    } else if (sql.includes("c.play_count DESC")) {
+      rowsWithCounts.sort((a, b) => b.play_count - a.play_count || a.created_at - b.created_at);
     } else if (sql.includes("c.created_at DESC")) {
-      rows.sort((a, b) => b.created_at - a.created_at);
+      rowsWithCounts.sort((a, b) => b.created_at - a.created_at);
     } else {
-      rows.sort((a, b) => a.created_at - b.created_at);
+      rowsWithCounts.sort((a, b) => a.created_at - b.created_at);
     }
 
-    return rows as unknown as T[];
+    return rowsWithCounts as unknown as T[];
   }
 
   if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN relationships r")) {
@@ -1305,17 +1399,24 @@ function queryAll<T>(
     } else if (sql.includes("c.source = 'official'")) {
       rows = rows.filter((c) => c.source === "official");
     }
+    if (sql.includes("f.user_id IS NOT NULL")) {
+      rows = rows.filter((c) => favorites.some((favorite) => (
+        favorite.user_id === userId && favorite.companion_id === c.id
+      )));
+    }
 
     rows.sort((a, b) => a.created_at - b.created_at);
 
     return rows.map((c) => {
       const rel = relationships.find((r) => r.companion_id === c.id && r.user_id === userId);
       const override = profileImages.get(`${userId}:${c.id}`)?.art_key ?? null;
+      const isFavorite = favorites.some((favorite) => favorite.user_id === userId && favorite.companion_id === c.id);
       return {
         ...c,
         art_url: override ?? c.art_url,
         canonical_art_url: c.art_url,
-        fav_user: null,
+        favorite_count: favoriteCountFor(favorites, c.id),
+        fav_user: isFavorite ? userId : null,
         last_interaction_at: rel?.last_interaction_at ?? null,
         level_label: rel?.level_label ?? null,
         profile_image_override: override,
@@ -1324,6 +1425,10 @@ function queryAll<T>(
   }
 
   return [];
+}
+
+function favoriteCountFor(favorites: CompanionFavoriteFixture[], companionId: string): number {
+  return favorites.filter((favorite) => favorite.companion_id === companionId).length;
 }
 
 function queryFirst<T>(
@@ -1487,7 +1592,7 @@ function queryFirst<T>(
 }
 
 function mutate(sql: string, values: unknown[], state: MockState): void {
-  const { companions, cutoutJobs, imageJobs, profileImages, profileOutfits, userImageAssets, users } = state;
+  const { companions, cutoutJobs, favorites, imageJobs, profileImages, profileOutfits, userImageAssets, users } = state;
   if (sql.includes("INSERT OR IGNORE INTO users")) {
     const [id, email] = values as [string, string];
     if (id && email && !users.has(email)) {
@@ -1666,6 +1771,28 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
     const existing = companions.get(id);
     if (existing) {
       companions.set(id, { ...existing, is_public: isPublic, updated_at: updatedAt });
+    }
+    return;
+  }
+
+  if (sql.includes("INSERT OR IGNORE INTO companion_favorites")) {
+    const [userId, companionId, createdAt] = values as [string, string, number];
+    const exists = favorites.some((favorite) => (
+      favorite.user_id === userId && favorite.companion_id === companionId
+    ));
+    if (!exists) {
+      favorites.push({ companion_id: companionId, created_at: createdAt, user_id: userId });
+    }
+    return;
+  }
+
+  if (sql.startsWith("DELETE FROM companion_favorites")) {
+    const [userId, companionId] = values as [string, string];
+    for (let i = favorites.length - 1; i >= 0; i--) {
+      const favorite = favorites[i]!;
+      if (favorite.user_id === userId && favorite.companion_id === companionId) {
+        favorites.splice(i, 1);
+      }
     }
     return;
   }

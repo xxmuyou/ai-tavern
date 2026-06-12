@@ -76,9 +76,11 @@ type CompanionRow = {
   preferred_scenes: string | null;
   art_url: string | null;
   canonical_art_url?: string | null;
+  favorite_count?: number | null;
   profile_image_override?: string | null;
   art_cutout_key: string | null;
   art_emotions: string | null;
+  featured_rank?: number | null;
   gender: string | null;
   initial_dims: string | null;
   created_at: number;
@@ -106,6 +108,7 @@ type CompanionListItem = {
   gender: Gender | null;
   relationship_role: string | null;
   art_url: string | null;
+  favorite_count: number;
   preferred_scenes: string[];
   tags: string[];
   play_count: number;
@@ -128,7 +131,9 @@ export async function handleCompanionsRequest(
       artStyle: url.searchParams.get("art_style"),
       gender: url.searchParams.get("gender"),
       q: url.searchParams.get("q"),
+      featured: url.searchParams.get("featured"),
       sort: url.searchParams.get("sort"),
+      source: url.searchParams.get("source"),
     });
   }
 
@@ -320,11 +325,25 @@ export async function handleCompanionsRequest(
 // -----------------------------------------------------------------------------
 
 type ListOptions = { source: string; q: string | null; sort: string | null };
-type PublicListOptions = { artStyle: string | null; gender: string | null; q: string | null; sort: string | null };
+type PublicListOptions = {
+  artStyle: string | null;
+  featured: string | null;
+  gender: string | null;
+  q: string | null;
+  sort: string | null;
+  source: string | null;
+};
 
 async function listPublicCompanions(env: Env, opts: PublicListOptions): Promise<Response> {
   const conditions: string[] = ["c.is_active = 1", "(c.source = 'official' OR c.is_public = 1)"];
   const whereBinds: unknown[] = [];
+
+  if (opts.source === "official") {
+    conditions.push("c.source = 'official'");
+  }
+  if (opts.featured === "1") {
+    conditions.push("c.featured_rank IS NOT NULL");
+  }
 
   const gender = normalizeGender(opts.gender);
   if (gender) {
@@ -341,6 +360,12 @@ async function listPublicCompanions(env: Env, opts: PublicListOptions): Promise<
 
   let orderBy: string;
   switch (opts.sort) {
+    case "favorites":
+      orderBy = "favorite_count DESC, c.play_count DESC, c.created_at ASC";
+      break;
+    case "featured":
+      orderBy = "c.featured_rank IS NULL ASC, c.featured_rank ASC, c.created_at ASC";
+      break;
     case "popular":
       orderBy = "c.play_count DESC, c.created_at ASC";
       break;
@@ -355,8 +380,15 @@ async function listPublicCompanions(env: Env, opts: PublicListOptions): Promise<
     `SELECT c.id, c.source, c.created_by, c.is_active, c.is_public, c.name,
             c.appearance, c.personality, c.background, c.speech_style,
             c.relationship_role, c.tags, c.play_count, c.preferred_scenes,
-            c.art_url, c.gender, c.initial_dims, c.created_at, c.updated_at
+            c.art_url, c.gender, c.initial_dims, c.created_at, c.updated_at,
+            c.featured_rank,
+            COALESCE(fav.favorite_count, 0) AS favorite_count
      FROM companions c
+     LEFT JOIN (
+       SELECT companion_id, COUNT(*) AS favorite_count
+       FROM companion_favorites
+       GROUP BY companion_id
+     ) fav ON fav.companion_id = c.id
      WHERE ${conditions.join(" AND ")}
      ORDER BY ${orderBy}`,
   )
@@ -426,11 +458,17 @@ async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Pr
             c.gender, c.initial_dims, c.created_at, c.updated_at,
             r.level_label         AS level_label,
             r.last_interaction_at AS last_interaction_at,
-            f.user_id             AS fav_user
+            f.user_id             AS fav_user,
+            COALESCE(fav_counts.favorite_count, 0) AS favorite_count
      FROM companions c
      LEFT JOIN relationships r ON r.companion_id = c.id AND r.user_id = ?
      LEFT JOIN companion_favorites f ON f.companion_id = c.id AND f.user_id = ?
      LEFT JOIN companion_profile_images p ON p.companion_id = c.id AND p.user_id = ?
+     LEFT JOIN (
+       SELECT companion_id, COUNT(*) AS favorite_count
+       FROM companion_favorites
+       GROUP BY companion_id
+     ) fav_counts ON fav_counts.companion_id = c.id
      WHERE ${conditions.join(" AND ")}
      ORDER BY ${orderBy}`,
   )
@@ -446,6 +484,7 @@ async function listCompanions(env: Env, user: UserRecord, opts: ListOptions): Pr
   const items: CompanionListItem[] = (results ?? []).map((row) => ({
     art_url: row.art_url,
     current_level: row.level_label,
+    favorite_count: Number(row.favorite_count ?? 0),
     gender: normalizeGender(row.gender),
     id: row.id,
     is_favorite: row.fav_user !== null,
@@ -466,6 +505,7 @@ function publicCompanionListItem(row: CompanionRow): CompanionListItem {
   return {
     art_url: row.art_url,
     current_level: null,
+    favorite_count: Number(row.favorite_count ?? 0),
     gender: normalizeGender(row.gender),
     id: row.id,
     is_favorite: false,

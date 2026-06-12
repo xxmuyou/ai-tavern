@@ -21,6 +21,7 @@ import { useApi } from './use-api';
 
 export type CompanionSourceFilter = CompanionSource | 'all' | 'public' | 'favorites';
 export type CompanionSort = 'recent' | 'popular';
+export type CompanionDiscoverySort = CompanionSort | 'favorites' | 'featured';
 export type CompanionDiscoveryStyle = 'anime' | 'realistic';
 
 export function useCompanions(
@@ -35,11 +36,18 @@ export function useCompanions(
 }
 
 export function usePublicCompanions(
-  opts: { artStyle?: CompanionDiscoveryStyle; gender?: 'male' | 'female'; q?: string; sort?: CompanionSort } = {},
+  opts: {
+    artStyle?: CompanionDiscoveryStyle;
+    featured?: boolean;
+    gender?: 'male' | 'female';
+    q?: string;
+    sort?: CompanionDiscoverySort;
+    source?: 'official' | 'all';
+  } = {},
 ) {
   return useApi<CompanionsListResponse>(
     () => listPublicCompanions(opts),
-    [opts.artStyle, opts.gender, opts.q, opts.sort],
+    [opts.artStyle, opts.featured, opts.gender, opts.q, opts.sort, opts.source],
   );
 }
 

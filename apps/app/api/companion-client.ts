@@ -579,13 +579,22 @@ export async function listCompanions(
 }
 
 export async function listPublicCompanions(
-  opts: { artStyle?: 'anime' | 'realistic'; gender?: 'male' | 'female'; q?: string; sort?: 'recent' | 'popular' } = {},
+  opts: {
+    artStyle?: 'anime' | 'realistic';
+    featured?: boolean;
+    gender?: 'male' | 'female';
+    q?: string;
+    sort?: 'recent' | 'popular' | 'favorites' | 'featured';
+    source?: 'official' | 'all';
+  } = {},
 ): Promise<CompanionsListResponse> {
   const params = new URLSearchParams();
   if (opts.artStyle) params.set('art_style', opts.artStyle);
+  if (opts.featured) params.set('featured', '1');
   if (opts.gender) params.set('gender', opts.gender);
   if (opts.q) params.set('q', opts.q);
   if (opts.sort) params.set('sort', opts.sort);
+  if (opts.source && opts.source !== 'all') params.set('source', opts.source);
   const query = params.toString();
   return requestJson<CompanionsListResponse>(`/companions/public${query ? `?${query}` : ''}`, undefined, { skipAuth: true });
 }

@@ -44,6 +44,13 @@ export function WebPublicCompanionHome() {
     q: debouncedQuery || undefined,
     sort: 'popular',
   });
+  const mostFavorited = usePublicCompanions({ gender, sort: 'favorites' });
+  const officialFeatured = usePublicCompanions({
+    featured: true,
+    gender,
+    sort: 'featured',
+    source: 'official',
+  });
   const recent = usePublicCompanions({ gender, sort: 'recent' });
 
   const popularItems = useMemo(
@@ -53,6 +60,14 @@ export function WebPublicCompanionHome() {
   const recentItems = useMemo(
     () => (recent.data?.items ?? []).filter((item) => item.art_url),
     [recent.data],
+  );
+  const mostFavoritedItems = useMemo(
+    () => (mostFavorited.data?.items ?? []).filter((item) => item.art_url).slice(0, 10),
+    [mostFavorited.data],
+  );
+  const officialFeaturedItems = useMemo(
+    () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url).slice(0, 12),
+    [officialFeatured.data],
   );
 
   const topTags = useMemo(() => {
@@ -75,10 +90,13 @@ export function WebPublicCompanionHome() {
     return popularItems;
   }, [isFiltering, popularItems, selectedTag]);
 
-  const trending = popularItems.slice(0, 10);
-  const newArrivals = recentItems.slice(0, 10);
-  const officialPicks = popularItems.filter((item) => item.source === 'official').slice(0, 12);
-  const community = popularItems.filter((item) => item.source === 'user');
+  const pinnedIds = useMemo(
+    () => new Set([...mostFavoritedItems, ...officialFeaturedItems].map((item) => item.id)),
+    [mostFavoritedItems, officialFeaturedItems],
+  );
+  const trending = popularItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
+  const newArrivals = recentItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
+  const community = popularItems.filter((item) => item.source === 'user' && !pinnedIds.has(item.id));
 
   function openCompanion(companion: CompanionListItem) {
     const target = `/companion/${encodeURIComponent(companion.id)}` as Href;
@@ -214,6 +232,43 @@ export function WebPublicCompanionHome() {
             />
           ) : (
             <View className="gap-12">
+              {mostFavoritedItems.length > 0 ? (
+                <DiscoverSection
+                  icon="heart"
+                  iconColor={PALETTE.roseDeep}
+                  subtitle="Most saved by players"
+                  title="Most Favorited"
+                >
+                  <DiscoverRail>
+                    {mostFavoritedItems.map((companion, index) => (
+                      <DiscoverCompanionCard
+                        key={companion.id}
+                        companion={companion}
+                        onPress={() => openCompanion(companion)}
+                        rank={index + 1}
+                        size="lg"
+                      />
+                    ))}
+                  </DiscoverRail>
+                </DiscoverSection>
+              ) : null}
+
+              {officialFeaturedItems.length > 0 ? (
+                <DiscoverSection icon="ribbon" subtitle="Curated by the house" title="Official Picks">
+                  <DiscoverRail>
+                    {officialFeaturedItems.map((companion, index) => (
+                      <DiscoverCompanionCard
+                        key={companion.id}
+                        companion={companion}
+                        onPress={() => openCompanion(companion)}
+                        rank={index + 1}
+                        size="lg"
+                      />
+                    ))}
+                  </DiscoverRail>
+                </DiscoverSection>
+              ) : null}
+
               {trending.length > 0 ? (
                 <DiscoverSection icon="flame" iconColor={PALETTE.ember} subtitle="Most played right now" title="Trending">
                   <DiscoverRail>
@@ -242,14 +297,6 @@ export function WebPublicCompanionHome() {
                       />
                     ))}
                   </DiscoverRail>
-                </DiscoverSection>
-              ) : null}
-
-              {officialPicks.length > 0 ? (
-                <DiscoverSection icon="ribbon" subtitle="Curated by the house" title="Official picks">
-                  <View className={DISCOVERY_GRID_CLASS}>
-                    {officialPicks.map(renderCard)}
-                  </View>
                 </DiscoverSection>
               ) : null}
 

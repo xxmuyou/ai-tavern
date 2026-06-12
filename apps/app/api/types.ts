@@ -238,6 +238,7 @@ export type CompanionListItem = {
   id: string;
   is_public: boolean;
   is_favorite: boolean;
+  favorite_count: number;
   last_interaction_at: number | null;
   name: string;
   play_count: number;
