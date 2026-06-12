@@ -791,27 +791,30 @@ function ChatScreenInner() {
         showBack
         title={companion.name}
         right={
-          <View className="flex-row items-center">
-            <Pressable
-              accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
-              accessibilityRole="button"
-              onPress={autoVoice.toggle}
-              className="h-10 w-10 items-center justify-center rounded-lg"
-            >
-              <Ionicons
-                color={autoVoice.enabled ? '#6E59C7' : '#687076'}
-                name={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
-                size={20}
-              />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Voice settings"
-              accessibilityRole="button"
-              onPress={() => setVoiceSettingsVisible(true)}
-              className="h-10 w-10 items-center justify-center rounded-lg"
-            >
-              <Ionicons color="#687076" name="settings-outline" size={20} />
-            </Pressable>
+          <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center overflow-hidden rounded-xl border border-app-line bg-app-card">
+              <Pressable
+                accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
+                accessibilityRole="button"
+                onPress={autoVoice.toggle}
+                className={`h-10 w-10 items-center justify-center ${autoVoice.enabled ? 'bg-app-primarySoft' : 'bg-app-card'}`}
+              >
+                <Ionicons
+                  color={autoVoice.enabled ? '#FF4D7E' : '#687076'}
+                  name={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
+                  size={20}
+                />
+              </Pressable>
+              <View className="h-6 w-px bg-app-line" />
+              <Pressable
+                accessibilityLabel="Voice settings"
+                accessibilityRole="button"
+                onPress={() => setVoiceSettingsVisible(true)}
+                className={`h-10 w-10 items-center justify-center ${voiceSettingsVisible ? 'bg-app-primarySoft' : 'bg-app-card'}`}
+              >
+                <Ionicons color={voiceSettingsVisible ? '#FF4D7E' : '#687076'} name="settings-outline" size={20} />
+              </Pressable>
+            </View>
             <Pressable
               accessibilityLabel="Clear conversation"
               accessibilityRole="button"

@@ -147,14 +147,7 @@ export function WebPublicCompanionHome() {
     setFavoriteBusyId(id);
     try {
       await favoriteCompanion(id, next);
-      await Promise.all([
-        favorites.refetch(),
-        popular.refetch(),
-        mostFavorited.refetch(),
-        officialFeatured.refetch(),
-        rankedTrending.refetch(),
-        recent.refetch(),
-      ]);
+      await favorites.refetch();
     } finally {
       setFavoriteBusyId(null);
     }

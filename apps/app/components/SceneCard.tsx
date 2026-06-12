@@ -15,9 +15,13 @@ export function SceneCard({ onPress, scene }: SceneCardProps) {
 
   return (
     <Pressable accessibilityRole="button" onPress={onPress} className="overflow-hidden rounded-lg border border-app-line bg-app-card">
-      <View className="aspect-video w-full bg-app-primarySoft">
+      <View className="relative aspect-video w-full overflow-hidden bg-app-primarySoft">
         {imageSource ? (
-          <Image source={imageSource} resizeMode="cover" className="h-full w-full" />
+          <>
+            <Image source={imageSource} resizeMode="cover" blurRadius={14} className="absolute inset-0 h-full w-full opacity-35" />
+            <View pointerEvents="none" className="absolute inset-0 bg-app-bg/35" />
+            <Image source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
+          </>
         ) : (
           <View className="h-full w-full items-center justify-center bg-app-primarySoft">
             <Ionicons color="#1E6B52" name="map-outline" size={40} />

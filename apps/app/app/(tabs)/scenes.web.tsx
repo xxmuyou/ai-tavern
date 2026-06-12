@@ -120,12 +120,16 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
     >
       <View className="relative aspect-[16/9] overflow-hidden bg-white/[0.075]">
         {imageSource ? (
-          <Image
-            accessibilityLabel={scene.name}
-            source={imageSource}
-            resizeMode="cover"
-            className="h-full w-full"
-          />
+          <>
+            <Image source={imageSource} resizeMode="cover" blurRadius={16} className="absolute inset-0 h-full w-full opacity-35" />
+            <View pointerEvents="none" className="absolute inset-0 bg-app-twilight/35" />
+            <Image
+              accessibilityLabel={scene.name}
+              source={imageSource}
+              resizeMode="contain"
+              className="relative z-10 h-full w-full"
+            />
+          </>
         ) : (
           <View className="h-full w-full items-center justify-center bg-gradient-warm">
             <Text className="font-serif text-display-sm text-app-rose-deep/40">{scene.name.slice(0, 1)}</Text>

@@ -1253,7 +1253,37 @@ export default function WebChatScreen() {
                   </Text>
                 </View>
               </View>
-              <View className="flex-row items-center gap-3">
+              <View className="flex-row flex-wrap items-center justify-end gap-3">
+                <View className="flex-row items-center overflow-hidden rounded-full border border-white/15 bg-app-sunken">
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
+                    onPress={autoVoice.toggle}
+                    className={`min-h-9 flex-row items-center justify-center gap-2 px-3 transition-colors ${
+                      autoVoice.enabled ? 'bg-app-rose-soft' : 'hover:bg-white/[0.075]'
+                    }`}
+                  >
+                    <Ionicons
+                      color={autoVoice.enabled ? '#FF8FAD' : 'rgba(255,255,255,0.65)'}
+                      name={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
+                      size={15}
+                    />
+                    <Text className="hidden text-caption font-semibold text-white sm:flex">
+                      {autoVoice.enabled ? (chatLanguage === 'zh' ? '语音开' : 'Voice on') : (chatLanguage === 'zh' ? '语音关' : 'Voice off')}
+                    </Text>
+                  </Pressable>
+                  <View className="h-5 w-px bg-app-line" />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={chatLanguage === 'zh' ? '声音设置' : 'Voice settings'}
+                    onPress={() => setVoiceDialogVisible(true)}
+                    className={`h-9 w-9 items-center justify-center transition-colors ${
+                      voiceDialogVisible ? 'bg-app-rose-soft' : 'hover:bg-white/[0.075]'
+                    }`}
+                  >
+                    <Ionicons color={voiceDialogVisible ? '#FF8FAD' : 'rgba(255,255,255,0.65)'} name="settings-outline" size={15} />
+                  </Pressable>
+                </View>
                 {pendingArrival ? (
                   <Pressable
                     accessibilityRole="button"
@@ -1293,17 +1323,6 @@ export default function WebChatScreen() {
                 icon="shirt-outline"
                 label={chatLanguage === 'zh' ? '形象' : 'Outfit'}
                 onPress={() => setOutfitDialogVisible(true)}
-              />
-              <ChatRailButton
-                icon={autoVoice.enabled ? 'volume-high' : 'volume-mute-outline'}
-                label={autoVoice.enabled ? (chatLanguage === 'zh' ? '语音开' : 'Voice on') : (chatLanguage === 'zh' ? '语音关' : 'Voice off')}
-                onPress={autoVoice.toggle}
-              />
-              <ChatRailButton
-                icon="settings-outline"
-                label={chatLanguage === 'zh' ? '声音' : 'Voice set'}
-                selected={voiceDialogVisible}
-                onPress={() => setVoiceDialogVisible(true)}
               />
               <ChatRailButton
                 icon="time-outline"
@@ -1656,8 +1675,8 @@ function WebInviteDialog({
                   onPress={() => onSelect(target)}
                   className="flex-row items-center gap-3 rounded-xl border border-app-line bg-app-sunken p-3 transition-colors hover:border-app-rose hover:bg-app-rose-soft active:bg-app-wine-soft"
                 >
-                  <View className="h-16 w-16 overflow-hidden rounded-lg bg-app-rose-soft">
-                    {thumb ? <Image source={thumb} resizeMode="cover" className="h-full w-full" /> : null}
+                  <View className="h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-app-rose-soft">
+                    {thumb ? <Image source={thumb} resizeMode="contain" className="h-full w-full" /> : null}
                   </View>
                   <View className="min-w-0 flex-1">
                     <Text className="text-base font-semibold text-white">{target.name}</Text>

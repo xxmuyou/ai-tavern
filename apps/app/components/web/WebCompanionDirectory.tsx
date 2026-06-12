@@ -258,7 +258,11 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
     >
       <View className="relative aspect-[3/2] overflow-hidden bg-app-sunken">
         {imageSource ? (
-          <Image accessibilityLabel={scene.name} source={imageSource} resizeMode="cover" className="h-full w-full" />
+          <>
+            <Image source={imageSource} resizeMode="cover" blurRadius={14} className="absolute inset-0 h-full w-full opacity-35" />
+            <View pointerEvents="none" className="absolute inset-0 bg-black/25" />
+            <Image accessibilityLabel={scene.name} source={imageSource} resizeMode="contain" className="relative z-10 h-full w-full" />
+          </>
         ) : (
           <View className="h-full w-full items-center justify-center bg-app-rose-soft">
             <Ionicons color="#FF8FAD" name="map-outline" size={28} />
