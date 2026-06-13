@@ -839,7 +839,7 @@ async function createCompanion(env: Env, user: UserRecord, raw: unknown): Promis
        greeting, example_dialogues, tags,
        preferred_scenes, art_url, art_emotions, gender, initial_dims,
        created_at, updated_at)
-     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+     VALUES (?, 'user', ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
   )
     .bind(
       id,

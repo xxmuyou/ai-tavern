@@ -1672,6 +1672,7 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
   }
 
   if (sql.includes("INSERT INTO companions")) {
+    assertInsertColumnValueArity(sql);
     const [
       id,
       ownerId,
@@ -1953,4 +1954,42 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
       cutoutJobs.set(id, { ...existing, status: "pending", output_key: null, error_code: null, error_message: null });
     }
   }
+}
+
+function assertInsertColumnValueArity(sql: string): void {
+  const match = sql.match(/INSERT\s+INTO\s+\w+\s*\(([\s\S]+?)\)\s*VALUES\s*\(([\s\S]+?)\)/i);
+  if (!match) return;
+
+  const columns = countTopLevelCsvItems(match[1] ?? "");
+  const values = countTopLevelCsvItems(match[2] ?? "");
+  if (columns !== values) {
+    throw new Error(`insert_arity_mismatch:${columns}:${values}`);
+  }
+}
+
+function countTopLevelCsvItems(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+
+  let count = 1;
+  let quote: string | null = null;
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const char = trimmed[i];
+    if (quote) {
+      if (char === quote && trimmed[i + 1] === quote) {
+        i += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === ",") {
+      count += 1;
+    }
+  }
+  return count;
 }
