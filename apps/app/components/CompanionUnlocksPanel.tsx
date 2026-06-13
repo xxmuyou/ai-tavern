@@ -37,7 +37,7 @@ export function CompanionUnlocksPanel({ companionId, tone = 'default' }: { compa
   const mutedClass = isDark ? 'text-rose-50/60' : 'text-app-muted';
 
   return (
-    <View className={`gap-4 rounded-lg border p-5 ${isDark ? 'border-white/10 bg-app-surface' : 'border-app-line bg-app-card web:bg-white'}`}>
+    <View className={`gap-4 rounded-lg border p-5 ${isDark ? 'border-white/10 bg-app-surface' : 'border-app-line bg-app-card web:bg-app-solid-surface'}`}>
       <Text className={`text-xl font-semibold ${titleClass}`}>Unlocked</Text>
 
       {secretItem ? (

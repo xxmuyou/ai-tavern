@@ -104,7 +104,7 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
   return (
     <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
       <View className={layoutClass}>
-        <View className="rounded-lg border border-app-line bg-app-card p-4 web:bg-white">
+        <View className="rounded-lg border border-app-line bg-app-card p-4 web:bg-app-solid-surface">
           <Pressable
             accessibilityRole="button"
             disabled={isUploading}
@@ -340,7 +340,7 @@ function parseTags(value: string): string[] {
 
 function FormPanel({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-white">
+    <View className="gap-4 rounded-lg border border-app-line bg-app-card p-5 web:bg-app-solid-surface">
       <Text className="text-lg font-semibold text-app-text">{title}</Text>
       {children}
     </View>
@@ -370,7 +370,7 @@ function Field({
       {hint ? <Text className="mb-2 -mt-1 text-xs text-app-muted">{hint}</Text> : null}
       <TextInput
         ref={inputRef}
-        className={`rounded-lg border border-app-line bg-white px-3 py-3 text-base text-app-text ${
+        className={`rounded-lg border border-app-line bg-app-sunken px-3 py-3 text-base text-app-text web:bg-app-solid-sunken web:text-app-ink ${
           multiline ? 'min-h-24 text-top' : ''
         }`}
         multiline={multiline}
@@ -447,7 +447,7 @@ function Choice({ active, label, onPress }: { active: boolean; label: string; on
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      className={`rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-white'}`}
+      className={`rounded-full border px-3 py-2 ${active ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-sunken web:bg-app-solid-surface'}`}
     >
       <Text className={`text-sm font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted'}`}>{label}</Text>
     </Pressable>

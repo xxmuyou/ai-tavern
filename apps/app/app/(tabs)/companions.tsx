@@ -90,7 +90,7 @@ export default function CompanionsScreen() {
         <Text className="mb-3 text-sm font-semibold text-app-muted">
           {formatCompanionCount(userCompanions.data?.items.length ?? 0, billing.data?.entitlements.custom_companion_limit)}
         </Text>
-        <View className="mb-3 flex-row items-center gap-2 rounded-lg border border-app-line bg-white px-3">
+        <View className="mb-3 flex-row items-center gap-2 rounded-lg border border-app-line bg-app-sunken px-3">
           <Ionicons color="#687076" name="search" size={16} />
           <TextInput
             className="flex-1 py-2.5 text-base text-app-text"
@@ -139,7 +139,7 @@ export default function CompanionsScreen() {
                 key={option.value}
                 accessibilityRole="button"
                 onPress={() => setSort(option.value)}
-                className={`rounded-full border px-3 py-1 ${isActive ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-white'}`}
+                className={`rounded-full border px-3 py-1 ${isActive ? 'border-app-primary bg-app-primarySoft' : 'border-app-line bg-app-sunken'}`}
               >
                 <Text className={`text-xs font-semibold ${isActive ? 'text-app-primary' : 'text-app-muted'}`}>{option.label}</Text>
               </Pressable>

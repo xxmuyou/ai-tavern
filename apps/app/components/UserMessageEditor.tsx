@@ -22,7 +22,7 @@ export function UserMessageEditor({ text, isSaving, onChangeText, onSave, onCanc
           onChangeText={onChangeText}
           placeholderTextColor={PALETTE.muted}
           textAlignVertical="top"
-          className="min-h-12 rounded-2xl border border-app-primary bg-white px-4 py-2.5 text-base text-app-text"
+          className="min-h-12 rounded-2xl border border-app-primary bg-app-sunken px-4 py-2.5 text-base text-app-text web:bg-app-solid-sunken web:text-app-ink"
         />
         <View className="flex-row items-center justify-end gap-4">
           <Pressable accessibilityRole="button" disabled={isSaving} onPress={onCancel}>

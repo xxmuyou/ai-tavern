@@ -57,7 +57,7 @@ export default function WebCompanionEditScreen() {
               pushError(err instanceof Error ? err.message : 'Could not export this card.'),
             );
           }}
-          className="rounded-lg border border-white/10 bg-white px-3 py-2"
+          className="rounded-lg border border-app-line bg-app-solid-surface px-3 py-2 hover:border-app-rose/50 hover:bg-app-solid-sunken"
         >
           <Text className="text-sm font-semibold text-app-primary">Export card</Text>
         </Pressable>

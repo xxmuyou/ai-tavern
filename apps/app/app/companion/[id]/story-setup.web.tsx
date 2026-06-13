@@ -49,7 +49,7 @@ export default function WebCompanionStorySetupScreen() {
         description="Pick a story pack, write a lightweight arc, or ask AI for a draft. Sandbox chat stays available even if you skip."
       >
         <View className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_1fr]">
-          <CompanionStoryPanel canEdit companionId={detail.id} onChanged={companion.refetch} />
+          <CompanionStoryPanel canEdit companionId={detail.id} onChanged={companion.refetch} tone="dark" />
           <WebCard padding="md" className="gap-4">
             <Text className="font-serif text-title-sm text-white">{detail.name}</Text>
             <Text className="text-body-sm leading-6 text-rose-50/60">

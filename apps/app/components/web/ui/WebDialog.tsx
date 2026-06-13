@@ -31,10 +31,10 @@ const surfaceClass = {
     close: 'hover:bg-app-solid-sunken',
   },
   glass: {
-    panel: 'border-white/12 bg-white/[0.08] backdrop-blur-md',
-    chrome: 'border-white/12 bg-white/[0.06]',
+    panel: 'border-white/12 bg-app-solid-panel/92 backdrop-blur-md',
+    chrome: 'border-white/12 bg-app-solid-surface/95',
     description: 'text-rose-50/75',
-    close: 'hover:bg-white/[0.075]',
+    close: 'hover:bg-app-solid-sunken',
   },
   solid: {
     panel: 'border-app-line bg-app-solid-panel',

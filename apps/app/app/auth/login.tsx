@@ -85,7 +85,7 @@ export default function LoginScreen() {
             placeholder="you@example.com"
             placeholderTextColor="#8B949E"
             value={email}
-            className="min-h-12 rounded-lg border border-app-line bg-white px-4 text-base text-app-text"
+            className="min-h-12 rounded-lg border border-app-line bg-app-sunken px-4 text-base text-app-text"
           />
           <Button isLoading={isSendingLink} label="Send sign-in link" onPress={handleSendLink} variant="secondary" />
           {notice ? <Text className="text-sm leading-5 text-app-primary">{notice}</Text> : null}

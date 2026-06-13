@@ -259,7 +259,7 @@ function Choice({ active, label, onPress }: { active: boolean; label: string; on
       className={`rounded-full border px-3 py-2 ${
         active
           ? 'border-app-rose/70 bg-app-canvas/70 web:bg-app-solid-sunken'
-          : 'border-app-line bg-white web:border-white/15 web:bg-app-solid-surface'
+          : 'border-app-line bg-app-sunken web:border-white/15 web:bg-app-solid-surface'
       }`}
     >
       <Text className={`text-sm font-semibold ${active ? 'text-app-rose-deep' : 'text-app-muted web:text-rose-50/70'}`}>{label}</Text>

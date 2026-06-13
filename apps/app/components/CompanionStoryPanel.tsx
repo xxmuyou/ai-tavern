@@ -67,7 +67,7 @@ export function CompanionStoryPanel({
   const isDark = tone === 'dark';
   const titleClass = isDark ? 'text-white' : 'text-app-text';
   const mutedClass = isDark ? 'text-rose-50/65' : 'text-app-muted';
-  const insetClass = isDark ? 'border-white/10 bg-white/[0.04]' : 'border-app-line bg-app-bg';
+  const insetClass = isDark ? 'border-white/10 bg-app-sunken' : 'border-app-line bg-app-bg web:bg-app-solid-sunken';
 
   async function refreshAll() {
     await arcs.refetch();
@@ -311,7 +311,7 @@ export function CompanionStoryPanel({
 function Panel({ children, compact, tone }: { children: ReactNode; compact?: boolean; tone: PanelTone }) {
   return (
     <View className={`gap-4 rounded-lg border ${compact ? 'p-4' : 'p-5'} ${
-      tone === 'dark' ? 'border-white/10 bg-app-surface' : 'border-app-line bg-app-card web:bg-white'
+      tone === 'dark' ? 'border-white/10 bg-app-surface' : 'border-app-line bg-app-card web:bg-app-solid-surface'
     }`}>
       {children}
     </View>
@@ -335,7 +335,7 @@ function StoryPackRow({
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      className={`rounded-lg border p-4 ${isDark ? 'border-white/10 bg-white/[0.04]' : 'border-app-line bg-app-bg'} ${disabled ? 'opacity-50' : 'opacity-100'}`}
+      className={`rounded-lg border p-4 ${isDark ? 'border-white/10 bg-app-sunken' : 'border-app-line bg-app-bg web:bg-app-solid-sunken'} ${disabled ? 'opacity-50' : 'opacity-100'}`}
     >
       <View className="flex-row flex-wrap items-center gap-2">
         <Text className={`text-base font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>{template.title}</Text>
@@ -362,7 +362,7 @@ function DraftBeatEditor({
 }) {
   const isDark = tone === 'dark';
   return (
-    <View className={`gap-3 rounded-lg border p-3 ${isDark ? 'border-white/10 bg-white/[0.04]' : 'border-app-line bg-app-bg'}`}>
+    <View className={`gap-3 rounded-lg border p-3 ${isDark ? 'border-white/10 bg-app-sunken' : 'border-app-line bg-app-bg web:bg-app-solid-sunken'}`}>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
         <Text className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>Beat {index + 1}</Text>
         <View className="flex-row flex-wrap gap-2">
@@ -438,7 +438,7 @@ function Field({
       <Text className={`mb-2 text-sm font-semibold ${isDark ? 'text-white' : 'text-app-text'}`}>{label}</Text>
       <TextInput
         className={`rounded-lg border px-3 py-3 text-base ${
-          isDark ? 'border-white/10 bg-app-sunken text-app-ink' : 'border-app-line bg-white text-app-text'
+          isDark ? 'border-white/10 bg-app-sunken text-app-ink' : 'border-app-line bg-app-sunken text-app-text web:bg-app-solid-sunken web:text-app-ink'
         } ${
           multiline ? 'min-h-20 text-top' : ''
         }`}
@@ -475,7 +475,7 @@ function ModeButton({
         active
           ? 'border-app-rose/70 bg-app-canvas/70'
           : isDark
-            ? 'border-white/10 bg-white/[0.05]'
+            ? 'border-white/10 bg-app-sunken'
             : 'border-app-line bg-app-card'
       }`}
     >
@@ -489,7 +489,7 @@ function ModeButton({
 function Pill({ label, panelTone, tone = 'primary' }: { label: string; panelTone: PanelTone; tone?: 'primary' | 'muted' }) {
   const isDark = panelTone === 'dark';
   return (
-    <View className={`rounded-full px-2.5 py-1 ${tone === 'primary' ? 'bg-app-primarySoft' : isDark ? 'bg-white/[0.07]' : 'bg-app-sunken'}`}>
+    <View className={`rounded-full px-2.5 py-1 ${tone === 'primary' ? 'bg-app-primarySoft' : 'bg-app-sunken'}`}>
       <Text className={`text-xs font-semibold ${tone === 'primary' ? 'text-app-primary' : isDark ? 'text-rose-50/65' : 'text-app-muted'}`}>{label}</Text>
     </View>
   );

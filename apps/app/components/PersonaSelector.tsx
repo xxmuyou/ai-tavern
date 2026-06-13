@@ -43,7 +43,7 @@ export function PersonaSelector({ personas, selectedId, onSelect }: PersonaSelec
                 accessibilityState={{ selected: isActive }}
                 onPress={() => onSelect(persona.id)}
                 className={`rounded-full border px-3 py-1 ${
-                  isActive ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-white'
+                  isActive ? 'border-app-rose/70 bg-app-canvas/70' : 'border-app-line bg-app-sunken web:bg-app-solid-surface'
                 }`}
               >
                 <Text className={`text-xs font-semibold ${isActive ? 'text-app-rose-deep' : 'text-app-muted'}`}>

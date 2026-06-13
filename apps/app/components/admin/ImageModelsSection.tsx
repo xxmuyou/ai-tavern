@@ -533,7 +533,7 @@ function WorkflowFields({
       <LoraAllowlistPicker draft={draft} loras={loras} models={models} setDraft={setDraft} />
       <Field label="Generation params JSON">
         <TextInput
-          className="min-h-24 rounded-lg border border-app-line bg-white px-3 py-2 text-sm text-app-text"
+          className="min-h-24 rounded-lg border border-app-line bg-app-surface px-3 py-2 text-sm text-app-ink"
           multiline
           onChangeText={(generation_params_json) => setDraft({ ...draft, generation_params_json })}
           placeholder='{"latentNodeId":"4","widthFieldName":"width","heightFieldName":"height","batchSizeFieldName":"batch_size","ksamplerNodeId":"5","seedFieldName":"seed"}'
