@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
 import {
@@ -211,8 +211,10 @@ export default function WebBillingScreen() {
               </WebSection>
 
               <WebSection description="Recent account credit events." eyebrow="Ledger" title="Recent activity">
-                <WebCard padding="md">
-                  <WebTimeline entries={ledgerEntries} emptyLabel="No credit activity yet." />
+                <WebCard className="min-h-[260px]" padding="md">
+                  <ScrollView className="max-h-[340px] min-h-0" contentContainerClassName="pb-1" showsVerticalScrollIndicator>
+                    <WebTimeline entries={ledgerEntries} emptyLabel="No credit activity yet." />
+                  </ScrollView>
                 </WebCard>
               </WebSection>
             </View>

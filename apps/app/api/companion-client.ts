@@ -908,10 +908,11 @@ export async function getProfileOutfitImageJob(jobId: string): Promise<ProfileOu
 
 export async function setCompanionProfileImage(
   companionId: string,
-  generationId: string,
+  input: string | { art_key: string } | { generation_id: string },
 ): Promise<ProfileImageResponse> {
+  const body = typeof input === 'string' ? { generation_id: input } : input;
   return requestJson<ProfileImageResponse>(`/companions/${encodeURIComponent(companionId)}/profile-image`, {
-    body: JSON.stringify({ generation_id: generationId }),
+    body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },
     method: 'PUT',
   });

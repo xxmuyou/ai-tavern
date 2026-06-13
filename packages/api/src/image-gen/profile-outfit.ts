@@ -28,6 +28,7 @@ import {
   type OutfitPromptSource,
 } from "./outfit-image";
 import { checkSourceArtAvailable } from "./source-art";
+import { normalizeObjectKey } from "./signed-url";
 
 export const TASK_PROFILE_OUTFIT_IMAGE = "profile_outfit_image";
 
@@ -145,7 +146,7 @@ export async function loadEffectiveCompanionArtUrl(
   };
 }
 
-export async function setCompanionProfileImageFromGeneration(
+export async function setCompanionProfileImage(
   env: Env,
   user: UserRecord,
   companionId: string,
@@ -155,7 +156,14 @@ export async function setCompanionProfileImageFromGeneration(
   if (!loaded.ok) return loaded.response;
   const body = raw && typeof raw === "object" ? raw as Record<string, unknown> : null;
   const generationId = typeof body?.generation_id === "string" ? body.generation_id.trim() : "";
-  if (!generationId) return jsonResponse({ error: "generation_id_required" }, { status: 400 });
+  const artKey = typeof body?.art_key === "string" ? body.art_key.trim() : "";
+  if (generationId && artKey) {
+    return jsonResponse({ error: "profile_image_source_ambiguous" }, { status: 400 });
+  }
+  if (artKey) {
+    return setCompanionProfileImageFromUploadedArt(env, user, companionId, artKey);
+  }
+  if (!generationId) return jsonResponse({ error: "profile_image_source_required" }, { status: 400 });
 
   const generation = await env.DB.prepare(
     `SELECT * FROM profile_outfit_images
@@ -171,7 +179,7 @@ export async function setCompanionProfileImageFromGeneration(
     return jsonResponse({ error: "generation_not_ready" }, { status: 422 });
   }
 
-  await upsertUserImageAsset(env, user.id, synced.output_key, synced.prompt_snapshot);
+  await upsertUserImageAsset(env, user.id, synced.output_key, "generated", synced.prompt_snapshot);
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO companion_profile_images
@@ -190,6 +198,46 @@ export async function setCompanionProfileImageFromGeneration(
     companion_id: companionId,
     generation_id: synced.id,
     profile_image_override: synced.output_key,
+  });
+}
+
+async function setCompanionProfileImageFromUploadedArt(
+  env: Env,
+  user: UserRecord,
+  companionId: string,
+  rawArtKey: string,
+): Promise<Response> {
+  const artKey = normalizeObjectKey(rawArtKey);
+  if (!artKey) return jsonResponse({ error: "invalid_art_key" }, { status: 400 });
+  if (!isUserOwnedArtKey(artKey, user.id)) {
+    return jsonResponse({ error: "forbidden_art_key" }, { status: 403 });
+  }
+
+  const asset = await env.DB.prepare(
+    "SELECT key FROM asset_objects WHERE key = ?",
+  )
+    .bind(artKey)
+    .first<{ key: string }>();
+  if (!asset) return jsonResponse({ error: "asset_not_found" }, { status: 404 });
+
+  await upsertUserImageAsset(env, user.id, artKey, "upload", null);
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO companion_profile_images
+       (user_id, companion_id, art_key, source_generation_id, created_at, updated_at)
+     VALUES (?, ?, ?, NULL, ?, ?)
+     ON CONFLICT(user_id, companion_id) DO UPDATE SET
+       art_key = excluded.art_key,
+       source_generation_id = NULL,
+       updated_at = excluded.updated_at`,
+  )
+    .bind(user.id, companionId, artKey, now, now)
+    .run();
+
+  return jsonResponse({
+    art_url: artKey,
+    companion_id: companionId,
+    profile_image_override: artKey,
   });
 }
 
@@ -522,7 +570,7 @@ async function syncProfileOutfitFromJob(
   }
   const next = { ...generation, output_key: nextOutputKey, status: nextStatus, updated_at: Date.now() };
   if (next.status === "succeeded" && next.output_key) {
-    await upsertUserImageAsset(env, next.user_id, next.output_key, next.prompt_snapshot);
+    await upsertUserImageAsset(env, next.user_id, next.output_key, "generated", next.prompt_snapshot);
   }
   return next;
 }
@@ -549,20 +597,25 @@ async function upsertUserImageAsset(
   env: Env,
   userId: string,
   artKey: string,
+  source: "generated" | "upload",
   prompt: string | null,
 ): Promise<void> {
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO user_image_assets
        (id, user_id, art_key, source, prompt, model_id, created_at, deleted_at)
-     VALUES (?, ?, ?, 'generated', ?, NULL, ?, NULL)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, NULL)
      ON CONFLICT(user_id, art_key) DO UPDATE SET
-       source = 'generated',
+       source = excluded.source,
        prompt = COALESCE(excluded.prompt, user_image_assets.prompt),
        deleted_at = NULL`,
   )
-    .bind(crypto.randomUUID(), userId, artKey, prompt, now)
+    .bind(crypto.randomUUID(), userId, artKey, source, prompt, now)
     .run();
+}
+
+function isUserOwnedArtKey(key: string, userId: string): boolean {
+  return key.startsWith(`user-art/${userId}/`) || key.startsWith(`companions/user/${userId}/`);
 }
 
 async function loadUserTimezone(env: Env, userId: string): Promise<string | null> {

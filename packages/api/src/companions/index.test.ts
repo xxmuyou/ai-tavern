@@ -93,6 +93,7 @@ type CutoutJobFixture = {
 };
 
 type Fixtures = {
+  assetObjects?: string[];
   companions: CompanionRow[];
   cutoutJobs?: CutoutJobFixture[];
   favorites?: CompanionFavoriteFixture[];
@@ -696,6 +697,137 @@ describe("companions module", () => {
     expect(response?.status).toBe(404);
   });
 
+  it("PUT /companions/:id/profile-image accepts a user-uploaded art key for an official companion", async () => {
+    const uploadedKey = "companions/user/user-1/uploaded-profile.webp";
+    const env = createEnv({
+      assetObjects: [uploadedKey],
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/profile-image", token, "PUT", {
+        art_key: uploadedKey,
+      }),
+      env,
+      "/companions/maya/profile-image",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as { profile_image_override: string };
+    expect(body.profile_image_override).toBe(uploadedKey);
+
+    const detail = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya", token),
+      env,
+      "/companions/maya",
+    );
+    const detailBody = (await detail?.json()) as { art_url: string | null; profile_image_override: string | null };
+    expect(detailBody.art_url).toBe(uploadedKey);
+    expect(detailBody.profile_image_override).toBe(uploadedKey);
+  });
+
+  it("PUT /companions/:id/profile-image accepts a user-uploaded art key for the user's own companion", async () => {
+    const uploadedKey = "companions/user/user-1/private-profile.png";
+    const env = createEnv({
+      assetObjects: [uploadedKey],
+      companions: [userCompanion("alex", "user-1", "female", { art_url: "companions/user/user-1/original.png" })],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/alex/profile-image", token, "PUT", {
+        art_key: uploadedKey,
+      }),
+      env,
+      "/companions/alex/profile-image",
+    );
+
+    expect(response?.status).toBe(200);
+    const detail = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/alex", token),
+      env,
+      "/companions/alex",
+    );
+    const detailBody = (await detail?.json()) as { art_url: string | null; canonical_art_url: string | null };
+    expect(detailBody.art_url).toBe(uploadedKey);
+    expect(detailBody.canonical_art_url).toBe("companions/user/user-1/original.png");
+  });
+
+  it("PUT /companions/:id/profile-image rejects another user's uploaded art key", async () => {
+    const uploadedKey = "companions/user/user-2/uploaded-profile.webp";
+    const env = createEnv({
+      assetObjects: [uploadedKey],
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      relationships: [],
+      users: [
+        { email: "player@example.com", id: "user-1" },
+        { email: "other@example.com", id: "user-2" },
+      ],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/profile-image", token, "PUT", {
+        art_key: uploadedKey,
+      }),
+      env,
+      "/companions/maya/profile-image",
+    );
+
+    expect(response?.status).toBe(403);
+  });
+
+  it("PUT /companions/:id/profile-image rejects a missing uploaded art key", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/profile-image", token, "PUT", {
+        art_key: "companions/user/user-1/missing.webp",
+      }),
+      env,
+      "/companions/maya/profile-image",
+    );
+
+    expect(response?.status).toBe(404);
+  });
+
+  it("DELETE /companions/:id/profile-image clears a user's uploaded override", async () => {
+    const env = createEnv({
+      companions: [officialCompanion("maya", "female", { art_url: "portraits/maya/neutral.webp" })],
+      profileImages: [{
+        art_key: "companions/user/user-1/uploaded-profile.webp",
+        companion_id: "maya",
+        source_generation_id: null,
+        user_id: "user-1",
+      }],
+      relationships: [],
+    });
+    const token = await issueDevToken(env, "player@example.com");
+
+    const response = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya/profile-image", token, "DELETE"),
+      env,
+      "/companions/maya/profile-image",
+    );
+
+    expect(response?.status).toBe(200);
+    const detail = await handleCompanionsRequest(
+      authedRequest("http://localhost/companions/maya", token),
+      env,
+      "/companions/maya",
+    );
+    const detailBody = (await detail?.json()) as { art_url: string | null; profile_image_override: string | null };
+    expect(detailBody.art_url).toBe("portraits/maya/neutral.webp");
+    expect(detailBody.profile_image_override).toBeNull();
+  });
+
   it("get on user's own private companion succeeds; on other user's private returns 404", async () => {
     const env = createEnv({
       companions: [userCompanion("alex", "user-1"), userCompanion("private", "user-2")],
@@ -1282,6 +1414,7 @@ function authedRequest(
 // -----------------------------------------------------------------------------
 
 function createEnv(fixtures: Fixtures): Env {
+  const assetObjects = new Set(fixtures.assetObjects ?? []);
   const users = new Map<string, { id: string; email: string }>();
   const seedUsers = fixtures.users ?? [{ email: "player@example.com", id: "user-1" }];
   for (const u of seedUsers) users.set(u.email, u);
@@ -1319,6 +1452,7 @@ function createEnv(fixtures: Fixtures): Env {
       prepare(sql: string) {
         return buildStatement(sql, {
           companions,
+          assetObjects,
           cutoutJobs,
           favorites,
           imageJobs,
@@ -1339,6 +1473,7 @@ function createEnv(fixtures: Fixtures): Env {
 }
 
 type MockState = {
+  assetObjects: Set<string>;
   companions: Map<string, CompanionRow>;
   cutoutJobs: Map<string, CutoutJobFixture>;
   favorites: CompanionFavoriteFixture[];
@@ -1496,7 +1631,7 @@ function queryFirst<T>(
   values: unknown[],
   state: MockState,
 ): T | null {
-  const { companions, cutoutJobs, favorites, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
+  const { assetObjects, companions, cutoutJobs, favorites, imageJobs, profileImages, profileOutfits, proUserIds, relationships, users } = state;
   if (sql.includes("FROM admin_user_allowlist")) {
     return { email: values[0] as string } as T;
   }
@@ -1612,6 +1747,11 @@ function queryFirst<T>(
       : null;
   }
 
+  if (sql.includes("FROM asset_objects WHERE key = ?")) {
+    const key = values[0] as string;
+    return (assetObjects.has(key) ? { key } : null) as T | null;
+  }
+
   if (sql.includes("FROM relationships") && sql.includes("WHERE user_id = ? AND companion_id = ?")) {
     const [userId, companionId] = values as [string, string];
     const rel = relationships.find((r) => r.user_id === userId && r.companion_id === companionId);
@@ -1662,7 +1802,7 @@ function queryFirst<T>(
 }
 
 function mutate(sql: string, values: unknown[], state: MockState): void {
-  const { companions, cutoutJobs, favorites, imageJobs, profileImages, profileOutfits, userImageAssets, users } = state;
+  const { assetObjects, companions, cutoutJobs, favorites, imageJobs, profileImages, profileOutfits, userImageAssets, users } = state;
   if (sql.includes("INSERT OR IGNORE INTO users")) {
     const [id, email] = values as [string, string];
     if (id && email && !users.has(email)) {
@@ -1881,6 +2021,12 @@ function mutate(sql: string, values: unknown[], state: MockState): void {
   if (sql.includes("INSERT INTO user_image_assets")) {
     const [, userId, artKey] = values as [string, string, string];
     userImageAssets.set(`${userId}:${artKey}`, { art_key: artKey, user_id: userId });
+    return;
+  }
+
+  if (sql.includes("INSERT OR REPLACE INTO asset_objects")) {
+    const [key] = values as [string];
+    assetObjects.add(key);
     return;
   }
 

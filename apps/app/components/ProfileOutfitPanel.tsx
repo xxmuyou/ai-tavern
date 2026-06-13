@@ -11,6 +11,7 @@ import {
   getProfileOutfitRecommendations,
   mediaSource,
   setCompanionProfileImage,
+  uploadCompanionArt,
 } from '@/api/companion-client';
 import type { MomentImageStatus, OutfitRecommendation } from '@/api/types';
 import { WebButton, WebCard } from '@/components/web/ui';
@@ -44,6 +45,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
   const [customPrompt, setCustomPrompt] = useState('');
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [outputKey, setOutputKey] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const activeRef = useRef(true);
 
   useEffect(() => {
@@ -177,6 +179,22 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
     }
   }
 
+  async function uploadProfileImage() {
+    setIsUploading(true);
+    try {
+      const file = await selectImageFile();
+      if (!file) return;
+      const uploaded = await uploadCompanionArt(file);
+      await setCompanionProfileImage(companionId, { art_key: uploaded.key });
+      await onChanged();
+      if (activeRef.current) setPhase('idle');
+    } catch {
+      onError?.('Could not upload this profile image.');
+    } finally {
+      if (activeRef.current) setIsUploading(false);
+    }
+  }
+
   async function resetProfileImage() {
     try {
       await clearCompanionProfileImage(companionId);
@@ -191,18 +209,29 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
 
   return (
     <WebCard padding="md" className="gap-3 border-white/12 bg-[#1B0F22]">
-      <View className="flex-row items-center justify-between gap-3">
+      <View className="flex-row flex-wrap items-center justify-between gap-3">
         <View className="min-w-0 flex-1">
           <Text className="text-overline text-rose-200">Profile image</Text>
-          <Text className="mt-1 text-body-sm text-rose-50/75">Generate a new outfit for {name}, then keep only the one that feels right.</Text>
+          <Text className="mt-1 text-body-sm text-rose-50/75">Upload your own image, or generate a new outfit for {name}.</Text>
         </View>
-        <WebButton
-          label={phase === 'generating' ? 'Generating…' : 'Change outfit'}
-          isLoading={phase === 'generating'}
-          onPress={() => void openChooser()}
-          variant="primary"
-          iconLeft={<Ionicons color={PALETTE.roseDeep} name="shirt-outline" size={16} />}
-        />
+        <View className="flex-row flex-wrap justify-end gap-2">
+          <WebButton
+            label={isUploading ? 'Uploading…' : 'Upload image'}
+            isLoading={isUploading}
+            onPress={() => void uploadProfileImage()}
+            variant="outline"
+            iconLeft={<Ionicons color={PALETTE.roseDeep} name="image-outline" size={16} />}
+            disabled={phase === 'generating' || phase === 'applying'}
+          />
+          <WebButton
+            label={phase === 'generating' ? 'Generating…' : 'Change outfit'}
+            isLoading={phase === 'generating'}
+            onPress={() => void openChooser()}
+            variant="primary"
+            iconLeft={<Ionicons color={PALETTE.roseDeep} name="shirt-outline" size={16} />}
+            disabled={isUploading}
+          />
+        </View>
       </View>
 
       {phase === 'choosing' || phase === 'generating' || phase === 'ready' || phase === 'applying' || phase === 'error' ? (
@@ -289,3 +318,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
+
+function selectImageFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
+}

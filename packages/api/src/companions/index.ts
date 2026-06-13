@@ -32,7 +32,7 @@ import {
   clearCompanionProfileImage,
   handleProfileOutfitRequest,
   loadEffectiveCompanionArtUrl,
-  setCompanionProfileImageFromGeneration,
+  setCompanionProfileImage,
 } from "../image-gen/profile-outfit";
 import {
   handleCompanionCutoutRequest,
@@ -250,7 +250,7 @@ export async function handleCompanionsRequest(
       return clearCompanionProfileImage(env, user, companionId);
     }
     const body = await readJson<unknown>(request);
-    return setCompanionProfileImageFromGeneration(env, user, companionId, body);
+    return setCompanionProfileImage(env, user, companionId, body);
   }
 
   const dailyStateMatch = pathname.match(/^\/companions\/([^/]+)\/daily-state$/);
