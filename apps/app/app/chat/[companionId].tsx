@@ -44,7 +44,6 @@ import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { PortraitBar } from '@/components/PortraitBar';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StoryActionBar } from '@/components/StoryActionBar';
-import { StreamingBubble } from '@/components/StreamingBubble';
 import { TopBar } from '@/components/TopBar';
 import { UnlockCelebration } from '@/components/UnlockCelebration';
 import { ApiError, QuotaExceededError, RateLimitedError } from '@/hooks/use-api';
@@ -59,6 +58,7 @@ import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { usePendingEvents } from '@/hooks/use-pending-events';
 import { PersonaSelector } from '@/components/PersonaSelector';
+import { useStreamingChatMessages } from '@/hooks/use-streaming-chat-messages';
 import { useMessageActions } from '@/hooks/use-message-actions';
 import { MessageActions } from '@/components/MessageActions';
 import { useEditMessage } from '@/hooks/use-edit-message';
@@ -128,9 +128,9 @@ function ChatScreenInner() {
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   const history = useChatHistory(companionId);
+  const streamingMessages = useStreamingChatMessages(companionId, history);
   const stream = useChatStream(companionId);
-  // The streaming bubble lives in ListFooterComponent so per-chunk updates never
-  // rebuild this array — FlatList keeps the same data reference while streaming.
+  // Streaming replies are real local messages now, so the same bubble grows in place.
   const items = history.messages;
   const autoScroll = useChatAutoScroll({
     getItems: () => items,
@@ -155,6 +155,13 @@ function ChatScreenInner() {
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
   const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true));
   const autoVoice = useAutoVoice();
+  const {
+    appendLocalUserMessage,
+    appendStreamingCompanionMessage,
+    cleanupFailedStreamingCompanionMessage,
+    finishStreamingCompanionMessage,
+    updateStreamingCompanionMessage,
+  } = streamingMessages;
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
     onSaved: () => {
@@ -338,17 +345,13 @@ function ChatScreenInner() {
       return;
     }
     const text = inviteTextForTarget(target);
-    const userMessage: ChatMessage = {
-      companion_id: companionId,
-      content: text,
-      created_at: new Date().toISOString(),
-      id: `local-user-${Date.now()}`,
-      role: 'user',
-    };
-    history.appendMessage(userMessage);
+    const messageSceneId = sceneId ?? null;
+    appendLocalUserMessage(text, messageSceneId);
+    const streamingMessageId = appendStreamingCompanionMessage(messageSceneId);
 
     let serverMessageId = '';
     let acceptedSceneId: string | null = null;
+    let streamedText = '';
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
@@ -357,7 +360,10 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: notifyNewReply,
+        onChunk: (_delta, total) => {
+          streamedText = total;
+          updateStreamingCompanionMessage(streamingMessageId, total);
+        },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
         },
@@ -375,16 +381,7 @@ function ChatScreenInner() {
         },
         sceneId,
       });
-      const finalMessage: ChatMessage = {
-        companion_id: companionId,
-        content: result.text,
-        created_at: new Date().toISOString(),
-        emotion: result.emotion,
-        id: serverMessageId || `local-companion-${Date.now()}`,
-        role: 'companion',
-        scene_id: sceneId ?? null,
-      };
-      history.appendMessage(finalMessage);
+      finishStreamingCompanionMessage(streamingMessageId, result, serverMessageId, messageSceneId);
       if (acceptedSceneId) {
         history.appendMessage({
           companion_id: companionId,
@@ -413,8 +410,9 @@ function ChatScreenInner() {
         const message = error instanceof Error ? error.message : 'Failed to send invitation.';
         pushError(message);
       }
+      cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, handleInviteResult, history, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, companionId, finishStreamingCompanionMessage, handleInviteResult, history, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream, updateStreamingCompanionMessage]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -436,17 +434,13 @@ function ChatScreenInner() {
     if (rateLimitedUntil && Date.now() < rateLimitedUntil) {
       return;
     }
-    const userMessage: ChatMessage = {
-      companion_id: companionId,
-      content: text,
-      created_at: new Date().toISOString(),
-      id: `local-user-${Date.now()}`,
-      role: 'user',
-    };
-    history.appendMessage(userMessage);
+    const messageSceneId = sceneId ?? null;
+    appendLocalUserMessage(text, messageSceneId);
+    const streamingMessageId = appendStreamingCompanionMessage(messageSceneId);
     setDraft('');
 
     let serverMessageId = '';
+    let streamedText = '';
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
@@ -454,7 +448,10 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: notifyNewReply,
+        onChunk: (_delta, total) => {
+          streamedText = total;
+          updateStreamingCompanionMessage(streamingMessageId, total);
+        },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
         },
@@ -468,16 +465,7 @@ function ChatScreenInner() {
         },
         sceneId,
       });
-      const finalMessage: ChatMessage = {
-        companion_id: companionId,
-        content: result.text,
-        created_at: new Date().toISOString(),
-        emotion: result.emotion,
-        id: serverMessageId || `local-companion-${Date.now()}`,
-        role: 'companion',
-        scene_id: sceneId ?? null,
-      };
-      history.appendMessage(finalMessage);
+      finishStreamingCompanionMessage(streamingMessageId, result, serverMessageId, messageSceneId);
       notifyNewReply();
       // Auto-play the new reply when the global voice toggle is on.
       if (autoVoice.enabled && serverMessageId) {
@@ -498,22 +486,19 @@ function ChatScreenInner() {
         const message = error instanceof Error ? error.message : 'Failed to send message.';
         pushError(message);
       }
+      cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, autoVoice.enabled, companionId, draft, history, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, draft, finishStreamingCompanionMessage, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream, updateStreamingCompanionMessage]);
 
   const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
     const text = quickActionTextForItem(itemId);
-    const userMessage: ChatMessage = {
-      companion_id: companionId,
-      content: text,
-      created_at: new Date().toISOString(),
-      id: `local-user-${Date.now()}`,
-      role: 'user',
-    };
-    history.appendMessage(userMessage);
+    const messageSceneId = sceneId ?? null;
+    appendLocalUserMessage(text, messageSceneId);
+    const streamingMessageId = appendStreamingCompanionMessage(messageSceneId);
 
     let serverMessageId = '';
+    let streamedText = '';
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
@@ -523,7 +508,10 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: notifyNewReply,
+        onChunk: (_delta, total) => {
+          streamedText = total;
+          updateStreamingCompanionMessage(streamingMessageId, total);
+        },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
           showInviteNotice(quick.ok
@@ -539,15 +527,7 @@ function ChatScreenInner() {
           setUnlockToken((token) => token + 1);
         },
       });
-      history.appendMessage({
-        companion_id: companionId,
-        content: result.text,
-        created_at: new Date().toISOString(),
-        emotion: result.emotion,
-        id: serverMessageId || `local-companion-${Date.now()}`,
-        role: 'companion',
-        scene_id: sceneId ?? null,
-      });
+      finishStreamingCompanionMessage(streamingMessageId, result, serverMessageId, messageSceneId);
       notifyNewReply();
       void relationship.refresh();
     } catch (error) {
@@ -556,8 +536,9 @@ function ChatScreenInner() {
       } else {
         pushError(error instanceof Error ? error.message : 'Quick action failed.');
       }
+      cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, companionId, history, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, cleanupFailedStreamingCompanionMessage, finishStreamingCompanionMessage, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream, updateStreamingCompanionMessage]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
@@ -690,7 +671,11 @@ function ChatScreenInner() {
 
     return (
       <View>
-        <MessageBubble content={item.content} role={role} />
+        <MessageBubble
+          content={item.content}
+          isPending={role === 'companion' && item.id.startsWith('local-') && item.content.length === 0}
+          role={role}
+        />
         {isServerUser ? (
           <View className="w-full flex-row justify-end px-5 pb-1">
             <Pressable
@@ -889,9 +874,6 @@ function ChatScreenInner() {
                     </Pressable>
                   </View>
                 ) : null
-              }
-              ListFooterComponent={
-                stream.isStreaming ? <StreamingBubble text={stream.streamingText} /> : null
               }
             />
           )}

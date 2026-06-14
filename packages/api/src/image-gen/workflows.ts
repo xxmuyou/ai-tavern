@@ -25,6 +25,8 @@ export type WorkflowConfig = {
   label?: string;
   mode: ImageGenMode;
   workflowId: string;
+  /** Optional RunningHub task instance type, e.g. "plus" for 48G VRAM. */
+  instanceType?: string;
   promptNodeId: string;
   /** Field name on the prompt node. Source of truth is the workflow contract. */
   promptFieldName?: string;
@@ -58,6 +60,11 @@ function str(value: unknown): string {
   return value == null ? "" : String(value).trim();
 }
 
+function runningHubInstanceType(value: unknown): string | undefined {
+  const normalized = str(value).toLowerCase();
+  return normalized === "plus" ? normalized : undefined;
+}
+
 export function isImageGenMode(value: unknown): value is ImageGenMode {
   return value === "create" || value === "variation" || value === "cutout";
 }
@@ -87,6 +94,7 @@ export function parseWorkflows(raw: string | null | undefined): Record<string, W
       label: str(entry.label) || undefined,
       mode,
       workflowId,
+      instanceType: runningHubInstanceType(entry.instanceType),
       promptNodeId,
       promptFieldName: str(entry.promptFieldName) || "text",
       checkpointNodeId: str(entry.checkpointNodeId) || undefined,

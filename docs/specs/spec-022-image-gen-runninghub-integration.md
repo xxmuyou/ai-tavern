@@ -167,8 +167,8 @@ RunningHub 提供 `POST /api/openapi/getJsonApiFormat`，传 `apiKey + workflowI
 
 | Endpoint | 用途 | 状态 |
 |---|---|---|
-| `POST https://www.runninghub.ai/task/openapi/create` | 创建任务（路径推测，**待客服确认**） | OPEN |
-| `POST https://www.runninghub.ai/task/openapi/status` | 任务状态查询（路径推测，**待客服确认**） | OPEN |
+| `POST https://www.runninghub.ai/task/openapi/create` | 创建任务 | ✅ 已知 |
+| `POST https://www.runninghub.ai/task/openapi/status` | 任务状态查询 | ✅ 已知 |
 | `POST https://www.runninghub.ai/task/openapi/retryWebhook` | 重发 webhook 事件 | ✅ 已知 |
 
 #### B.2 认证
@@ -181,7 +181,7 @@ Content-Type: application/json
 
 `RUNNINGHUB_API_KEY` 是 32 位字符串，在 RunningHub 网页右上角个人菜单查看；走 Cloudflare Worker secret，不入仓库。
 
-#### B.3 创建任务请求体（推测，待客服确认）
+#### B.3 创建任务请求体
 
 目标形态下 `workflowId` 按请求 `mode` 选（create/variation/edit 各一个）；`nodeInfoList` 按 mode 拼装，并只注入 contract 校验通过的字段。workflow/node 映射来自 D1 catalog，由 repo workflow 配置文件与 RunningHub contract 刷新结果在部署时同步。下例为 `variation` mode，字段名均为占位符，必须来自该 workflow contract：
 
@@ -197,6 +197,16 @@ Content-Type: application/json
   "webhookUrl": "https://api.<our-domain>/webhooks/runninghub"
 }
 ```
+
+RunningHub Plus / 48G VRAM 任务不换 base URL，只在创建任务请求体中增加可选字段：
+
+```json
+{
+  "instanceType": "plus"
+}
+```
+
+系统按 workflow 配置 opt-in 传递该字段，默认 workflow 不带此参数。
 
 各 mode 的 `nodeInfoList` 差异：
 - `create`：prompt 必填；checkpoint 仅当 workflow contract 声明 checkpoint 节点且用户选择 checkpoint 时注入；load-image 仅保留给后续 img2img 能力，当前创建 UI 不使用。

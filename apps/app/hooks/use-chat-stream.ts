@@ -12,6 +12,7 @@ import {
 
 export const CHAT_EMOTIONS = ['warm', 'neutral', 'guarded', 'playful', 'tense', 'annoyed'] as const;
 export type ChatEmotion = (typeof CHAT_EMOTIONS)[number];
+const STREAM_FLUSH_MS = 100;
 
 export type ChatStreamDoneInfo = {
   messageId: string;
@@ -96,12 +97,10 @@ function categorizeStreamError(rawError: unknown): Error {
 export type UseChatStreamResult = {
   isStreaming: boolean;
   send: (text: string, options?: SendOptions) => Promise<ChatStreamResult>;
-  streamingText: string;
 };
 
 export function useChatStream(companionId: string): UseChatStreamResult {
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
   const activeRef = useRef(false);
 
   const send = useCallback(
@@ -111,13 +110,12 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       }
       activeRef.current = true;
       setIsStreaming(true);
-      setStreamingText('');
 
       let buffer = '';
       let emotion: ChatEmotion | null = null;
 
-      // Coalesce per-token chunks into ~20 UI updates per second; rendering
-      // each token individually causes visible jank on long replies.
+      // Coalesce token chunks so the chat bubble grows smoothly without
+      // forcing React Native Web to re-layout the thread on every provider delta.
       let pendingDelta = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
       const flush = () => {
@@ -127,7 +125,6 @@ export function useChatStream(companionId: string): UseChatStreamResult {
         }
         const delta = pendingDelta;
         pendingDelta = '';
-        setStreamingText(buffer);
         options.onChunk?.(delta, buffer);
       };
       const flushNow = () => {
@@ -154,7 +151,7 @@ export function useChatStream(companionId: string): UseChatStreamResult {
               buffer += delta;
               pendingDelta += delta;
               if (flushTimer === null) {
-                flushTimer = setTimeout(flush, 50);
+                flushTimer = setTimeout(flush, STREAM_FLUSH_MS);
               }
             }
           } else if (event.type === 'signals') {
@@ -225,11 +222,10 @@ export function useChatStream(companionId: string): UseChatStreamResult {
         }
         activeRef.current = false;
         setIsStreaming(false);
-        setStreamingText('');
       }
     },
     [companionId],
   );
 
-  return { isStreaming, send, streamingText };
+  return { isStreaming, send };
 }

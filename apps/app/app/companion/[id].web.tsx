@@ -210,44 +210,57 @@ export default function WebCompanionDetailScreen() {
               </View>
             </View>
 
-            <View className="gap-2 border-t border-white/8 pt-4">
+            <View className="gap-3 border-t border-white/8 pt-4">
               <WebButton
-                label="Chat now"
+                label="Start chat"
                 onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
                 variant="primary"
                 iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
+                className="w-full"
               />
               {canPublish || canEdit ? (
-                <View className="flex-row flex-wrap gap-2">
-                  {canPublish ? (
-                    <>
-                      <WebButton
-                        label={isPublishing ? 'Saving…' : isPublic ? 'Unpublish' : 'Publish'}
-                        onPress={() => void handleTogglePublish(false)}
-                        size="sm"
-                        variant="outline"
-                      />
-                      {!isPublic ? (
+                <View className="gap-2">
+                  <Text className="text-overline text-rose-50/55">Manage</Text>
+                  <View className="grid grid-cols-2 gap-2">
+                    {canPublish ? (
+                      <>
                         <WebButton
-                          label="Publish + story"
-                          onPress={() => void handleTogglePublish(true)}
+                          label={isPublishing ? 'Saving...' : isPublic ? 'Unpublish' : 'Publish'}
+                          onPress={() => void handleTogglePublish(false)}
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                        />
+                        {!isPublic ? (
+                          <WebButton
+                            label="Publish story"
+                            onPress={() => void handleTogglePublish(true)}
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                          />
+                        ) : null}
+                      </>
+                    ) : null}
+                    {canEdit ? (
+                      <>
+                        <WebButton
+                          label="Edit"
+                          onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                        />
+                        <WebButton
+                          label="Delete"
+                          onPress={() => setConfirmDelete(true)}
                           size="sm"
                           variant="ghost"
+                          className="w-full"
                         />
-                      ) : null}
-                    </>
-                  ) : null}
-                  {canEdit ? (
-                    <>
-                      <WebButton
-                        label="Edit"
-                        onPress={() => router.push(`/companion/${encodeURIComponent(companion.id)}/edit` as Href)}
-                        size="sm"
-                        variant="outline"
-                      />
-                      <WebButton label="Delete" onPress={() => setConfirmDelete(true)} size="sm" variant="ghost" />
-                    </>
-                  ) : null}
+                      </>
+                    ) : null}
+                  </View>
                 </View>
               ) : null}
             </View>

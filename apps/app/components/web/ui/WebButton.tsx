@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PALETTE } from '@/constants/palette';
 
@@ -97,10 +97,16 @@ export function WebButton({
       {isLoading ? (
         <ActivityIndicator color={PALETTE.ink} />
       ) : (
-        <View className="flex-row items-center gap-2">
+        <View className="min-w-0 max-w-full flex-row items-center gap-2">
           {iconLeft ? <View>{iconLeft}</View> : null}
           {label ? (
-            <Text className={cn('font-semibold', textSizeClass[size], textColorClass[variant])}>{label}</Text>
+            <Text
+              className={cn('min-w-0 font-semibold', textSizeClass[size], textColorClass[variant])}
+              numberOfLines={1}
+              style={styles.label}
+            >
+              {label}
+            </Text>
           ) : null}
           {children}
           {iconRight ? <View>{iconRight}</View> : null}
@@ -109,3 +115,10 @@ export function WebButton({
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  label: {
+    flexShrink: 1,
+    maxWidth: '100%',
+  },
+});

@@ -43,9 +43,13 @@ describe("outfit image prompts", () => {
       error: "prompt_too_long",
       ok: false,
     });
-    expect(validateCustomOutfitPrompt("see-through lingerie")).toEqual({
+    expect(validateCustomOutfitPrompt("nsfw naked outfit")).toEqual({
       error: "unsafe_prompt",
       ok: false,
+    });
+    expect(validateCustomOutfitPrompt("lace lingerie-inspired evening dress")).toEqual({
+      ok: true,
+      prompt: "lace lingerie-inspired evening dress",
     });
     expect(validateCustomOutfitPrompt("black oversized hoodie")).toEqual({
       ok: true,

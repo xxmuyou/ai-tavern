@@ -17,6 +17,7 @@ export type UseChatHistoryResult = {
   isLoadingMore: boolean;
   loadMore: () => Promise<void>;
   messages: ChatMessage[];
+  removeMessage: (id: string) => void;
   refresh: (options?: ChatHistoryRefreshOptions) => Promise<void>;
   replaceMessage: (id: string, next: ChatMessage) => void;
   reset: () => void;
@@ -101,6 +102,10 @@ export function useChatHistory(companionId: string): UseChatHistoryResult {
     setMessages((current) => current.map((message) => (message.id === id ? next : message)));
   }, []);
 
+  const removeMessage = useCallback((id: string) => {
+    setMessages((current) => current.filter((message) => message.id !== id));
+  }, []);
+
   const updateMessage = useCallback((id: string, updater: (message: ChatMessage) => ChatMessage) => {
     setMessages((current) => current.map((message) => (message.id === id ? updater(message) : message)));
   }, []);
@@ -119,6 +124,7 @@ export function useChatHistory(companionId: string): UseChatHistoryResult {
     isLoadingMore,
     loadMore,
     messages,
+    removeMessage,
     refresh,
     replaceMessage,
     reset,

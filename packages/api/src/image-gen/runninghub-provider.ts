@@ -394,6 +394,7 @@ async function submitTask(
   const baseUrl = (cfg.runninghubBaseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
   const body = {
     apiKey,
+    ...(config.instanceType ? { instanceType: config.instanceType } : {}),
     nodeInfoList,
     webhookUrl: cfg.webhookUrl ? buildWebhookUrl(cfg.webhookUrl, cfg.webhookSecret) : undefined,
     workflowId: config.workflowId,
@@ -459,6 +460,7 @@ async function readWorkflowConfig(
   requireApiKey(cfg);
   const workflowKey = normalizeWorkflowKey(key) || key;
   const dbWorkflow = await getImageWorkflow(env, workflowKey).catch(() => null);
+  const fallbackConfig = getWorkflowConfig(cfg.workflows, workflowKey);
   const config = dbWorkflow
     ? {
         checkpointFieldName: dbWorkflow.checkpoint_field_name || "ckpt_name",
@@ -480,9 +482,10 @@ async function readWorkflowConfig(
         promptNodeId: dbWorkflow.prompt_node_id,
         contractHash: dbWorkflow.contract_hash ?? undefined,
         contractJson: dbWorkflow.contract_json ?? undefined,
+        instanceType: fallbackConfig?.instanceType,
         workflowId: dbWorkflow.workflow_id,
       }
-    : getWorkflowConfig(cfg.workflows, workflowKey);
+    : fallbackConfig;
   if (!config) {
     throw new ImageGenError(
       "provider_not_configured",

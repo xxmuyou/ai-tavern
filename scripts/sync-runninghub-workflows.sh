@@ -461,6 +461,10 @@ for (const key of Object.keys(workflowsRaw)) {
     throw new Error(`workflows.${key}.mode must be "create", "variation", or "cutout".`);
   }
   const workflowId = readString(`workflows.${key}.workflowId`, entry.workflowId);
+  const instanceType = readString(`workflows.${key}.instanceType`, entry.instanceType).toLowerCase();
+  if (instanceType && instanceType !== "plus") {
+    throw new Error(`workflows.${key}.instanceType must be "plus" when provided.`);
+  }
   const promptNodeId = readString(`workflows.${key}.promptNodeId`, entry.promptNodeId);
   const promptFieldName =
     readString(`workflows.${key}.promptFieldName`, entry.promptFieldName) || "text";
@@ -567,6 +571,7 @@ for (const key of Object.keys(workflowsRaw)) {
     label,
     mode,
     workflowId,
+    ...(instanceType ? { instanceType } : {}),
     promptNodeId,
     promptFieldName,
     ...(checkpointNodeId ? { checkpointNodeId } : {}),

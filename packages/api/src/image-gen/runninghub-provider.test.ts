@@ -403,6 +403,44 @@ describe("runningHubImageGenProvider", () => {
     expect(body.nodeInfoList).toEqual([
       { fieldName: "text", fieldValue: "a calm girl in a sweater", nodeId: "6" },
     ]);
+    expect(body.instanceType).toBeUndefined();
+  });
+
+  it("passes RunningHub plus instanceType when configured for the workflow", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-plus-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          chat_moment: {
+            instanceType: "plus",
+            mode: "create",
+            promptNodeId: "13",
+            promptFieldName: "prompt",
+            workflowId: "moment-plus-workflow",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "create")).generate(
+      { mode: "create", prompt: "a quiet cafe", workflow_key: "chat_moment" },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body).toMatchObject({
+      instanceType: "plus",
+      workflowId: "moment-plus-workflow",
+    });
   });
 
   it("injects the negative prompt on the create path (chat_moment) when configured", async () => {
@@ -797,6 +835,7 @@ describe("parseWorkflows", () => {
   it("parses URL workflows without architecture metadata", () => {
     expect(parseWorkflows(JSON.stringify({
       chat_moment: {
+        instanceType: "plus",
         loadImageFieldName: "url",
         loadImageNodeId: "1",
         mode: "create",
@@ -805,6 +844,7 @@ describe("parseWorkflows", () => {
       },
     }))).toMatchObject({
       chat_moment: {
+        instanceType: "plus",
         loadImageFieldName: "url",
         loadImageNodeId: "1",
         mode: "create",

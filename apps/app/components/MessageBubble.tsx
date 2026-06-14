@@ -1,18 +1,27 @@
+import { memo } from 'react';
 import { Text, View } from 'react-native';
 
 import { normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
 
 type MessageBubbleProps = {
   content: string;
+  isPending?: boolean;
   role: 'user' | 'companion' | 'assistant';
   companionName?: string | null;
 };
 
-export function MessageBubble({ content, role, companionName }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ content, isPending = false, role, companionName }: MessageBubbleProps) {
   const isUser = role === 'user';
   const segments = parseNarration(content);
 
   if (segments.length === 0) {
+    if (isPending && !isUser) {
+      return (
+        <View className="w-full py-1">
+          <TypingBubble />
+        </View>
+      );
+    }
     return null;
   }
 
@@ -42,6 +51,20 @@ export function MessageBubble({ content, role, companionName }: MessageBubblePro
           <DialogueBubble key={idx} text={segment.text} role="companion" />
         )
       ))}
+    </View>
+  );
+});
+
+function TypingBubble() {
+  return (
+    <View className="w-full flex-row justify-start px-4 py-0.5">
+      <View className="rounded-2xl rounded-tl-md border border-app-line bg-app-card px-4 py-3">
+        <View className="flex-row items-center gap-1.5">
+          <View className="h-1.5 w-1.5 rounded-full bg-app-muted" />
+          <View className="h-1.5 w-1.5 rounded-full bg-app-muted" />
+          <View className="h-1.5 w-1.5 rounded-full bg-app-muted" />
+        </View>
+      </View>
     </View>
   );
 }

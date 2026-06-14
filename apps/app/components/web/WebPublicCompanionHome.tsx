@@ -334,7 +334,7 @@ export function WebPublicCompanionHome() {
 
               {officialFeaturedItems.length > 0 ? (
                 <DiscoverSection
-                  actionLabel={officialRemaining > 0 ? `Show all (${officialFeaturedItemsAll.length})` : undefined}
+                  actionLabel={officialRemaining > 0 ? 'Show all' : undefined}
                   icon="ribbon"
                   onAction={officialRemaining > 0 ? () => setBrowseDialog('official') : undefined}
                   subtitle="Curated by the house"
@@ -350,7 +350,7 @@ export function WebPublicCompanionHome() {
 
               {trending.length > 0 ? (
                 <DiscoverSection
-                  actionLabel={trendingRemaining > 0 ? `Show all (${trendingItemsAll.length})` : undefined}
+                  actionLabel={trendingRemaining > 0 ? 'Show all' : undefined}
                   icon="flame"
                   iconColor={PALETTE.ember}
                   onAction={trendingRemaining > 0 ? () => setBrowseDialog('trending') : undefined}
@@ -391,9 +391,7 @@ export function WebPublicCompanionHome() {
                       onPress={() => setBrowseDialog('community')}
                       className="mt-2 min-h-11 items-center justify-center self-center rounded-xl border border-white/15 px-8 hover:border-app-rose/50 hover:bg-app-rose-soft/40"
                     >
-                      <Text className="text-body-sm font-semibold text-app-ink-soft">
-                        Show all ({community.length})
-                      </Text>
+                      <Text className="text-body-sm font-semibold text-app-ink-soft">Show all</Text>
                     </Pressable>
                   ) : null}
                 </DiscoverSection>

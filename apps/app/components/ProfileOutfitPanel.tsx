@@ -37,6 +37,10 @@ function isTerminalFailure(status: MomentImageStatus): boolean {
   return status === 'failed' || status === 'cancelled';
 }
 
+function messageForError(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, onError }: ProfileOutfitPanelProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [recommendations, setRecommendations] = useState<OutfitRecommendation[]>([]);
@@ -156,10 +160,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
         return;
       }
       await poll(payload.job_id, payload.generation_id ?? null);
-    } catch {
+    } catch (error) {
       if (activeRef.current) {
         setPhase('error');
-        onError?.('Could not generate that outfit.');
+        onError?.(messageForError(error, 'Could not generate that outfit.'));
       }
     }
   }
@@ -171,10 +175,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
       await setCompanionProfileImage(companionId, generationId);
       await onChanged();
       if (activeRef.current) setPhase('idle');
-    } catch {
+    } catch (error) {
       if (activeRef.current) {
         setPhase('ready');
-        onError?.('Could not apply this profile image.');
+        onError?.(messageForError(error, 'Could not apply this profile image.'));
       }
     }
   }
@@ -188,8 +192,8 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
       await setCompanionProfileImage(companionId, { art_key: uploaded.key });
       await onChanged();
       if (activeRef.current) setPhase('idle');
-    } catch {
-      onError?.('Could not upload this profile image.');
+    } catch (error) {
+      onError?.(messageForError(error, 'Could not upload this profile image.'));
     } finally {
       if (activeRef.current) setIsUploading(false);
     }
@@ -208,14 +212,15 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
   const canGenerate = customPrompt.trim().length > 0 || selectedRecommendationId !== null;
 
   return (
-    <WebCard padding="md" className="gap-3 border-white/12 bg-[#1B0F22]">
-      <View className="flex-row flex-wrap items-center justify-between gap-3">
-        <View className="min-w-0 flex-1">
+    <WebCard padding="md" className="gap-4 border-white/12 bg-[#1B0F22]">
+      <View className="gap-3">
+        <View className="min-w-0">
           <Text className="text-overline text-rose-200">Profile image</Text>
           <Text className="mt-1 text-body-sm text-rose-50/75">Upload your own image, or generate a new outfit for {name}.</Text>
         </View>
-        <View className="flex-row flex-wrap justify-end gap-2">
+        <View className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <WebButton
+            className="w-full"
             label={isUploading ? 'Uploading…' : 'Upload image'}
             isLoading={isUploading}
             onPress={() => void uploadProfileImage()}
@@ -224,6 +229,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
             disabled={phase === 'generating' || phase === 'applying'}
           />
           <WebButton
+            className="w-full"
             label={phase === 'generating' ? 'Generating…' : 'Change outfit'}
             isLoading={phase === 'generating'}
             onPress={() => void openChooser()}
@@ -236,7 +242,7 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
 
       {phase === 'choosing' || phase === 'generating' || phase === 'ready' || phase === 'applying' || phase === 'error' ? (
         <View className="gap-3 rounded-2xl border border-white/12 bg-[#21142A] p-3">
-          <View className="flex-row flex-wrap gap-2">
+          <View className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {isLoadingRecommendations ? (
               <ActivityIndicator color={PALETTE.roseDeep} size="small" />
             ) : recommendations.map((item) => {
@@ -249,11 +255,16 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
                     setCustomPrompt('');
                     setSelectedRecommendationId(item.id);
                   }}
-                  className={`rounded-full border px-3 py-1.5 ${
+                  className={`min-h-10 justify-center rounded-xl border px-3 py-2 ${
                     selected ? 'border-app-rose/70 bg-app-canvas/70' : 'border-white/15 bg-[#2A1934]'
                   }`}
                 >
-                  <Text className={`text-xs font-semibold ${selected ? 'text-app-rose-deep' : 'text-rose-50/75'}`}>{item.title}</Text>
+                  <Text
+                    className={`text-xs font-semibold ${selected ? 'text-app-rose-deep' : 'text-rose-50/75'}`}
+                    numberOfLines={1}
+                  >
+                    {item.title}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -281,25 +292,41 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
             <Text className="text-caption font-semibold text-app-ember">Generation failed. Try another outfit prompt.</Text>
           ) : null}
 
-          <View className="flex-row flex-wrap gap-2">
-            <WebButton
-              label={phase === 'generating' ? 'Generating…' : outputKey ? 'Regenerate' : 'Generate'}
-              isLoading={phase === 'generating'}
-              onPress={() => void generate()}
-              variant="outline"
-              disabled={!canGenerate || phase === 'generating' || phase === 'applying'}
-            />
-            {outputKey ? (
+          {outputKey ? (
+            <View className="gap-2">
               <WebButton
+                className="w-full"
                 label={phase === 'applying' ? 'Applying…' : 'Use as profile image'}
                 isLoading={phase === 'applying'}
                 onPress={() => void applyGeneratedImage()}
                 variant="primary"
                 disabled={!generationId}
               />
-            ) : null}
-            <WebButton label="Close" onPress={() => setPhase('idle')} variant="ghost" />
-          </View>
+              <View className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <WebButton
+                  className="w-full"
+                  label={phase === 'generating' ? 'Generating…' : 'Regenerate'}
+                  isLoading={phase === 'generating'}
+                  onPress={() => void generate()}
+                  variant="outline"
+                  disabled={!canGenerate || phase === 'generating' || phase === 'applying'}
+                />
+                <WebButton className="w-full" label="Close" onPress={() => setPhase('idle')} variant="ghost" />
+              </View>
+            </View>
+          ) : (
+            <View className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <WebButton
+                className="w-full"
+                label={phase === 'generating' ? 'Generating…' : 'Generate'}
+                isLoading={phase === 'generating'}
+                onPress={() => void generate()}
+                variant="outline"
+                disabled={!canGenerate || phase === 'generating' || phase === 'applying'}
+              />
+              <WebButton className="w-full" label="Close" onPress={() => setPhase('idle')} variant="ghost" />
+            </View>
+          )}
         </View>
       ) : null}
 
