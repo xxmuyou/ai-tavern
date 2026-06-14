@@ -21,7 +21,10 @@ import { CHAT_MOMENT_WORKFLOW_KEY } from "./workflow-keys";
 import type { MomentVisualAction } from "./moment-action";
 import {
   classifyMomentVenue,
+  formatMomentStyleProfile,
+  MOMENT_POSE_BODY_QUALITY,
   presetMomentStyle,
+  resolveMomentStyleProfile,
   stageStyleTier,
   type MomentScenePrivacy,
   type MomentVenue,
@@ -66,6 +69,7 @@ export type StoryMomentImageRow = {
 
 export type MomentPromptContext = {
   companion: {
+    id: string;
     name: string;
     gender: string | null;
     personality: string | null;
@@ -96,6 +100,7 @@ function presetFallbackAction(ctx: MomentPromptContext): MomentVisualAction {
     resolveMomentVenue(ctx),
     stageStyleTier(ctx.stage),
     ctx.companion.gender,
+    resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender),
   );
   return {
     body_pose: "standing or seated alone in the scene, posture matching the emotional tone",
@@ -119,6 +124,7 @@ function ensureRestyle(
     resolveMomentVenue(ctx),
     stageStyleTier(ctx.stage),
     ctx.companion.gender,
+    resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender),
   );
   return {
     ...action,
@@ -184,6 +190,11 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
 
   const momentPose = ensureRestyle(ctx.visualAction ?? presetFallbackAction(ctx), ctx);
   pushMomentPoseLines(lines, momentPose);
+  const styleProfile = resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender);
+  lines.push(
+    formatMomentStyleProfile(styleProfile) + ".",
+    `Pose/body quality: ${MOMENT_POSE_BODY_QUALITY}.`,
+  );
   lines.push(
     isPublic
       ? "Exactly one person in focus: this companion only. The viewer/user is not visible. No second main subject, no hand from another person."

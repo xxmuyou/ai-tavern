@@ -15,6 +15,7 @@ const mockLlmCall = vi.mocked(llmCall);
 function sampleInput() {
   return {
     activity: { activity_hint: "sharing coffee", activity_type: "gift", mood: "warm" },
+    companionId: "maya",
     companionGender: "female",
     companionName: "Maya",
     emotion: "warm",
@@ -182,7 +183,7 @@ describe("extractMomentVisualAction", () => {
           }),
           expect.objectContaining({
             content: expect.stringContaining(
-              "Plan a safe solo pose and a full venue-appropriate restyle (outfit, hairstyle, makeup) for the companion",
+              "Plan a safe solo pose and choose one outfit candidate",
             ),
             role: "user",
           }),
@@ -202,14 +203,20 @@ describe("extractMomentVisualAction", () => {
     expect(system).toContain("leaving someone's lap or bed contact becomes");
     // The restyle mandate, the nudity ceiling and the fixed-background rule.
     expect(system).toContain("Always restyle");
+    expect(system).toContain("Pose quality:");
+    expect(system).toContain("graceful three-quarter body angle");
     expect(system).toContain("never nude");
     expect(system).toContain("The background location is already fixed");
 
     const user = request.messages[1]?.content ?? "";
     expect(user).toContain("Companion gender: female");
+    expect(user).toContain("Style profile: sharp urban");
     expect(user).toContain("Venue type: dining; setting: public");
     expect(user).toContain("Styling boldness:");
     expect(user).toContain("no sleepwear"); // familiar -> reserved tier guidance
+    expect(user).toContain("Outfit candidates:");
+    expect(user).toContain("tailored cardigan over a silk camisole and pleated skirt");
+    expect(user).toContain("Pose/body quality:");
   });
 
   it("retries once with a nudge and higher temperature when the first attempt errors", async () => {

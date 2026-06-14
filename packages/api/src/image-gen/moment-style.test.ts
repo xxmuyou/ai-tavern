@@ -5,9 +5,12 @@ import {
   classifyMomentPrivacy,
   classifyMomentScene,
   classifyMomentVenue,
+  formatMomentStyleProfile,
   presetMomentStyle,
+  resolveMomentStyleProfile,
   stageStyleGuidance,
   stageStyleTier,
+  suggestMomentOutfitOptions,
   type MomentVenue,
   type StyleTier,
 } from "./moment-style";
@@ -169,5 +172,53 @@ describe("presetMomentStyle", () => {
         }
       }
     }
+  });
+});
+
+describe("moment style profiles and outfit candidates", () => {
+  it("selects a stable style profile for the same companion and gender", () => {
+    const first = resolveMomentStyleProfile("maya", "female");
+    const second = resolveMomentStyleProfile("maya", "female");
+
+    expect(first).toEqual(second);
+    expect(formatMomentStyleProfile(first)).toContain(`Style profile: ${first.label}`);
+  });
+
+  it("returns three short outfit candidates for every venue/tier/gender", () => {
+    for (const venue of ALL_VENUES) {
+      for (const tier of ALL_TIERS) {
+        for (const gender of ["female", "male"]) {
+          const profile = resolveMomentStyleProfile(`${venue}-${tier}-${gender}`, gender);
+          const options = suggestMomentOutfitOptions(venue, tier, gender, profile);
+
+          expect(options).toHaveLength(3);
+          for (const option of options) {
+            expect(option.outfit.length).toBeLessThanOrEqual(120);
+            expect(option.outfit).not.toMatch(/random costume|cheap|oversized shapeless/i);
+            const parsed = parseMomentVisualAction({
+              body_pose: "standing alone in the scene",
+              hairstyle: option.hairstyle,
+              ...(option.makeup ? { makeup: option.makeup } : {}),
+              outfit: option.outfit,
+            });
+            expect(parsed, `${venue}/${tier}/${gender} candidate tripped the risky-word guard`).not.toBeNull();
+          }
+        }
+      }
+    }
+  });
+
+  it("lets the profile reorder candidates without changing the venue pool", () => {
+    const elegant = resolveMomentStyleProfile("profile-elegant", "female");
+    const sharp = resolveMomentStyleProfile("maya", "female");
+    expect(sharp.key).toBe("sharp_urban");
+
+    const elegantOptions = suggestMomentOutfitOptions("dining", "reserved", "female", elegant);
+    const sharpOptions = suggestMomentOutfitOptions("dining", "reserved", "female", sharp);
+
+    expect(new Set(elegantOptions.map((option) => option.outfit))).toEqual(
+      new Set(sharpOptions.map((option) => option.outfit)),
+    );
+    expect(sharpOptions[0]?.outfit).toBe("tailored cardigan over a silk camisole and pleated skirt");
   });
 });

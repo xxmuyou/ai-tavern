@@ -549,7 +549,7 @@
     "chat_moment": {
       "label": "Chat moment image",
       "mode": "create",
-      "workflowId": "2062743172710752257",
+      "workflowId": "2065721930698813441",
       "promptNodeId": "13",
       "promptFieldName": "prompt",
       "loadImageNodeId": "1",
@@ -573,7 +573,7 @@
     "profile_outfit": {
       "label": "Profile outfit image",
       "mode": "variation",
-      "workflowId": "2062743172710752257",
+      "workflowId": "2065721930698813441",
       "loadImageNodeId": "1",
       "loadImageFieldName": "image",
       "promptNodeId": "13",

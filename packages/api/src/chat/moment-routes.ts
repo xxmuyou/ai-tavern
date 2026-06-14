@@ -219,6 +219,7 @@ async function composePrompt(
       : null,
     companion: {
       gender: companion?.gender ?? null,
+      id: companion?.id ?? thread.companion_id,
       name: companion?.name ?? "the companion",
       personality: companion?.personality ?? null,
       relationship_role: companion?.relationship_role ?? null,
@@ -239,6 +240,7 @@ async function composePrompt(
 
   const visualAction = await extractMomentVisualAction(env, {
     activity: ctx.activity,
+    companionId: ctx.companion.id,
     companionGender: ctx.companion.gender,
     companionName: ctx.companion.name,
     emotion: ctx.emotion,

@@ -1,9 +1,14 @@
 import { llmCall, type LLMMessage } from "../llm";
 import type { RelationshipStage } from "../life/types";
 import {
+  formatMomentStyleProfile,
+  MOMENT_POSE_BODY_QUALITY,
+  resolveMomentStyleProfile,
   stageStyleGuidance,
   stageStyleTier,
+  suggestMomentOutfitOptions,
   type MomentScenePrivacy,
+  type MomentStylePreset,
   type MomentVenue,
 } from "./moment-style";
 
@@ -21,6 +26,7 @@ export type MomentVisualAction = {
 
 export type ExtractMomentVisualActionInput = {
   userId: string;
+  companionId: string;
   companionName: string;
   companionGender: string | null;
   previousUserText: string | null;
@@ -63,6 +69,7 @@ const ACTION_SYSTEM_PROMPT =
   "Return one JSON object only with body_pose, outfit, hairstyle and optional hand_action, gaze, expression, makeup, held_or_nearby_props, scene_position. " +
   "Always restyle: outfit and hairstyle must be a deliberate new look chosen for this venue and time of day, never a generic default; never answer with plain cardigan/sweater/jeans unless the venue is cold outdoors. " +
   "Examples: nightlife bar or livehouse -> sleek party dress or sharp shirt, styled hair, evening makeup; daytime plaza or park -> playful chic streetwear; bedroom -> loungewear or nightwear; beach or pool -> swimwear or a summer dress; gym -> sportswear. " +
+  `Pose quality: ${MOMENT_POSE_BODY_QUALITY}; avoid stiff mannequin posture, awkward arms, hidden waistline, or bulky shapeless styling. ` +
   "Match the styling boldness level given in the request. Whatever the level: never nude, never topless, no exposed nipples, no transparent fabric over the chest, no underwear-only looks in public venues. " +
   "The background location is already fixed and rendered separately; never relocate the moment: body_pose and scene_position must happen inside the given scene. " +
   "The pose should play to the viewer: expressive, flirty or playful body language directed at the viewer fits this format. " +
@@ -82,20 +89,43 @@ function buildUserPrompt(input: ExtractMomentVisualActionInput): string {
     ? `${input.activity.activity_type}, ${input.activity.activity_hint}, ${input.activity.mood}`
     : "none";
   const tier = stageStyleTier(input.stage);
+  const styleProfile = resolveMomentStyleProfile(input.companionId, input.companionGender);
+  const outfitOptions = suggestMomentOutfitOptions(
+    input.sceneVenue,
+    tier,
+    input.companionGender,
+    styleProfile,
+  );
   return [
     `Companion: ${input.companionName}`,
     `Companion gender: ${input.companionGender ?? "unspecified"}`,
+    formatMomentStyleProfile(styleProfile),
     `Scene (fixed background): ${input.sceneName}, ${input.sceneMood}`,
     `Venue type: ${input.sceneVenue}; setting: ${input.scenePrivacy}`,
     `Relationship stage: ${input.stage}`,
     `Styling boldness: ${stageStyleGuidance(tier)}`,
+    `Outfit candidates: ${formatOutfitOptions(outfitOptions)}`,
+    `Pose/body quality: ${MOMENT_POSE_BODY_QUALITY}`,
     `Emotion: ${input.emotion ?? "neutral"}`,
     `Activity: ${activity}`,
     `Previous user message: ${input.previousUserText ?? "(none)"}`,
     `Companion reply: ${input.sourceReply}`,
     "",
-    "Plan a safe solo pose and a full venue-appropriate restyle (outfit, hairstyle, makeup) for the companion. Return JSON only.",
+    "Plan a safe solo pose and choose one outfit candidate; light edits are allowed only if they preserve the style profile. Return JSON only.",
   ].join("\n");
+}
+
+function formatOutfitOptions(options: readonly MomentStylePreset[]): string {
+  return options
+    .map((option, index) => {
+      const details = [
+        option.outfit,
+        `hairstyle: ${option.hairstyle}`,
+        option.makeup ? `makeup: ${option.makeup}` : null,
+      ].filter(Boolean);
+      return `${index + 1}) ${details.join("; ")}`;
+    })
+    .join(" | ");
 }
 
 async function attemptExtract(

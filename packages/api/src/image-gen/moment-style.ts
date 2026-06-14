@@ -33,6 +33,81 @@ export type MomentStylePreset = {
   makeup?: string;
 };
 
+export type MomentStyleProfileKey =
+  | "elegant_minimalist"
+  | "soft_romantic"
+  | "sharp_urban"
+  | "relaxed_premium";
+
+export type MomentStyleProfile = {
+  key: MomentStyleProfileKey;
+  label: string;
+  styleIdentity: string;
+  colorPalette: string;
+  silhouette: string;
+  bodyAesthetic: string;
+};
+
+export const MOMENT_POSE_BODY_QUALITY =
+  "flattering natural proportions, elegant posture, relaxed shoulders, natural hands, clean waistline, graceful three-quarter body angle, balanced anatomy";
+
+const STYLE_PROFILES: readonly MomentStyleProfile[] = [
+  {
+    bodyAesthetic: "graceful proportions, refined posture, clean body line",
+    colorPalette: "black, ivory, charcoal, pearl, muted metallic accents",
+    key: "elegant_minimalist",
+    label: "elegant minimalist",
+    silhouette: "tailored fit, defined waist, clean long lines",
+    styleIdentity: "polished minimalist styling with premium fabrics and no costume-like details",
+  },
+  {
+    bodyAesthetic: "soft curves, poised shoulders, gentle flattering angles",
+    colorPalette: "ivory, rose, warm beige, soft blue, delicate gold accents",
+    key: "soft_romantic",
+    label: "soft romantic",
+    silhouette: "fitted waist, flowing hems, delicate but intentional styling",
+    styleIdentity: "soft feminine styling with graceful fabrics and romantic detail",
+  },
+  {
+    bodyAesthetic: "confident stance, athletic poise, sharp body line",
+    colorPalette: "black, white, denim blue, wine red, cool silver accents",
+    key: "sharp_urban",
+    label: "sharp urban",
+    silhouette: "sleek fitted shapes, cropped layers, strong street-fashion lines",
+    styleIdentity: "modern urban styling with crisp contrast and refined edge",
+  },
+  {
+    bodyAesthetic: "natural attractive proportions, relaxed confidence, easy posture",
+    colorPalette: "cream, olive, slate, soft brown, warm neutral accents",
+    key: "relaxed_premium",
+    label: "relaxed premium",
+    silhouette: "comfortable fitted layers, visible waistline, premium casual polish",
+    styleIdentity: "quiet luxury casual styling with soft texture and no shapeless bulk",
+  },
+];
+
+export function resolveMomentStyleProfile(
+  companionId: string | null | undefined,
+  gender: string | null | undefined,
+): MomentStyleProfile {
+  const seed = `${companionId?.trim() || "companion"}:${gender?.trim() || "unspecified"}`;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return STYLE_PROFILES[hash % STYLE_PROFILES.length] ?? STYLE_PROFILES[0]!;
+}
+
+export function formatMomentStyleProfile(profile: MomentStyleProfile): string {
+  return [
+    `Style profile: ${profile.label}`,
+    profile.styleIdentity,
+    `palette: ${profile.colorPalette}`,
+    `silhouette: ${profile.silhouette}`,
+    `body aesthetic: ${profile.bodyAesthetic}`,
+  ].join("; ");
+}
+
 const PRIVATE_TAGS = new Set(["intimate", "bedroom", "hotel", "home"]);
 
 export function classifyMomentPrivacy(
@@ -170,11 +245,11 @@ const FEMALE_PRESETS: Record<MomentVenue, Record<StyleTier, MomentStylePreset>> 
   bedroom: {
     intimate: {
       hairstyle: "damp tousled hair",
-      outfit: "white bath towel wrapped around the body",
+      outfit: "white spa bath towel wrap with a clean fitted silhouette",
     },
     reserved: {
       hairstyle: "relaxed loose hair",
-      outfit: "cozy oversized knit loungewear",
+      outfit: "soft ribbed knit lounge set with a defined waist",
     },
     romantic: {
       hairstyle: "soft tousled hair",
@@ -211,7 +286,7 @@ const FEMALE_PRESETS: Record<MomentVenue, Record<StyleTier, MomentStylePreset>> 
   home_private: {
     intimate: {
       hairstyle: "messy just-woke-up hair",
-      outfit: "oversized shirt worn as loungewear with bare legs",
+      outfit: "crisp long shirt worn as polished loungewear with bare legs",
     },
     reserved: {
       hairstyle: "casual messy bun",
@@ -347,7 +422,316 @@ const MALE_PRESETS: Record<MomentVenue, { modest: MomentStylePreset; bold: Momen
   },
 };
 
-export function presetMomentStyle(
+const FEMALE_OUTFIT_OPTIONS: Record<MomentVenue, Record<StyleTier, readonly string[]>> = {
+  active: {
+    intimate: [
+      "premium matching workout set with a sculpted waist and bare midriff",
+      "sleek zip-front training top with high-waisted leggings",
+      "fitted racerback athletic top with tailored running shorts",
+    ],
+    reserved: [
+      "cropped technical hoodie with high-waisted leggings",
+      "fitted tennis dress with clean white sneakers",
+      "sleek athletic jacket over a shaped training set",
+    ],
+    romantic: [
+      "stylish cropped sports top with high-waisted leggings",
+      "fitted dance-studio wrap top with sculpting leggings",
+      "sleek tennis skirt with a fitted athletic tank",
+    ],
+    warm: [
+      "fitted athletic top with yoga pants and clean lines",
+      "soft zip-up training jacket with sculpting leggings",
+      "premium cropped sweatshirt with a shaped tennis skirt",
+    ],
+  },
+  beach: {
+    intimate: [
+      "daring strappy bikini with an elegant sheer sarong",
+      "sleek cutout one-piece swimsuit with a light wrap skirt",
+      "minimal black bikini with a polished linen cover-up",
+    ],
+    reserved: [
+      "playful sundress over a modest swimsuit",
+      "linen wrap dress over a clean one-piece swimsuit",
+      "soft cropped resort shirt with a high-waisted beach skirt",
+    ],
+    romantic: [
+      "fashionable bikini with a sheer sarong",
+      "romantic halter sundress with delicate sandals",
+      "sleek one-piece swimsuit with a gauzy wrap skirt",
+    ],
+    warm: [
+      "stylish one-piece swimsuit with a wrap skirt",
+      "soft linen sundress with a defined waist",
+      "fitted resort tank with a flowing beach skirt",
+    ],
+  },
+  bedroom: {
+    intimate: [
+      "white spa bath towel wrap with a clean fitted silhouette",
+      "lace-trimmed silk slip with an elegant robe",
+      "soft satin wrap dress styled as refined nightwear",
+    ],
+    reserved: [
+      "soft ribbed knit lounge set with a defined waist",
+      "fitted cotton pajama set with delicate piping",
+      "premium lounge cardigan over a shaped camisole set",
+    ],
+    romantic: [
+      "elegant silk slip nightdress",
+      "satin camisole set with a soft robe",
+      "lace-trimmed silk nightdress with a clean silhouette",
+    ],
+    warm: [
+      "soft camisole pajama set",
+      "ribbed lounge top with fitted knit shorts",
+      "silky pajama shirt with tailored lounge shorts",
+    ],
+  },
+  dining: {
+    intimate: [
+      "form-fitting cocktail dress with refined jewelry",
+      "sleek satin midi dress with a defined waist",
+      "tailored off-shoulder dinner dress with delicate heels",
+    ],
+    reserved: [
+      "cute knit dress with a collared blouse",
+      "soft wrap blouse with a high-waisted midi skirt",
+      "tailored cardigan over a silk camisole and pleated skirt",
+    ],
+    romantic: [
+      "elegant slip dress with delicate jewelry",
+      "soft off-shoulder midi dress with refined heels",
+      "fitted satin blouse with a flowing high-waisted skirt",
+    ],
+    warm: [
+      "stylish fitted midi dress",
+      "ribbed knit top with a tailored A-line skirt",
+      "silk camisole under a cropped cardigan with a midi skirt",
+    ],
+  },
+  home_private: {
+    intimate: [
+      "crisp long shirt worn as polished loungewear with bare legs",
+      "silk robe over a fitted camisole set",
+      "soft satin wrap top with tailored lounge shorts",
+    ],
+    reserved: [
+      "comfortable knit cardigan and lounge pants with a defined waist",
+      "soft fitted lounge top with premium knit pants",
+      "ribbed cardigan over a camisole with tailored lounge shorts",
+    ],
+    romantic: [
+      "silk robe over a camisole",
+      "soft off-shoulder lounge top with fitted shorts",
+      "delicate satin lounge set with a clean waistline",
+    ],
+    warm: [
+      "soft off-shoulder lounge top and shorts",
+      "fitted ribbed lounge dress with a cozy cardigan",
+      "silky camisole with premium knit lounge pants",
+    ],
+  },
+  indoor_quiet: {
+    intimate: [
+      "chic fitted slip dress under a long open cardigan",
+      "sleek knit dress with a deep but covered neckline",
+      "tailored satin blouse with a fitted long skirt",
+    ],
+    reserved: [
+      "preppy cardigan over a pleated skirt",
+      "soft fitted turtleneck with a high-waisted skirt",
+      "tailored blouse with a clean midi skirt",
+    ],
+    romantic: [
+      "fitted knit dress with a delicate necklace",
+      "soft wrap dress with a refined cardigan",
+      "silk blouse with a flowing high-waisted skirt",
+    ],
+    warm: [
+      "soft fitted turtleneck dress",
+      "ribbed knit top with a tailored midi skirt",
+      "cropped cardigan over a satin camisole and skirt",
+    ],
+  },
+  nightlife: {
+    intimate: [
+      "backless high-slit evening dress",
+      "sleek satin club dress with refined metallic jewelry",
+      "sharp black mini dress with an elegant waist cutout",
+    ],
+    reserved: [
+      "chic black mini dress with a modest neckline",
+      "tailored satin party dress with clean heels",
+      "sleek fitted top with a high-waisted leather skirt",
+    ],
+    romantic: [
+      "off-shoulder bodycon party dress",
+      "glamorous satin slip dress with delicate jewelry",
+      "sleek halter mini dress with polished heels",
+    ],
+    warm: [
+      "fitted satin party dress",
+      "sleek wrap mini dress with refined jewelry",
+      "tailored party top with a high-waisted skirt",
+    ],
+  },
+  outdoor_public: {
+    intimate: [
+      "bold bodycon mini dress with a light jacket",
+      "sleek fitted crop top with a tailored short skirt",
+      "polished wrap mini dress with a cropped jacket",
+    ],
+    reserved: [
+      "playful sundress with sneakers",
+      "soft wrap blouse with a high-waisted skirt and clean sneakers",
+      "tailored cropped jacket over a fitted dress",
+    ],
+    romantic: [
+      "chic short skirt with a fitted crop top",
+      "soft romantic mini dress with a light jacket",
+      "silky blouse with a tailored short skirt",
+    ],
+    warm: [
+      "flowy short dress with a denim jacket",
+      "fitted ribbed top with a high-waisted skirt",
+      "soft cropped cardigan over a clean day dress",
+    ],
+  },
+};
+
+const MALE_OUTFIT_OPTIONS: Record<MomentVenue, { modest: readonly string[]; bold: readonly string[] }> = {
+  active: {
+    bold: [
+      "fitted sleeveless training top and athletic shorts",
+      "sculpted compression top with tailored training shorts",
+      "sleek zip training vest over a fitted athletic top",
+    ],
+    modest: [
+      "athletic t-shirt and training shorts",
+      "fitted technical hoodie with slim joggers",
+      "clean training jacket over a fitted sports tee",
+    ],
+  },
+  beach: {
+    bold: [
+      "swim trunks with an unbuttoned linen shirt",
+      "tailored swim shorts with a lightweight resort shirt",
+      "open summer shirt with clean swim trunks",
+    ],
+    modest: [
+      "swim trunks and an open summer shirt",
+      "linen resort shirt with tailored shorts",
+      "lightweight knit polo with clean swim shorts",
+    ],
+  },
+  bedroom: {
+    bold: [
+      "loose half-buttoned linen shirt and lounge pants",
+      "soft open-collar pajama shirt with tailored lounge pants",
+      "fitted lounge tee with premium drawstring pants",
+    ],
+    modest: [
+      "soft knit loungewear",
+      "premium lounge henley with slim knit pants",
+      "clean cotton pajama shirt with tailored lounge pants",
+    ],
+  },
+  dining: {
+    bold: [
+      "fitted dress shirt with rolled-up sleeves",
+      "open-collar satin shirt with tailored trousers",
+      "slim dark shirt with polished dress trousers",
+    ],
+    modest: [
+      "smart-casual blazer over a plain t-shirt",
+      "tailored knit polo with slim trousers",
+      "clean button-up shirt with a fitted casual jacket",
+    ],
+  },
+  home_private: {
+    bold: [
+      "fitted t-shirt and lounge pants",
+      "soft open-collar knit shirt with tailored lounge pants",
+      "premium fitted henley with relaxed slim joggers",
+    ],
+    modest: [
+      "comfortable hoodie and joggers",
+      "soft knit pullover with slim lounge pants",
+      "clean lounge cardigan over a fitted tee",
+    ],
+  },
+  indoor_quiet: {
+    bold: [
+      "fitted dark turtleneck and slim trousers",
+      "sleek knit shirt with tailored trousers",
+      "sharp fitted cardigan over a clean tee",
+    ],
+    modest: [
+      "soft sweater over a collared shirt",
+      "tailored overshirt with a fitted knit tee",
+      "clean turtleneck with relaxed slim trousers",
+    ],
+  },
+  nightlife: {
+    bold: [
+      "open-collar fitted black shirt with sleeves rolled up",
+      "sleek satin shirt with slim black trousers",
+      "sharp dark jacket over a fitted open-collar shirt",
+    ],
+    modest: [
+      "smart black shirt with slim trousers",
+      "tailored black jacket over a fitted tee",
+      "clean open-collar shirt with polished trousers",
+    ],
+  },
+  outdoor_public: {
+    bold: [
+      "fitted henley with chinos",
+      "sharp cropped jacket over a fitted tee and chinos",
+      "sleek knit polo with tailored trousers",
+    ],
+    modest: [
+      "casual denim jacket over a t-shirt",
+      "clean overshirt with a fitted tee and chinos",
+      "soft bomber jacket with tailored casual trousers",
+    ],
+  },
+};
+
+function profileOrder(profile?: MomentStyleProfile | null): readonly number[] {
+  switch (profile?.key) {
+    case "soft_romantic":
+      return [1, 0, 2];
+    case "sharp_urban":
+      return [2, 0, 1];
+    case "relaxed_premium":
+      return [1, 2, 0];
+    case "elegant_minimalist":
+    default:
+      return [0, 1, 2];
+  }
+}
+
+export function suggestMomentOutfitOptions(
+  venue: MomentVenue,
+  tier: StyleTier,
+  gender: string | null,
+  profile?: MomentStyleProfile | null,
+): MomentStylePreset[] {
+  const isMale = gender?.trim().toLowerCase().startsWith("m");
+  const base = presetBaseMomentStyle(venue, tier, gender);
+  const outfits = isMale
+    ? MALE_OUTFIT_OPTIONS[venue][tier === "romantic" || tier === "intimate" ? "bold" : "modest"]
+    : FEMALE_OUTFIT_OPTIONS[venue][tier];
+  return profileOrder(profile).map((index) => ({
+    ...base,
+    outfit: outfits[index] ?? outfits[0] ?? base.outfit,
+  }));
+}
+
+function presetBaseMomentStyle(
   venue: MomentVenue,
   tier: StyleTier,
   gender: string | null,
@@ -357,4 +741,13 @@ export function presetMomentStyle(
     return tier === "romantic" || tier === "intimate" ? presets.bold : presets.modest;
   }
   return FEMALE_PRESETS[venue][tier];
+}
+
+export function presetMomentStyle(
+  venue: MomentVenue,
+  tier: StyleTier,
+  gender: string | null,
+  profile?: MomentStyleProfile | null,
+): MomentStylePreset {
+  return suggestMomentOutfitOptions(venue, tier, gender, profile)[0]!;
 }

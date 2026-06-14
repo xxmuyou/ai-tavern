@@ -103,6 +103,14 @@ type MomentVisualAction = {
 - **背景锁定（v1.5）**：背景位置已固定并单独渲染，extractor 不得迁移场景；`body_pose` / `scene_position` 必须发生在给定 scene 内。
 - **重试与预设兜底（v1.5）**：首次调用失败（异常/JSON 不合法/风险词命中）时升温重试一次（`temperature: 0.5` + 追加 strict reminder user message；temp=0 重复相同输入会复现同样的坏输出）。两次均失败时使用按 场所×尺度档 的预设造型表（`presetMomentStyle`，女表 8×4 + 男装精简表）拼出 fallback action，保证任何路径出图都换装换发型；旧的 `an outfit that naturally fits the scene` 泛化兜底已废弃。extractor 成功但缺 outfit/hairstyle 时由 `ensureRestyle` 用同一预设表补齐。图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
 
+**审美控制层（v1.6）**：`chat_moment` 的换装不再让 LLM 完全自由发挥。后端在 image-gen 模块内用纯函数生成三层可独立调整的审美控制，不新增 DB 字段、不改前端、不改 RunningHub workflow：
+
+- `MomentStyleProfile`：按 `companionId + gender` deterministic 选择稳定角色审美 archetype（如 elegant minimalist / soft romantic / sharp urban / relaxed premium），包含色系、廓形、材质/气质和身材线条偏好。同一 companion 的 moment 图应保持稳定穿搭方向。
+- `suggestMomentOutfitOptions`：按 `venue + style tier + gender + profile` 返回 3 个高质量候选 outfit。extractor 必须从候选中选择，可轻微改写但不能改变 profile 方向；fallback 也从候选取默认项，避免随机低质服装。
+- `MOMENT_POSE_BODY_QUALITY`：独立控制姿态/身材审美，例如自然比例、优雅姿态、放松肩颈、自然手部、清晰腰线、三分之四角度、平衡解剖。该规则同时进入 extractor 和最终 prompt，但不改变单人约束。
+
+这三层互相解耦：profile 负责角色审美方向，outfit candidates 负责具体穿搭，pose/body quality 负责姿态和身体线条。调整某一层不需要改 API、DB、前端或 job 流程。
+
 最终 prompt 示例结构（v1.4：脸靠参考图锁定；无 appearance/名字/relationship/personality，仅留 gender 锚点）：
 
 ```text
@@ -118,6 +126,8 @@ Makeup: natural date makeup.
 Gaze: eyes toward the viewer.
 Expression: shy warm smile.
 Position in scene: near the cafe window.
+Style profile: soft romantic; soft feminine styling with graceful fabrics and romantic detail; palette: ivory, rose, warm beige, soft blue, delicate gold accents; silhouette: fitted waist, flowing hems, delicate but intentional styling; body aesthetic: soft curves, poised shoulders, gentle flattering angles.
+Pose/body quality: flattering natural proportions, elegant posture, relaxed shoulders, natural hands, clean waistline, graceful three-quarter body angle, balanced anatomy.
 Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.
 Companion gender: female.
 Change the background to: Pier Coffee Shop, morning, warm cafe atmosphere, ...tags. The background is empty of other people.

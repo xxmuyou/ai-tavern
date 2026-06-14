@@ -251,6 +251,7 @@ function sampleContext(): MomentPromptContext {
     activity: { activity_hint: "sketching by the window", activity_type: "coffee", mood: "calm" },
     companion: {
       gender: "female",
+      id: "maya",
       name: "Maya",
       personality: "shy but warm",
       relationship_role: "friend",
@@ -281,10 +282,12 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
     expect(prompt).toContain("Gaze: eyes toward the viewer");
     expect(prompt).toContain("Expression: warm expression");
+    expect(prompt).toContain("Style profile: sharp urban");
+    expect(prompt).toContain("Pose/body quality: flattering natural proportions");
     // Fallback styling comes from the venue/stage preset (harbor tags ->
     // outdoor_public, familiar stage -> reserved tier), never a vague default.
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): playful sundress with sneakers",
+      "Outfit (overrides any clothing mentioned in the reference): tailored cropped jacket over a fitted dress",
     );
     expect(prompt).toContain("Change the hairstyle to: high ponytail with a ribbon");
     expect(prompt).toContain("Makeup: fresh light makeup");
@@ -365,7 +368,7 @@ describe("buildMomentPrompt", () => {
       visualAction: null,
     });
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): white bath towel wrapped around the body",
+      "Outfit (overrides any clothing mentioned in the reference): soft satin wrap dress styled as refined nightwear",
     );
     expect(prompt).toContain("Change the hairstyle to: damp tousled hair");
   });
@@ -436,7 +439,7 @@ describe("buildMomentPrompt", () => {
 
     expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): playful sundress with sneakers",
+      "Outfit (overrides any clothing mentioned in the reference): tailored cropped jacket over a fitted dress",
     );
     expect(prompt).not.toContain("slid off");
     expect(prompt).not.toContain("lap");
