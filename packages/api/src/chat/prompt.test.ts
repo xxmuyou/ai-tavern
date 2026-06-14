@@ -44,6 +44,8 @@ describe("buildChatPrompt", () => {
     expect(system).toContain("Stay strictly in character");
     expect(system).toContain("Narration voice rule");
     expect(system).toContain("treat that as the user/player's action");
+    expect(system).toContain("no Markdown blockquotes");
+    expect(system).toContain("no dialogue lines starting with >");
     // spec-025: want + boundary are always injected.
     expect(system).toContain("to be taken seriously as an artist");
     expect(system).toContain("being rushed or treated as a backup option");

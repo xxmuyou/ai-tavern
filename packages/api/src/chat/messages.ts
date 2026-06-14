@@ -37,6 +37,7 @@ import {
 } from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type UserPersonaForPrompt } from "./prompt";
+import { createStreamingReplyNormalizer } from "./reply-normalize";
 import { resolveThreadPersona } from "../personas";
 import { applyHostilityOverride, assessHostileInput } from "./hostility";
 import {
@@ -374,11 +375,15 @@ async function runChat(args: RunChatArgs): Promise<void> {
   let conflictSignals: Partial<DimensionValues> | null = null;
   let unlockEvents: UnlockEvent[] = [];
   let quickActionResult: { activity_id: string; item_id: string } | null = null;
+  const replyNormalizer = createStreamingReplyNormalizer();
 
   const handleChunk = (chunk: LLMStreamChunk): void => {
     if (chunk.type === "text") {
-      replyBuffer += chunk.text;
-      sse.writeEvent("chunk", { text: chunk.text });
+      const clean = replyNormalizer.push(chunk.text);
+      if (clean.length > 0) {
+        replyBuffer += clean;
+        sse.writeEvent("chunk", { text: clean });
+      }
     } else if (chunk.type === "done") {
       call1Usage = chunk.usage;
     }
@@ -392,6 +397,11 @@ async function runChat(args: RunChatArgs): Promise<void> {
     while (!result.done) {
       result = await iterator.next();
       if (!result.done) handleChunk(result.value);
+    }
+    const tail = replyNormalizer.flush();
+    if (tail.length > 0) {
+      replyBuffer += tail;
+      sse.writeEvent("chunk", { text: tail });
     }
   } catch (err) {
     if (chatReservationId) {

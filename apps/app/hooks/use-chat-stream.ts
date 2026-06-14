@@ -12,7 +12,6 @@ import {
 
 export const CHAT_EMOTIONS = ['warm', 'neutral', 'guarded', 'playful', 'tense', 'annoyed'] as const;
 export type ChatEmotion = (typeof CHAT_EMOTIONS)[number];
-const STREAM_FLUSH_MS = 100;
 
 export type ChatStreamDoneInfo = {
   messageId: string;
@@ -114,26 +113,6 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       let buffer = '';
       let emotion: ChatEmotion | null = null;
 
-      // Coalesce token chunks so the chat bubble grows smoothly without
-      // forcing React Native Web to re-layout the thread on every provider delta.
-      let pendingDelta = '';
-      let flushTimer: ReturnType<typeof setTimeout> | null = null;
-      const flush = () => {
-        flushTimer = null;
-        if (!activeRef.current || pendingDelta.length === 0) {
-          return;
-        }
-        const delta = pendingDelta;
-        pendingDelta = '';
-        options.onChunk?.(delta, buffer);
-      };
-      const flushNow = () => {
-        if (flushTimer !== null) {
-          clearTimeout(flushTimer);
-        }
-        flush();
-      };
-
       try {
         const stream = sendChatMessage(companionId, {
           activity_id: options.activityId,
@@ -149,10 +128,7 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             const delta = typeof data?.text === 'string' ? data.text : '';
             if (delta) {
               buffer += delta;
-              pendingDelta += delta;
-              if (flushTimer === null) {
-                flushTimer = setTimeout(flush, STREAM_FLUSH_MS);
-              }
+              options.onChunk?.(delta, buffer);
             }
           } else if (event.type === 'signals') {
             options.onSignals?.((event.data as Partial<RelationshipDimensions>) ?? {});
@@ -190,7 +166,6 @@ export function useChatStream(companionId: string): UseChatStreamResult {
               options.onEmotion?.(next);
             }
           } else if (event.type === 'done') {
-            flushNow();
             const data = (event.data as { message_id?: string; warning?: string | null }) ?? {};
             if (__DEV__ && data.warning) {
               console.warn('[chat] stream done with warning', data.warning);
@@ -211,15 +186,10 @@ export function useChatStream(companionId: string): UseChatStreamResult {
             throw err;
           }
         }
-        flushNow();
         return { emotion, text: buffer };
       } catch (rawError) {
         throw categorizeStreamError(rawError);
       } finally {
-        if (flushTimer !== null) {
-          clearTimeout(flushTimer);
-          flushTimer = null;
-        }
         activeRef.current = false;
         setIsStreaming(false);
       }

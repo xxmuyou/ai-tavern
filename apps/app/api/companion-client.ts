@@ -1552,7 +1552,8 @@ export function readSseEvent(block: string): SseEvent | null {
       type = line.slice('event:'.length).trim();
     }
     if (line.startsWith('data:')) {
-      dataLines.push(line.slice('data:'.length).trim());
+      const value = line.slice('data:'.length);
+      dataLines.push(value.startsWith(' ') ? value.slice(1) : value);
     }
   }
 

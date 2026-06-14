@@ -610,7 +610,7 @@ function buildRules(input: ChatPromptInput): string {
     "If a user message contains second-person UI narration like '<narration>You set a coffee down.</narration>', treat that as the user/player's action, not yours.",
   );
   lines.push(
-    "DO NOT use markdown for actions: no *asterisks*, no _underscores_, no (parentheses). Use ONLY <narration> tags.",
+    "DO NOT use markdown for actions or dialogue: no *asterisks*, no _underscores_, no (parentheses), no Markdown blockquotes, and no dialogue lines starting with >. Use ONLY <narration> tags for narration.",
   );
   lines.push(
     "Correct: <narration>She leaned closer, voice low.</narration>You came back.<narration>A small smile played at her lips.</narration>",
@@ -642,7 +642,7 @@ function buildPostHistoryGuard(input: ChatPromptInput): string {
   lines.push("Use <narration>...</narration> for actions/gestures/inner observations; spoken dialogue stays outside tags.");
   lines.push("Narration for your actions must be third person or use your name, not first person; first person is allowed only in spoken dialogue.");
   lines.push("Second-person narration inside a user message describes the user/player action, not yours.");
-  lines.push("Match the user's current language. Do not output JSON, analysis, system text, or meta-commentary.");
+  lines.push("Match the user's current language. Do not output JSON, analysis, system text, meta-commentary, Markdown blockquotes, or any spoken line starting with >.");
   return lines.join("\n");
 }
 

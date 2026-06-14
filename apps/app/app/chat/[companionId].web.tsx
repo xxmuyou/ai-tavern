@@ -79,7 +79,6 @@ import { detectChatLanguage, type ChatLanguage } from '@/utils/chat-language';
 import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionText, type SceneAction } from '@/utils/scene-actions';
 
 const CUSTOM_SCENE_ACTION_MAX_LENGTH = 120;
-const MAINTAIN_VISIBLE_CONTENT_POSITION = { minIndexForVisible: 0 };
 
 const EVENT_TITLES: Record<EventResponseItem['event_type'], string> = {
   confession: 'A confession',
@@ -244,7 +243,7 @@ export default function WebChatScreen() {
     appendStreamingCompanionMessage,
     cleanupFailedStreamingCompanionMessage,
     finishStreamingCompanionMessage,
-    updateStreamingCompanionMessage,
+    pushStreamingCompanionDelta,
   } = streamingMessages;
 
   useEffect(() => {
@@ -592,6 +591,7 @@ export default function WebChatScreen() {
         <MessageBubble
           content={item.content}
           isPending={role === 'companion' && item.id.startsWith('local-') && item.content.length === 0}
+          isStreaming={role === 'companion' && item.id.startsWith('local-')}
           role={role}
           companionName={role === 'companion' ? companion?.name : null}
         />
@@ -753,9 +753,9 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onInviteResult: (invite) => {
@@ -790,7 +790,7 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, handleInviteResult, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, handleInviteResult, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -816,9 +816,9 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onSignals: (signals) => {
@@ -856,7 +856,7 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, stream]);
 
   const sendSceneAction = useCallback(async (action: SceneAction) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -877,9 +877,9 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
@@ -919,7 +919,7 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const sendCustomSceneAction = useCallback(async () => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -956,9 +956,9 @@ export default function WebChatScreen() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
@@ -999,7 +999,7 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, customActionText, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, customActionText, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
@@ -1377,7 +1377,6 @@ export default function WebChatScreen() {
                 }
                 onContentSizeChange={handleContentSizeChange}
                 onScroll={handleScroll}
-                maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
                 scrollEventThrottle={16}
                 style={twilightStyles.thread}
               />

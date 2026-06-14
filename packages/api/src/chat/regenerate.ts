@@ -25,6 +25,7 @@ import {
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type HistoryMessage, type UserPersonaForPrompt } from "./prompt";
 import { checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
+import { createStreamingReplyNormalizer } from "./reply-normalize";
 import { commitReservation, releaseReservation } from "../credits";
 import { reserveChatCredits } from "./messages";
 import { createSSEStream, type SSEHandle } from "./sse";
@@ -231,11 +232,15 @@ async function runRegenerate(args: RunRegenerateArgs): Promise<void> {
 
   let replyBuffer = "";
   let usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
+  const replyNormalizer = createStreamingReplyNormalizer();
 
   const handleChunk = (chunk: LLMStreamChunk): void => {
     if (chunk.type === "text") {
-      replyBuffer += chunk.text;
-      sse.writeEvent("chunk", { text: chunk.text });
+      const clean = replyNormalizer.push(chunk.text);
+      if (clean.length > 0) {
+        replyBuffer += clean;
+        sse.writeEvent("chunk", { text: clean });
+      }
     } else if (chunk.type === "done") {
       usage = chunk.usage;
     }
@@ -247,6 +252,11 @@ async function runRegenerate(args: RunRegenerateArgs): Promise<void> {
     while (!result.done) {
       result = await iterator.next();
       if (!result.done) handleChunk(result.value);
+    }
+    const tail = replyNormalizer.flush();
+    if (tail.length > 0) {
+      replyBuffer += tail;
+      sse.writeEvent("chunk", { text: tail });
     }
   } catch (err) {
     if (chatReservationId) {

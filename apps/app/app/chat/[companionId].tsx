@@ -160,7 +160,7 @@ function ChatScreenInner() {
     appendStreamingCompanionMessage,
     cleanupFailedStreamingCompanionMessage,
     finishStreamingCompanionMessage,
-    updateStreamingCompanionMessage,
+    pushStreamingCompanionDelta,
   } = streamingMessages;
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
@@ -360,9 +360,9 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
@@ -412,7 +412,7 @@ function ChatScreenInner() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, companionId, finishStreamingCompanionMessage, handleInviteResult, history, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, companionId, finishStreamingCompanionMessage, handleInviteResult, history, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -448,9 +448,9 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => {
           setCurrentEmotion(emotion);
@@ -488,7 +488,7 @@ function ChatScreenInner() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, draft, finishStreamingCompanionMessage, messageActions, notifyNewReply, pushError, rateLimitedUntil, relationship, sceneId, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, draft, finishStreamingCompanionMessage, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, stream]);
 
   const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -508,9 +508,9 @@ function ChatScreenInner() {
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
-        onChunk: (_delta, total) => {
-          streamedText = total;
-          updateStreamingCompanionMessage(streamingMessageId, total);
+        onChunk: (delta) => {
+          streamedText += delta;
+          pushStreamingCompanionDelta(streamingMessageId, delta);
         },
         onEmotion: (emotion) => setCurrentEmotion(emotion),
         onQuickActionResult: (quick) => {
@@ -538,7 +538,7 @@ function ChatScreenInner() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, cleanupFailedStreamingCompanionMessage, finishStreamingCompanionMessage, notifyNewReply, pushError, relationship, remainingSeconds, sceneId, showInviteNotice, stream, updateStreamingCompanionMessage]);
+  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, cleanupFailedStreamingCompanionMessage, finishStreamingCompanionMessage, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
     if (!sceneId || stream.isStreaming || isResolvingStory) return;
@@ -674,6 +674,7 @@ function ChatScreenInner() {
         <MessageBubble
           content={item.content}
           isPending={role === 'companion' && item.id.startsWith('local-') && item.content.length === 0}
+          isStreaming={role === 'companion' && item.id.startsWith('local-')}
           role={role}
         />
         {isServerUser ? (

@@ -11,6 +11,10 @@ const ACTION_VERB_RE =
 const ACTION_SUBJECT_RE =
   /^((?:[A-Z][A-Za-z0-9_-]{1,30})|he|she|they|his|her|their|我|她|他|TA|ta|两人|对方|这个人|那个人)\b|^(我|她|他|两人|对方|这个人|那个人)/i;
 
+export function normalizeChatDisplayText(content: string): string {
+  return content.replace(/(^|\n)[ \t]{0,3}>[ \t]?/g, '$1');
+}
+
 export function parseNarration(content: string, options: { tolerateUnclosed?: boolean } = {}): NarrationSegment[] {
   const tolerate = options.tolerateUnclosed ?? false;
   const segments: NarrationSegment[] = [];

@@ -243,16 +243,16 @@ function nowMinuteUtc(): string {
   return `${todayUtc()}T${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-function buildStreamFetch(): ReturnType<typeof vi.fn> {
+function buildStreamFetch(chunks: string[] = ["Hello", " there"]): ReturnType<typeof vi.fn> {
   return vi.fn(async (url: string | URL | Request) => {
     const target = String(url);
     if (target.includes("/chat/completions") && !pendingSignal()) {
       // Streaming chat call — encode SSE
       const sse = [
-        `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello" } }] })}`,
-        "",
-        `data: ${JSON.stringify({ choices: [{ delta: { content: " there" } }] })}`,
-        "",
+        ...chunks.flatMap((content) => [
+          `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}`,
+          "",
+        ]),
         `data: ${JSON.stringify({
           choices: [{ finish_reason: "stop" }],
           usage: { completion_tokens: 2, prompt_tokens: 100 },
@@ -355,6 +355,21 @@ describe("handlePostMessage", () => {
     expect(state.threadBumps).toBe(1);
     expect(state.signalUpdates).toBe(1);
     expect(state.relationshipApplies).toBeGreaterThanOrEqual(1);
+  });
+
+  it("strips markdown blockquote markers from streamed and saved replies", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({ companion: COMPANION });
+    vi.stubGlobal("fetch", buildStreamFetch(["<narration>x</narration>\n\n ", "> 嗯。"]));
+
+    const response = await handlePostMessage(buildPost({ text: "hi" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+
+    const body = await response.text();
+    expect(body).toContain(`event: chunk\ndata: {"text":"<narration>x</narration>\\n\\n"}\n\n`);
+    expect(body).toContain(`event: chunk\ndata: {"text":"嗯。"}\n\n`);
+    expect(body).not.toContain(`> 嗯`);
+    expect(state.messages[1]?.content).toBe("<narration>x</narration>\n\n嗯。");
   });
 
   it("forces annoyed hostile signals for direct abuse even when the model scores warm", async () => {

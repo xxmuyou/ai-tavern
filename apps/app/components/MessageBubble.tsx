@@ -1,18 +1,25 @@
 import { memo } from 'react';
 import { Text, View } from 'react-native';
 
-import { normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
+import { normalizeChatDisplayText, normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
 
 type MessageBubbleProps = {
   content: string;
   isPending?: boolean;
+  isStreaming?: boolean;
   role: 'user' | 'companion' | 'assistant';
   companionName?: string | null;
 };
 
-export const MessageBubble = memo(function MessageBubble({ content, isPending = false, role, companionName }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({
+  content,
+  isPending = false,
+  isStreaming = false,
+  role,
+  companionName,
+}: MessageBubbleProps) {
   const isUser = role === 'user';
-  const segments = parseNarration(content);
+  const segments = parseNarration(normalizeChatDisplayText(content), { tolerateUnclosed: isStreaming });
 
   if (segments.length === 0) {
     if (isPending && !isUser) {
@@ -30,9 +37,9 @@ export const MessageBubble = memo(function MessageBubble({ content, isPending = 
       <View className="w-full py-1">
         {segments.map((segment, idx) => (
           segment.type === 'narration' ? (
-            <NarrationLine key={idx} text={segment.text} />
+            <NarrationLine key={idx} text={segment.text} trailingCursor={isStreaming && idx === segments.length - 1} />
           ) : (
-            <DialogueBubble key={idx} text={segment.text} role="user" />
+            <DialogueBubble key={idx} text={segment.text} role="user" trailingCursor={isStreaming && idx === segments.length - 1} />
           )
         ))}
       </View>
@@ -46,9 +53,10 @@ export const MessageBubble = memo(function MessageBubble({ content, isPending = 
           <NarrationLine
             key={idx}
             text={normalizeCompanionNarrationPerspective(segment.text, companionName)}
+            trailingCursor={isStreaming && idx === segments.length - 1}
           />
         ) : (
-          <DialogueBubble key={idx} text={segment.text} role="companion" />
+          <DialogueBubble key={idx} text={segment.text} role="companion" trailingCursor={isStreaming && idx === segments.length - 1} />
         )
       ))}
     </View>

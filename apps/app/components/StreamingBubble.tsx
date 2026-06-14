@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
+import { normalizeChatDisplayText, normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
 import { DialogueBubble, NarrationLine } from './MessageBubble';
 
 type StreamingBubbleProps = {
@@ -10,7 +10,7 @@ type StreamingBubbleProps = {
 };
 
 export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
-  const segments = useMemo(() => parseNarration(text, { tolerateUnclosed: true }), [text]);
+  const segments = useMemo(() => parseNarration(normalizeChatDisplayText(text), { tolerateUnclosed: true }), [text]);
 
   if (text.length === 0) {
     return null;
