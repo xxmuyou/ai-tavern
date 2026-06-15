@@ -64,6 +64,7 @@
 | 036 | [聊天内邀约换场景（Invite & Switch Scene from Chat）](./spec-036-in-chat-scene-invitation.md) | 后端+前端+LLM | 006, 007, 005, 035 | 3-5 天 | 🟡 in-progress（聊天内"邀请前往"浮窗→大模型同意才切场景/背景→拒绝不切；越界邀约借打分链路扣分；全栈实现+后端单测完成，待端到端验证） |
 | 037 | [Voice Labels, Image Job Continuity, and Scene Invite QA](./spec-037-voice-image-invite-polish.md) | 文档+前端+QA | 027, 033, 036 | 1-2 天 | 📝 draft（voice 标签按语言展示；moment/profile outfit 切页后继续轮询；scene invite 可见性与部署核查收口） |
 | 038 | [Web 场景沉浸、待到达切换与解锁反馈](./spec-038-web-scene-immersion-and-unlocks.md) | Web 前端+API/types+文档治理 | 024, 025, 031, 036, 037 | 3-5 天 | 📝 draft（Web 邀约 accepted 后改为 pending arrival；场景舞台 + companion cutout + 停靠聊天面板；解锁/成就显著 overlay） |
+| 039 | [Admin 用户数据看板（Web，本地验证优先）](./spec-039-admin-analytics-dashboard.md) | Web 前端+admin API+文档 | 018, 023, 010, 021 | 2-4 天 | 🟡 in-progress（Analytics 面板、overview + recent_signup 分页端点、文档与本地自动验证已落地；待本地手工验收，不发 dev） |
 
 **估时总计：** 约 64-94 工程日（不含美术、QA、市场准备）
 
@@ -83,6 +84,7 @@
 - **G 路径（开发体验）：** 016 独立可开（密钥管理收敛，不阻塞他者）
 - **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，workflow contract 校验节点字段 + checkpoint/LoRA 资产目录 + Anime/Realistic asset lanes）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
 - **I 路径（管理员后端）：** 011（LLM 端点，已 done）+ 023（积分查看/调整），管理员后端能力统一沿用 `requireAdminUser` 与 `admin/` 分派模式，UI 归 spec-018
+- **I2 路径（管理员分析）：** 018 + 023 + 010 + 021 → 039。先复用 admin workspace 与现有 billing / credits 口径，再补 Web 侧 Analytics 概览、趋势和最近注册明细分页；第一版止于本地验证，不直接发 dev。
 - **J 路径（自建角色剧情）：** 019 → 026 → 028 → 029。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 让自建角色拥有剧情包、用户自写 arc、AI 辅助草稿与手动完成机制。自建角色不再按“纯 sandbox + 数值”作为长期路线。
 - **K 路径（图片动作）：** 027 → 031 → 033。spec-027 先跑通聊天内异步图片生成、job 轮询与回看模式；spec-031 重构出图源和 cutout；spec-033 将换装从聊天动作迁移到 profile 图片管理。spec-030 的聊天换装后端保留为 legacy/deprecated，不再作为新 UI 入口。
 - **L 路径（Web 上线首页）：** 018 → 032。spec-032 是 web 首页收口：未登录也展示公开 companion discovery；mobile 不动；用户侧与 Admin 主分类都收敛为 Anime/Realistic。

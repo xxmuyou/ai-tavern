@@ -1,3 +1,4 @@
+import { handleAdminAnalyticsRequest } from "./analytics";
 import { handleAdminChatPromptDebugRequest } from "./chat-prompt-debug";
 import { handleAdminCompanionArtRequest } from "./companion-art";
 import { handleAdminCreditsRequest } from "./credits";
@@ -16,6 +17,9 @@ export async function handleAdminRequest(
 
   const chatPromptDebugResponse = await handleAdminChatPromptDebugRequest(request, env, pathname);
   if (chatPromptDebugResponse) return chatPromptDebugResponse;
+
+  const analyticsResponse = await handleAdminAnalyticsRequest(request, env, pathname);
+  if (analyticsResponse) return analyticsResponse;
 
   const creditsResponse = await handleAdminCreditsRequest(request, env, pathname);
   if (creditsResponse) return creditsResponse;

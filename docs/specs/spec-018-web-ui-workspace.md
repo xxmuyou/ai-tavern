@@ -93,7 +93,7 @@ dev 部署后至少验证：
   - `apps/app/app/memories.web.tsx`
   - `apps/app/app/companion-create.web.tsx`
   - `apps/app/app/admin/index.web.tsx` 及现有 admin web 子组件
-- Admin 范围按当前真实结构表述为 5 个顶层区域 + 若干已存在子面板：`Users`、`Chat models`、`Portrait generation`、`Prompts`、`Settings`。不要再使用旧的多 section 口径。
+- Admin 范围按当前真实结构表述为 6 个顶层区域 + 若干已存在子面板：`Analytics`、`Users`、`Chat models`、`Portrait generation`、`Prompts`、`Settings`。不要再使用旧的多 section 口径。
 
 ### 实现约定
 
@@ -114,6 +114,8 @@ pnpm --dir apps/app export:web
 - 文档不再出现与当前代码结构不一致的旧 admin section 口径。
 - 命令、组件接口假设、admin 顶层区域名称与当前仓库保持一致。
 - `spec-023` 与 `docs/ops/admin-settings-workspace.md` 不暗示本轮会改后端或配置语义。
+
+2026-06-15 补充：Analytics 面板由 [`spec-039`](./spec-039-admin-analytics-dashboard.md) 承载，第一版只做 Web、本地验证优先，不含 dev 发布。
 
 ## 2026-06 首页与导航修订（spec-032 + web-navigation-and-theme）
 

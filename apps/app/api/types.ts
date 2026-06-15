@@ -1016,6 +1016,75 @@ export type AdminUsersResponse = {
   users: AdminUserSummary[];
 };
 
+export type AdminAnalyticsWindow = '7d' | '30d' | 'today';
+
+export type AdminAnalyticsUser = {
+  created_at: string;
+  email: string;
+  last_seen_at: string;
+  subscription_status: string | null;
+  tier: AdminUserTier;
+  user_id: string;
+};
+
+export type AdminAnalyticsSummary = {
+  active_subscriptions: number;
+  active_users: number;
+  credits_revenue_usd: number;
+  free_users: number;
+  gross_revenue_usd: number;
+  new_users: number;
+  pro_users: number;
+  subscription_revenue_usd: number;
+  total_users: number;
+};
+
+export type AdminAnalyticsTierBreakdownItem = {
+  count: number;
+  tier: AdminUserTier;
+};
+
+export type AdminAnalyticsSubscriptionStatusItem = {
+  count: number;
+  status: string;
+};
+
+export type AdminAnalyticsSignupPoint = {
+  date_utc: string;
+  users: number;
+};
+
+export type AdminAnalyticsRevenuePoint = {
+  credits_revenue_usd: number;
+  date_utc: string;
+  gross_revenue_usd: number;
+  subscription_revenue_usd: number;
+};
+
+export type AdminAnalyticsRevenueStatus = {
+  available: boolean;
+  message: string | null;
+};
+
+export type AdminAnalyticsOverviewResponse = {
+  from: string;
+  recent_signups: AdminAnalyticsUser[];
+  revenue_by_day: AdminAnalyticsRevenuePoint[];
+  revenue_status: AdminAnalyticsRevenueStatus;
+  signups_by_day: AdminAnalyticsSignupPoint[];
+  subscription_status_breakdown: AdminAnalyticsSubscriptionStatusItem[];
+  summary: AdminAnalyticsSummary;
+  tier_breakdown: AdminAnalyticsTierBreakdownItem[];
+  to: string;
+  window: AdminAnalyticsWindow;
+};
+
+export type AdminUsersListResponse = {
+  items: AdminAnalyticsUser[];
+  next_cursor: string | null;
+  sort: 'recent_signup';
+};
+
 export type AdminLedgerEntry = {
   amount: number;
   balance_after: number;

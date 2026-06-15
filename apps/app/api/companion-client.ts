@@ -5,9 +5,12 @@ import type {
   ActivityResponse,
   AdminAllowlistItem,
   AdminAllowlistResponse,
+  AdminAnalyticsOverviewResponse,
+  AdminAnalyticsWindow,
   AdminCreditAdjustmentResult,
   AdminSecretRevealResponse,
   AdminUserCredits,
+  AdminUsersListResponse,
   AdminUsersResponse,
   AdminSettingItem,
   BaseArtGenerateInput,
@@ -289,6 +292,24 @@ export async function removeAdminAllowlistEmail(email: string): Promise<{ ok: tr
 
 export async function searchAdminUsers(search: string): Promise<AdminUsersResponse> {
   return requestJson<AdminUsersResponse>(`/admin/users?search=${encodeURIComponent(search)}`);
+}
+
+export async function getAdminAnalyticsOverview(
+  window: AdminAnalyticsWindow,
+): Promise<AdminAnalyticsOverviewResponse> {
+  return requestJson<AdminAnalyticsOverviewResponse>(
+    `/admin/analytics/overview?window=${encodeURIComponent(window)}`,
+  );
+}
+
+export async function listAdminUsersByRecentSignup(
+  options: { cursor?: string | null; limit?: number } = {},
+): Promise<AdminUsersListResponse> {
+  const params = new URLSearchParams();
+  params.set('sort', 'recent_signup');
+  if (options.cursor) params.set('cursor', options.cursor);
+  if (options.limit) params.set('limit', String(options.limit));
+  return requestJson<AdminUsersListResponse>(`/admin/users/list?${params.toString()}`);
 }
 
 export async function getAdminUserCredits(userId: string): Promise<AdminUserCredits> {

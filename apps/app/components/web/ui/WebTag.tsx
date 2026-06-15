@@ -14,15 +14,39 @@ export type WebTagProps = {
   variant?: WebTagVariant;
 };
 
-const variantClass: Record<WebTagVariant, string> = {
-  brand: 'bg-emerald-300/12 text-emerald-200',
-  rose: 'bg-rose-300/12 text-rose-200',
-  wine: 'bg-app-wine-soft text-app-wine',
-  ember: 'bg-app-ember-soft text-app-ember',
-  neutral: 'bg-app-sunken text-app-ink-soft',
-  success: 'bg-app-success/15 text-app-success',
-  warning: 'bg-app-warning-soft text-app-warning',
-  danger: 'bg-app-danger-soft text-app-danger',
+const variantClass: Record<WebTagVariant, { container: string; text: string }> = {
+  brand: {
+    container: 'bg-emerald-300/12',
+    text: 'text-emerald-200',
+  },
+  rose: {
+    container: 'bg-rose-300/12',
+    text: 'text-rose-200',
+  },
+  wine: {
+    container: 'bg-app-wine-soft',
+    text: 'text-app-wine',
+  },
+  ember: {
+    container: 'bg-app-ember-soft',
+    text: 'text-app-ember',
+  },
+  neutral: {
+    container: 'bg-app-sunken',
+    text: 'text-rose-50/80',
+  },
+  success: {
+    container: 'bg-app-success/15',
+    text: 'text-app-success',
+  },
+  warning: {
+    container: 'bg-app-warning-soft',
+    text: 'text-app-warning',
+  },
+  danger: {
+    container: 'bg-app-danger-soft',
+    text: 'text-app-danger',
+  },
 };
 
 const sizeClass: Record<WebTagSize, string> = {
@@ -31,18 +55,20 @@ const sizeClass: Record<WebTagSize, string> = {
 };
 
 export function WebTag({ children, className, iconLeft, size = 'md', variant = 'neutral' }: WebTagProps) {
+  const tone = variantClass[variant];
+
   return (
     <View
       className={cn(
         'flex-row items-center gap-1.5 self-start rounded-full',
-        variantClass[variant],
+        tone.container,
         sizeClass[size],
         className,
       )}
     >
-      {iconLeft ? <View>{iconLeft}</View> : null}
+      {iconLeft ? <View className={tone.text}>{iconLeft}</View> : null}
       {typeof children === 'string' ? (
-        <Text className="font-semibold">{children}</Text>
+        <Text className={cn('font-semibold', tone.text)}>{children}</Text>
       ) : (
         children
       )}

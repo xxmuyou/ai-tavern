@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
 import type { AdminSection } from '@/components/admin/AdminSectionTabs';
+import { AnalyticsSection } from '@/components/admin/AnalyticsSection';
 import { LlmSection } from '@/components/admin/LlmSection';
 import { PortraitGenerationSection } from '@/components/admin/PortraitGenerationSection';
 import { PromptsSection } from '@/components/admin/PromptsSection';
@@ -15,6 +16,7 @@ import { ADMIN_ROUTE } from '@/constants/routes';
 import { WebPageContainer, WebSidebar, WebTopBar, type WebNavItem } from '@/components/web/ui';
 
 const SECTION_ITEMS: (WebNavItem & { id: AdminSection; subtitle: string })[] = [
+  { href: ADMIN_ROUTE, icon: 'analytics-outline', id: 'analytics', label: 'Analytics', subtitle: 'Users, membership, and revenue' },
   { href: ADMIN_ROUTE, icon: 'people-outline', id: 'users', label: 'Users', subtitle: 'Members and credits' },
   { href: ADMIN_ROUTE, icon: 'hardware-chip-outline', id: 'chat-models', label: 'Chat models', subtitle: 'LLM routing and usage' },
   { href: ADMIN_ROUTE, icon: 'image-outline', id: 'portrait-generation', label: 'Portrait generation', subtitle: 'Image jobs and catalogs' },
@@ -31,7 +33,7 @@ export default function WebAdminScreen() {
 }
 
 function WebAdminContent() {
-  const [section, setSection] = useState<AdminSection>('users');
+  const [section, setSection] = useState<AdminSection>('analytics');
   const activeItem = SECTION_ITEMS.find((item) => item.id === section) ?? SECTION_ITEMS[0];
 
   return (
@@ -44,7 +46,7 @@ function WebAdminContent() {
             brandTitle="Admin"
             className="bg-white/[0.06]"
             items={SECTION_ITEMS}
-            onItemPress={(item) => setSection((item.id ?? 'users') as AdminSection)}
+            onItemPress={(item) => setSection((item.id ?? 'analytics') as AdminSection)}
             width={260}
             bottomSlot={
               <View className="gap-2 rounded-xl border border-white/10 bg-white/[0.075] p-3">
@@ -63,6 +65,7 @@ function WebAdminContent() {
               title={activeItem.label}
             />
             <WebPageContainer maxWidth="2xl" scroll={false}>
+              {section === 'analytics' ? <AnalyticsSection /> : null}
               {section === 'users' ? <UsersSection /> : null}
               {section === 'chat-models' ? <LlmSection /> : null}
               {section === 'portrait-generation' ? <PortraitGenerationSection /> : null}

@@ -839,6 +839,69 @@ render version 参与缓存 key，避免改声音后复用旧音频。
 
 错误：thread 不存在或无 snapshot → 404 `prompt_debug_not_found`；非 admin → 403 `admin_required`。
 
+### `GET /admin/analytics/overview?window=today|7d|30d` (spec-039)
+
+管理员 Analytics 概览接口。`window` 缺省为 `7d`，非法值返回 400 `invalid_window`。用户/会员类指标以 D1 为真相来源；收入类指标以 Stripe 为真相来源。
+
+```json
+// Response 200
+{
+  "window": "7d",
+  "from": "2026-06-09T00:00:00.000Z",
+  "to": "2026-06-15T12:00:00.000Z",
+  "summary": {
+    "total_users": 1234,
+    "new_users": 56,
+    "active_users": 341,
+    "pro_users": 210,
+    "free_users": 1024,
+    "active_subscriptions": 210,
+    "credits_revenue_usd": 189.5,
+    "subscription_revenue_usd": 432,
+    "gross_revenue_usd": 621.5
+  },
+  "tier_breakdown": [
+    { "tier": "free", "count": 1024 },
+    { "tier": "pro", "count": 210 }
+  ],
+  "subscription_status_breakdown": [
+    { "status": "active", "count": 198 },
+    { "status": "trialing", "count": 12 },
+    { "status": "canceled", "count": 37 }
+  ],
+  "signups_by_day": [
+    { "date_utc": "2026-06-09", "users": 4 }
+  ],
+  "revenue_by_day": [
+    {
+      "date_utc": "2026-06-09",
+      "credits_revenue_usd": 19.5,
+      "subscription_revenue_usd": 72,
+      "gross_revenue_usd": 91.5
+    }
+  ],
+  "recent_signups": [
+    {
+      "user_id": "usr_abc",
+      "email": "user@example.com",
+      "tier": "pro",
+      "subscription_status": "active",
+      "created_at": "2026-06-15T08:00:00.000Z",
+      "last_seen_at": "2026-06-15T10:00:00.000Z"
+    }
+  ],
+  "revenue_status": {
+    "available": true,
+    "message": null
+  }
+}
+```
+
+说明：
+
+- `recent_signups` 只代表 dashboard 摘要，不承载全量明细职责；Web admin 默认展示其中前 5 条。
+- 若 Stripe 关键配置缺失，收入字段返回 0，`revenue_status.available = false`，并通过 `message` 提示。
+
 ### `GET /admin/users?search=<email>` (spec-023)
 
 按邮箱精确或前缀匹配用户，供管理员定位 userId。结果上限 20 条。
@@ -849,6 +912,30 @@ render version 参与缓存 key，避免改声音后复用旧音频。
 ```
 
 错误：`search` 为空 → 400 `search_required`；无匹配 → 200 空数组。
+
+### `GET /admin/users/list?sort=recent_signup&cursor=<optional>&limit=<optional>` (spec-039)
+
+管理员最近注册用户分页明细。第一版只支持 `sort=recent_signup`，按 `created_at DESC, user_id DESC` 排序。`limit` 缺省 20、上限 100。`cursor` 为不透明分页游标。
+
+```json
+// Response 200
+{
+  "sort": "recent_signup",
+  "items": [
+    {
+      "user_id": "usr_abc",
+      "email": "user@example.com",
+      "tier": "pro",
+      "subscription_status": "active",
+      "created_at": "2026-06-15T08:00:00.000Z",
+      "last_seen_at": "2026-06-15T10:00:00.000Z"
+    }
+  ],
+  "next_cursor": "eyJjcmVhdGVkX2F0IjoxNzUwMDAwMDAwMDAwLCJ1c2VyX2lkIjoidXNyX2FiYyJ9"
+}
+```
+
+错误：`sort` 非 `recent_signup` → 400 `invalid_sort`；`limit` 非正整数 → 400 `invalid_limit`；`cursor` 非法 → 400 `invalid_cursor`。
 
 ### `GET /admin/users/{user_id}/credits` (spec-023)
 
@@ -888,7 +975,7 @@ render version 参与缓存 key，避免改声音后复用旧音频。
 
 错误：`amount` 非正整数 → 400 `invalid_amount`；`reason` 为空 → 400 `reason_required`；用户不存在 → 404 `user_not_found`。
 
-> 三个端点均走 `requireAdminUser`（401 `auth_required` / 403 `admin_required`），与 §9 其余 admin 端点一致。其他后台统计接口（`GET /admin/usage` 等）v1 暂不实现完整 dashboard。
+> 上述 admin analytics / users / credits 端点均走 `requireAdminUser`（401 `auth_required` / 403 `admin_required`），与 §9 其余 admin 端点一致。`spec-039` 的 Analytics 第一版只要求本地验证，不包含 `dev` 发布。
 
 ### `GET /admin/image-gen-jobs?status=<failed|...>&limit=<N>&created_from=<ms>&created_to=<ms>` (2026-06-01)
 
@@ -1007,6 +1094,7 @@ D1 连通性诊断（仅 admin / 内部）。
 ### 11.9 Admin 扩展（需 admin 权限）
 
 - `GET /admin/llm/config/{task}`、`GET /admin/llm/usage` — 单任务配置 / LLM 用量。
+- `GET /admin/analytics/overview`、`GET /admin/users/list` — Analytics 概览与最近注册用户分页明细（spec-039）。
 - `GET/POST /admin/admin-allowlist`、`DELETE /admin/admin-allowlist/{id}` — 管理员白名单。
 - `GET /admin/settings`、`PUT/DELETE /admin/settings/{key}`、`POST /admin/settings/{key}/reveal` — 运行配置（见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)）。
 - `/admin/image-models`、`/admin/image-workflows`、`/admin/expression-prompts`（GET/POST/PUT/DELETE）— 出图模型 / workflow / 表情 prompt 目录（spec-022）。

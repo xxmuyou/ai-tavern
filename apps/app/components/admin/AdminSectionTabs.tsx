@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text } from 'react-native';
 
 export type AdminSection =
+  | 'analytics'
   | 'users'
   | 'chat-models'
   | 'portrait-generation'
@@ -8,6 +9,7 @@ export type AdminSection =
   | 'settings';
 
 const TABS: { id: AdminSection; label: string }[] = [
+  { id: 'analytics', label: 'Analytics' },
   { id: 'users', label: 'Users' },
   { id: 'chat-models', label: 'Chat models' },
   { id: 'portrait-generation', label: 'Portrait generation' },
