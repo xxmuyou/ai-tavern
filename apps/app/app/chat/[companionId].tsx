@@ -39,6 +39,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { EventPopup } from '@/components/EventPopup';
 import { InvitePopup } from '@/components/InvitePopup';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { LiveStreamingBubble } from '@/components/LiveStreamingBubble';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { PortraitBar } from '@/components/PortraitBar';
@@ -153,14 +154,17 @@ function ChatScreenInner() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const activePersonaId =
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
-  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true));
+  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true), streamingMessages);
   const autoVoice = useAutoVoice();
   const {
     appendLocalUserMessage,
     appendStreamingCompanionMessage,
     cleanupFailedStreamingCompanionMessage,
     finishStreamingCompanionMessage,
+    getStreamSnapshot,
     pushStreamingCompanionDelta,
+    streamingId,
+    subscribeStream,
   } = streamingMessages;
   const editMessage = useEditMessage(companionId, history, {
     onError: pushError,
@@ -474,6 +478,11 @@ function ChatScreenInner() {
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'aborted') {
+        // Caller-initiated cancel (left the chat); stay silent and just clean up.
+        cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
+        return;
+      }
       if (error instanceof QuotaExceededError) {
         setQuotaModalVisible(true);
       } else if (error instanceof RateLimitedError) {
@@ -487,6 +496,9 @@ function ChatScreenInner() {
         pushError(message);
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
+      // Don't silently lose what the user typed — restore it unless they've
+      // already started a new message.
+      setDraft((current) => (current.length > 0 ? current : text));
     }
   }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, draft, finishStreamingCompanionMessage, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, stream]);
 
@@ -641,8 +653,14 @@ function ChatScreenInner() {
   const shownEmotion = currentEmotion;
 
   const updateHistoryMessage = history.updateMessage;
+  // Read the latest messages through a ref so handleMomentReady stays referentially
+  // stable — keeping `history.messages` in its deps made it (and therefore
+  // renderItem) change identity on every streamed frame, defeating FlatList's
+  // per-row bail-out and re-rendering the whole list while typing.
+  const messagesRef = useRef(history.messages);
+  messagesRef.current = history.messages;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
-    const previousMoment = history.messages.find((message) => message.id === messageId)?.moment_image ?? null;
+    const previousMoment = messagesRef.current.find((message) => message.id === messageId)?.moment_image ?? null;
     const isNewSucceededMoment =
       moment.status === 'succeeded' &&
       (previousMoment?.status !== 'succeeded' || previousMoment.output_key !== moment.output_key);
@@ -650,39 +668,53 @@ function ChatScreenInner() {
     if (isNewSucceededMoment) {
       notifyMomentReady(messageId);
     }
-  }, [history.messages, notifyMomentReady, updateHistoryMessage]);
+  }, [notifyMomentReady, updateHistoryMessage]);
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
+
+  // Pull the individually-stable callbacks and id-state out of the hook objects.
+  // The hook objects are recreated every render, but their methods are useCallback
+  // -stable and the id-state only changes on user action (never while streaming),
+  // so depending on these keeps renderItem stable during a reply.
+  const { beginEdit, cancelEdit, editingId, editingText, isSaving: isEditSaving, saveEdit, setEditingText } = editMessage;
+  const { regenerate, regeneratingId, selectVariant, speak, speakingId } = messageActions;
   const renderItem = useCallback(({ item }: { item: ChatMessage }) => {
     const role = item.role === 'assistant' ? 'companion' : item.role;
     const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
     const isServerUser = role === 'user' && !item.id.startsWith('local-');
+    const isLiveStreaming = item.id === streamingId;
 
-    if (isServerUser && editMessage.editingId === item.id) {
+    if (isServerUser && editingId === item.id) {
       return (
         <UserMessageEditor
-          text={editMessage.editingText}
-          isSaving={editMessage.isSaving}
-          onChangeText={editMessage.setEditingText}
-          onSave={editMessage.saveEdit}
-          onCancel={editMessage.cancelEdit}
+          text={editingText}
+          isSaving={isEditSaving}
+          onChangeText={setEditingText}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
         />
       );
     }
 
     return (
       <View>
-        <MessageBubble
-          content={item.content}
-          isPending={role === 'companion' && item.id.startsWith('local-') && item.content.length === 0}
-          isStreaming={role === 'companion' && item.id.startsWith('local-')}
-          role={role}
-        />
+        {isLiveStreaming ? (
+          <LiveStreamingBubble
+            messageId={item.id}
+            subscribe={subscribeStream}
+            getSnapshot={getStreamSnapshot}
+          />
+        ) : (
+          <MessageBubble
+            content={item.content}
+            role={role}
+          />
+        )}
         {isServerUser ? (
           <View className="w-full flex-row justify-end px-5 pb-1">
             <Pressable
               accessibilityRole="button"
-              disabled={editMessage.isSaving}
-              onPress={() => editMessage.beginEdit(item.id, item.content)}
+              disabled={isEditSaving}
+              onPress={() => beginEdit(item.id, item.content)}
             >
               <Text className="text-xs font-semibold text-app-muted">Edit</Text>
             </Pressable>
@@ -692,12 +724,12 @@ function ChatScreenInner() {
           <MessageActions
             variants={item.variants}
             selectedVariant={item.selected_variant}
-            isRegenerating={messageActions.regeneratingId === item.id}
-            isSpeaking={messageActions.speakingId === item.id}
-            disabled={messageActions.regeneratingId !== null && messageActions.regeneratingId !== item.id}
-            onRegenerate={() => messageActions.regenerate(item.id)}
-            onSelectVariant={(index) => messageActions.selectVariant(item.id, index)}
-            onSpeak={() => messageActions.speak(item.id)}
+            isRegenerating={regeneratingId === item.id}
+            isSpeaking={speakingId === item.id}
+            disabled={isLiveStreaming || stream.isStreaming || (regeneratingId !== null && regeneratingId !== item.id)}
+            onRegenerate={() => regenerate(item.id)}
+            onSelectVariant={(index) => selectVariant(item.id, index)}
+            onSpeak={() => speak(item.id)}
           />
         ) : null}
         {isServerCompanion ? (
@@ -709,7 +741,7 @@ function ChatScreenInner() {
         ) : null}
       </View>
     );
-  }, [editMessage, handleMomentReady, messageActions]);
+  }, [beginEdit, cancelEdit, editingId, editingText, getStreamSnapshot, handleMomentReady, isEditSaving, regenerate, regeneratingId, saveEdit, selectVariant, setEditingText, speak, speakingId, stream.isStreaming, streamingId, subscribeStream]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 

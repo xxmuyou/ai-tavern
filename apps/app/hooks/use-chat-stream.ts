@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { clearStoredAuthSession, sendChatMessage } from '@/api/companion-client';
 import type { ChatInviteResult, ChatQuickActionResult, ChatUnlock, RelationshipDimensions } from '@/api/types';
@@ -55,6 +55,14 @@ function categorizeStreamError(rawError: unknown): Error {
   const err = rawError as Error & { code?: string; retryAfter?: number | null; status?: number };
   const status = err.status;
 
+  if (err.code === 'aborted') {
+    // Caller-initiated cancel (e.g. left the chat). Surface a silent marker the
+    // screen can ignore rather than showing an error toast.
+    return new ApiError('Request canceled.', undefined, 'aborted');
+  }
+  if (err.code === 'stream_timeout') {
+    return new ServerError('The reply timed out. Please try again.', undefined, 'stream_timeout');
+  }
   if (status === 401) {
     clearStoredAuthSession();
     return new ApiError('Your session has expired. Please sign in again.', 401, 'unauthorized');
@@ -101,6 +109,14 @@ export type UseChatStreamResult = {
 export function useChatStream(companionId: string): UseChatStreamResult {
   const [isStreaming, setIsStreaming] = useState(false);
   const activeRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight stream when the screen unmounts or switches companion, so a
+  // hung request does not keep reading in the background after the user leaves.
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [companionId]);
 
   const send = useCallback(
     async (text: string, options: SendOptions = {}): Promise<ChatStreamResult> => {
@@ -110,6 +126,8 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       activeRef.current = true;
       setIsStreaming(true);
 
+      const controller = new AbortController();
+      abortRef.current = controller;
       let buffer = '';
       let emotion: ChatEmotion | null = null;
 
@@ -121,7 +139,7 @@ export function useChatStream(companionId: string): UseChatStreamResult {
           quick_action: options.quickAction,
           scene_id: options.sceneId,
           text,
-        });
+        }, controller.signal);
         for await (const event of stream) {
           if (event.type === 'chunk') {
             const data = event.data as { text?: string } | undefined;
@@ -190,6 +208,9 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       } catch (rawError) {
         throw categorizeStreamError(rawError);
       } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
         activeRef.current = false;
         setIsStreaming(false);
       }

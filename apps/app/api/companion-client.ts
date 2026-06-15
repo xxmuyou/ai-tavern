@@ -1336,21 +1336,36 @@ export async function selectMessageVariant(
 export async function* regenerateChatMessage(
   companionId: string,
   messageId: string,
+  signal?: AbortSignal,
 ): AsyncIterable<SseEvent> {
   yield* streamChatSse(
     `${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/regenerate`,
     undefined,
+    signal,
   );
 }
 
 export async function* sendChatMessage(
   companionId: string,
   input: ChatMessageInput,
+  signal?: AbortSignal,
 ): AsyncIterable<SseEvent> {
-  yield* streamChatSse(`${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages`, input);
+  yield* streamChatSse(`${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages`, input, signal);
 }
 
-async function* streamChatSse(url: string, body: ChatMessageInput | undefined): AsyncIterable<SseEvent> {
+// If the upstream LLM stalls we would otherwise hang forever on a blank reply.
+// Guard the stream with an inactivity timeout: the first event must arrive within
+// FIRST_EVENT_TIMEOUT_MS (the server holds the response until its first chunk), and
+// after that no more than IDLE_TIMEOUT_MS may pass between chunks. On expiry — or an
+// external abort (e.g. leaving the chat) — we abort the fetch and surface a clean error.
+const FIRST_EVENT_TIMEOUT_MS = 30000;
+const IDLE_TIMEOUT_MS = 20000;
+
+async function* streamChatSse(
+  url: string,
+  body: ChatMessageInput | undefined,
+  externalSignal?: AbortSignal,
+): AsyncIterable<SseEvent> {
   const headers = new Headers();
   const token = readStoredAuthToken();
   if (token) {
@@ -1360,62 +1375,109 @@ async function* streamChatSse(url: string, body: ChatMessageInput | undefined): 
     headers.set('content-type', 'application/json');
   }
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      body: body === undefined ? undefined : JSON.stringify(body),
-      headers,
-      method: 'POST',
-    });
-  } catch {
-    const error = new Error(`API is unreachable at ${API_BASE_URL}`) as Error & {
-      apiBaseUrl?: string;
-      code?: string;
-    };
-    error.apiBaseUrl = API_BASE_URL;
-    error.code = 'api_unreachable';
-    throw error;
-  }
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
-    const error = new Error(apiErrorMessage(payload, `HTTP ${response.status}`));
-    const retryAfter = parseRetryAfter(response.headers.get('retry-after'));
-    (error as Error & { code?: string; retryAfter?: number | null; status?: number }).code =
-      payload.code ?? payload.error;
-    (error as Error & { retryAfter?: number | null }).retryAfter = retryAfter;
-    (error as Error & { status?: number }).status = response.status;
-    throw error;
-  }
-
-  if (!response.body) {
-    throw new Error('sse_body_missing');
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const armTimer = (ms: number) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, ms);
+  };
+  const clearTimer = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
     }
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split(/\n\n/);
-    buffer = blocks.pop() ?? '';
+  };
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+  const abortError = (): Error & { code?: string } => {
+    const err = new Error(timedOut ? 'The reply timed out.' : 'aborted') as Error & { code?: string };
+    err.code = timedOut ? 'stream_timeout' : 'aborted';
+    return err;
+  };
 
-    for (const block of blocks) {
-      const event = readSseEvent(block);
-      if (event) {
-        yield event;
+  try {
+    let response: Response;
+    armTimer(FIRST_EVENT_TIMEOUT_MS);
+    try {
+      response = await fetch(url, {
+        body: body === undefined ? undefined : JSON.stringify(body),
+        headers,
+        method: 'POST',
+        signal: controller.signal,
+      });
+    } catch {
+      if (controller.signal.aborted) throw abortError();
+      const error = new Error(`API is unreachable at ${API_BASE_URL}`) as Error & {
+        apiBaseUrl?: string;
+        code?: string;
+      };
+      error.apiBaseUrl = API_BASE_URL;
+      error.code = 'api_unreachable';
+      throw error;
+    }
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+      const error = new Error(apiErrorMessage(payload, `HTTP ${response.status}`));
+      const retryAfter = parseRetryAfter(response.headers.get('retry-after'));
+      (error as Error & { code?: string; retryAfter?: number | null; status?: number }).code =
+        payload.code ?? payload.error;
+      (error as Error & { retryAfter?: number | null }).retryAfter = retryAfter;
+      (error as Error & { status?: number }).status = response.status;
+      throw error;
+    }
+
+    if (!response.body) {
+      throw new Error('sse_body_missing');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    armTimer(IDLE_TIMEOUT_MS);
+    while (true) {
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } catch {
+        if (controller.signal.aborted) throw abortError();
+        throw new Error('stream_read_failed');
+      }
+      if (result.done) {
+        break;
+      }
+      // Each chunk is activity — reset the inactivity window so a long reply is
+      // never cut off, only a genuine stall trips the timeout.
+      armTimer(IDLE_TIMEOUT_MS);
+      buffer += decoder.decode(result.value, { stream: true });
+      const blocks = buffer.split(/\n\n/);
+      buffer = blocks.pop() ?? '';
+
+      for (const block of blocks) {
+        const event = readSseEvent(block);
+        if (event) {
+          yield event;
+        }
       }
     }
-  }
 
-  const trailing = readSseEvent(buffer);
-  if (trailing) {
-    yield trailing;
+    const trailing = readSseEvent(buffer);
+    if (trailing) {
+      yield trailing;
+    }
+  } finally {
+    clearTimer();
+    if (externalSignal) {
+      externalSignal.removeEventListener('abort', onExternalAbort);
+    }
   }
 }
 

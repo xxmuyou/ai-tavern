@@ -47,6 +47,7 @@ import type {
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
+import { LiveStreamingBubble } from '@/components/LiveStreamingBubble';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { SceneArtwork, SceneStageBackdrop } from '@/components/SceneArtwork';
@@ -176,7 +177,7 @@ export default function WebChatScreen() {
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
-  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true));
+  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true), streamingMessages);
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [lastSignals, setLastSignals] = useState<Partial<RelationshipDimensions> | null>(null);
@@ -243,7 +244,10 @@ export default function WebChatScreen() {
     appendStreamingCompanionMessage,
     cleanupFailedStreamingCompanionMessage,
     finishStreamingCompanionMessage,
+    getStreamSnapshot,
     pushStreamingCompanionDelta,
+    streamingId,
+    subscribeStream,
   } = streamingMessages;
 
   useEffect(() => {
@@ -558,8 +562,14 @@ export default function WebChatScreen() {
   }, [history.isLoadingInitial, resetForThread]);
 
   const updateHistoryMessage = history.updateMessage;
+  // Read the latest messages through a ref so handleMomentReady stays referentially
+  // stable — keeping `history.messages` in its deps made it (and therefore
+  // renderItem) change identity on every streamed frame, defeating FlatList's
+  // per-row bail-out and re-rendering the whole list while typing.
+  const messagesRef = useRef(history.messages);
+  messagesRef.current = history.messages;
   const handleMomentReady = useCallback((messageId: string, moment: ChatMomentImage) => {
-    const previousMoment = history.messages.find((message) => message.id === messageId)?.moment_image ?? null;
+    const previousMoment = messagesRef.current.find((message) => message.id === messageId)?.moment_image ?? null;
     const isNewSucceededMoment =
       moment.status === 'succeeded' &&
       (previousMoment?.status !== 'succeeded' || previousMoment.output_key !== moment.output_key);
@@ -567,40 +577,55 @@ export default function WebChatScreen() {
     if (isNewSucceededMoment) {
       notifyMomentReady(messageId);
     }
-  }, [history.messages, notifyMomentReady, updateHistoryMessage]);
+  }, [notifyMomentReady, updateHistoryMessage]);
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
+  // Pull the individually-stable callbacks and id-state out of the hook objects.
+  // The hook objects are recreated every render, but their methods are useCallback
+  // -stable and the id-state only changes on user action (never while streaming),
+  // so depending on these keeps renderItem stable during a reply.
+  const { beginEdit, cancelEdit, editingId, editingText, isSaving: isEditSaving, saveEdit, setEditingText } = editMessage;
+  const { regenerate, regeneratingId, selectVariant, speak, speakingId } = messageActions;
+  const companionName = companion?.name;
   const renderItem = useCallback(({ item }: ListRenderItemInfo<ChatMessage>) => {
     const role = item.role === 'assistant' ? 'companion' : item.role;
     const isServerCompanion = role === 'companion' && !item.id.startsWith('local-');
     const isServerUser = role === 'user' && !item.id.startsWith('local-');
-    if (isServerUser && editMessage.editingId === item.id) {
+    const isLiveStreaming = item.id === streamingId;
+    if (isServerUser && editingId === item.id) {
       return (
         <UserMessageEditor
-          text={editMessage.editingText}
-          isSaving={editMessage.isSaving}
-          onChangeText={editMessage.setEditingText}
-          onSave={editMessage.saveEdit}
-          onCancel={editMessage.cancelEdit}
+          text={editingText}
+          isSaving={isEditSaving}
+          onChangeText={setEditingText}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
         />
       );
     }
     return (
       <View>
-        <MessageBubble
-          content={item.content}
-          isPending={role === 'companion' && item.id.startsWith('local-') && item.content.length === 0}
-          isStreaming={role === 'companion' && item.id.startsWith('local-')}
-          role={role}
-          companionName={role === 'companion' ? companion?.name : null}
-        />
+        {isLiveStreaming ? (
+          <LiveStreamingBubble
+            messageId={item.id}
+            subscribe={subscribeStream}
+            getSnapshot={getStreamSnapshot}
+            companionName={companionName}
+          />
+        ) : (
+          <MessageBubble
+            content={item.content}
+            role={role}
+            companionName={role === 'companion' ? companionName : null}
+          />
+        )}
         {isServerUser ? (
           <View className="w-full flex-row justify-end px-5 pb-1">
             <Pressable
               accessibilityRole="button"
-              disabled={editMessage.isSaving}
-              onPress={() => editMessage.beginEdit(item.id, item.content)}
+              disabled={isEditSaving}
+              onPress={() => beginEdit(item.id, item.content)}
             >
               <Text className="text-xs font-semibold text-rose-50/60">Edit</Text>
             </Pressable>
@@ -610,12 +635,12 @@ export default function WebChatScreen() {
           <MessageActions
             variants={item.variants}
             selectedVariant={item.selected_variant}
-            isRegenerating={messageActions.regeneratingId === item.id}
-            isSpeaking={messageActions.speakingId === item.id}
-            disabled={messageActions.regeneratingId !== null && messageActions.regeneratingId !== item.id}
-            onRegenerate={() => messageActions.regenerate(item.id)}
-            onSelectVariant={(index) => messageActions.selectVariant(item.id, index)}
-            onSpeak={() => messageActions.speak(item.id)}
+            isRegenerating={regeneratingId === item.id}
+            isSpeaking={speakingId === item.id}
+            disabled={isLiveStreaming || stream.isStreaming || (regeneratingId !== null && regeneratingId !== item.id)}
+            onRegenerate={() => regenerate(item.id)}
+            onSelectVariant={(index) => selectVariant(item.id, index)}
+            onSpeak={() => speak(item.id)}
           />
         ) : null}
         {isServerCompanion ? (
@@ -627,7 +652,7 @@ export default function WebChatScreen() {
         ) : null}
       </View>
     );
-  }, [companion?.name, editMessage, handleMomentReady, messageActions]);
+  }, [beginEdit, cancelEdit, companionName, editingId, editingText, getStreamSnapshot, handleMomentReady, isEditSaving, regenerate, regeneratingId, saveEdit, selectVariant, setEditingText, speak, speakingId, stream.isStreaming, streamingId, subscribeStream]);
 
   usePendingMomentImages({ messages: history.messages, onUpdate: handleMomentReady });
   const remainingSeconds = useMemo(() => {
@@ -839,6 +864,11 @@ export default function WebChatScreen() {
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'aborted') {
+        // Caller-initiated cancel (left the chat); stay silent and just clean up.
+        cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
+        return;
+      }
       if (error instanceof QuotaExceededError) {
         setQuotaModalVisible(true);
       } else if (error instanceof RateLimitedError) {
@@ -855,6 +885,9 @@ export default function WebChatScreen() {
         pushError(error instanceof Error ? error.message : 'Failed to send message.');
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
+      // Don't silently lose what the user typed — restore it unless they've
+      // already started a new message.
+      setDraft((current) => (current.length > 0 ? current : text));
     }
   }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, stream]);
 

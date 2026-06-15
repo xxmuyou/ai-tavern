@@ -3,13 +3,11 @@ export type NarrationSegment = {
   type: 'dialogue' | 'narration';
 };
 
-const NARRATION_OPEN = '<narration>';
-const NARRATION_CLOSE = '</narration>';
 const ASTERISK_NARRATION_RE = /\*([^*\n][^*]*?)\*/g;
-const ACTION_VERB_RE =
-  /(lean|smil|look|glanc|blink|breath|laugh|pause|nod|shrug|turn|walk|step|sit|stand|reach|touch|hold|tilt|lower|raise|watch|stare|freeze|frown|grin|whisper|sigh|push|pull|set|place|rest|press|thread|grip|trembl|hesitat|停|走|站|坐|看|望|笑|眨|皱|抬|低|转|推|拉|伸|靠|贴|握|抓|放|拿|递|碰|摸|抱|躲|顿|沉默|呼吸|喘|咬|眯|垂|挑|点头|摇头|回头|侧身|靠近|退后)/i;
-const ACTION_SUBJECT_RE =
-  /^((?:[A-Z][A-Za-z0-9_-]{1,30})|he|she|they|his|her|their|我|她|他|TA|ta|两人|对方|这个人|那个人)\b|^(我|她|他|两人|对方|这个人|那个人)/i;
+// Tolerate malformed tags (extra spaces, partial) so `< narration>` style output
+// never leaks into the bubble as literal text.
+const NARRATION_TAG_RE = /<\s*\/?\s*narrat[a-z]*\s*>?/gi;
+const NARRATION_TAG_SCAN_RE = /<\s*(\/?)\s*narrat[a-z]*\s*>/gi;
 
 export function normalizeChatDisplayText(content: string): string {
   return content.replace(/(^|\n)[ \t]{0,3}>[ \t]?/g, '$1');
@@ -19,48 +17,42 @@ export function parseNarration(content: string, options: { tolerateUnclosed?: bo
   const tolerate = options.tolerateUnclosed ?? false;
   const segments: NarrationSegment[] = [];
   let cursor = 0;
-  const normalized = content.toLowerCase();
+  let narrationStart: number | null = null;
+  NARRATION_TAG_SCAN_RE.lastIndex = 0;
 
-  while (cursor < content.length) {
-    const openIdx = normalized.indexOf(NARRATION_OPEN, cursor);
-    const closeIdxBeforeOpen = normalized.indexOf(NARRATION_CLOSE, cursor);
+  let match: RegExpExecArray | null;
+  while ((match = NARRATION_TAG_SCAN_RE.exec(content))) {
+    const tagStart = match.index;
+    const tagEnd = NARRATION_TAG_SCAN_RE.lastIndex;
+    const isClose = match[1] === '/';
 
-    if (closeIdxBeforeOpen !== -1 && (openIdx === -1 || closeIdxBeforeOpen < openIdx)) {
-      pushMixed(segments, content.slice(cursor, closeIdxBeforeOpen));
-
-      const orphanTextStart = closeIdxBeforeOpen + NARRATION_CLOSE.length;
-      const nextCloseIdx = normalized.indexOf(NARRATION_CLOSE, orphanTextStart);
-      const nextOpenIdx = normalized.indexOf(NARRATION_OPEN, orphanTextStart);
-
-      if (nextCloseIdx !== -1 && (nextOpenIdx === -1 || nextCloseIdx < nextOpenIdx)) {
-        pushNarration(segments, content.slice(orphanTextStart, nextCloseIdx));
-        cursor = nextCloseIdx + NARRATION_CLOSE.length;
+    if (isClose) {
+      if (narrationStart === null) {
+        pushMixed(segments, content.slice(cursor, tagStart));
       } else {
-        cursor = orphanTextStart;
+        pushNarration(segments, content.slice(narrationStart, tagStart));
+        narrationStart = null;
       }
+      cursor = tagEnd;
       continue;
     }
 
-    if (openIdx === -1) {
-      pushMixed(segments, content.slice(cursor));
-      break;
+    if (narrationStart === null) {
+      pushMixed(segments, content.slice(cursor, tagStart));
+    } else {
+      pushNarration(segments, content.slice(narrationStart, tagStart));
     }
+    narrationStart = tagEnd;
+    cursor = tagEnd;
+  }
 
-    pushMixed(segments, content.slice(cursor, openIdx));
-
-    const innerStart = openIdx + NARRATION_OPEN.length;
-    const closeIdx = normalized.indexOf(NARRATION_CLOSE, innerStart);
-    if (closeIdx === -1) {
-      if (tolerate) {
-        pushNarration(segments, content.slice(innerStart));
-      } else {
-        pushNarration(segments, content.slice(innerStart));
-      }
-      break;
+  if (narrationStart !== null) {
+    const rest = content.slice(narrationStart);
+    if (tolerate || rest.trim().length > 0) {
+      pushNarration(segments, rest);
     }
-
-    pushNarration(segments, content.slice(innerStart, closeIdx));
-    cursor = closeIdx + NARRATION_CLOSE.length;
+  } else if (cursor < content.length) {
+    pushMixed(segments, content.slice(cursor));
   }
 
   return segments;
@@ -103,8 +95,7 @@ function pushDialogue(out: NarrationSegment[], raw: string) {
   // the dialogue segment the bubble renders taller than its visible text.
   // Internal newlines (a genuinely multi-line line) are preserved.
   const trimmed = raw
-    .replace(/<\/?narration>/gi, '')
-    .replace(/<\/?narrat[a-z]*>?/gi, '')
+    .replace(NARRATION_TAG_RE, '')
     .replace(/^\s+|\s+$/g, '');
   if (trimmed.length === 0) return;
 
@@ -118,40 +109,23 @@ function pushDialogue(out: NarrationSegment[], raw: string) {
 }
 
 function pushNarration(out: NarrationSegment[], raw: string) {
-  const trimmed = raw.replace(/<\/?narrat[a-z]*>?/gi, '').trim();
+  const trimmed = raw.replace(NARRATION_TAG_RE, '').trim();
   if (trimmed.length === 0) return;
   out.push({ text: trimmed, type: 'narration' });
 }
 
 function splitDialogueCandidates(raw: string): string[] {
-  const lines = raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const out: string[] = [];
-  for (const line of lines) {
-    if (!ACTION_SUBJECT_RE.test(line)) {
-      out.push(line);
-      continue;
-    }
-    const pieces = line.match(/[^.!?。！？；;]+[.!?。！？；;]?/g) ?? [line];
-    for (const piece of pieces) {
-      const trimmed = piece.trim();
-      if (trimmed) out.push(trimmed);
-    }
-  }
-  return out;
+  return raw.split(/\n+/).map((line) => line.trim()).filter(Boolean);
 }
 
+// Narration is recognised by explicit markers ONLY — `<narration>` tags,
+// `*asterisks*` (handled in pushMixed), or a fully parenthesised line. We do NOT
+// guess from sentence shape: the old subject+verb heuristic wrongly turned
+// ordinary dialogue like "You always make me smile." into centred narration.
 function looksLikeNarration(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
-  if (/<\/?narrat/i.test(trimmed)) return true;
+  if (/<\s*\/?\s*narrat/i.test(trimmed)) return true;
   if (/^[(（].+[)）]$/.test(trimmed)) return true;
-  if (!ACTION_SUBJECT_RE.test(trimmed)) return false;
-  if (!ACTION_VERB_RE.test(trimmed)) return false;
-  if (/^(我|i)\s*(think|feel|want|like|love|hate|know|remember|guess|mean|need|miss)\b/i.test(trimmed)) {
-    return false;
-  }
-  if (/^我(觉得|想|要|喜欢|爱|讨厌|知道|记得|猜|是|不是|可以|不能|会|不会)/.test(trimmed)) {
-    return false;
-  }
-  return true;
+  return false;
 }

@@ -63,7 +63,7 @@ export const MessageBubble = memo(function MessageBubble({
   );
 });
 
-function TypingBubble() {
+export function TypingBubble() {
   return (
     <View className="w-full flex-row justify-start px-4 py-0.5">
       <View className="rounded-2xl rounded-tl-md border border-app-line bg-app-card px-4 py-3">

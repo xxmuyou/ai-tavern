@@ -9,10 +9,22 @@ type StreamingBubbleProps = {
   companionName?: string | null;
 };
 
-export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
-  const segments = useMemo(() => parseNarration(normalizeChatDisplayText(text), { tolerateUnclosed: true }), [text]);
+function streamingSegments(text: string) {
+  // Hide a trailing, not-yet-complete tag (e.g. text streamed up to `<narr`,
+  // or a stall mid-tag) so the literal `<...` never flashes in the bubble. Once
+  // the closing `>` arrives parseNarration strips the whole tag as usual.
+  const withoutPartialTag = normalizeChatDisplayText(text).replace(/<[^>]*$/, '');
+  return parseNarration(withoutPartialTag, { tolerateUnclosed: true });
+}
 
-  if (text.length === 0) {
+export function hasRenderableStreamingText(text: string): boolean {
+  return streamingSegments(text).length > 0;
+}
+
+export function StreamingBubble({ text, companionName }: StreamingBubbleProps) {
+  const segments = useMemo(() => streamingSegments(text), [text]);
+
+  if (text.length === 0 || segments.length === 0) {
     return null;
   }
 

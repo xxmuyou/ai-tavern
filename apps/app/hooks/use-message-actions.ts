@@ -8,6 +8,17 @@ type HistoryLike = {
   updateMessage: (id: string, updater: (message: ChatMessage) => ChatMessage) => void;
 };
 
+type StreamingMessageLike = {
+  beginStreamingExistingCompanionMessage: (messageId: string) => void;
+  cleanupFailedStreamingCompanionMessage: (messageId: string, streamedText: string) => void;
+  finishStreamingExistingCompanionMessage: (
+    messageId: string,
+    fullText: string,
+    updater: (message: ChatMessage) => ChatMessage,
+  ) => void;
+  pushStreamingCompanionDelta: (messageId: string, delta: string) => void;
+};
+
 export type UseMessageActionsResult = {
   regeneratingId: string | null;
   speakingId: string | null;
@@ -25,9 +36,14 @@ export function useMessageActions(
   history: HistoryLike,
   onError?: (message: string) => void,
   onQuotaExceeded?: () => void,
+  streaming?: StreamingMessageLike,
 ): UseMessageActionsResult {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const beginStreamingExistingCompanionMessage = streaming?.beginStreamingExistingCompanionMessage;
+  const cleanupFailedStreamingCompanionMessage = streaming?.cleanupFailedStreamingCompanionMessage;
+  const finishStreamingExistingCompanionMessage = streaming?.finishStreamingExistingCompanionMessage;
+  const pushStreamingCompanionDelta = streaming?.pushStreamingCompanionDelta;
 
   const regenerate = useCallback(
     async (messageId: string) => {
@@ -36,34 +52,66 @@ export function useMessageActions(
       }
       setRegeneratingId(messageId);
       let buffer = '';
+      let didFinish = false;
+      beginStreamingExistingCompanionMessage?.(messageId);
       try {
         for await (const event of regenerateChatMessage(companionId, messageId)) {
           if (event.type === 'chunk') {
             const delta = (event.data as { text?: string } | undefined)?.text ?? '';
             if (delta) {
               buffer += delta;
-              history.updateMessage(messageId, (message) => ({ ...message, content: buffer }));
+              pushStreamingCompanionDelta?.(messageId, delta);
             }
           } else if (event.type === 'done') {
             const data = (event.data as { variants?: string[]; selected_variant?: number }) ?? {};
-            history.updateMessage(messageId, (message) => ({
+            const updater = (message: ChatMessage): ChatMessage => ({
               ...message,
               content: buffer || message.content,
               selected_variant: data.selected_variant ?? message.selected_variant ?? null,
               variants: data.variants ?? message.variants ?? null,
-            }));
+            });
+            if (finishStreamingExistingCompanionMessage) {
+              finishStreamingExistingCompanionMessage(messageId, buffer, updater);
+            } else {
+              history.updateMessage(messageId, updater);
+            }
+            didFinish = true;
           } else if (event.type === 'error') {
             const message = (event.data as { message?: string } | undefined)?.message ?? 'Regenerate failed.';
             throw new Error(message);
           }
         }
+        if (!didFinish) {
+          if (buffer) {
+            const updater = (message: ChatMessage): ChatMessage => ({ ...message, content: buffer });
+            if (finishStreamingExistingCompanionMessage) {
+              finishStreamingExistingCompanionMessage(messageId, buffer, updater);
+            } else {
+              history.updateMessage(messageId, updater);
+            }
+          } else {
+            cleanupFailedStreamingCompanionMessage?.(messageId, '');
+          }
+        }
       } catch (error) {
+        if (!didFinish) {
+          cleanupFailedStreamingCompanionMessage?.(messageId, buffer);
+        }
         onError?.(error instanceof Error ? error.message : 'Could not regenerate the reply.');
       } finally {
         setRegeneratingId(null);
       }
     },
-    [companionId, history, onError, regeneratingId],
+    [
+      beginStreamingExistingCompanionMessage,
+      cleanupFailedStreamingCompanionMessage,
+      companionId,
+      finishStreamingExistingCompanionMessage,
+      history,
+      onError,
+      pushStreamingCompanionDelta,
+      regeneratingId,
+    ],
   );
 
   const selectVariant = useCallback(
