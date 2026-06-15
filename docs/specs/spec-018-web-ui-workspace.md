@@ -117,6 +117,8 @@ pnpm --dir apps/app export:web
 
 2026-06-15 补充：Analytics 面板由 [`spec-039`](./spec-039-admin-analytics-dashboard.md) 承载，第一版只做 Web、本地验证优先，不含 dev 发布。
 
+2026-06-15 补充：Web `billing` 页面采用“购买决策优先”的信息结构，首屏除价格外还应明确 credits 用途、`chat/image/voice` 消耗成本、充值包可支持的大致使用量，以及 Free/Pro 的**已上线**差异；不把 planned perks 写成当前购买页卖点。
+
 ## 2026-06 首页与导航修订（spec-032 + web-navigation-and-theme）
 
 `spec-032` 取代早期“未登录营销 landing”的口径：Web 上线优先让用户在第一屏浏览真实 companions，并通过 `Female/Male` 与 `Anime/Realistic` 两组筛选直接选择角色。旧浅色营销首页与 fake catalog skeleton 不再作为并行入口保留；mobile/native 页面仍按本 spec 原原则暂不重做。

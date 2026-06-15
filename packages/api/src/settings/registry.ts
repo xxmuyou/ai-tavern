@@ -199,7 +199,7 @@ export const SETTINGS: readonly SettingDef[] = [
     label: "Voice generation cost",
     type: "number",
     description:
-      "Credits charged the first time a user generates a voice clip for a message with a selected voice/speed. Defaults to chat message cost.",
+      "Credits charged the first time a user generates a voice clip for a message with a selected voice/speed. Defaults to 3 credits.",
   },
 
   // --- image_gen ---

@@ -20,7 +20,7 @@ const { reserveCreditsMock, MockCreditsError } = vi.hoisted(() => {
 // tests don't touch a real ledger DB. Default: reserve succeeds.
 vi.mock("../credits", () => ({
   CreditsError: MockCreditsError,
-  TASK_CREDIT_COST: { admin_prewarm: 0, chat_message: 1, image_generation: 50, signal_extract: 0, summary: 0, voice_generation: 1 },
+  TASK_CREDIT_COST: { admin_prewarm: 0, chat_message: 1, image_generation: 40, signal_extract: 0, summary: 0, voice_generation: 3 },
   commitReservation: async () => {},
   releaseReservation: async () => {},
   reserveCredits: reserveCreditsMock,

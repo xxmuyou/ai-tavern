@@ -18,8 +18,11 @@ export async function ensureMonthlyGrant(
   userId: string,
   tier: BillingTier,
   now: number = Date.now(),
-): Promise<MonthlyGrantDto> {
+): Promise<MonthlyGrantDto | null> {
   const amount = MONTHLY_GRANT[tier];
+  if (amount <= 0) {
+    return null;
+  }
   const period = utcMonthKey(now);
 
   await grantCredits(env, {

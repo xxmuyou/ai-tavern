@@ -14,6 +14,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
+import { CREDIT_PACKAGES, MONTHLY_CREDIT_GRANT } from '@/constants/billing';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useCredits } from '@/hooks/use-credits';
@@ -21,12 +22,10 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { formatDateTime } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
 
-const PRO_FEATURES = ['30,000 credits every month', 'Unlimited custom companions', 'Priority access to new scenes'];
-
-const CREDIT_PACKAGES: { id: CreditPackageId; label: string; credits: number; price: string }[] = [
-  { id: 'small', label: 'Small', credits: 5000, price: '$4.99' },
-  { id: 'medium', label: 'Medium', credits: 15000, price: '$9.99' },
-  { id: 'large', label: 'Large', credits: 40000, price: '$19.99' },
+const PRO_FEATURES = [
+  `${MONTHLY_CREDIT_GRANT.pro.toLocaleString()} credits every month`,
+  'Unlimited custom companions',
+  'Buy extra credits any time without changing your plan',
 ];
 
 const LEDGER_LABELS: Record<CreditLedgerType, string> = {
@@ -203,7 +202,7 @@ export default function BillingScreen() {
                 <Text className="text-sm font-semibold uppercase tracking-normal text-app-primary">Pro Monthly</Text>
                 <Text className="mt-2 text-3xl font-semibold text-app-text">Upgrade your sandbox</Text>
                 <Text className="mt-2 text-base leading-6 text-app-muted">
-                  More monthly credits, unlimited custom companions, and priority access to new scenes.
+                  More monthly credits, unlimited custom companions, and the same pay as you go top-ups whenever you need them.
                 </Text>
               </View>
               <View className="rounded-full bg-app-primarySoft px-3 py-1">

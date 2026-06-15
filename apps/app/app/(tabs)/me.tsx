@@ -149,7 +149,7 @@ export default function MeScreen() {
               </>
             ) : (
               <>
-                <Text className="text-sm leading-5 text-app-muted">Free includes 1,000 credits each month and 3 custom companions.</Text>
+                <Text className="text-sm leading-5 text-app-muted">Free starts with 1,000 credits and includes 3 custom companions.</Text>
                 <Button label="Upgrade to Pro" onPress={() => router.push(BILLING_ROUTE)} />
               </>
             )}

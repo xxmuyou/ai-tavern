@@ -11,6 +11,7 @@ import {
   releaseReservation,
   reserveCredits,
 } from "./ledger";
+import { SIGNUP_GRANT, TASK_CREDIT_COST } from "./pricing";
 import { createCreditsTestEnv } from "./test-fixtures";
 import { CreditsError } from "./types";
 
@@ -165,15 +166,20 @@ describe("credits ledger", () => {
     expect((await getCreditBalance(env, USER)).available_credits).toBe(100);
   });
 
-  it("monthly grant is idempotent within a month", async () => {
+  it("free monthly grant is disabled", async () => {
     const env = createCreditsTestEnv();
     const now = Date.UTC(2026, 4, 15);
-    await ensureMonthlyGrant(env, USER, "free", now);
-    await ensureMonthlyGrant(env, USER, "free", now);
-    expect((await getCreditBalance(env, USER)).available_credits).toBe(1000);
+    expect(await ensureMonthlyGrant(env, USER, "free", now)).toBeNull();
+    expect((await getCreditBalance(env, USER)).available_credits).toBe(0);
+    expect(await listLedger(env, USER, { limit: 10 })).toEqual([]);
+  });
 
-    await ensureMonthlyGrant(env, USER, "pro", now); // upgrade same month grants pro on top
-    expect((await getCreditBalance(env, USER)).available_credits).toBe(31000);
+  it("pro monthly grant is idempotent within a month", async () => {
+    const env = createCreditsTestEnv();
+    const now = Date.UTC(2026, 4, 15);
+    await ensureMonthlyGrant(env, USER, "pro", now);
+    await ensureMonthlyGrant(env, USER, "pro", now);
+    expect((await getCreditBalance(env, USER)).available_credits).toBe(30000);
   });
 
   it("purchase credits idempotently by stripe session", async () => {
@@ -220,5 +226,10 @@ describe("credits ledger", () => {
     expect(entries.length).toBe(2);
     expect(entries[0]?.type).toBe("reserve");
     expect(entries[1]?.type).toBe("grant_monthly");
+  });
+
+  it("exposes the live signup and voice pricing constants", () => {
+    expect(SIGNUP_GRANT).toBe(1000);
+    expect(TASK_CREDIT_COST.voice_generation).toBe(3);
   });
 });

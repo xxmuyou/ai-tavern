@@ -587,7 +587,7 @@ CREATE INDEX idx_image_generation_jobs_task_status ON image_generation_jobs(task
 CREATE INDEX idx_image_generation_jobs_provider_task ON image_generation_jobs(provider_task_id);
 ```
 
-通用生图任务表（spec-020 §C / spec-022，migration `0018`），承载未绑定 companion 的生图（首个消费者是创建前的 base-art 草稿）。**积分接线**：创建 job 前 `reserveCredits(image_generation=50)`，把返回的 `reservation_id` 写入 `billing_ref`；job 落终态时由统一收敛点按 `billing_ref` 做 commit（succeeded）/ release（failed/cancelled），见 spec-021 §F。
+通用生图任务表（spec-020 §C / spec-022，migration `0018`），承载未绑定 companion 的生图（首个消费者是创建前的 base-art 草稿）。**积分接线**：创建 job 前 `reserveCredits(image_generation=40)`，把返回的 `reservation_id` 写入 `billing_ref`；job 落终态时由统一收敛点按 `billing_ref` 做 commit（succeeded）/ release（failed/cancelled），见 spec-021 §F。
 
 ---
 

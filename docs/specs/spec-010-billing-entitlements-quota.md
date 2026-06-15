@@ -3,6 +3,8 @@
 > **类型：** 新建  |  **依赖：** spec-003, spec-009  |  **估时：** 5-7 天  |  **状态：** 🟢 done
 >
 > ⚠️ **2026-06-08 修订（产品转向纯积分制）**：每日**消息条数配额已下线**，聊天改为按积分扣费（见 [`spec-021`](./spec-021-credits-ledger-and-metering.md)）。本 spec 的订阅 / Stripe / customer 映射 / **自创角色上限 entitlement** 仍然有效——自创角色上限（Free 3 / Pro 不限）是少数保留的订阅 gating；rate-limit 也保留防滥用。下文涉及"每日消息 quota / 软阈值"的部分作为历史保留，已不再生效。
+>
+> **2026-06-15 补充（Billing 页面展示口径）**：Web billing 购买页只展示**当前已上线**的订阅权益与积分消耗，不把规划中能力写成现有卖点。用户可见文案应明确 `1 chat = 1 credit`、`1 image = 40 credits`、`首次 voice generation = 3 credits`，以及 Free/Pro 的当前差异：Free 注册赠送 `1000` credits、Pro 每月 `30000` credits、`3 / unlimited` 自创角色上限。完整页面结构归 Web UI 文档维护，本 spec 只承载这些展示约束。
 
 ---
 

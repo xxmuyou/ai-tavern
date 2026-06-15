@@ -27,10 +27,11 @@
 ### 目标
 
 - 新增不可变积分流水账本，记录所有发放、扣减、预占、确认、退款和购买。
-- 新用户注册赠送 2000 积分（一次性）；Free/Pro 每月发放固定积分：Free 1000/月，Pro 30000/月。
+- 新用户注册赠送 1000 积分（一次性）；Free 不做月度赠送，Pro 每月发放固定积分 30000。
 - 任务按固定积分价计费（兑换率 $1 = 1000 积分）：
   - `chat_message`: 1 credit（≈$0.001/条）
-  - `image_generation`: 50 credits（≈$0.05/张）
+  - `voice_generation`: 3 credits（≈$0.003/次首次生成）
+  - `image_generation`: 40 credits（≈$0.04/张）
 - 聊天与生图**均实际扣费**；废弃每日消息配额，聊天改为按积分计费。
 - 购买积分包通过 Stripe 一次性 Checkout。
 - 异步任务采用 reserve → commit/release 模型。
@@ -55,8 +56,8 @@
 3. **聊天按积分扣费（取代每日配额）**：纯积分制下，chat 与 image generation 一样实际扣费——每条成功消息扣 1 积分。采用 reserve→commit/release：发送前 `reserveCredits(chat_message=1)`（余额不足直接 402 拦截，不进 LLM）、回复成功持久化后 `commitReservation`、LLM 失败/中断 `releaseReservation`。spec-010 的每日消息条数配额下线；rate-limit 保留防滥用。理由：产品转向"只看积分余额"，聊天不再免费无限，但单价极低（$0.001/条）几乎不影响体验。
 4. **helper 语义钉死**：`reserveCredits` 返回的 `reservationId` 即那条 `reserve` ledger 的 `id`；`commitReservation` / `releaseReservation` 用它反查原始预占额来结算 reserved；reserve 幂等由 `idx_credit_ledger_reference`（`type + reference_type + reference_id` 唯一）保证，同 reference 重复 reserve 返回已存在预占而非报错。
 5. **消费侧接线为本轮待实现工作项**：ledger helper（reserve/commit/release/grant/purchase）已实现并通过单测；本轮要把它们接进业务流程——生图（创建 job 前 reserve、job 落终态统一 commit/release）、聊天（发送前 reserve、产出后结算）、注册赠送、前端 402 付费墙。接线点见 §F 与 §实施步骤。
-6. **纯积分制（放弃功能门控）**：所有功能人人可用，只看积分余额。订阅 Pro 不再门控功能，改为"月度发放更多积分（30000 vs Free 1000）+ 少量特权（更多自创角色上限、专属/抢先内容）"。自创角色上限是少数保留的订阅 gating（见 [`spec-010`](./spec-010-billing-entitlements-quota.md)）。
-7. **兑换率 $1 = 1000 积分，注册赠送 2000**：粒度调细以表示聊天 $0.001/条；新用户注册一次性赠送 2000 积分（≈40 张图），懒发放、reference `{user_id}:signup` 唯一保证只发一次。
+6. **纯积分制（放弃功能门控）**：所有功能人人可用，只看积分余额。订阅 Pro 不再门控功能，改为"月度发放更多积分（30000 vs Free 无月度赠送）+ 少量特权（更多自创角色上限、专属/抢先内容）"。自创角色上限是少数保留的订阅 gating（见 [`spec-010`](./spec-010-billing-entitlements-quota.md)）。
+7. **兑换率 $1 = 1000 积分，注册赠送 1000**：粒度调细以表示聊天 $0.001/条；新用户注册一次性赠送 1000 积分（≈25 张图），懒发放、reference `{user_id}:signup` 唯一保证只发一次。
 
 ---
 
@@ -64,20 +65,20 @@
 
 ### 注册赠送
 
-新用户注册一次性赠送 **2000 credits**（≈40 张图），不过期。懒发放：用户首次访问 `/credits/balance` 时与月度发放一起入账，reference `{user_id}:signup` 唯一保证只发一次（见 §E）。
+新用户注册一次性赠送 **1000 credits**（≈25 张图），不过期。懒发放：用户首次访问 `/credits/balance` 时入账，reference `{user_id}:signup` 唯一保证只发一次（见 §E）。
 
 ### 月度发放
 
 | Tier | Monthly grant |
 |---|---:|
-| Free | 1000 credits |
+| Free | 0 credits |
 | Pro | 30000 credits |
 
 规则：
 
 - 月度赠送积分按 UTC 月份发放。
-- 同一用户同一月份同一 tier 只发一次。
-- Free 升级 Pro 后，本月可获得 Pro grant；若本月已发 Free grant，不追回。
+- 仅 Pro 参与月度发放；同一用户同一月份的 Pro grant 只发一次。
+- Free 升级 Pro 后，本月可获得 Pro grant。
 - Pro 取消后，到订阅期结束前仍按 Pro 判断；下个发放周期按实际 tier 发放。
 - v1 月度赠送积分不过期，未用完的额度滚存累计（过期机制推迟到 v1.1，见 §关键决策 1 与 §E）。
 
@@ -108,7 +109,8 @@ STRIPE_PRICE_CREDITS_LARGE
 | Task | Credits | 说明 |
 |---|---:|---|
 | `chat_message` | 1 | 用户主动发送并成功获得 companion 回复（≈$0.001/条，实际扣费） |
-| `image_generation` | 50 | 每生成 1 张图片（≈$0.05/张，实际扣费） |
+| `voice_generation` | 3 | 同一用户同一回复同一 voice/speed 的首次语音生成（≈$0.003/次，重复播放免费） |
+| `image_generation` | 40 | 每生成 1 张图片（≈$0.04/张，实际扣费） |
 | `signal_extract` | 0 | 系统内部任务，不向用户扣费 |
 | `summary` | 0 | 系统内部任务，不向用户扣费 |
 | `admin_prewarm` | 0 | admin/system 成本审计，不扣普通用户积分 |
@@ -328,14 +330,14 @@ reference_id = "{user_id}:{tier}:{YYYY-MM}"
 发放后写 ledger：
 
 - `type = grant_monthly`
-- `amount = 1000`（Free）或 `30000`（Pro）
+- `amount = 30000`（仅 Pro）
 - `expires_at = NULL`（v1 不过期，见 §关键决策 1）
 
 **注册赠送**（与月度发放同处懒发放，新用户一次性）：
 
 - 同样在 `/credits/balance` 首次访问时入账（与月度发放同批）。
 - `reference_type = "signup_grant"`，`reference_id = "{user_id}:signup"`，唯一索引保证一生只发一次。
-- `type = grant_monthly`、`amount = 2000`、`expires_at = NULL`（不过期）。
+- `type = grant_monthly`、`amount = 1000`、`expires_at = NULL`（不过期）。
 
 过期处理（推迟到 v1.1）：
 
@@ -354,7 +356,7 @@ Chat（纯积分制，按积分扣费，见 §关键决策 3）：
 
 Image generation（本轮接线，见 §关键决策 5）：
 
-- 计费契约：创建 job 前 `reserveCredits(image_generation = 50)`（referenceId = 预生成 jobId，余额不足 402 且不创建 job）；job 落终态后统一结算——`succeeded` → `commitReservation`，`failed` / `cancelled` → `releaseReservation`。
+- 计费契约：创建 job 前 `reserveCredits(image_generation = 40)`（referenceId = 预生成 jobId，余额不足 402 且不创建 job）；job 落终态后统一结算——`succeeded` → `commitReservation`，`failed` / `cancelled` → `releaseReservation`。
 - 若 provider 已扣真实成本但输出不可用，仍按产品口径 release 给用户；真实成本进入运营成本。
 - **接线点**：复用 `image_generation_jobs.billing_ref` 列（migration `0018` 已有）记录预占 `reservation_id`，无需新增列；reserve 在各生图入口（moment / outfit / base-art 路由）创建 job 前；commit/release 在 job 落终态的**统一收敛点**——`art-consumer`、moment reconcile、runninghub 轮询都汇聚到一个 `settleImageJobReservation`。覆盖范围见 [`spec-020`](./spec-020-companion-emotion-art-generation.md)。
 
@@ -367,7 +369,7 @@ Admin/system：
 ### G. 前端展示
 
 - `Me` 或 `Billing` 页展示 available/reserved credits。
-- 触发 image generation 前展示消耗：`Generate expression - 50 credits`。
+- 触发 image generation 前展示消耗：`Generate expression - 40 credits`。
 - 收到 402 `credits_insufficient` 时弹付费墙（充值入口 + Pro 升级入口）。
 - Ledger 页面可后置；v1 至少在 Billing 页显示最近 20 条流水。
 
@@ -384,16 +386,16 @@ Admin/system：
 7. 前端 Billing/Me 页面展示 available/reserved credits，并处理 `credits_insufficient`。
 8. 补测试和 docs。
 
-> 本轮修订新增工作项（消费侧接线）：① pricing 数值更新（生图 100、聊天 1、月度 1000/30000、充值 5000/15000/40000）+ 注册赠送 `SIGNUP_GRANT=2000`；② 生图 reserve/commit/release 接线（用 `image_generation_jobs.billing_ref` 记录预占 + 统一 `settleImageJobReservation`）；③ 聊天 reserve/commit/release 接线 + 下线每日条数配额；④ 前端 402 付费墙。
+> 本轮修订新增工作项（消费侧接线）：① pricing 数值更新（生图 40、聊天 1、语音 3、月度 0/30000、充值 5000/15000/40000）+ 注册赠送 `SIGNUP_GRANT=1000`；② 生图 reserve/commit/release 接线（用 `image_generation_jobs.billing_ref` 记录预占 + 统一 `settleImageJobReservation`）；③ 聊天 reserve/commit/release 接线 + 下线每日条数配额；④ 前端 402 付费墙。
 
 ---
 
 ## 验证方式
 
-- 新用户首次访问 `/credits/balance` 获得注册赠送 2000 + 当月 Free 1000 = 3000 credits。
+- 新用户首次访问 `/credits/balance` 获得注册赠送 1000 credits。
 - Pro 用户当月获得 30000 credits。
-- 同一用户同一月份重复访问不会重复发放。
-- `reserveCredits(image_generation = 50)` 后 available 减少、reserved 增加（helper 单测，可不经业务流程）。
+- Free 用户重复访问不会产生月度 grant；Pro 用户同一月份重复访问不会重复发放。
+- `reserveCredits(image_generation = 40)` 后 available 减少、reserved 增加（helper 单测，可不经业务流程）。
 - commit 后 reserved 减少，available 不增加。
 - release 后 reserved 减少、available 恢复。
 - 并发两次 reserve 超过余额时只有一次成功，账户不出现负 available（并发不超扣）。

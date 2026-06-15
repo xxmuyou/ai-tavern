@@ -4,18 +4,18 @@ import type { CreditPackageId, CreditTaskType, CreditsEnv } from "./types";
 
 /**
  * Fixed credit cost per task (pure-credits model, spec-021). Exchange rate is
- * $1 = 1000 credits, so `image_generation` = 50 (~$0.05), `chat_message` = 1
- * (~$0.001), and `voice_generation` defaults to the same price as chat.
+ * $1 = 1000 credits, so `image_generation` = 40 (~$0.04), `chat_message` = 1
+ * (~$0.001), and `voice_generation` = 3 (~$0.003).
  * signal_extract / summary / admin_prewarm are system tasks and never charge
  * the user.
  */
 export const TASK_CREDIT_COST: Record<CreditTaskType, number> = {
   admin_prewarm: 0,
   chat_message: 1,
-  image_generation: 50,
+  image_generation: 40,
   signal_extract: 0,
   summary: 0,
-  voice_generation: 1,
+  voice_generation: 3,
 };
 
 export async function voiceGenerationCreditCost(env: Env): Promise<number> {
@@ -23,10 +23,10 @@ export async function voiceGenerationCreditCost(env: Env): Promise<number> {
 }
 
 /** One-time grant on a new user's first balance read (spec-021 §E). */
-export const SIGNUP_GRANT = 2000;
+export const SIGNUP_GRANT = 1000;
 
 export const MONTHLY_GRANT: Record<BillingTier, number> = {
-  free: 1000,
+  free: 0,
   pro: 30000,
 };
 

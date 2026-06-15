@@ -562,8 +562,8 @@ CREATE TABLE image_workflow_models (... PRIMARY KEY (workflow_key, model_id));
 3. **webhook payload 结构**：`taskId`、`status`、`outputs`、`imageUrl` 字段的确切名字 / 层级
 4. **webhook 签名验证**：runninghub 是否提供 HMAC 签名头？若无则走 secret query param + 白名单 IP
 5. **R2 presigned URL**：本项目 R2 binding 是否支持原生 presign？还是必须自建签名路由
-6. **价格 / 并发**（✅ 已核算）：RunningHub 按 GPU 秒计费——标准 24G **0.2 RH币/秒**、Plus 48G 0.4 RH币/秒（[API 文档](https://www.runninghub.ai/runninghub-api-doc-en/doc-8287463)）。本项目 workflow 目标单次 ≤30 秒（§性能），故单图约 **6~12 RH币 ≈ <$0.01**（注册即送 1000+ RH币、$9.99 套餐约 5 万币量级）。据此 spec-021 用户侧定价 **50 积分/图（≈$0.05，兑换率 $1=1000 积分）**，对真实成本有 5 倍以上毛利，但远低于早期 $1/图 的劝退价。
-7. **失败时 RH Coins 退款策略**（✅ 已定）：RunningHub 失败不退 RHC，但按产品口径——job 落 `failed` / `cancelled` 时调 spec-021 `releaseReservation` 把用户的 50 积分预占退回（用户不为失败买单）；真实烧掉的 RHC 计入运营成本。配合 §D"失败不自动重试 runninghub 避免烧 RH Coins"。
+6. **价格 / 并发**（✅ 已核算）：RunningHub 按 GPU 秒计费——标准 24G **0.2 RH币/秒**、Plus 48G 0.4 RH币/秒（[API 文档](https://www.runninghub.ai/runninghub-api-doc-en/doc-8287463)）。本项目 workflow 目标单次 ≤30 秒（§性能），故单图约 **6~12 RH币 ≈ <$0.01**（注册即送 1000+ RH币、$9.99 套餐约 5 万币量级）。据此 spec-021 用户侧定价 **40 积分/图（≈$0.04，兑换率 $1=1000 积分）**，对真实成本仍有 4 倍以上毛利，同时比早期 50 积分更友好。
+7. **失败时 RH Coins 退款策略**（✅ 已定）：RunningHub 失败不退 RHC，但按产品口径——job 落 `failed` / `cancelled` 时调 spec-021 `releaseReservation` 把用户的 40 积分预占退回（用户不为失败买单）；真实烧掉的 RHC 计入运营成本。配合 §D"失败不自动重试 runninghub 避免烧 RH Coins"。
 8. **LoRA 字段 contract**：每条 LoRA workflow 使用的实际节点（如 `RHLoraLoader`）及可覆盖字段必须通过 contract 确认；创建页最多暴露 0-1 个命中当前 workflow/model allowlist 的 LoRA。
 
 ---
