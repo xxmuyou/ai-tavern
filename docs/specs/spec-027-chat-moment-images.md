@@ -44,6 +44,7 @@
 - 历史消息：
   - 若已有 moment image，直接展示。
   - 若已有 `queued` / `pending` / `processing` moment image，自动恢复轮询直到成功或失败；切换页面、继续聊天或刷新 history 不应让任务在 UI 上“停下”。
+  - 前端轮询只在存在 pending moment image 时发生；没有触发生图或没有未完成 job 时，不会空转查询 RunningHub。
   - 若没有 scene context，仍允许 private-chat moment fallback（当前后端支持 `scene_id = NULL`）；UI 是否展示入口由产品体验决定，但不能和后端契约冲突。
 - 文案建议：
   - 按钮 tooltip / label：`Capture this moment`
@@ -184,16 +185,19 @@ CREATE TABLE story_moment_images (
 
 - `task = 'chat_moment_image'`
 - `mode = 'create'`；当存在 companion cutout/source image 时，RunningHub provider 会走 load-image + prompt 的 img2img/参考图路径。
+- source image 选择顺序：已有 `companions.art_cutout_key` 时直接把该 cutout 作为参考图传给 `chat_moment`；没有 cutout 时创建/复用同一 `(companion, source_art_url)` 的 `companion_cutout` job，并等待 cutout 成功后重新 enqueue moment job；只有完全没有 source art 时才退回纯文生图。
 - `workflow_key = 'chat_moment'`（若未配置，dev/mock 可 fallback）
 - `output_prefix = 'chat-moments'`
 
 ## Workflow / Provider
 
 - RunningHub 可配置 workflow key：`chat_moment`。
-- 当前 RunningHub workflow 是 URL 输入型 workflow：`loadImageFieldName = "url"`，不绑定 checkpoint/LoRA；workflow 不声明底模架构。
-- 需要同时配置 load-image node 和 prompt node；业务 prompt 仍注入 prompt node，source image 传短期签名 URL。
-- 旧 `loadImageFieldName = "image"` 会触发 upload/fileName 路径，不适用于当前 URL 输入 workflow。
+- 当前 RunningHub workflow 是 `LoadImageFromUrl.image` 输入型 workflow：`loadImageFieldName = "image"`，不绑定 checkpoint/LoRA；workflow 不声明底模架构。
+- 需要同时配置 load-image node 和 prompt node；业务 prompt 仍注入 prompt node，source image 通过 `LoadImageFromUrl.image` 字段传短期签名 URL。
+- 这里的 `image` 不是旧 upload/fileName 路径；provider 会通过 workflow contract 识别 `LoadImageFromUrl` 并继续传 signed URL。只有非 URL loader 字段才默认走 upload API。
 - mock provider 返回可预测图片 key，保证 API 和前端测试不依赖外部生图服务。
+
+`GET /moment-images/jobs/{jobId}` 只在当前 job 非终态、超过 1 分钟且该 job 最近 1 分钟没有主动查过 RunningHub 时，执行一次单 job RunningHub outputs/status poll。前端仍只在存在 pending moment image 时按 2.5 秒查询我们自己的状态接口；无 pending 生图时不会后台轮询。RunningHub 返回 pending 时只更新 `provider_last_polled_at`，不更新 `updated_at`，因此 15 分钟 hard timeout 仍按 job 生命周期生效。
 
 ## 验证
 

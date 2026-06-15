@@ -314,6 +314,7 @@ export async function processProfileOutfitImageJob(env: Env, jobId: string): Pro
         model: response.model,
         provider: response.provider,
         provider_task_id: response.external_task_id,
+        provider_submitted_at: Date.now(),
         status: "processing",
       });
       return;

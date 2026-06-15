@@ -62,6 +62,11 @@ export type ImageGenJobRow = {
   output_key: string | null;
   output_content_type: string | null;
   provider_task_id: string | null;
+  provider_submitted_at: number | null;
+  provider_last_polled_at: number | null;
+  provider_result_received_at: number | null;
+  provider_task_cost_time_ms: number | null;
+  provider_consume_coins: number | null;
   error_code: string | null;
   error_message: string | null;
   retry_count: number;
@@ -213,6 +218,8 @@ export async function getImageJobByProviderTaskId(
 export async function listStaleImageJobs(
   env: Env,
   beforeUpdatedAt: number,
+  beforeProviderPollAt = beforeUpdatedAt,
+  hardTimeoutBeforeUpdatedAt = beforeUpdatedAt,
   limit = 20,
 ): Promise<ImageGenJobRow[]> {
   const { results } = await env.DB.prepare(
@@ -220,10 +227,15 @@ export async function listStaleImageJobs(
      WHERE status = 'processing'
        AND provider_task_id IS NOT NULL
        AND updated_at < ?
+       AND (
+         updated_at < ?
+         OR provider_last_polled_at IS NULL
+         OR provider_last_polled_at < ?
+       )
      ORDER BY updated_at ASC
      LIMIT ?`,
   )
-    .bind(beforeUpdatedAt, limit)
+    .bind(beforeUpdatedAt, hardTimeoutBeforeUpdatedAt, beforeProviderPollAt, limit)
     .all<ImageGenJobRow>();
   return results ?? [];
 }
@@ -267,6 +279,10 @@ type UpdateImageJobInput = {
   provider?: string | null;
   model?: string | null;
   provider_task_id?: string | null;
+  provider_submitted_at?: number | null;
+  provider_result_received_at?: number | null;
+  provider_task_cost_time_ms?: number | null;
+  provider_consume_coins?: number | null;
   output_key?: string | null;
   output_content_type?: string | null;
   error_code?: string | null;
@@ -294,6 +310,18 @@ export async function updateImageJob(
     `UPDATE image_generation_jobs SET ${fields.join(", ")} WHERE id = ?`,
   )
     .bind(...values)
+    .run();
+}
+
+export async function markImageJobProviderPolled(
+  env: Env,
+  jobId: string,
+  timestamp: number,
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE image_generation_jobs SET provider_last_polled_at = ? WHERE id = ?`,
+  )
+    .bind(timestamp, jobId)
     .run();
 }
 
@@ -407,6 +435,7 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
         model: response.model,
         provider: response.provider,
         provider_task_id: response.external_task_id,
+        provider_submitted_at: Date.now(),
         status: "processing",
       });
       return;

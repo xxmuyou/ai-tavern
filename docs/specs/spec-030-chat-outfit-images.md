@@ -193,7 +193,7 @@ type ChatMessage = {
 - `config/runninghub-workflows.dev.json` 与 `config/runninghub-workflows.prod.json` 新增 `profile_outfit`。
 - `profile_outfit.mode = "variation"`，不扩展 `image_workflows.mode` CHECK。
 - `profile_outfit` 不配置 `modelIds` / `loraBindings`；workflow 不声明底模架构。
-- `profile_outfit.loadImageFieldName = "url"`，provider 传 source image 的短期签名 URL；旧 `image` 字段会触发 upload/fileName 路径，不适用于当前 workflow。
+- `profile_outfit.loadImageFieldName = "image"`，当前 workflow 节点为 `LoadImageFromUrl.image`；provider 通过 workflow contract 识别后传 source image 的短期签名 URL，不走 upload/fileName 路径。
 - 必填配置：
   - `workflowId`
   - `loadImageNodeId`

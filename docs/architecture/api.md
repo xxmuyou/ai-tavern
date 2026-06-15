@@ -983,6 +983,8 @@ render version 参与缓存 key，避免改声音后复用旧音频。
 
 Web Admin 的 Portrait generation 页面只保留 `View logs` 入口；日志在浮窗中查看，默认摘要展示，点击单条 job 后展开完整详情。
 
+对 `Capture moment`，`GET /moment-images/jobs/{jobId}` 只会对当前 job 做节流后的单 job RunningHub poll：job 超过 1 分钟且 `provider_last_polled_at` 也超过 1 分钟才主动查 RunningHub。RunningHub 返回 pending 时只更新 `provider_last_polled_at`，不更新 `updated_at`，避免前端 2.5 秒状态轮询把 15 分钟 hard timeout 无限延后。
+
 ```json
 // Response 200
 {
@@ -991,7 +993,8 @@ Web Admin 的 Portrait generation 页面只保留 `View logs` 入口；日志在
       "model": "anime_animagine", "provider": "runninghub", "error_code": "provider_error",
       "error_message": "NODE_INFO_MISMATCH(nodeId=1, fieldName=style_name, reason=field_not_found_in_node_inputs)",
       "prompt_excerpt": "Create a portrait...",
-      "provider_task_id": null, "created_at": 1748785108000, "completed_at": 1748785109000 }
+      "provider_task_id": null, "provider_last_polled_at": null,
+      "created_at": 1748785108000, "completed_at": 1748785109000 }
   ]
 }
 ```
@@ -1083,7 +1086,7 @@ D1 连通性诊断（仅 admin / 内部）。
 - `POST /companions/base-art/generate` — 生成角色底图。
 - `POST /companions/base-art/prompt-assist` — 出图 prompt 辅助。
 - `GET /companions/base-art/jobs/{id}` — 底图 job 轮询。
-- `POST /chat/{companion_id}/messages/{message_id}/moment-image/generate`、`GET /moment-images/jobs/{id}` — 聊天瞬间图（spec-027）。
+- `POST /chat/{companion_id}/messages/{message_id}/moment-image/generate`、`GET /moment-images/jobs/{id}` — 聊天瞬间图（spec-027）。前端只在 pending moment image 存在时轮询；后端在 job 超过约 1 分钟未更新时才主动触发 RunningHub stale poll。
 - `POST /chat/.../outfit-image`（推荐 / 自定义）、`GET /outfit-images/jobs/{id}` — 聊天换装图（spec-030，legacy/deprecated 入口）。
 - profile 换装图见 §3「Profile Outfit Images」。
 
@@ -1098,6 +1101,7 @@ D1 连通性诊断（仅 admin / 内部）。
 - `GET/POST /admin/admin-allowlist`、`DELETE /admin/admin-allowlist/{id}` — 管理员白名单。
 - `GET /admin/settings`、`PUT/DELETE /admin/settings/{key}`、`POST /admin/settings/{key}/reveal` — 运行配置（见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)）。
 - `/admin/image-models`、`/admin/image-workflows`、`/admin/expression-prompts`（GET/POST/PUT/DELETE）— 出图模型 / workflow / 表情 prompt 目录（spec-022）。
+- `GET /admin/image-gen-jobs` — 生图任务诊断日志，包含总耗时、provider 提交/最近主动查询/回收时间、RunningHub `taskCostTime` 与 `consumeCoins`。
 
 ### 11.10 平台 / 基础设施
 

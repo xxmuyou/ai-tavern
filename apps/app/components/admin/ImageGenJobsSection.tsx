@@ -121,6 +121,9 @@ function JobRow({ expanded, job, onToggle }: { expanded: boolean; job: AdminImag
           <Text className="text-caption text-app-muted">· {job.workflow_key}</Text>
         ) : null}
         {job.model ? <Text className="text-caption text-app-muted">· {job.model}</Text> : null}
+        {job.completed_at ? (
+          <Text className="text-caption text-app-muted">· {formatDuration(job.completed_at - job.created_at)}</Text>
+        ) : null}
         <Text className="ml-auto text-caption text-app-muted">{formatTime(job.created_at)}</Text>
       </View>
       {job.error_code ? (
@@ -131,6 +134,12 @@ function JobRow({ expanded, job, onToggle }: { expanded: boolean; job: AdminImag
           <Detail label="provider" value={job.provider} />
           <Detail label="model" value={job.model} />
           <Detail label="provider task" value={job.provider_task_id} />
+          <Detail label="submitted" value={job.provider_submitted_at ? formatTime(job.provider_submitted_at) : null} />
+          <Detail label="provider last polled" value={job.provider_last_polled_at ? formatTime(job.provider_last_polled_at) : null} />
+          <Detail label="provider result" value={job.provider_result_received_at ? formatTime(job.provider_result_received_at) : null} />
+          <Detail label="total duration" value={job.completed_at ? formatDuration(job.completed_at - job.created_at) : null} />
+          <Detail label="provider duration" value={job.provider_task_cost_time_ms ? formatDuration(job.provider_task_cost_time_ms) : null} />
+          <Detail label="provider coins" value={formatCoins(job.provider_consume_coins)} />
           <Detail label="completed" value={job.completed_at ? formatTime(job.completed_at) : null} />
           <Detail label="error" value={job.error_message} />
           <Detail label="prompt" value={job.prompt_excerpt} />
@@ -177,4 +186,19 @@ function formatTime(ms: number): string {
   } catch {
     return String(ms);
   }
+}
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+}
+
+function formatCoins(value: number | null | undefined): string | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  return value.toFixed(Number.isInteger(value) ? 0 : 2);
 }

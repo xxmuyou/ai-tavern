@@ -256,6 +256,64 @@ describe("runningHubImageGenProvider", () => {
     ]);
   });
 
+  it("creates a chat moment task with a signed source URL for LoadImageFromUrl.image", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 0, data: { taskId: "rh-moment-image-1", taskStatus: "QUEUED" } }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          chat_moment: {
+            contractJson: JSON.stringify({
+              nodes: [
+                { class_type: "LoadImageFromUrl", inputs: ["image", "url"], nodeId: "1" },
+                { class_type: "TextEncodeQwenImageEditPlus", inputs: ["prompt"], nodeId: "13" },
+              ],
+              version: 1,
+            }),
+            loadImageFieldName: "image",
+            loadImageNodeId: "1",
+            mode: "create",
+            promptFieldName: "prompt",
+            promptNodeId: "13",
+            workflowId: "moment-image-workflow",
+          },
+        }),
+      },
+    );
+
+    await (await getImageGenProvider(env, "create", "chat_moment")).generate(
+      {
+        mode: "create",
+        prompt: "a quiet cafe",
+        source_art_url: "companions/user/u1/cutout.png",
+        workflow_key: "chat_moment",
+      },
+      env,
+    );
+
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]![1].body));
+    expect(body.workflowId).toBe("moment-image-workflow");
+    expect(body.nodeInfoList).toEqual([
+      {
+        fieldName: "image",
+        fieldValue: expect.stringMatching(
+          /^https:\/\/dev\.aiappsbox\.com\/api\/objects\/signed\/companions%2Fuser%2Fu1%2Fcutout\.png\?exp=\d+&sig=[a-f0-9]{64}$/,
+        ),
+        nodeId: "1",
+      },
+      { fieldName: "prompt", fieldValue: "a quiet cafe", nodeId: "13" },
+    ]);
+  });
+
   it("creates a profile outfit task with a signed source URL when the load-image node accepts url", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(

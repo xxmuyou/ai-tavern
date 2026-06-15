@@ -3,6 +3,7 @@
 > **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-020(emotion-art), spec-022(RunningHub), spec-027(moment images)  |  **估时：** 4-6 天  |  **状态：** 📝 draft
 
 > **2026-06-10 口径更新：** 本 spec 原本把 cutout 定位为 moment image 后端管线的内部能力。Web 前端直接消费 companion cutout、`art_cutout_url` 展示字段与 ensure/status 端点，以 [spec-038](./spec-038-web-scene-immersion-and-unlocks.md) 为新权威。
+> **2026-06-15 口径更新：** Web chat 会在角色无 cutout 时调用 `/companions/{id}/cutout/ensure` 做预热；`Capture moment` 后端同样优先复用已有 `art_cutout_key`，没有时才创建/等待 `companion_cutout`，不会每次重新抠图。
 
 ---
 
@@ -120,7 +121,7 @@ ALTER TABLE companions ADD COLUMN art_cutout_key TEXT;        -- 缓存的透明
   提交 matting workflow，返回 `PendingImageGenResponse`，走现有 webhook/poll 完成链路
   （[runninghub-results.ts](../../packages/api/src/image-gen/runninghub-results.ts)）。当
   `loadImageFieldName` 是 `url` / `image_url` 时，provider 生成 R2 签名 URL 并传给 RunningHub；
-  其它 load-image 字段继续走 upload API 并传 RunningHub `fileName`。
+  当前 dev workflow 使用 `LoadImageFromUrl.image`，provider 会通过 contract 识别 URL loader 并继续传签名 URL；其它非 URL loader 字段才走 upload API 并传 RunningHub `fileName`。
 - mock-provider：`cutout` 返回带透明像素的 PNG。
 - openai-provider：无原生 matting → `cutout` 报 `provider_not_supported`（RunningHub-only）。
 - **输出存 PNG 保 alpha**，不转 webp 丢透明（或确认 webp 编码保留 alpha）。
@@ -141,7 +142,7 @@ ALTER TABLE companions ADD COLUMN art_cutout_key TEXT;        -- 缓存的透明
 ### 配置
 - `config/runninghub-workflows.{dev,prod}.json`：移除 `portrait_variation`；**保留 `profile_outfit` 不动**；新增 `companion_cutout`（mode=cutout，声明 `loadImageNodeId`）。
 - `image_workflows` 目录：portrait_variation 停用（sync 只 upsert 不剪枝，需手动 deactivate），新增 companion_cutout 行；
-  loadimage 字段名遵循 workflow contract。URL 输入 workflow 使用 `LoadImageFromUrl` 的 `url` 字段，不需要 prompt 节点或 checkpoint 节点。
+  loadimage 字段名遵循 workflow contract。当前 dev 的 URL 输入 workflow 使用 `LoadImageFromUrl.image` 字段，provider 识别该 contract 后传 signed URL；不需要 prompt 节点或 checkpoint 节点。
 
 ### portrait_create prompt
 - `base-art.ts` 的 prompt 构造补"soft studio / clean gradient / bokeh 背景、主体居中、无杂物"约束，避免复杂场景背景。

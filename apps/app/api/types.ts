@@ -1269,6 +1269,11 @@ export type AdminImageGenJob = {
   error_code: string | null;
   error_message: string | null;
   provider_task_id: string | null;
+  provider_submitted_at: number | null;
+  provider_last_polled_at: number | null;
+  provider_result_received_at: number | null;
+  provider_task_cost_time_ms: number | null;
+  provider_consume_coins: number | null;
   created_at: number;
   completed_at: number | null;
 };

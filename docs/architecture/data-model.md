@@ -573,6 +573,11 @@ CREATE TABLE image_generation_jobs (
   output_key            TEXT,
   output_content_type   TEXT,
   provider_task_id      TEXT,
+  provider_submitted_at INTEGER,
+  provider_last_polled_at INTEGER,
+  provider_result_received_at INTEGER,
+  provider_task_cost_time_ms INTEGER,
+  provider_consume_coins REAL,
   error_code            TEXT,
   error_message         TEXT,
   retry_count           INTEGER NOT NULL DEFAULT 0,
@@ -587,7 +592,7 @@ CREATE INDEX idx_image_generation_jobs_task_status ON image_generation_jobs(task
 CREATE INDEX idx_image_generation_jobs_provider_task ON image_generation_jobs(provider_task_id);
 ```
 
-通用生图任务表（spec-020 §C / spec-022，migration `0018`），承载未绑定 companion 的生图（首个消费者是创建前的 base-art 草稿）。**积分接线**：创建 job 前 `reserveCredits(image_generation=40)`，把返回的 `reservation_id` 写入 `billing_ref`；job 落终态时由统一收敛点按 `billing_ref` 做 commit（succeeded）/ release（failed/cancelled），见 spec-021 §F。
+通用生图任务表（spec-020 §C / spec-022，migration `0018`；provider 诊断字段见 migration `0060` / `0061`），承载未绑定 companion 的生图（首个消费者是创建前的 base-art 草稿）。`provider_submitted_at` 记录拿到 RunningHub taskId 的时间；`provider_last_polled_at` 记录后端最近一次主动查询 RunningHub outputs/status 的时间，pending poll 只更新该字段、不更新 `updated_at`；`provider_result_received_at` 记录 webhook/cron/poll 回收终态结果的时间；`provider_task_cost_time_ms` 与 `provider_consume_coins` 来自 RunningHub output。**积分接线**：创建 job 前 `reserveCredits(image_generation=40)`，把返回的 `reservation_id` 写入 `billing_ref`；job 落终态时由统一收敛点按 `billing_ref` 做 commit（succeeded）/ release（failed/cancelled），见 spec-021 §F。
 
 ---
 

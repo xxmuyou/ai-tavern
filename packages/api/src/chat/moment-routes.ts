@@ -8,7 +8,7 @@ import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
 import { loadStoryBeatForScene } from "../story-beats";
 import { loadBaseArtJob, reserveImageGenerationCredits } from "../image-gen/base-art";
-import { pollStaleRunningHubArtJobs } from "../image-gen/runninghub-results";
+import { pollRunningHubImageJobIfDue } from "../image-gen/runninghub-results";
 import { releaseReservation } from "../credits";
 import {
   buildMomentPrompt,
@@ -29,6 +29,8 @@ import { loadCompanionForChat, loadSceneForChat, parseSceneTags } from "./loader
  *   POST /chat/messages/{message_id}/moment-image/generate
  *   GET  /moment-images/jobs/{job_id}
  */
+const MOMENT_STATUS_STALE_AFTER_MS = 60 * 1000;
+
 export async function handleMomentImageRequest(
   request: Request,
   env: Env,
@@ -291,8 +293,12 @@ async function handleJobStatus(
   }
   let job = await loadBaseArtJob(env, jobId);
   if (job && isMaybeStale(job.status, job.updated_at)) {
-    await pollStaleRunningHubArtJobs(env);
-    job = await loadBaseArtJob(env, jobId);
+    const polled = await pollRunningHubImageJobIfDue(env, job, {
+      staleAfterMs: MOMENT_STATUS_STALE_AFTER_MS,
+    });
+    if (polled) {
+      job = await loadBaseArtJob(env, jobId);
+    }
   }
   const reconciled = job ? await reconcileMomentFromJob(env, moment, job) : moment;
 
@@ -309,5 +315,5 @@ function isMaybeStale(status: string, updatedAt: number): boolean {
   if (status === "succeeded" || status === "failed" || status === "cancelled") {
     return false;
   }
-  return Date.now() - updatedAt > 2 * 60 * 1000;
+  return Date.now() - updatedAt > MOMENT_STATUS_STALE_AFTER_MS;
 }

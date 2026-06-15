@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../auth", () => ({
   requireAuthUser: async () => ({ email: "user@example.com", id: "usr_1" }),
@@ -14,7 +14,14 @@ vi.mock("../credits", () => ({
   CreditsError: class CreditsError extends Error {},
 }));
 
+vi.mock("../image-gen/runninghub-results", () => ({
+  pollRunningHubImageJobIfDue: vi.fn(async () => true),
+}));
+
+import { pollRunningHubImageJobIfDue } from "../image-gen/runninghub-results";
 import { handleMomentImageRequest } from "./moment-routes";
+
+const mockPollRunningHubImageJobIfDue = vi.mocked(pollRunningHubImageJobIfDue);
 
 type Row = Record<string, unknown>;
 
@@ -198,6 +205,11 @@ function createEnv(): { env: Env; jobs: Row[]; moments: Row[]; queue: unknown[] 
 }
 
 describe("moment image routes", () => {
+  afterEach(() => {
+    mockPollRunningHubImageJobIfDue.mockClear();
+    vi.useRealTimers();
+  });
+
   it("allows direct chat companion messages without scene context", async () => {
     const { env, jobs, moments, queue } = createEnv();
     const request = new Request("https://api.test/chat/messages/msg_private/moment-image/generate", {
@@ -276,5 +288,82 @@ describe("moment image routes", () => {
       status: "failed",
     });
     expect(moments[0]).toMatchObject({ status: "failed", output_key: null });
+  });
+
+  it("does not poll RunningHub for a fresh pending moment job", async () => {
+    vi.setSystemTime(new Date("2026-06-05T00:00:00.000Z"));
+    const { env, jobs, moments } = createEnv();
+    const now = Date.now();
+    jobs.push({
+      completed_at: null,
+      created_at: now - 30_000,
+      error_code: null,
+      error_message: null,
+      id: "job_fresh",
+      output_key: null,
+      provider_task_id: "rh-fresh",
+      status: "processing",
+      updated_at: now - 30_000,
+    });
+    moments.push({
+      companion_id: "maya",
+      id: "moment_fresh",
+      job_id: "job_fresh",
+      message_id: "msg_private",
+      output_key: null,
+      status: "processing",
+      updated_at: now - 30_000,
+      user_id: "usr_1",
+    });
+
+    const response = await handleMomentImageRequest(
+      new Request("https://api.test/moment-images/jobs/job_fresh"),
+      env,
+      "/moment-images/jobs/job_fresh",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(mockPollRunningHubImageJobIfDue).not.toHaveBeenCalled();
+  });
+
+  it("polls RunningHub once a pending moment job is older than one minute", async () => {
+    vi.setSystemTime(new Date("2026-06-05T00:00:00.000Z"));
+    const { env, jobs, moments } = createEnv();
+    const now = Date.now();
+    jobs.push({
+      completed_at: null,
+      created_at: now - 61_000,
+      error_code: null,
+      error_message: null,
+      id: "job_stale",
+      output_key: null,
+      provider_task_id: "rh-stale",
+      status: "processing",
+      updated_at: now - 61_000,
+    });
+    moments.push({
+      companion_id: "maya",
+      id: "moment_stale",
+      job_id: "job_stale",
+      message_id: "msg_private",
+      output_key: null,
+      status: "processing",
+      updated_at: now - 61_000,
+      user_id: "usr_1",
+    });
+
+    const response = await handleMomentImageRequest(
+      new Request("https://api.test/moment-images/jobs/job_stale"),
+      env,
+      "/moment-images/jobs/job_stale",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(mockPollRunningHubImageJobIfDue).toHaveBeenCalledTimes(1);
+    expect(mockPollRunningHubImageJobIfDue).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ id: "job_stale", provider_task_id: "rh-stale" }),
+      { staleAfterMs: 60_000 },
+    );
   });
 });

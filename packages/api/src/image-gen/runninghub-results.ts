@@ -4,7 +4,9 @@ import {
   getImageJobByProviderTaskId,
   listStaleImageJobs,
   listStalePendingImageJobs,
+  markImageJobProviderPolled,
   reenqueueImageJob,
+  updateImageJob,
   type ImageGenJobRow,
 } from "./base-art";
 import { syncCutoutFromImageJob } from "./cutout";
@@ -40,6 +42,11 @@ const STALE_AFTER_MS = 2 * 60 * 1000;
 // Absolute ceiling: a task still unresolved this long after its last update is
 // marked failed so it can't sit in `processing` forever.
 const HARD_TIMEOUT_MS = 15 * 60 * 1000;
+
+type PollImageJobOptions = {
+  now?: number;
+  staleAfterMs?: number;
+};
 
 export async function handleRunningHubWebhookRequest(
   request: Request,
@@ -78,27 +85,14 @@ export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
 
   // Generic image_generation_jobs (base-art drafts, etc.) — same fallback so a
   // missed webhook doesn't strand a job in `processing`.
-  const staleImageJobs = await listStaleImageJobs(env, now - STALE_AFTER_MS);
+  const staleImageJobs = await listStaleImageJobs(
+    env,
+    now - STALE_AFTER_MS,
+    now - STALE_AFTER_MS,
+    now - HARD_TIMEOUT_MS,
+  );
   for (const job of staleImageJobs) {
-    if (!job.provider_task_id) continue;
-    if (now - job.updated_at > HARD_TIMEOUT_MS) {
-      await failImageJob(env, job, "timeout", "RunningHub task exceeded 15 minutes");
-      continue;
-    }
-
-    try {
-      const result = await fetchRunningHubTaskResult(env, job.provider_task_id);
-      await applyRunningHubImageJobResult(env, job, result);
-    } catch (err) {
-      console.warn(
-        JSON.stringify({
-          error: err instanceof Error ? err.message : String(err),
-          job_id: job.id,
-          message: "RunningHub image-job poll failed; will retry on next cron",
-          provider_task_id: job.provider_task_id,
-        }),
-      );
-    }
+    await pollRunningHubImageJobIfDue(env, job, { now, staleAfterMs: STALE_AFTER_MS });
   }
 
   // Recover `pending` image jobs whose queue message was never delivered (no
@@ -124,6 +118,45 @@ export async function pollStaleRunningHubArtJobs(env: Env): Promise<void> {
   }
 }
 
+export async function pollRunningHubImageJobIfDue(
+  env: Env,
+  job: ImageGenJobRow,
+  options: PollImageJobOptions = {},
+): Promise<boolean> {
+  const now = options.now ?? Date.now();
+  const staleAfterMs = options.staleAfterMs ?? STALE_AFTER_MS;
+  if (job.status === "succeeded" || job.status === "failed" || job.status === "cancelled") {
+    return false;
+  }
+  if (!job.provider_task_id) return false;
+
+  if (now - job.updated_at > HARD_TIMEOUT_MS) {
+    await failImageJob(env, job, "timeout", "RunningHub task exceeded 15 minutes");
+    return true;
+  }
+  if (now - job.updated_at <= staleAfterMs) return false;
+  if (job.provider_last_polled_at && now - job.provider_last_polled_at <= staleAfterMs) {
+    return false;
+  }
+
+  try {
+    await markImageJobProviderPolled(env, job.id, now);
+    const result = await fetchRunningHubTaskResult(env, job.provider_task_id);
+    await applyRunningHubImageJobResult(env, job, result);
+    return true;
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        error: err instanceof Error ? err.message : String(err),
+        job_id: job.id,
+        message: "RunningHub image-job poll failed; will retry after throttle window",
+        provider_task_id: job.provider_task_id,
+      }),
+    );
+    return false;
+  }
+}
+
 async function applyRunningHubImageJobResult(
   env: Env,
   job: ImageGenJobRow,
@@ -134,6 +167,7 @@ async function applyRunningHubImageJobResult(
   }
   if (result.status === "pending") return;
   if (result.status === "failed") {
+    await updateImageJob(env, job.id, { provider_result_received_at: Date.now() });
     await failImageJob(env, job, result.errorCode, result.errorMessage);
     const synced = await syncCutoutFromImageJob(env, {
       ...job,
@@ -148,7 +182,13 @@ async function applyRunningHubImageJobResult(
     return;
   }
 
+  const receivedAt = Date.now();
   const downloaded = await downloadResultImage(result.output);
+  await updateImageJob(env, job.id, {
+    provider_consume_coins: parseProviderNumber(result.output.consumeCoins),
+    provider_result_received_at: receivedAt,
+    provider_task_cost_time_ms: parseTaskCostTimeMs(result.output.taskCostTime),
+  });
   const outputKey = await completeImageJobWithImage(env, job, {
     bytes: downloaded.bytes,
     contentType: downloaded.contentType,
@@ -164,6 +204,19 @@ async function applyRunningHubImageJobResult(
   if (synced?.status === "succeeded") {
     await reenqueueMomentJobsForCompanion(env, synced.companion_id);
   }
+}
+
+function parseProviderNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseTaskCostTimeMs(value: string | number | null | undefined): number | null {
+  const parsed = parseProviderNumber(value);
+  if (parsed === null) return null;
+  const ms = parsed > 10_000 ? parsed : parsed * 1000;
+  return Math.max(0, Math.round(ms));
 }
 
 async function fetchRunningHubTaskResult(
@@ -207,6 +260,9 @@ function parseTaskResult(payload: unknown): RunningHubTaskResult {
   if (!payload || typeof payload !== "object") return { status: "pending" };
   const obj = payload as RunningHubApiResponse & Record<string, unknown>;
   if (obj.code !== undefined && obj.code !== 0) {
+    if (isRunningHubTaskStillRunningMessage(obj.msg)) {
+      return { status: "pending" };
+    }
     return {
       errorCode: "provider_error",
       errorMessage: obj.msg ?? `RunningHub returned code ${obj.code}`,
@@ -239,6 +295,9 @@ function parseTaskResult(payload: unknown): RunningHubTaskResult {
 
 function parseStatusResult(payload: RunningHubApiResponse): RunningHubTaskResult {
   if (payload.code !== 0) {
+    if (isRunningHubTaskStillRunningMessage(payload.msg)) {
+      return { status: "pending" };
+    }
     return {
       errorCode: "provider_error",
       errorMessage: payload.msg ?? `RunningHub returned code ${payload.code}`,
@@ -255,6 +314,12 @@ function parseStatusResult(payload: RunningHubApiResponse): RunningHubTaskResult
     };
   }
   return { status: "pending" };
+}
+
+function isRunningHubTaskStillRunningMessage(message: string | undefined): boolean {
+  if (!message) return false;
+  const normalized = message.trim().toUpperCase();
+  return normalized.includes("TASK_IS_RUNNING");
 }
 
 async function downloadResultImage(output: RunningHubOutput): Promise<{
