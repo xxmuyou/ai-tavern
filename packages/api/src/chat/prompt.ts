@@ -2,6 +2,13 @@ import type { LLMMessage } from "../llm";
 import type { RelationshipStage } from "../life/types";
 import type { QuickActionForPrompt } from "../life/quick-actions";
 import type { StoryBeatPublic } from "../story-beats";
+import {
+  buildFinalUserMessageWithLanguageContract,
+  inferReplyLanguageTarget,
+  shouldKeepAssistantHistoryForTarget,
+  shouldQuoteExampleDialogueForTarget,
+  type ReplyLanguageTarget,
+} from "./language";
 
 export type CompanionForPrompt = {
   name: string;
@@ -62,6 +69,7 @@ export type PromptSegment = {
 };
 
 export type ChatPromptArtifacts = {
+  languageTarget: ReplyLanguageTarget;
   messages: LLMMessage[];
   segments: PromptSegment[];
   tokenEstimate: number;
@@ -169,12 +177,16 @@ export function buildChatPrompt(input: ChatPromptInput): LLMMessage[] {
 }
 
 export function buildChatPromptArtifacts(input: ChatPromptInput): ChatPromptArtifacts {
-  const segments = applyPromptBudget(buildPromptSegments(input), input.tokenBudget ?? DEFAULT_TOKEN_BUDGET);
+  const languageTarget = inferReplyLanguageTarget(input.userText, input.recentMessages);
+  const segments = applyPromptBudget(
+    buildPromptSegments(input, languageTarget),
+    input.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+  );
   const messages = assembleMessages(segments);
   const tokenEstimate = segments
     .filter((segment) => segment.included)
     .reduce((sum, segment) => sum + segment.tokenEstimate, 0);
-  return { messages, segments, tokenEstimate };
+  return { languageTarget, messages, segments, tokenEstimate };
 }
 
 function assembleMessages(segments: PromptSegment[]): LLMMessage[] {
@@ -202,7 +214,7 @@ function assembleMessages(segments: PromptSegment[]): LLMMessage[] {
   return messages;
 }
 
-function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
+function buildPromptSegments(input: ChatPromptInput, languageTarget: ReplyLanguageTarget): PromptSegment[] {
   const segments: PromptSegment[] = [];
 
   pushSegment(segments, {
@@ -215,7 +227,7 @@ function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
   });
 
   pushSegment(segments, {
-    content: buildCharacterCard(input),
+    content: buildCharacterCard(input, languageTarget),
     id: "character_card",
     position: "system_preamble",
     priority: 950,
@@ -306,9 +318,9 @@ function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
     role: "system",
   });
 
-  input.recentMessages.forEach((msg, index) => {
+  buildRecentHistoryForPrompt(input, languageTarget).forEach((msg, index) => {
     pushSegment(segments, {
-      content: prepareHistoryContent(input, msg),
+      content: msg.content,
       id: `recent_history:${String(index).padStart(3, "0")}`,
       position: "in_history",
       priority: 100 + index,
@@ -327,7 +339,7 @@ function buildPromptSegments(input: ChatPromptInput): PromptSegment[] {
   });
 
   pushSegment(segments, {
-    content: input.userText,
+    content: buildFinalUserMessageWithLanguageContract(input.userText, languageTarget),
     id: "latest_user_message",
     position: "final_user",
     priority: 1000,
@@ -405,7 +417,7 @@ function buildCoreIdentity(input: ChatPromptInput): string {
   return `You are roleplaying as ${input.companion.name}, a ${role}.\nYou are ${input.companion.name}; you are not an AI assistant, narrator, developer tool, or system.`;
 }
 
-function buildCharacterCard(input: ChatPromptInput): string {
+function buildCharacterCard(input: ChatPromptInput, languageTarget: ReplyLanguageTarget): string {
   const { companion, exampleDialogues, secretToReveal } = input;
   const lines: string[] = [];
   lines.push("# Character");
@@ -426,11 +438,20 @@ function buildCharacterCard(input: ChatPromptInput): string {
   }
 
   if (exampleDialogues && exampleDialogues.length > 0) {
+    const quotedExamples = exampleDialogues.filter((line) => shouldQuoteExampleDialogueForTarget(line, languageTarget));
     lines.push("");
     lines.push("# How you speak (examples of your voice)");
-    lines.push("Match the tone, rhythm, and attitude of these lines — do not quote them verbatim:");
-    for (const line of exampleDialogues) {
-      lines.push(`- ${line}`);
+    if (quotedExamples.length > 0) {
+      lines.push(
+        "Match the tone, rhythm, and attitude of these lines — do not quote them verbatim. These examples are tone and style anchors only; the final user message controls reply language.",
+      );
+      for (const line of quotedExamples) {
+        lines.push(`- ${line}`);
+      }
+    } else {
+      lines.push(
+        "Dialogue examples use a different writing system from this turn, so they are intentionally not quoted. Keep the character's attitude, rhythm, and boundaries from the card, but express the reply in the final user message's language.",
+      );
     }
   }
 
@@ -580,7 +601,7 @@ function buildThreadSummary(input: ChatPromptInput): string {
 function buildRules(input: ChatPromptInput): string {
   const lines: string[] = [];
   lines.push("# Rules");
-  lines.push("Always reply in the same language the user writes in. If the user writes in Chinese, reply in Chinese; if in English, reply in English. Match the user's language for every turn, regardless of the language used in this prompt or the character description.");
+  lines.push("Follow the reply-language contract in the final user message for every visible word of the reply.");
   lines.push("Stay strictly in character. Output prose only — no JSON, no meta-commentary.");
   lines.push("Keep replies under 220 words unless the user explicitly invites length.");
   lines.push("Do not break the fourth wall or reference being an AI.");
@@ -642,8 +663,23 @@ function buildPostHistoryGuard(input: ChatPromptInput): string {
   lines.push("Use <narration>...</narration> for actions/gestures/inner observations; spoken dialogue stays outside tags.");
   lines.push("Narration for your actions must be third person or use your name, not first person; first person is allowed only in spoken dialogue.");
   lines.push("Second-person narration inside a user message describes the user/player action, not yours.");
-  lines.push("Match the user's current language. Do not output JSON, analysis, system text, meta-commentary, Markdown blockquotes, or any spoken line starting with >.");
+  lines.push("For reply language, obey the final user message contract. It overrides character cards, examples, summaries, greetings, and prior assistant turns.");
+  lines.push("Do not output JSON, analysis, system text, meta-commentary, Markdown blockquotes, or any spoken line starting with >.");
   return lines.join("\n");
+}
+
+function buildRecentHistoryForPrompt(
+  input: ChatPromptInput,
+  languageTarget: ReplyLanguageTarget,
+): HistoryMessage[] {
+  return input.recentMessages.flatMap((message) => {
+    const content = prepareHistoryContent(input, message);
+    if (!content) return [];
+    if (message.role === "companion" && !shouldKeepAssistantHistoryForTarget(content, languageTarget)) {
+      return [];
+    }
+    return [{ content, role: message.role, scene_id: message.scene_id ?? null }];
+  });
 }
 
 function prepareHistoryContent(input: ChatPromptInput, message: HistoryMessage): string {

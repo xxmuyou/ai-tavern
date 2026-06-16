@@ -1,6 +1,6 @@
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
-import { canChatWithCompanion, ensureThread, loadCompanionForChat, loadThread } from "./loaders";
+import { canChatWithCompanion, loadCompanionForChat, loadThread } from "./loaders";
 import { parseVariants } from "./variants";
 
 const DEFAULT_LIMIT = 50;
@@ -45,32 +45,9 @@ export async function handleGetHistory(
 
   const thread = await loadThread(env, user.id, companionId);
   if (!thread) {
-    // First time opening this chat: if the character has an opening line, seed it
-    // as the first companion message so the thread is never a blank screen and the
-    // greeting becomes part of the conversation context.
-    const greeting = companion.greeting?.trim();
-    if (greeting) {
-      const seeded = await seedGreeting(env, user.id, companionId, greeting);
-      return jsonResponse({
-        messages: [
-          {
-            content: greeting,
-            created_at: seeded.created_at,
-            emotion: null,
-            id: seeded.message_id,
-            moment_image: null,
-            outfit_image: null,
-            role: "companion",
-            scene_id: null,
-            selected_variant: null,
-            signals: null,
-            variants: null,
-          },
-        ],
-        next_cursor: null,
-        thread: { message_count: 1, summary: null },
-      });
-    }
+    // Fresh chats stay empty at the data layer. The greeting is an opening UI
+    // hint only; storing it as an assistant turn makes its language pollute
+    // future prompt history.
     return jsonResponse({
       messages: [],
       next_cursor: null,
@@ -189,29 +166,6 @@ export async function handleDeleteHistory(
     .run();
 
   return new Response(null, { status: 204 });
-}
-
-async function seedGreeting(
-  env: Env,
-  userId: string,
-  companionId: string,
-  greeting: string,
-): Promise<{ message_id: string; created_at: number }> {
-  const now = Date.now();
-  const thread = await ensureThread(env, userId, companionId, now);
-  const messageId = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO messages
-       (id, thread_id, role, content, scene_id, activity_id, signals, emotion,
-        llm_provider, llm_model, token_input, token_output, created_at)
-     VALUES (?, ?, 'companion', ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?)`,
-  )
-    .bind(messageId, thread.id, greeting, now)
-    .run();
-  await env.DB.prepare(`UPDATE threads SET message_count = 1, updated_at = ? WHERE id = ?`)
-    .bind(now, thread.id)
-    .run();
-  return { created_at: now, message_id: messageId };
 }
 
 type MomentImagePublic = { job_id: string; status: string; output_key: string | null };

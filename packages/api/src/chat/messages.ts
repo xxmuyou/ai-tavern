@@ -1,7 +1,7 @@
 import { isAdminUser } from "../auth/guards";
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
-import { LLMError, llmStream, type LLMStreamChunk, type LLMUsage } from "../llm";
+import { LLMError, llmStream, type LLMRequest, type LLMStreamChunk, type LLMUsage } from "../llm";
 import { maybeCreateConflictEvent } from "../events/conflict";
 import { loadActiveActivityForChat } from "../life/activity";
 import {
@@ -37,6 +37,11 @@ import {
 } from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type UserPersonaForPrompt } from "./prompt";
+import {
+  assessReplyLanguage,
+  buildLanguageRetryInstruction,
+  type ReplyLanguageTarget,
+} from "./language";
 import { createStreamingReplyNormalizer } from "./reply-normalize";
 import { resolveThreadPersona } from "../personas";
 import { applyHostilityOverride, assessHostileInput } from "./hostility";
@@ -219,7 +224,7 @@ export async function handlePostMessage(
   );
 
   const thread = await ensureThread(env, user.id, companionId, now);
-  const recentMessages = await loadRecentMessages(env, thread.id, RECENT_MESSAGES_LIMIT);
+  const recentMessages = await loadRecentMessages(env, thread.id, RECENT_MESSAGES_LIMIT, companion.greeting);
 
   // Bind the thread to an explicitly chosen persona, then resolve which persona
   // the user is speaking as (chosen → thread's existing → user's default).
@@ -287,24 +292,20 @@ export async function handlePostMessage(
 
   // Pull the first chunk before opening the SSE response so we can surface
   // "all providers failed" as a clean 503 JSON instead of an empty event stream.
-  const iterator = llmStream(
-    env,
-    {
-      // Roomier + livelier sampling so replies read as a person with flavor,
-      // not a clipped assistant. frequency/presence penalties cut samey phrasing.
-      frequency_penalty: 0.4,
-      max_tokens: 700,
-      messages: promptArtifacts.messages,
-      presence_penalty: 0.3,
-      task: "chat",
-      temperature: 0.95,
-      top_p: 0.95,
-    },
-    { user_id: user.id },
-  )[Symbol.asyncIterator]();
-  let firstResult: IteratorResult<LLMStreamChunk>;
+  const chatRequest: LLMRequest = {
+    // Roomier + livelier sampling so replies read as a person with flavor,
+    // not a clipped assistant. frequency/presence penalties cut samey phrasing.
+    frequency_penalty: 0.4,
+    max_tokens: 700,
+    messages: promptArtifacts.messages,
+    presence_penalty: 0.3,
+    task: "chat",
+    temperature: 0.95,
+    top_p: 0.95,
+  };
+  let streamStart: ChatStreamStart;
   try {
-    firstResult = await iterator.next();
+    streamStart = await openChatStream(env, chatRequest, user.id);
   } catch (err) {
     if (chatReservationId) {
       await releaseReservation(env, chatReservationId, "llm_unavailable");
@@ -317,12 +318,12 @@ export async function handlePostMessage(
     runChat({
       activity_id: activityIdForChat,
       chatReservationId,
+      chatRequest,
       companionId,
       ctx,
       env,
-      firstResult,
       inviteTarget,
-      iterator,
+      languageTarget: promptArtifacts.languageTarget,
       narrative,
       now,
       previousDimensions: relationship?.dimensions ?? { ...ZERO_DIMENSIONS },
@@ -330,6 +331,7 @@ export async function handlePostMessage(
       relationship_role: companion.relationship_role,
       scene_id: sceneIdInput,
       sse,
+      streamStart,
       subscriber,
       thread,
       user,
@@ -344,8 +346,9 @@ export async function handlePostMessage(
 type RunChatArgs = {
   env: Env;
   sse: SSEHandle;
-  iterator: AsyncIterator<LLMStreamChunk>;
-  firstResult: IteratorResult<LLMStreamChunk>;
+  streamStart: ChatStreamStart;
+  chatRequest: LLMRequest;
+  languageTarget: ReplyLanguageTarget;
   user: UserRecord;
   companionId: string;
   thread: ChatThreadRow;
@@ -366,43 +369,42 @@ type RunChatArgs = {
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, iterator, firstResult, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, chatReservationId, now, ctx } =
+  const { env, sse, streamStart, chatRequest, languageTarget, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, chatReservationId, now, ctx } =
     args;
 
   let replyBuffer = "";
   let call1Usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
+  let languageWarning = false;
   let companionMessageId: string | null = null;
   let conflictSignals: Partial<DimensionValues> | null = null;
   let unlockEvents: UnlockEvent[] = [];
   let quickActionResult: { activity_id: string; item_id: string } | null = null;
-  const replyNormalizer = createStreamingReplyNormalizer();
-
-  const handleChunk = (chunk: LLMStreamChunk): void => {
-    if (chunk.type === "text") {
-      const clean = replyNormalizer.push(chunk.text);
-      if (clean.length > 0) {
-        replyBuffer += clean;
-        sse.writeEvent("chunk", { text: clean });
-      }
-    } else if (chunk.type === "done") {
-      call1Usage = chunk.usage;
-    }
-  };
 
   try {
-    if (!firstResult.done) {
-      handleChunk(firstResult.value);
+    let attempt = await streamReplyAttempt({
+      allowLanguageMismatch: false,
+      firstResult: streamStart.firstResult,
+      iterator: streamStart.iterator,
+      languageTarget,
+      sse,
+    });
+    if (!attempt.ok) {
+      const retryRequest = buildLanguageRetryRequest(chatRequest);
+      const retryStart = await openChatStream(env, retryRequest, user.id);
+      attempt = await streamReplyAttempt({
+        allowLanguageMismatch: true,
+        firstResult: retryStart.firstResult,
+        iterator: retryStart.iterator,
+        languageTarget,
+        sse,
+      });
     }
-    let result = firstResult;
-    while (!result.done) {
-      result = await iterator.next();
-      if (!result.done) handleChunk(result.value);
+    if (!attempt.ok) {
+      throw new LLMError("unknown", "chat language retry did not produce a reply");
     }
-    const tail = replyNormalizer.flush();
-    if (tail.length > 0) {
-      replyBuffer += tail;
-      sse.writeEvent("chunk", { text: tail });
-    }
+    replyBuffer = attempt.replyBuffer;
+    call1Usage = attempt.usage;
+    languageWarning = attempt.languageWarning;
   } catch (err) {
     if (chatReservationId) {
       await releaseReservation(env, chatReservationId, "llm_stream_failed");
@@ -557,7 +559,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
       input_tokens: call1Usage.input_tokens,
       output_tokens: call1Usage.output_tokens,
     },
-    warning: finalExtract.ok ? null : "signal_extract_failed",
+    warning: languageWarning ? "language_mismatch" : finalExtract.ok ? null : "signal_extract_failed",
   });
   sse.close();
 
@@ -591,6 +593,138 @@ async function runChat(args: RunChatArgs): Promise<void> {
       user_text: userText,
     }),
   );
+}
+
+type ChatStreamStart = {
+  firstResult: IteratorResult<LLMStreamChunk>;
+  iterator: AsyncIterator<LLMStreamChunk>;
+};
+
+type StreamReplyAttemptResult =
+  | {
+      languageWarning: boolean;
+      ok: true;
+      replyBuffer: string;
+      usage: LLMUsage;
+    }
+  | { ok: false; reason: "language_mismatch" };
+
+async function openChatStream(
+  env: Env,
+  request: LLMRequest,
+  userId: string,
+): Promise<ChatStreamStart> {
+  const iterator = llmStream(env, request, { user_id: userId })[Symbol.asyncIterator]();
+  const firstResult = await iterator.next();
+  return { firstResult, iterator };
+}
+
+async function streamReplyAttempt(input: {
+  allowLanguageMismatch: boolean;
+  firstResult: IteratorResult<LLMStreamChunk>;
+  iterator: AsyncIterator<LLMStreamChunk>;
+  languageTarget: ReplyLanguageTarget;
+  sse: SSEHandle;
+}): Promise<StreamReplyAttemptResult> {
+  const { allowLanguageMismatch, firstResult, iterator, languageTarget, sse } = input;
+  let replyBuffer = "";
+  let usage: LLMUsage = { input_tokens: 0, output_tokens: 0 };
+  let buffering = languageTarget.shouldGuardOutput;
+  let languageWarning = false;
+  const pendingChunks: string[] = [];
+  const replyNormalizer = createStreamingReplyNormalizer();
+
+  const flushPending = (): void => {
+    if (pendingChunks.length === 0) return;
+    for (const text of pendingChunks) {
+      sse.writeEvent("chunk", { text });
+    }
+    pendingChunks.length = 0;
+  };
+
+  const acceptBuffered = (): void => {
+    buffering = false;
+    flushPending();
+  };
+
+  const handleCleanText = (text: string): StreamReplyAttemptResult | null => {
+    if (!text) return null;
+    replyBuffer += text;
+    if (!buffering) {
+      sse.writeEvent("chunk", { text });
+      return null;
+    }
+
+    pendingChunks.push(text);
+    const assessment = assessReplyLanguage(replyBuffer, languageTarget);
+    if (assessment === "match") {
+      acceptBuffered();
+      return null;
+    }
+    if (assessment === "mismatch") {
+      if (!allowLanguageMismatch) {
+        return { ok: false, reason: "language_mismatch" };
+      }
+      languageWarning = true;
+      acceptBuffered();
+    }
+    return null;
+  };
+
+  const handleChunk = (chunk: LLMStreamChunk): StreamReplyAttemptResult | null => {
+    if (chunk.type === "text") {
+      return handleCleanText(replyNormalizer.push(chunk.text));
+    }
+    usage = chunk.usage;
+    return null;
+  };
+
+  const maybeAbortForLanguage = async (result: StreamReplyAttemptResult | null): Promise<StreamReplyAttemptResult | null> => {
+    if (!result || result.ok) return result;
+    await iterator.return?.();
+    return result;
+  };
+
+  if (!firstResult.done) {
+    const early = await maybeAbortForLanguage(handleChunk(firstResult.value));
+    if (early) return early;
+  }
+
+  let result = firstResult;
+  while (!result.done) {
+    result = await iterator.next();
+    if (result.done) break;
+    const early = await maybeAbortForLanguage(handleChunk(result.value));
+    if (early) return early;
+  }
+
+  const tailResult = handleCleanText(replyNormalizer.flush());
+  if (tailResult) return tailResult;
+
+  if (buffering) {
+    const finalAssessment = assessReplyLanguage(replyBuffer, languageTarget, { final: true });
+    if (finalAssessment === "mismatch") {
+      if (!allowLanguageMismatch) {
+        return { ok: false, reason: "language_mismatch" };
+      }
+      languageWarning = true;
+    }
+    acceptBuffered();
+  }
+
+  return { languageWarning, ok: true, replyBuffer, usage };
+}
+
+function buildLanguageRetryRequest(request: LLMRequest): LLMRequest {
+  const messages = [...request.messages];
+  const finalUser = messages.pop();
+  const retryInstruction = { content: buildLanguageRetryInstruction(), role: "system" as const };
+  return {
+    ...request,
+    messages: finalUser ? [...messages, retryInstruction, finalUser] : [...messages, retryInstruction],
+    temperature: Math.min(request.temperature ?? 0.95, 0.45),
+    top_p: Math.min(request.top_p ?? 0.95, 0.85),
+  };
 }
 
 function mergeUnlockEvents(existing: UnlockEvent[], incoming: UnlockEvent[]): UnlockEvent[] {
@@ -664,6 +798,7 @@ async function loadRecentMessages(
   env: Env,
   threadId: string,
   limit: number,
+  companionGreeting: string | null,
 ): Promise<HistoryRow[]> {
   const { results } = await env.DB.prepare(
     `SELECT role, content, scene_id, created_at FROM messages
@@ -679,10 +814,24 @@ async function loadRecentMessages(
       r.role === "user" || r.role === "companion",
   );
 
+  const greeting = companionGreeting?.trim() ?? "";
+  let hasSeenUserMessage = false;
+
   return rows
     .slice()
     .reverse()
-    .map((r) => ({ content: r.content, role: r.role, scene_id: r.scene_id ?? null }));
+    .flatMap((r) => {
+      const isSeedGreeting =
+        !hasSeenUserMessage &&
+        r.role === "companion" &&
+        greeting.length > 0 &&
+        r.content.trim() === greeting;
+      if (r.role === "user") {
+        hasSeenUserMessage = true;
+      }
+      if (isSeedGreeting) return [];
+      return [{ content: r.content, role: r.role, scene_id: r.scene_id ?? null }];
+    });
 }
 
 function llmFailureResponse(err: unknown): Response {

@@ -290,7 +290,7 @@ export type CompanionDetail = {
   speech_style: string | null;
   voice_id?: string | null;
   voice_speed?: VoiceSpeed | null;
-  // The character's opening line; shown as the first message of a fresh chat.
+  // The character's opening line; used as an intro hint, not stored as chat history.
   greeting?: string | null;
   // spec-025 persona fields. Only present for the owner of a user-created
   // companion (the backend hides them otherwise).

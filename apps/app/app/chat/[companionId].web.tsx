@@ -1163,6 +1163,11 @@ export default function WebChatScreen() {
   const sceneActions = sceneActionsFor(sceneId);
   const canUseQuickAction = Boolean(sceneId) && !stream.isStreaming && remainingSeconds === 0;
   const canSend = !stream.isStreaming && remainingSeconds === 0 && draft.trim().length > 0;
+  const introText = chatLanguage === 'zh'
+    ? (companion?.source === 'user' && companion.greeting
+      ? `开场：${companion.greeting}`
+      : '开场：开始一个私人对话。')
+    : `Intro. ${companion?.greeting ?? 'Start a private conversation.'}`;
 
   return (
     <WebAppShell
@@ -1300,7 +1305,7 @@ export default function WebChatScreen() {
                   ? (chatLanguage === 'zh'
                     ? `场景：${displaySceneName}${sceneSourceText ? ` · ${sceneSourceText}` : ''}`
                     : `Scene: ${displaySceneName}${sceneSourceText ? ` · ${sceneSourceText}` : ''}`)
-                  : (chatLanguage === 'zh' ? `Intro. ${companion?.greeting ?? '开始一个私人对话。'}` : `Intro. ${companion?.greeting ?? 'Start a private conversation.'}`)}
+                  : introText}
               </Text>
             </View>
             <View className="absolute -right-[108px] top-20 z-30 hidden gap-2 xl:flex">

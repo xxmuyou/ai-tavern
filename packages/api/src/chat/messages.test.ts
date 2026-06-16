@@ -40,6 +40,15 @@ type CompanionFixture = {
   source: "official" | "user";
   created_by: string | null;
   is_active: number;
+  example_dialogues?: string | null;
+  greeting?: string | null;
+};
+
+type HistoryFixture = {
+  role: "user" | "companion";
+  content: string;
+  scene_id?: string | null;
+  created_at: number;
 };
 
 type Inserts = {
@@ -64,6 +73,8 @@ function createEnv(opts: {
   rateCount?: number;
   llmConfigChat?: { provider: string; model: string };
   llmConfigSignal?: { provider: string; model: string };
+  thread?: { id: string; message_count: number; summary: string | null };
+  history?: HistoryFixture[];
 }): { env: Env; state: Inserts } {
   const state: Inserts = {
     messages: [],
@@ -105,8 +116,9 @@ function createEnv(opts: {
     ],
   ]);
 
-  let threadId: string | null = null;
-  let threadMessageCount = 0;
+  let threadId: string | null = opts.thread?.id ?? null;
+  let threadMessageCount = opts.thread?.message_count ?? 0;
+  const threadSummary = opts.thread?.summary ?? null;
 
   const env = {
     CONFIG: {
@@ -127,10 +139,18 @@ function createEnv(opts: {
                 ...opts.companion,
                 appearance: null,
                 background: null,
+                boundary: null,
+                example_dialogues: opts.companion.example_dialogues ?? null,
+                gender: null,
+                greeting: opts.companion.greeting ?? null,
                 name: "Maya",
                 personality: null,
                 relationship_role: null,
+                secret: null,
                 speech_style: null,
+                voice_id: null,
+                voice_speed: null,
+                want: null,
               } as unknown as T;
             }
             if (sql.includes("FROM scenes")) return null;
@@ -140,7 +160,8 @@ function createEnv(opts: {
                 created_at: 0,
                 id: threadId,
                 message_count: threadMessageCount,
-                summary: null,
+                persona_id: null,
+                summary: threadSummary,
                 updated_at: 0,
               } as unknown as T;
             }
@@ -172,6 +193,22 @@ function createEnv(opts: {
             return null;
           },
           async all<T>(): Promise<{ results: T[] }> {
+            if (sql.includes("SELECT role, content, scene_id, created_at FROM messages")) {
+              const targetThreadId = values[0] as string;
+              const limit = values[1] as number;
+              const rows = (opts.history ?? [])
+                .filter(() => targetThreadId === threadId)
+                .slice()
+                .sort((a, b) => b.created_at - a.created_at)
+                .slice(0, limit)
+                .map((row) => ({
+                  content: row.content,
+                  created_at: row.created_at,
+                  role: row.role,
+                  scene_id: row.scene_id ?? null,
+                }));
+              return { results: rows as unknown as T[] };
+            }
             return { results: [] };
           },
           async run(): Promise<{ meta: { changes: number } }> {
@@ -243,13 +280,27 @@ function nowMinuteUtc(): string {
   return `${todayUtc()}T${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-function buildStreamFetch(chunks: string[] = ["Hello", " there"]): ReturnType<typeof vi.fn> {
-  return vi.fn(async (url: string | URL | Request) => {
+function buildStreamFetch(
+  chunks: string[] | string[][] = ["Hello", " there"],
+  onChatBody?: (body: { messages?: Array<{ content: string; role: string }> }) => void,
+): ReturnType<typeof vi.fn> {
+  const attempts = (Array.isArray(chunks[0]) ? chunks : [chunks]) as string[][];
+  let streamIndex = 0;
+  return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const target = String(url);
-    if (target.includes("/chat/completions") && !pendingSignal()) {
+    const requestBody =
+      typeof init?.body === "string"
+        ? (JSON.parse(init.body) as { messages?: Array<{ content: string; role: string }>; stream?: boolean })
+        : null;
+    if (target.includes("/chat/completions") && requestBody?.stream) {
+      if (onChatBody) {
+        onChatBody(requestBody);
+      }
+      const attemptChunks = attempts[Math.min(streamIndex, attempts.length - 1)] ?? [];
+      streamIndex += 1;
       // Streaming chat call — encode SSE
       const sse = [
-        ...chunks.flatMap((content) => [
+        ...attemptChunks.flatMap((content) => [
           `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}`,
           "",
         ]),
@@ -370,6 +421,118 @@ describe("handlePostMessage", () => {
     expect(body).toContain(`event: chunk\ndata: {"text":"嗯。"}\n\n`);
     expect(body).not.toContain(`> 嗯`);
     expect(state.messages[1]?.content).toBe("<narration>x</narration>\n\n嗯。");
+  });
+
+  it("does not send old seeded English greetings as prompt history when the latest user message is Chinese", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env } = createEnv({
+      companion: {
+        ...COMPANION,
+        example_dialogues: JSON.stringify(["Oh, it's you again. Sit. I'll pretend I'm not glad."]),
+        greeting: "If you are here to waste my time, at least do it beautifully.",
+      },
+      history: [
+        {
+          content: "If you are here to waste my time, at least do it beautifully.",
+          created_at: 1,
+          role: "companion",
+        },
+        { content: "你好。", created_at: 2, role: "user" },
+      ],
+      thread: { id: "t-1", message_count: 2, summary: null },
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["你好。"], (body) => {
+      chatBodies.push(body);
+    }));
+
+    const response = await handlePostMessage(buildPost({ text: "你今天怎么样？" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const promptMessages = chatBodies[0]?.messages ?? [];
+    expect(promptMessages.some((message) => message.content === "If you are here to waste my time, at least do it beautifully.")).toBe(false);
+    expect(promptMessages.some((message) => message.content === "你好。")).toBe(true);
+    const promptText = promptMessages.map((message) => message.content).join("\n");
+    expect(promptText).toContain("# Reply language contract");
+    expect(promptText).toContain("same natural language and writing system");
+    expect(promptText).toContain("Do not copy the language of character cards");
+    expect(promptText).toContain("intentionally not quoted");
+    expect(promptText).not.toContain("Oh, it's you again");
+    expect(promptText).not.toContain("Simplified Chinese");
+  });
+
+  it("retries a wrong-language non-Latin reply without streaming or saving the first draft", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env, state } = createEnv({
+      companion: {
+        ...COMPANION,
+        example_dialogues: JSON.stringify(["Oh, it's you again. Sit. I'll pretend I'm not glad."]),
+      },
+      history: [
+        { content: "你好。", created_at: 1, role: "user" },
+        {
+          content: "<narration>Maya looked up from her phone.</narration>Hello there.",
+          created_at: 2,
+          role: "companion",
+        },
+      ],
+      thread: { id: "t-1", message_count: 2, summary: null },
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(
+      [
+        ["<narration>Maya smiled at him.</narration>Hello there."],
+        ["<narration>她抬头看向他。</narration>", "你好。"],
+      ],
+      (body) => {
+        chatBodies.push(body);
+      },
+    ));
+
+    const response = await handlePostMessage(buildPost({ text: "你今天怎么样？" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(body).not.toContain("Hello there");
+    expect(body).not.toContain("Maya smiled");
+    expect(body).toContain("她抬头看向他");
+    expect(body).toContain(`"warning":null`);
+    expect(chatBodies).toHaveLength(2);
+    expect(chatBodies[1]?.messages?.some((message) => message.content.includes("# Language correction"))).toBe(true);
+    expect(reserveCreditsMock).toHaveBeenCalledTimes(1);
+    expect(state.messages.length).toBe(2);
+    expect(state.messages[1]?.content).toBe("<narration>她抬头看向他。</narration>你好。");
+  });
+
+  it("streams the retry with a warning when the retry still uses the wrong language", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env, state } = createEnv({
+      companion: COMPANION,
+      history: [{ content: "你好。", created_at: 1, role: "user" }],
+      thread: { id: "t-1", message_count: 1, summary: null },
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(
+      [
+        ["<narration>Maya smiled at him.</narration>Hello there."],
+        ["<narration>Maya paused beside him.</narration>Still English."],
+      ],
+      (body) => {
+        chatBodies.push(body);
+      },
+    ));
+
+    const response = await handlePostMessage(buildPost({ text: "你今天怎么样？" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(body).not.toContain("Hello there");
+    expect(body).toContain("Still English");
+    expect(body).toContain("language_mismatch");
+    expect(chatBodies).toHaveLength(2);
+    expect(reserveCreditsMock).toHaveBeenCalledTimes(1);
+    expect(state.messages[1]?.content).toBe("<narration>Maya paused beside him.</narration>Still English.");
   });
 
   it("forces annoyed hostile signals for direct abuse even when the model scores warm", async () => {

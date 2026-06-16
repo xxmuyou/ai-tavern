@@ -14,7 +14,13 @@ type MessageRow = {
 };
 
 function createEnv(opts: {
-  companion?: { id: string; source: "official" | "user"; created_by: string | null; is_active: number } | null;
+  companion?: {
+    id: string;
+    source: "official" | "user";
+    created_by: string | null;
+    is_active: number;
+    greeting?: string | null;
+  } | null;
   thread?: { id: string; summary: string | null; message_count: number; created_at: number; updated_at: number } | null;
   messages?: MessageRow[];
 }): {
@@ -43,6 +49,7 @@ function createEnv(opts: {
                 personality: null,
                 relationship_role: null,
                 speech_style: null,
+                greeting: opts.companion.greeting ?? null,
               } as unknown as T;
             }
             if (sql.includes("FROM threads")) {
@@ -121,6 +128,25 @@ describe("handleGetHistory", () => {
     expect(body.messages).toEqual([]);
     expect((body.thread as { message_count: number }).message_count).toBe(0);
     expect(body.next_cursor).toBeNull();
+  });
+
+  it("does not seed a companion greeting into a fresh chat history", async () => {
+    const { env, state } = createEnv({
+      companion: {
+        created_by: null,
+        greeting: "If you are here to waste my time, at least do it beautifully.",
+        id: "c-1",
+        is_active: 1,
+        source: "official",
+      },
+    });
+
+    const response = await handleGetHistory(env, USER, "c-1", new URL("https://x/chat/c-1/history"));
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.messages).toEqual([]);
+    expect((body.thread as { message_count: number }).message_count).toBe(0);
+    expect(state.messages).toEqual([]);
+    expect(state.thread).toBeNull();
   });
 
   it("404 when companion missing or inactive", async () => {

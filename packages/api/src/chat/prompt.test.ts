@@ -50,10 +50,9 @@ describe("buildChatPrompt", () => {
     expect(system).toContain("to be taken seriously as an artist");
     expect(system).toContain("being rushed or treated as a backup option");
 
-    expect(messages.at(-1)).toEqual({
-      content: "Hey, what are you reading?",
-      role: "user",
-    });
+    expect(messages.at(-1)?.role).toBe("user");
+    expect(messages.at(-1)?.content).toContain("Hey, what are you reading?");
+    expect(messages.at(-1)?.content).toContain("# Reply language contract");
   });
 
   it("maps history user/companion roles to user/assistant", () => {
@@ -78,7 +77,9 @@ describe("buildChatPrompt", () => {
     expect(messages[3]).toEqual({ content: "How's your day?", role: "user" });
     expect(messages[4]?.role).toBe("system");
     expect(messages[4]?.content).toContain("Final guard before replying");
-    expect(messages[5]).toEqual({ content: "Want to grab coffee later?", role: "user" });
+    expect(messages[5]?.role).toBe("user");
+    expect(messages[5]?.content).toContain("Want to grab coffee later?");
+    expect(messages[5]?.content).toContain("Every visible word");
   });
 
   it("omits the scene section when scene is null", () => {
@@ -184,6 +185,75 @@ describe("buildChatPrompt", () => {
     expect(system).toContain("# How you speak (examples of your voice)");
     expect(system).toContain("pretend I'm not glad");
     expect(system).toContain("Don't make it weird");
+    expect(system).toContain("tone and style anchors only");
+    expect(system).toContain("the final user message controls reply language");
+  });
+
+  it("isolates English assistant history and examples when the latest user message uses a non-Latin script", () => {
+    const artifacts = buildChatPromptArtifacts({
+      companion: {
+        ...companion,
+        speech_style: "Soft-spoken English phrasing, often pauses mid-sentence.",
+      },
+      exampleDialogues: ["Oh, it's you again. Sit. I'll pretend I'm not glad."],
+      narrative: "Friend.",
+      recentMessages: [
+        { content: "If you came to waste my time, do it beautifully.", role: "companion" },
+        { content: "Hello.", role: "user" },
+      ],
+      scene: null,
+      secretToReveal: null,
+      stage: "trusted",
+      threadSummary: null,
+      userText: "你今天怎么样？",
+    });
+
+    expect(artifacts.languageTarget).toMatchObject({ scriptClass: "non_latin", source: "latest_user" });
+    expect(artifacts.segments.find((segment) => segment.id === "reply_language")).toBeUndefined();
+    expect(artifacts.segments.some((segment) => segment.content === "If you came to waste my time, do it beautifully.")).toBe(false);
+
+    const guard = artifacts.segments.find((segment) => segment.id === "post_history_guard");
+    expect(guard?.content).toContain("final user message contract");
+    expect(guard?.content).not.toContain("Reply in Chinese now");
+
+    const system = artifacts.messages[0]?.content ?? "";
+    expect(system).toContain("intentionally not quoted");
+    expect(system).not.toContain("Oh, it's you again");
+    expect(system).not.toContain("express it in Chinese instead of English");
+    expect(system).not.toContain("Simplified Chinese");
+    expect(system).not.toContain("Japanese");
+    expect(system).not.toContain("Korean");
+
+    const finalUser = artifacts.messages.at(-1)?.content ?? "";
+    expect(finalUser).toContain("你今天怎么样？");
+    expect(finalUser).toContain("Every visible word");
+    expect(finalUser).toContain("both narration text inside <narration> tags and spoken dialogue");
+  });
+
+  it.each([
+    ["non-Latin latest text", "今日は何をしてる？", "non_latin", "latest_user"],
+    ["another non-Latin latest text", "오늘 뭐 해?", "non_latin", "latest_user"],
+    ["Latin latest text", "How are you today?", "latin", "latest_user"],
+    ["short ambiguous text", "OK", "non_latin", "history_user"],
+  ] as const)("uses the same generic language contract for %s", (_label, userText, scriptClass, source) => {
+    const artifacts = buildChatPromptArtifacts({
+      companion,
+      narrative: "Friend.",
+      recentMessages: [{ content: "你好。", role: "user" }],
+      scene: null,
+      secretToReveal: null,
+      stage: "trusted",
+      threadSummary: null,
+      userText,
+    });
+
+    expect(artifacts.languageTarget).toMatchObject({ scriptClass, source });
+    const finalUser = artifacts.messages.at(-1)?.content ?? "";
+    expect(finalUser).toContain("# Reply language contract");
+    expect(finalUser).toContain("same natural language and writing system");
+    expect(finalUser).not.toContain("Simplified Chinese");
+    expect(finalUser).not.toContain("Japanese");
+    expect(finalUser).not.toContain("Korean");
   });
 
   it("varies how the character is told to address the user by stage", () => {
@@ -239,7 +309,9 @@ describe("buildChatPrompt", () => {
 
     const guardIndex = artifacts.messages.findIndex((message) => message.content.includes("Final guard before replying"));
     expect(guardIndex).toBe(2);
-    expect(artifacts.messages.at(-1)).toEqual({ content: "你还记得吗？", role: "user" });
+    expect(artifacts.messages.at(-1)?.role).toBe("user");
+    expect(artifacts.messages.at(-1)?.content).toContain("你还记得吗？");
+    expect(artifacts.messages.at(-1)?.content).toContain("# Reply language contract");
   });
 
   it("treats quick actions as visible conversation gestures", () => {
@@ -320,6 +392,7 @@ describe("buildChatPrompt", () => {
     expect(artifacts.segments.find((segment) => segment.id === "core_identity")?.included).toBe(true);
     expect(artifacts.segments.find((segment) => segment.id === "output_format")?.included).toBe(true);
     expect(artifacts.segments.find((segment) => segment.id === "post_history_guard")?.included).toBe(true);
+    expect(artifacts.segments.find((segment) => segment.id === "latest_user_message")?.included).toBe(true);
     expect(artifacts.segments.some((segment) => segment.id.startsWith("recent_history") && segment.trimReason === "budget")).toBe(true);
   });
 
@@ -347,8 +420,9 @@ describe("buildChatPrompt", () => {
     });
 
     const history = artifacts.segments.filter((segment) => segment.id.startsWith("recent_history"));
-    expect(history.map((segment) => segment.content)).toEqual(["Do you remember this place?", "I do."]);
+    expect(history.map((segment) => segment.content)).toEqual(["I do."]);
     expect(history.map((segment) => segment.content).join(" ")).not.toContain("bed");
+    expect(history.map((segment) => segment.content).join(" ")).not.toContain("Do you remember this place?");
     const guard = artifacts.segments.find((segment) => segment.id === "post_history_guard");
     expect(guard?.content).toContain("Current physical scene");
     expect(guard?.content).toContain("prior message history");
