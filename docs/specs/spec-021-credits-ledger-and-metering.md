@@ -96,12 +96,12 @@
 
 买多送多（兑换率 $1=1000 为基准）：Small 约平价、Medium 送约 50%、Large 约翻倍。
 
-价格 ID 不写死，使用环境变量配置：
+价格 ID 不写死。Admin Settings / D1 可覆盖环境变量 fallback：
 
 ```txt
-STRIPE_PRICE_CREDITS_SMALL
-STRIPE_PRICE_CREDITS_MEDIUM
-STRIPE_PRICE_CREDITS_LARGE
+billing.credits_small_price  -> STRIPE_PRICE_CREDITS_SMALL
+billing.credits_medium_price -> STRIPE_PRICE_CREDITS_MEDIUM
+billing.credits_large_price  -> STRIPE_PRICE_CREDITS_LARGE
 ```
 
 ### 固定扣费

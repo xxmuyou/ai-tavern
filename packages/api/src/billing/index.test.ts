@@ -112,7 +112,10 @@ async function issueAdminToken(env: Env): Promise<string> {
   return session.token;
 }
 
-function createEnv(overrides: Record<string, unknown> = {}): Env {
+function createEnv(
+  overrides: Record<string, unknown> = {},
+  settings: Record<string, string> = { "billing.pro_monthly_price": "price_pro" },
+): Env {
   const usersStore = createUsersStore([
     {
       created_at: 1000,
@@ -145,6 +148,12 @@ function createEnv(overrides: Record<string, unknown> = {}): Env {
     DB: {
       prepare(sql: string) {
         return {
+          async all() {
+            if (!sql.includes("FROM app_settings")) return { results: [] };
+            return {
+              results: Object.entries(settings).map(([key, value]) => ({ key, value })),
+            };
+          },
           bind(...values: unknown[]) {
             return {
               async first() {
@@ -167,7 +176,6 @@ function createEnv(overrides: Record<string, unknown> = {}): Env {
       },
     },
     STRIPE_CANCEL_URL: "https://app.example.com/cancel",
-    STRIPE_PRICE_PRO_MONTHLY: "price_pro",
     STRIPE_SECRET_KEY: "sk_test_123",
     STRIPE_SUCCESS_URL: "https://app.example.com/success",
     ...overrides,

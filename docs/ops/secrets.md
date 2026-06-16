@@ -25,8 +25,8 @@
 | `STRIPE_SECRET_KEY` | Stripe 服务端 API（创建 Checkout 等） | stripe.com（test/live） | Wrangler secret | **强制独立**（test vs live） |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook 签名验证 | Stripe webhook endpoint 创建后获取 | Wrangler secret | 独立 |
 | `STRIPE_PUBLISHABLE_KEY` | 前端用的 Stripe key | stripe.com | wrangler.jsonc `vars`（公开） | 独立 |
-| `STRIPE_PRICE_PRO_MONTHLY` | Pro Monthly Stripe Price ID | Stripe Dashboard | wrangler.jsonc `vars`（公开） | 独立 |
-| `STRIPE_PRICE_CREDITS_SMALL` / `_MEDIUM` / `_LARGE` | 积分包一次性 Price ID（spec-021） | Stripe Dashboard | 同 `STRIPE_PRICE_PRO_MONTHLY`（sync 脚本按 secret 处理） | 独立 |
+| `STRIPE_PRICE_PRO_MONTHLY` | Pro Monthly Stripe Price ID | Stripe Dashboard | `.env.*` / Worker var（公开） | 独立 |
+| `STRIPE_PRICE_CREDITS_SMALL` / `_MEDIUM` / `_LARGE` | 积分包一次性 Price ID（spec-021） | Stripe Dashboard | `.env.*` / Worker var（公开） | 独立 |
 | `STRIPE_CREDITS_SUCCESS_URL` / `_CANCEL_URL` | 积分 Checkout 成功/取消回跳 URL（缺省回退到 `STRIPE_SUCCESS_URL`/`_CANCEL_URL`） | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
 | `STRIPE_SUCCESS_URL` | Checkout 成功后回跳 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
 | `STRIPE_CANCEL_URL` | Checkout 取消后回跳 Web URL | 团队域名配置 | wrangler.jsonc `vars`（公开） | 独立 |
@@ -46,6 +46,8 @@
 | `AUTH_SUCCESS_URL` | OAuth / Magic Link 成功后的 Web 回调页 | app 域名 | wrangler.jsonc `vars` | 独立 |
 | `SUPPORT_EMAIL` | 用户支持邮箱（退款、客诉） | 团队邮箱 | wrangler.jsonc `vars` + 前端 | 共享 |
 | `ADMIN_INIT_EMAIL` | 首次部署 seed admin 用户的邮箱 | 团队约定（`admin@aiappsbox.com`） | wrangler.jsonc `vars` | 共享 |
+
+> Stripe Price ID（Pro Monthly 与 credits packages）是公开业务配置，不是 secret。`.env.*` / Worker vars 可以作为环境默认值；Admin Settings / D1 `app_settings` 中的 `billing.pro_monthly_price`、`billing.credits_small_price`、`billing.credits_medium_price`、`billing.credits_large_price` 会覆盖 env fallback，适合临时改价或 dev 验证。
 
 ---
 

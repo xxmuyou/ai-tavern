@@ -20,7 +20,7 @@ const PURPOSE_KEYS: Record<BillingConfigPurpose, Array<keyof BillingConfig>> = {
   webhook: ["secretKey", "webhookSecret"],
 };
 
-const ENV_NAMES: Record<keyof BillingConfig, keyof BillingEnv> = {
+const CONFIG_NAMES: Record<keyof BillingConfig, string> = {
   cancelUrl: "STRIPE_CANCEL_URL",
   portalReturnUrl: "STRIPE_PORTAL_RETURN_URL",
   priceProMonthly: "STRIPE_PRICE_PRO_MONTHLY",
@@ -41,7 +41,7 @@ export async function readBillingConfig(env: BillingEnv, purpose: BillingConfigP
 
   const missing = PURPOSE_KEYS[purpose]
     .filter((key) => !config[key])
-    .map((key) => ENV_NAMES[key]);
+    .map((key) => CONFIG_NAMES[key]);
   if (missing.length) {
     throw billingConfigError(env, missing);
   }
@@ -49,7 +49,7 @@ export async function readBillingConfig(env: BillingEnv, purpose: BillingConfigP
   return config;
 }
 
-export function billingConfigError(env: BillingEnv, missing: Array<keyof BillingEnv>): Response {
+export function billingConfigError(env: BillingEnv, missing: string[]): Response {
   const body: Record<string, unknown> = { error: "billing_config_missing" };
   if (isDevRuntime(env)) {
     body.missing = missing;

@@ -1,6 +1,6 @@
 import type { BillingTier } from "../billing/types";
 import { getSettingNumber } from "../settings/store";
-import type { CreditPackageId, CreditTaskType, CreditsEnv } from "./types";
+import type { CreditPackageId, CreditTaskType } from "./types";
 
 /**
  * Fixed credit cost per task (pure-credits model, spec-021). Exchange rate is
@@ -32,11 +32,11 @@ export const MONTHLY_GRANT: Record<BillingTier, number> = {
 
 export const CREDIT_PACKAGES: Record<
   CreditPackageId,
-  { credits: number; priceEnv: keyof CreditsEnv }
+  { credits: number; priceSettingKey: string }
 > = {
-  large: { credits: 40000, priceEnv: "STRIPE_PRICE_CREDITS_LARGE" },
-  medium: { credits: 15000, priceEnv: "STRIPE_PRICE_CREDITS_MEDIUM" },
-  small: { credits: 5000, priceEnv: "STRIPE_PRICE_CREDITS_SMALL" },
+  large: { credits: 40000, priceSettingKey: "billing.credits_large_price" },
+  medium: { credits: 15000, priceSettingKey: "billing.credits_medium_price" },
+  small: { credits: 5000, priceSettingKey: "billing.credits_small_price" },
 };
 
 export function isCreditPackageId(value: unknown): value is CreditPackageId {
