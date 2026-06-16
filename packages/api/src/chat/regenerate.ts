@@ -9,6 +9,7 @@ import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
 import { isSecretUnlocked, loadUnlockedKeys } from "../relationships/unlocks";
 import { loadStoryBeatForScene } from "../story-beats";
+import { loadSceneStoryPromptContext } from "../scenes/stories";
 import {
   canChatWithCompanion,
   loadCompanionForChat,
@@ -24,6 +25,7 @@ import {
 } from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type HistoryMessage, type UserPersonaForPrompt } from "./prompt";
+import { parseChatMode, storyModeRequiresScene } from "./chat-mode";
 import { checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
 import { createStreamingReplyNormalizer, normalizeChatReplyText } from "./reply-normalize";
 import { commitReservation, releaseReservation } from "../credits";
@@ -33,6 +35,8 @@ import { formatDateUtc, recordUsage } from "./usage";
 import { loadMessageRow, parseVariants } from "./variants";
 
 const RECENT_MESSAGES_LIMIT = 50;
+
+type RegenerateBody = { chat_mode?: unknown; story_id?: unknown };
 
 /**
  * Regenerate a companion reply. Produces a new alternative wording, appends it to
@@ -65,6 +69,9 @@ export async function handleRegenerateMessage(
   if (target.role !== "companion") {
     return jsonResponse({ error: "not_regeneratable" }, { status: 400 });
   }
+  const body = await readOptionalRegenerateBody(request);
+  const chatMode = parseChatMode(body?.chat_mode);
+  const storyIdInput = typeof body?.story_id === "string" && body.story_id.length > 0 ? body.story_id : null;
 
   const now = Date.now();
   const isAdmin = await isAdminUser(env, user.email);
@@ -77,6 +84,15 @@ export async function handleRegenerateMessage(
         { status: 429, headers: { "retry-after": "60" } },
       );
     }
+  }
+
+  const sceneId = target.scene_id;
+  const scene = sceneId ? await loadSceneForChat(env, sceneId) : null;
+  if (storyModeRequiresScene(chatMode, Boolean(scene))) {
+    return jsonResponse({ error: "story_mode_requires_scene" }, { status: 400 });
+  }
+  if (storyIdInput && chatMode !== "story") {
+    return jsonResponse({ error: "story_requires_story_mode" }, { status: 400 });
   }
 
   const subscriber = isAdmin || (await isSubscriberActive(env, user.id, now));
@@ -99,8 +115,6 @@ export async function handleRegenerateMessage(
   const priorRows = await loadMessagesBefore(env, thread.id, target.created_at, RECENT_MESSAGES_LIMIT);
   const { recentMessages, userText } = splitTrailingUserTurn(priorRows);
 
-  const sceneId = target.scene_id;
-  const scene = sceneId ? await loadSceneForChat(env, sceneId) : null;
   const activity = target.activity_id
     ? await loadActiveActivityForChat(env, user.id, target.activity_id)
     : null;
@@ -119,9 +133,15 @@ export async function handleRegenerateMessage(
   const stage = deriveStage(dimensions).stage;
   const unlockedKeys = await loadUnlockedKeys(env, user.id, companionId);
   const secretToReveal = isSecretUnlocked(unlockedKeys) ? companion.secret : null;
-  const storyBeat = sceneId
-    ? await loadStoryBeatForScene(env, user.id, companionId, sceneId)
+  const storyBeat = chatMode === "story" && scene
+    ? await loadStoryBeatForScene(env, user.id, companionId, scene.id)
     : null;
+  const sceneStory = chatMode === "story" && scene && storyIdInput
+    ? await loadSceneStoryPromptContext(env, user.id, companionId, scene.id, storyIdInput)
+    : null;
+  if (storyIdInput && !sceneStory) {
+    return jsonResponse({ error: "story_unavailable" }, { status: 404 });
+  }
   const threadMemories = await loadThreadMemories(env, thread.id);
 
   const promptArtifacts = buildChatPromptArtifacts({
@@ -130,6 +150,7 @@ export async function handleRegenerateMessage(
     recentMessages,
     secretToReveal,
     stage,
+    sceneStory,
     storyBeat,
     scene: scene ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) } : null,
     activity: activity
@@ -346,4 +367,17 @@ function splitTrailingUserTurn(messages: HistoryMessage[]): {
     }
   }
   return { recentMessages: messages, userText: "" };
+}
+
+async function readOptionalRegenerateBody(request: Request): Promise<RegenerateBody | null> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+  try {
+    const body = await request.json();
+    return body && typeof body === "object" ? (body as RegenerateBody) : null;
+  } catch {
+    return null;
+  }
 }

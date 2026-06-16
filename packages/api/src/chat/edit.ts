@@ -14,7 +14,9 @@ import {
   type UnlockEvent,
 } from "../relationships/unlocks";
 import { loadStoryBeatForScene } from "../story-beats";
+import { loadSceneStoryPromptContext } from "../scenes/stories";
 import { assessHostileInput, applyHostilityOverride } from "./hostility";
+import { parseChatMode, storyModeRequiresScene } from "./chat-mode";
 import {
   canChatWithCompanion,
   loadCompanionForChat,
@@ -38,7 +40,7 @@ import { loadMessageRow } from "./variants";
 
 const RECENT_MESSAGES_LIMIT = 50;
 
-type EditBody = { text?: unknown };
+type EditBody = { chat_mode?: unknown; story_id?: unknown; text?: unknown };
 
 /**
  * Edit a user message: rewrite its text, drop every message that came after it,
@@ -86,6 +88,8 @@ export async function handleEditMessage(
   if (!text) {
     return jsonResponse({ error: "invalid_request", field: "text" }, { status: 400 });
   }
+  const chatMode = parseChatMode(body.chat_mode);
+  const storyIdInput = typeof body.story_id === "string" && body.story_id.length > 0 ? body.story_id : null;
 
   const now = Date.now();
   const isAdmin = await isAdminUser(env, user.email);
@@ -110,6 +114,15 @@ export async function handleEditMessage(
     }
   }
 
+  const sceneId = target.scene_id;
+  const scene = sceneId ? await loadSceneForChat(env, sceneId) : null;
+  if (storyModeRequiresScene(chatMode, Boolean(scene))) {
+    return jsonResponse({ error: "story_mode_requires_scene" }, { status: 400 });
+  }
+  if (storyIdInput && chatMode !== "story") {
+    return jsonResponse({ error: "story_requires_story_mode" }, { status: 400 });
+  }
+
   // Everything after the edited message is now a different timeline — delete it
   // and undo the relationship signals those (now-erased) replies had applied.
   const deletedCount = await truncateAfter(env, user.id, companionId, thread.id, target.created_at, now);
@@ -118,8 +131,6 @@ export async function handleEditMessage(
 
   const priorMessages = await loadMessagesBefore(env, thread.id, target.created_at, RECENT_MESSAGES_LIMIT);
 
-  const sceneId = target.scene_id;
-  const scene = sceneId ? await loadSceneForChat(env, sceneId) : null;
   const activity = target.activity_id
     ? await loadActiveActivityForChat(env, user.id, target.activity_id)
     : null;
@@ -138,9 +149,15 @@ export async function handleEditMessage(
   const stage = deriveStage(dimensions).stage;
   const unlockedKeys = await loadUnlockedKeys(env, user.id, companionId);
   const secretToReveal = isSecretUnlocked(unlockedKeys) ? companion.secret : null;
-  const storyBeat = sceneId
-    ? await loadStoryBeatForScene(env, user.id, companionId, sceneId)
+  const storyBeat = chatMode === "story" && scene
+    ? await loadStoryBeatForScene(env, user.id, companionId, scene.id)
     : null;
+  const sceneStory = chatMode === "story" && scene && storyIdInput
+    ? await loadSceneStoryPromptContext(env, user.id, companionId, scene.id, storyIdInput)
+    : null;
+  if (storyIdInput && !sceneStory) {
+    return jsonResponse({ error: "story_unavailable" }, { status: 404 });
+  }
   const threadMemories = await loadThreadMemories(env, thread.id);
 
   const promptArtifacts = buildChatPromptArtifacts({
@@ -149,6 +166,7 @@ export async function handleEditMessage(
     recentMessages: priorMessages,
     secretToReveal,
     stage,
+    sceneStory,
     storyBeat,
     scene: scene ? { mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) } : null,
     activity: activity

@@ -109,18 +109,18 @@
 - **体验上必须有反馈。** beat 完成后要看到阶段变化、unlock、memory、事件结果或下一目标，不能只在数据库里默默变化。
 - **事件引擎是执行器之一。** authored beat 提供钩子和目标，`events` 仍负责生成互动选项与结果文案。
 
-### 4.5 自建角色剧情路线（已定方向）
+### 4.5 Scene story authoring 路线（已定方向）
 
-官方角色数量有限，自建角色必须是一等体验，而不是“没有剧情的自由聊天”。当前路线是：
+官方 preset 内容有限，用户也需要能围绕自己喜欢的 scene 创建故事，而不是只有自由聊天。当前路线是：
 
-- **官方角色**：内容团队维护 authored arcs，保证质量基线。
-- **自建角色**：创建后可选择剧情包、用户自写轻量 arc，或用 AI 辅助生成 3-5 个 beats。
+- **官方内容**：内容团队维护 scene preset stories，保证质量基线。
+- **用户故事**：用户在 Scene 页面选择剧情包、用户自写轻量 story，或用 AI 辅助生成 3-5 个 tasks/beats。
 - **剧情包模板**：按关系定位和体验类型提供，例如 slow burn romance、healing trust、workplace tension、mystery stranger。
 - **推进方式**：用户手动 `Mark as done` 完成 beat；不让系统因为发生一轮聊天就自动判断剧情结束。
-- **共享方式**：用户发布公开 companion 时，story arcs 默认私有，可选择共享为只读 arc；其他用户的进度独立记录。
+- **共享方式**：scene story sharing 需按 spec-040 的 ownership 决策另行确认；默认用户私有，其他用户进度独立。
 - **商业边界**：基础模板和手写免费；当前实现里 AI draft 走 Pro-only，credits 扣费需等价格决策后另接。
 
-因此，`spec-026` 只代表基础 story beat 框架；自建角色剧情线、剧情包、AI 辅助和手动完成由 `spec-029` 承接。
+因此，`spec-026` 只代表基础 story beat 框架；剧情包、AI 辅助和手动完成能力由 `spec-029` 承接；Scene 页面入口、`story_id` 和 Talk/Story 边界由 `spec-040` 约束。
 
 ---
 
@@ -197,10 +197,10 @@
   - S-η：官方角色轻量 arc seed（每角色 3-5 拍）+ 主页/场景剧情钩子
   - S-θ：事件 resolve / chat / activity 完成后统一跑阶段解锁与 beat 推进，保证“100% 有反馈”
 
-- **阶段 2b — 自建角色剧情规模化**
-  - S-κ：自建角色 story setup（剧情包 / 自写 / AI 辅助 / 跳过）
-  - S-λ：Story panel + 轻量 beat editor + 手动完成 / reopen
-  - S-μ：公开自建 companion 时可选共享 story arcs
+- **阶段 2b — Scene story authoring 规模化**
+  - S-κ：Scene `Create story`（剧情包 / 自写 / AI 辅助 / 跳过）
+  - S-λ：Scene story editor + 轻量 task editor + 手动完成 / reopen
+  - S-μ：Scene story sharing / official preset governance（待 ownership 决策）
 
 - **阶段 3 — 增味**
   - S-ι：Chat Moment Images（场景聊天瞬间图；小相机按钮 + prompt snapshot + image job）
@@ -230,4 +230,4 @@
 - 不取代 `gameplay.md` / `daily-life-sim.md`，而是**指出它们已设计、但未在体验层兑现**的部分，并补上"剧情冒险"维度。
 - 阶段 0 与 spec-012/018（UI）强相关，是其内容的具体化。
 - 阶段 1-2 的剧情骨架是 `events` 模块（spec-008）的"内容 + 编排"延伸。
-- `spec-026` 是 story beat 基础设施与官方 seed 示例；`spec-028` 解决“下一步按钮和引导不清楚”；`spec-029` 解决自建角色剧情包、AI 辅助和手动完成。
+- `spec-026` 是 story beat 基础设施与官方 seed 示例；`spec-028` 解决“下一步按钮和引导不清楚”；`spec-029` 保留剧情包、AI 辅助和手动完成能力；`spec-040` 将 story authoring 入口迁移到 Scene 并定义 `scene_id` / `chat_mode` / `story_id` 边界。

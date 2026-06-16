@@ -19,6 +19,7 @@ import type {
   BaseArtPromptAssistResponse,
   BillingStatusResponse,
   ChatHistoryResponse,
+  ChatMode,
   ChatVoiceSettingsResponse,
   CompanionCutoutResponse,
   ChatMessageInput,
@@ -69,6 +70,12 @@ import type {
   EventsListResponse,
   InviteTargetsResponse,
   SceneEnterResponse,
+  SceneStoriesResponse,
+  SceneStoryInput,
+  SceneStoryInviteCompanionsResponse,
+  SceneStoryInviteResponse,
+  SceneStoryResponse,
+  SceneStoryUpdateInput,
   ScenesListResponse,
   SelectVariantResponse,
   SseEvent,
@@ -533,6 +540,105 @@ export async function enterScene(sceneId: string): Promise<SceneEnterResponse> {
   return requestJson<SceneEnterResponse>(`/scenes/${encodeURIComponent(sceneId)}/enter`, {
     method: 'POST',
   });
+}
+
+export async function listSceneStories(sceneId: string, companionId?: string | null): Promise<SceneStoriesResponse> {
+  const params = new URLSearchParams();
+  if (companionId) params.set('companion_id', companionId);
+  const query = params.toString();
+  return requestJson<SceneStoriesResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/stories${query ? `?${query}` : ''}`,
+  );
+}
+
+export async function getSceneStory(
+  sceneId: string,
+  storyId: string,
+  companionId?: string | null,
+): Promise<SceneStoryResponse> {
+  const params = new URLSearchParams();
+  if (companionId) params.set('companion_id', companionId);
+  const query = params.toString();
+  return requestJson<SceneStoryResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/stories/${encodeURIComponent(storyId)}${query ? `?${query}` : ''}`,
+  );
+}
+
+export async function createSceneStory(sceneId: string, input: SceneStoryInput): Promise<SceneStoryResponse> {
+  return requestJson<SceneStoryResponse>(`/scenes/${encodeURIComponent(sceneId)}/stories`, {
+    body: JSON.stringify(input),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export async function updateSceneStory(
+  sceneId: string,
+  storyId: string,
+  input: SceneStoryUpdateInput,
+): Promise<SceneStoryResponse> {
+  return requestJson<SceneStoryResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/stories/${encodeURIComponent(storyId)}`,
+    {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'PATCH',
+    },
+  );
+}
+
+export async function completeSceneStoryTask(
+  sceneId: string,
+  storyId: string,
+  taskId: string,
+  companionId: string,
+): Promise<SceneStoryResponse> {
+  return requestJson<SceneStoryResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/stories/${encodeURIComponent(storyId)}/tasks/${encodeURIComponent(taskId)}/complete`,
+    {
+      body: JSON.stringify({ companion_id: companionId }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function reopenSceneStoryTask(
+  sceneId: string,
+  storyId: string,
+  taskId: string,
+  companionId: string,
+): Promise<SceneStoryResponse> {
+  return requestJson<SceneStoryResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/stories/${encodeURIComponent(storyId)}/tasks/${encodeURIComponent(taskId)}/reopen`,
+    {
+      body: JSON.stringify({ companion_id: companionId }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
+}
+
+export async function listSceneStoryInviteCompanions(sceneId: string): Promise<SceneStoryInviteCompanionsResponse> {
+  return requestJson<SceneStoryInviteCompanionsResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/story-invite-companions`,
+  );
+}
+
+export async function inviteCompanionToSceneStory(
+  sceneId: string,
+  storyId: string,
+  companionId: string,
+  message?: string | null,
+): Promise<SceneStoryInviteResponse> {
+  return requestJson<SceneStoryInviteResponse>(
+    `/scenes/${encodeURIComponent(sceneId)}/stories/${encodeURIComponent(storyId)}/invite`,
+    {
+      body: JSON.stringify({ companion_id: companionId, message }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    },
+  );
 }
 
 export async function getStoryMoment(companionId: string, sceneId: string): Promise<StoryMomentResponse> {
@@ -1303,11 +1409,12 @@ export async function editChatMessage(
   companionId: string,
   messageId: string,
   text: string,
+  input: { chat_mode?: ChatMode; story_id?: string } = {},
 ): Promise<EditMessageResponse> {
   return requestJson<EditMessageResponse>(
     `/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/edit`,
     {
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ ...input, text }),
       headers: { 'content-type': 'application/json' },
       method: 'POST',
     },
@@ -1342,11 +1449,12 @@ export async function selectMessageVariant(
 export async function* regenerateChatMessage(
   companionId: string,
   messageId: string,
+  input: { chat_mode?: ChatMode; story_id?: string } = {},
   signal?: AbortSignal,
 ): AsyncIterable<SseEvent> {
   yield* streamChatSse(
     `${API_BASE_URL}/chat/${encodeURIComponent(companionId)}/messages/${encodeURIComponent(messageId)}/regenerate`,
-    undefined,
+    input,
     signal,
   );
 }
@@ -1369,7 +1477,7 @@ const IDLE_TIMEOUT_MS = 20000;
 
 async function* streamChatSse(
   url: string,
-  body: ChatMessageInput | undefined,
+  body: ChatMessageInput | { chat_mode?: ChatMode; story_id?: string } | undefined,
   externalSignal?: AbortSignal,
 ): AsyncIterable<SseEvent> {
   const headers = new Headers();

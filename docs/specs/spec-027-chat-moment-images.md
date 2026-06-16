@@ -1,12 +1,12 @@
 # spec-027: Chat Moment Images（场景聊天瞬间图）
 
-> **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-007(scenes), spec-014/024(life + HUD), spec-020/022(image-gen), spec-026(story beats)  |  **估时：** 3-5 天  |  **状态：** 🟡 in-progress
+> **类型：** 后端 + 前端 + image-gen 接线  |  **依赖：** spec-006(chat), spec-007(scenes), spec-014/024(life + HUD), spec-020/022(image-gen), spec-026(story beats), spec-040(scene/mode split)  |  **估时：** 3-5 天  |  **状态：** 🟡 in-progress
 
 ---
 
 ## Context
 
-当前聊天已经能携带 `scene_id`、`activity_id`、relationship stage、每轮 emotion/signals；spec-026 又让 scene 能返回 companion 当前 story beat。下一步可以把这些上下文转成一张“这一刻”的场景图，让用户在对话里产生更强的共同经历感。
+当前聊天已经能携带 `scene_id`、`activity_id`、relationship stage、每轮 emotion/signals；spec-026 又让 Story mode 能消费 companion 当前 story beat。下一步可以把这些上下文转成一张“这一刻”的场景图，让用户在对话里产生更强的共同经历感。根据 spec-040，`scene_id` 本身只代表物理场景；只有 Story mode 才把 active story beat 纳入上下文。
 
 典型体验：
 
@@ -19,7 +19,7 @@
 ### 目标
 
 - 在有 scene context 的聊天中，最新 companion 回复旁显示生成按钮。
-- 根据最近一轮聊天内容 + scene + time slot + companion + activity + relationship stage + emotion/status + active story beat 规则拼接 prompt。
+- 根据最近一轮聊天内容 + scene + time slot + companion + activity + relationship stage + emotion/status 规则拼接 prompt；若当前为 Story mode 且存在 active story beat，再加入 story beat。
 - 生成图片 job，完成后把图片挂回来源 message，作为可回看的 moment。
 - 复用现有 `image_generation_jobs`、provider、RunningHub workflow 配置和 mock provider。
 - 为后续回忆相册、scene history、companion gallery 留出数据字段。
@@ -72,7 +72,7 @@ v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由
 - `scene privacy / venue`（v1.5）：由 scene tags 推断、无 DB 改动。tags 含 `intimate / bedroom / hotel / home` 或无 scene（Private chat）→ private，否则 public；场所分 8 桶（nightlife / bedroom / home_private / dining / beach(预留) / active / outdoor_public / indoor_quiet），驱动 LLM 场所化换装与预设兜底造型。
 - `emotion/status`：来源 message 的 emotion，如 `warm / playful / guarded / tense / annoyed`，映射为画面状态。
 - `activity`：若聊天来自 activity，加入 `activity_type`、`activity_hint`、daily mood/availability。
-- `story_beat`：若当前 scene 有 active story beat，加入 `title / objective`，但不强行剧透未完成内容。
+- `story_beat`：仅当当前 chat 是 Story mode 且有 active story beat 时，加入 `title / objective`，但不强行剧透未完成内容。Talk mode 即使有 `scene_id` 也不加入 story beat。
 
 ### Visual Action Extraction
 

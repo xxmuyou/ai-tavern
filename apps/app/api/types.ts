@@ -269,6 +269,8 @@ export type ChatEmotionKey =
 
 export type NonNeutralChatEmotionKey = Exclude<ChatEmotionKey, 'neutral'>;
 
+export type ChatMode = 'talk' | 'story';
+
 export type CompanionDetail = {
   appearance: string | null;
   art_emotions: Partial<Record<ChatEmotionKey, string>> | null;
@@ -688,6 +690,85 @@ export type StoryBeatResponse = {
   beat: StoryBeat;
 };
 
+export type SceneStorySourceType = 'official_preset' | 'user_written' | 'ai_assisted';
+export type SceneStoryTaskStatus = 'locked' | 'active' | 'completed';
+
+export type SceneStoryTask = {
+  ai_guidance: string;
+  completion_hint: string | null;
+  id: string;
+  objective: string;
+  order: number;
+  status: SceneStoryTaskStatus;
+  title: string;
+};
+
+export type SceneStory = {
+  can_edit: boolean;
+  current_task: SceneStoryTask | null;
+  id: string;
+  progress_percent: number;
+  scene_id: string;
+  source_type: SceneStorySourceType;
+  synopsis: string | null;
+  task_count: number;
+  tasks?: SceneStoryTask[];
+  title: string;
+};
+
+export type SceneStoriesResponse = {
+  stories: SceneStory[];
+};
+
+export type SceneStoryResponse = {
+  story: SceneStory;
+};
+
+export type SceneStoryTaskInput = {
+  ai_guidance: string;
+  completion_hint?: string | null;
+  objective: string;
+  title: string;
+};
+
+export type SceneStoryInput = {
+  synopsis?: string | null;
+  tasks: SceneStoryTaskInput[];
+  title: string;
+};
+
+export type SceneStoryUpdateInput = {
+  synopsis?: string | null;
+  tasks?: SceneStoryTaskInput[];
+  title?: string;
+};
+
+export type SceneStoryInviteCompanion = {
+  art_url: string | null;
+  id: string;
+  level: string | null;
+  name: string;
+  relationship_role: string | null;
+  source: CompanionSource;
+};
+
+export type SceneStoryInviteCompanionsResponse = {
+  companions: SceneStoryInviteCompanion[];
+};
+
+export type SceneStoryInviteResponse = {
+  accepted: boolean;
+  chat: null | {
+    chat_mode: 'story';
+    companion_id: string;
+    scene_id: string;
+    story_id: string;
+  };
+  reason: string;
+  reply: string;
+  story: SceneStory;
+};
+
 export type SceneCompanionPresent = {
   active_story_beat: StoryBeat | null;
   art_cutout_url?: string | null;
@@ -829,6 +910,8 @@ export type ChatHistoryResponse = {
 
 export type ChatMessageInput = {
   activity_id?: string;
+  chat_mode?: ChatMode;
+  story_id?: string;
   scene_id?: string;
   persona_id?: string;
   // spec-036: when set, this turn carries an invitation to go to that scene.

@@ -51,10 +51,10 @@
 | 023 | [Admin Workspace（管理员工作台：积分查看/调整）](./spec-023-admin-workspace.md) | 新建 | 009, 021 | 2-3 天 | 🟡 in-progress（积分端点 + 单测落地；工作台已扩展 Settings/图像模型/表情/LLM，见 [ops/admin-settings-workspace](../ops/admin-settings-workspace.md)） |
 | 024 | [聊天内关系可见化 + 每轮反馈（沉浸感阶段 0）](./spec-024-in-chat-relationship-feedback.md) | 前端接线 | 006, 005, 012 | 2-3 天 | 🟡 in-progress（两端接线+HUD+每轮反馈已落地，typecheck/lint 通过，待运行端到端验证） |
 | 025 | [角色深度 + 解锁系统（沉浸感阶段 1）](./spec-025-character-depth-and-unlocks.md) | 后端+前端 | 004, 006, 005, 013, 019, 024 | 6-9 天 | 🟡 in-progress（persona 字段+prompt 强化+解锁系统全链路已落地，API 366 单测通过、两端 typecheck/lint 通过，待运行端到端验证；表情/场景的 Pro 门禁见实现记录待确认） |
-| 026 | [Companion Story Beats（角色剧情拍框架）](./spec-026-companion-story-beats.md) | 后端+前端+内容 | 005, 006, 007, 008, 024, 025 | 4-6 天 | 🟢 done（基础 story beat 框架、scene active beat、chat prompt 注入、官方示例 seed 已完成；自建角色剧情见 029） |
-| 027 | [Chat Moment Images（场景聊天瞬间图）](./spec-027-chat-moment-images.md) | 后端+前端+image-gen | 006, 007, 020, 022, 024, 026 | 3-5 天 | 🟡 in-progress（最新 companion 回复旁小相机按钮；根据聊天/行为/场景/时间/人物/状态生成完整场景图） |
+| 026 | [Companion Story Beats（角色剧情拍框架）](./spec-026-companion-story-beats.md) | 后端+前端+内容 | 005, 006, 007, 008, 024, 025 | 4-6 天 | 🟢 done（基础 story beat 框架、scene active beat、Story mode prompt 注入口径见 040；官方示例 seed 已完成；自建角色剧情见 029） |
+| 027 | [Chat Moment Images（场景聊天瞬间图）](./spec-027-chat-moment-images.md) | 后端+前端+image-gen | 006, 007, 020, 022, 024, 026, 040 | 3-5 天 | 🟡 in-progress（最新 companion 回复旁小相机按钮；根据聊天/行为/场景/时间/人物/状态生成完整场景图，Story mode 才附加 story beat） |
 | 028 | [剧情引导与行动按钮重构（Web 优先）](./spec-028-guided-story-actions-ui.md) | 前端体验/UI | 024, 025, 026 | 2-3 天 | 🟡 in-progress（统一剧情拍/关系目标/日常状态的下一步引导，重排 Today/Scene/Chat 行动按钮） |
-| 029 | [User-created Story Arcs（自建角色剧情线与剧情包）](./spec-029-user-created-story-arcs.md) | 后端+前端+LLM+内容 | 002, 010, 019, 021, 026, 028 | 5-8 天 | 🟡 in-progress（自建角色剧情包、轻量编辑、Pro-only AI draft、手动完成节点、公开角色可选共享已接线；待端到端 QA） |
+| 029 | [User-created Story Arcs（自建/用户剧情线与剧情包）](./spec-029-user-created-story-arcs.md) | 后端+前端+LLM+内容 | 002, 010, 019, 021, 026, 028, 040 | 5-8 天 | 🟡 in-progress（模板、轻量编辑、Pro-only AI draft、手动完成节点可复用；入口迁移到 Scene `Create story`，不再作为 companion create 尾部步骤） |
 | 030 | [Chat Outfit Images（聊天换衣服图）](./spec-030-chat-outfit-images.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 2-4 天 | 📝 draft（companion 消息下换衣服；推荐穿搭/自定义 prompt；一次性聊天图片，不改角色长期图片） |
 | 031 | [Companion 抠图与瞬间图合成（精简表情立绘 + 干净底图 + 聊天时 matting）](./spec-031-companion-cutout-moment-compositing.md) | 后端+前端+image-gen | 006, 020, 022, 027 | 4-6 天 | 🟢 done（WF2 表情立绘已退役返回 410 保数据；干净底图直接展示；cutout 工作流 + 聊天时 matting + 瞬间图合成已落地，见 commit "Implement companion cutout moment workflow"；情绪只驱动 UI） |
 | 032 | [Web Public Companion Discovery Home（暗色首页 + 公开角色发现 + 风格标签收敛）](./spec-032-web-public-companion-discovery-home.md) | Web UI+API+内容标签 | 017, 018, 019, 022 | 2-4 天 | 🟡 in-progress（未登录首页直接展示真实 companions；用户侧与 Admin 主分类只保留 Anime/Realistic） |
@@ -65,8 +65,9 @@
 | 037 | [Voice Labels, Image Job Continuity, and Scene Invite QA](./spec-037-voice-image-invite-polish.md) | 文档+前端+QA | 027, 033, 036 | 1-2 天 | 📝 draft（voice 标签按语言展示；moment/profile outfit 切页后继续轮询；scene invite 可见性与部署核查收口） |
 | 038 | [Web 场景沉浸、待到达切换与解锁反馈](./spec-038-web-scene-immersion-and-unlocks.md) | Web 前端+API/types+文档治理 | 024, 025, 031, 036, 037 | 3-5 天 | 📝 draft（Web 邀约 accepted 后改为 pending arrival；场景舞台 + companion cutout + 停靠聊天面板；解锁/成就显著 overlay） |
 | 039 | [Admin 用户数据看板（Web，本地验证优先）](./spec-039-admin-analytics-dashboard.md) | Web 前端+admin API+文档 | 018, 023, 010, 021 | 2-4 天 | 🟡 in-progress（Analytics 面板、overview + recent_signup 分页端点、文档与本地自动验证已落地；待本地手工验收，不发 dev） |
+| 040 | [Chat Scene, Talk Mode, and Story Mode Decoupling](./spec-040-chat-scene-talk-story-modes.md) | 文档治理+后端+前端 | 006, 007, 026, 028, 036, 038 | 3-5 天 | 📝 draft（`scene_id` 只表示物理场景；`chat_mode` 决定 Talk/Story；有故事才注入；scene roster 只过滤无头像，不动态补位） |
 
-**估时总计：** 约 64-94 工程日（不含美术、QA、市场准备）
+**估时总计：** 约 67-99 工程日（不含美术、QA、市场准备）
 
 ---
 
@@ -85,11 +86,11 @@
 - **H 路径（自创角色商业化）：** 019 → 021 → 020 → 022，先完成创建 UI 和积分账本，再接角色美术生成；spec-020 用 mock provider 跑通链路（文生图创建 + 风格 + 表情变体 + 透明背景 + 编辑接口），spec-022 接入首个真实 image gen provider（RunningHub，workflow contract 校验节点字段 + checkpoint/LoRA 资产目录 + Anime/Realistic asset lanes）。积分账本（021）落地后可并行开 spec-023（管理员查看/调整用户积分）
 - **I 路径（管理员后端）：** 011（LLM 端点，已 done）+ 023（积分查看/调整），管理员后端能力统一沿用 `requireAdminUser` 与 `admin/` 分派模式，UI 归 spec-018
 - **I2 路径（管理员分析）：** 018 + 023 + 010 + 021 → 039。先复用 admin workspace 与现有 billing / credits 口径，再补 Web 侧 Analytics 概览、趋势和最近注册明细分页；第一版止于本地验证，不直接发 dev。
-- **J 路径（自建角色剧情）：** 019 → 026 → 028 → 029。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 让自建角色拥有剧情包、用户自写 arc、AI 辅助草稿与手动完成机制。自建角色不再按“纯 sandbox + 数值”作为长期路线。
+- **J 路径（Scene story authoring）：** 026 → 028 → 029 → 040。spec-026 提供通用 story beat 基础设施，spec-028 负责把下一步行动讲清楚，spec-029 保留剧情包、用户自写、AI 辅助草稿与手动完成机制，spec-040 将入口迁移到 Scene `Create story` 并定义 `scene_id` / `chat_mode` / `story_id` 边界。companion create 不再承载 Make story 尾部步骤。
 - **K 路径（图片动作）：** 027 → 031 → 033。spec-027 先跑通聊天内异步图片生成、job 轮询与回看模式；spec-031 重构出图源和 cutout；spec-033 将换装从聊天动作迁移到 profile 图片管理。spec-030 的聊天换装后端保留为 legacy/deprecated，不再作为新 UI 入口。
 - **L 路径（Web 上线首页）：** 018 → 032。spec-032 是 web 首页收口：未登录也展示公开 companion discovery；mobile 不动；用户侧与 Admin 主分类都收敛为 Anime/Realistic。
 - **M 路径（聊天质量治理）：** 006 → 025 → 026/029 → 034。spec-034 不阻塞 image-gen，但阻塞聊天体验验收；上线前至少要完成 prompt 分层、post-history guard、单线程 memory 注入与 prompt debug。
-- **N 路径（聊天沉浸感手感）：** 024 → 035 → 036 → 037 → 038。spec-035 修关系进度"看得见、升得上去"（实测卡 Familiar 进度 0% 的手感缺陷）；spec-036 在其修正后的关系引擎上，把"聊天里约去某地"接成真正的场景切换（同意才切、拒绝不切、越界邀约扣分）；spec-037 收口 voice 标签、图片 job 持续轮询和场景邀请线上可见性；spec-038 将 Web 端 accepted 后的切换改为 pending arrival，并重做场景舞台、cutout 展示与解锁反馈。
+- **N 路径（聊天沉浸感手感）：** 024 → 035 → 036 → 037 → 038 → 040。spec-035 修关系进度"看得见、升得上去"（实测卡 Familiar 进度 0% 的手感缺陷）；spec-036 在其修正后的关系引擎上，把"聊天里约去某地"接成真正的场景切换（同意才切、拒绝不切、越界邀约扣分）；spec-037 收口 voice 标签、图片 job 持续轮询和场景邀请线上可见性；spec-038 将 Web 端 accepted 后的切换改为 pending arrival，并重做场景舞台、cutout 展示与解锁反馈；spec-040 则把 `scene_id` 从 Story mode 中解耦，明确 Talk/Story 两种聊天模式都可以发生在同一物理场景中。
 
 ---
 

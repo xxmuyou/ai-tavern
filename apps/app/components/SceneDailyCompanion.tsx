@@ -18,7 +18,7 @@ export function SceneDailyCompanion({ companion, sceneArt, sceneId }: SceneDaily
   const { data, error, isLoading } = useDailyState(companion.id);
 
   function openChat() {
-    const params = new URLSearchParams({ sceneId });
+    const params = new URLSearchParams({ chatMode: 'story', sceneId });
     if (sceneArt) params.set('sceneArt', sceneArt);
     router.push(`/chat/${encodeURIComponent(companion.id)}?${params.toString()}` as Href);
   }

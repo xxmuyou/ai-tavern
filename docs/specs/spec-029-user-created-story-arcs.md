@@ -2,6 +2,8 @@
 
 > **类型：** 后端 + 前端 + LLM + 内容模板  |  **依赖：** spec-002(LLM), spec-010/021(entitlements + credits), spec-019(companion creation), spec-026(story beats), spec-028(guided action UI)  |  **估时：** 5-8 天  |  **状态：** 🟡 in-progress
 
+> **2026-06-16 entry-point update：** 见 [spec-040](./spec-040-chat-scene-talk-story-modes.md)。`Make story` / story authoring 不再作为 companion create 的最后一步。故事编辑入口迁移到 Scene 页面：用户在某个 scene 下选择官方 preset story 或点击 `Create story` 创建私有 scene story。本文档中关于模板、手写、AI 辅助、任务编辑和进度的能力仍可复用，但 UI 入口不再挂在创角流程末尾。
+
 ---
 
 ## Context
@@ -10,15 +12,15 @@
 
 `spec-026` 已经提供了通用 `companion_story_beats` / `user_story_progress` 框架，但它的交付切片主要验证官方 seed beat 与 scene/chat 接线。当时写的“自创角色可无 beat”只代表该 spec 的范围边界，不代表当前产品方向。
 
-本 spec 负责补上自建角色剧情路线：用户创建角色后，可以选择剧情包、自己写轻量剧情线，或用 AI 辅助生成 3-5 个 story beats；推进时由用户手动标记完成，避免聊天一轮后系统误判剧情已经结束。
+本 spec 负责补上用户自定义剧情能力：用户可以在 Scene 页面选择剧情包、自己写轻量剧情线，或用 AI 辅助生成 3-5 个 story tasks/beats；推进时由用户或系统明确的 story action 标记完成，避免聊天一轮后系统误判剧情已经结束。
 
 ## 目标 / 非目标
 
 ### 目标
 
-- 自建 companion 可以拥有一条或多条 user-owned story arc。
+- 用户可以在 scene 下拥有一条或多条 user-owned story。
 - 提供官方剧情包模板，例如 `Slow Burn Romance`、`Healing Trust`、`Workplace Tension`、`Mystery Stranger`。
-- 支持轻量编辑：arc title、beat title、scene、objective、opener、stage gate、排序。
+- 支持轻量编辑：story title、task title、objective、opener/intro、stage gate、排序。
 - 支持 AI 辅助：用户选择剧情包或写一句 outline，LLM 草拟 3-5 个 beats，用户确认后保存。
 - 剧情完成改为用户显式操作：`Mark as done` / `Reopen`。
 - 公开用户自建 companion 时，story arc 默认私有，可选择共享为只读剧情线。
@@ -29,10 +31,12 @@
 - ❌ 不做复杂分支、失败线、多结局或长期记忆自动改写。
 - ❌ 不让 LLM 自动判断 beat 是否完成。
 - ❌ 不做完整公开角色市场、审核后台或商业分成。
-- ❌ 不替换官方 companion 的 authored story seed；官方线仍可按内容团队方式维护。
+- ❌ 不替换官方 scene preset story；官方线仍可按内容团队方式维护。
 - ❌ 不重写 spec-028 的按钮布局；本 spec 只提供可被引导 UI 消费的剧情数据和完成动作。
 
 ## 数据模型
+
+> **Compatibility note:** 本节的 `companion_story_arcs` / `companion_story_beats` 模型是早期 companion-owned story 设计与 legacy fallback。新入口以 [spec-040](./spec-040-chat-scene-talk-story-modes.md) 的 `scene_stories` / `scene_story_tasks` / `user_scene_story_progress` 为准：story authoring 属于 Scene，progress scope 为 `user + story + companion`。除非明确做 legacy 迁移，不应再把 companion create 结束后导向这里。
 
 新增 arc 分组表：
 
@@ -141,12 +145,12 @@ ALTER TABLE companion_story_beats ADD COLUMN completion_mode TEXT NOT NULL DEFAU
 
 ### UI
 
-- Companion 创建完成后增加一步 `Set up their story`：
+- Scene 页面增加 `Create story`，故事编辑不放在 companion create 的最后一步：
   - `Use a story pack`
   - `Write my own`
   - `Ask AI to draft`
   - `Skip for now`
-- Companion detail 增加 Story panel：
+- Scene story editor：
   - 当前 active beat、下一目标、完成状态。
   - 轻量编辑入口。
   - `Mark as done` / `Reopen`。
@@ -154,7 +158,7 @@ ALTER TABLE companion_story_beats ADD COLUMN completion_mode TEXT NOT NULL DEFAU
   - 有 active beat 时主 CTA 是 `Continue story`。
   - beat 内显示明确 objective。
   - 完成只能由用户点击 `Mark as done`，不会因为一轮聊天自动跳下一拍。
-- 发布公开自建 companion 时增加 `Share story arcs` toggle，默认关闭。
+- 发布/分享策略待 spec-040 的 scene story ownership 决策确认后再接，不从 companion create 强行暴露。
 
 ## 实施步骤
 
@@ -162,14 +166,14 @@ ALTER TABLE companion_story_beats ADD COLUMN completion_mode TEXT NOT NULL DEFAU
 2. Seed：写入 4-6 个基础 story arc templates。
 3. API：实现 arc list、from-template、assist draft、beat edit、complete、reopen。
 4. LLM：新增 `story_beat_assist` prompt、schema validation、Pro entitlement 检查。
-5. UI：创角后 story setup、companion detail Story panel、chat/scene 的手动完成入口。
+5. UI：Scene page `Create story`、scene story editor、chat/scene 的手动完成入口。
 6. Completion：对 UI-managed/user-owned arc 禁用旧自动完成；保留旧 official fallback，后续可统一迁移为 manual。
 7. Publish：公开自建 companion 时保存共享开关；非 owner 只读 shared arc。
 
 ## 验证
 
-1. 用户创建 companion 后可跳过 story setup，角色仍可 sandbox chat。
-2. 用户从 template 创建 arc 后，scene/chat 能看到 active beat。
+1. 用户创建 companion 后不会被强制进入 story setup，角色仍可 sandbox chat。
+2. 用户在 Scene 页面从 template 创建 story 后，scene/chat 能看到 active task/beat。
 3. AI assist 返回 draft，不自动保存；确认后才落库。
 4. 非 owner 不能读 private arc，不能编辑 shared arc。
 5. `Mark as done` 后返回下一 beat 或等待 stage 目标；`Reopen` 后可恢复。

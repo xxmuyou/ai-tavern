@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { clearStoredAuthSession, sendChatMessage } from '@/api/companion-client';
-import type { ChatInviteResult, ChatQuickActionResult, ChatUnlock, RelationshipDimensions } from '@/api/types';
+import type { ChatInviteResult, ChatMode, ChatQuickActionResult, ChatUnlock, RelationshipDimensions } from '@/api/types';
 import {
   ApiError,
   NetworkError,
@@ -35,7 +35,9 @@ export type ChatStreamCallbacks = {
 
 export type SendOptions = ChatStreamCallbacks & {
   activityId?: string;
+  chatMode?: ChatMode;
   sceneId?: string;
+  storyId?: string;
   personaId?: string;
   inviteSceneId?: string;
   quickAction?:
@@ -134,10 +136,12 @@ export function useChatStream(companionId: string): UseChatStreamResult {
       try {
         const stream = sendChatMessage(companionId, {
           activity_id: options.activityId,
+          chat_mode: options.chatMode,
           invite_scene_id: options.inviteSceneId,
           persona_id: options.personaId,
           quick_action: options.quickAction,
           scene_id: options.sceneId,
+          story_id: options.storyId,
           text,
         }, controller.signal);
         for await (const event of stream) {

@@ -29,24 +29,23 @@ export default function WebScenesScreen() {
   const scenes = data?.scenes ?? [];
   const unlocked = scenes.filter((s) => s.unlocked);
   const locked = scenes.filter((s) => !s.unlocked);
-  const totalCompanions = scenes.reduce((acc, s) => acc + s.potential_companions.length, 0);
 
   return (
     <WebAppShell
       title="Scenes"
-      subtitle="Walk into a room, see who is already there, and let the conversation choose its own direction."
+      subtitle="Choose a place, then start or create a story that belongs there."
     >
       <View className="mb-7">
         <Text className="font-serif text-display-sm text-white">Scenes</Text>
         <Text className="mt-2 max-w-2xl text-body-sm leading-6 text-rose-50/60">
-          Walk into a room, see who is already there, and let the conversation choose its own direction.
+          Choose a place, then start or create a story that belongs there.
         </Text>
       </View>
 
       <View className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <WebStat eyebrow="Total" value={String(scenes.length)} description="Locations open to you" icon={<Ionicons color={PALETTE.roseDeep} name="map-outline" size={16} />} />
         <WebStat eyebrow="Unlocked" value={String(unlocked.length)} description="Free to step into" icon={<Ionicons color={PALETTE.success} name="lock-open-outline" size={16} />} />
-        <WebStat eyebrow="Companions" value={String(totalCompanions)} description="Across the city" icon={<Ionicons color={PALETTE.ember} name="people-outline" size={16} />} />
+        <WebStat eyebrow="Stories" value="Scene-owned" description="Pick or create one inside" icon={<Ionicons color={PALETTE.ember} name="book-outline" size={16} />} />
       </View>
 
       {error ? (
@@ -126,9 +125,7 @@ function SceneTile({ onPress, scene }: { onPress: () => void; scene: Scene }) {
         <View className="absolute right-4 top-4">
           {scene.unlocked ? (
             <View className="rounded-full border border-white/10 bg-black/65 px-3 py-1">
-              <Text className="text-caption font-semibold text-white">
-                {scene.potential_companions.length} companion{scene.potential_companions.length === 1 ? '' : 's'}
-              </Text>
+              <Text className="text-caption font-semibold text-white">Stories</Text>
             </View>
           ) : (
             <View className="flex-row items-center gap-1.5 rounded-full bg-app-twilight px-3 py-1">

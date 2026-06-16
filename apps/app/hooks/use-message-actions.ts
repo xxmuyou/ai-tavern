@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { getMessageVoice, regenerateChatMessage, selectMessageVariant } from '@/api/companion-client';
-import type { ChatMessage } from '@/api/types';
+import type { ChatMessage, ChatMode } from '@/api/types';
 import { playAudioUrl } from '@/utils/play-audio';
 
 type HistoryLike = {
@@ -37,6 +37,8 @@ export function useMessageActions(
   onError?: (message: string) => void,
   onQuotaExceeded?: () => void,
   streaming?: StreamingMessageLike,
+  chatMode?: ChatMode,
+  storyId?: string | null,
 ): UseMessageActionsResult {
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
@@ -55,7 +57,7 @@ export function useMessageActions(
       let didFinish = false;
       beginStreamingExistingCompanionMessage?.(messageId);
       try {
-        for await (const event of regenerateChatMessage(companionId, messageId)) {
+        for await (const event of regenerateChatMessage(companionId, messageId, { chat_mode: chatMode, story_id: storyId ?? undefined })) {
           if (event.type === 'chunk') {
             const delta = (event.data as { text?: string } | undefined)?.text ?? '';
             if (delta) {
@@ -108,6 +110,8 @@ export function useMessageActions(
       companionId,
       finishStreamingExistingCompanionMessage,
       history,
+      chatMode,
+      storyId,
       onError,
       pushStreamingCompanionDelta,
       regeneratingId,

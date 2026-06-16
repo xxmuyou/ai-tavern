@@ -280,7 +280,7 @@ function SceneDirectoryCard({ onPress, scene }: { onPress: () => void; scene: Sc
         ) : null}
         <Text className="text-caption text-app-ink-soft" numberOfLines={2}>
           {scene.unlocked
-            ? `${scene.potential_companions.length} companion${scene.potential_companions.length === 1 ? '' : 's'} nearby`
+            ? 'Open this scene to choose or create a story.'
             : hint || 'Reach a relationship threshold'}
         </Text>
       </View>

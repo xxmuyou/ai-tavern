@@ -1,6 +1,7 @@
 import type { LLMMessage } from "../llm";
 import type { RelationshipStage } from "../life/types";
 import type { QuickActionForPrompt } from "../life/quick-actions";
+import type { SceneStoryPromptContext } from "../scenes/stories";
 import type { StoryBeatPublic } from "../story-beats";
 import {
   buildFinalUserMessageWithLanguageContract,
@@ -114,6 +115,8 @@ export type ChatPromptInput = {
   stage: RelationshipStage;
   // spec-026: optional authored story beat for the current companion/scene.
   storyBeat?: StoryBeatPublic | null;
+  // spec-040: selected scene-owned story task/progress for Story mode.
+  sceneStory?: SceneStoryPromptContext | null;
 };
 
 const DEFAULT_TOKEN_BUDGET = 12_000;
@@ -271,6 +274,15 @@ function buildPromptSegments(input: ChatPromptInput, languageTarget: ReplyLangua
     position: "pre_history",
     priority: 710,
     required: true,
+    role: "system",
+  });
+
+  pushSegment(segments, {
+    content: buildSceneStory(input),
+    id: "scene_story",
+    position: "pre_history",
+    priority: 695,
+    required: false,
     role: "system",
   });
 
@@ -538,6 +550,7 @@ function buildQuickAction(input: ChatPromptInput): string {
 }
 
 function buildStoryBeat(input: ChatPromptInput): string {
+  if (input.sceneStory?.task) return "";
   const { storyBeat } = input;
   if (storyBeat?.status !== "active") return "";
   const lines: string[] = [];
@@ -553,6 +566,30 @@ function buildStoryBeat(input: ChatPromptInput): string {
       "Do not claim that you and the user have already moved to another location, arrived somewhere else, or completed a physical transition. If the beat needs movement, propose it or react to the user's choice; the system will handle scene changes.",
     );
   }
+  return lines.join("\n");
+}
+
+function buildSceneStory(input: ChatPromptInput): string {
+  const sceneStory = input.sceneStory;
+  if (!sceneStory?.task) return "";
+  const { story, task } = sceneStory;
+  const lines: string[] = [];
+  lines.push("# Current scene story");
+  lines.push(`Story title: ${story.title}`);
+  if (story.synopsis) lines.push(`Story synopsis: ${story.synopsis}`);
+  lines.push(`Progress: ${story.progress_percent}%`);
+  lines.push(`Current task ${task.order}: ${task.title}`);
+  lines.push(`Task objective: ${task.objective}`);
+  lines.push(`AI guidance for this turn: ${task.ai_guidance}`);
+  if (task.completion_hint) {
+    lines.push(`Completion hint: ${task.completion_hint}`);
+  }
+  lines.push(
+    "Use only this current task as the story target. Do not reveal future tasks, skip ahead, or claim the user completed the task unless the user explicitly does it or the system marks it done.",
+  );
+  lines.push(
+    "You may create light <narration> events that support this task, but keep the user's actions under their control.",
+  );
   return lines.join("\n");
 }
 

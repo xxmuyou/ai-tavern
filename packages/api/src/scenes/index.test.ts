@@ -53,11 +53,38 @@ type StoryBeatFixture = {
   is_active?: number;
 };
 
+type SceneStoryFixture = {
+  id: string;
+  scene_id: string;
+  owner_user_id: string | null;
+  title: string;
+  synopsis?: string | null;
+  source_type?: string;
+  is_active?: number;
+  created_at?: number;
+  updated_at?: number;
+};
+
+type SceneStoryTaskFixture = {
+  id: string;
+  story_id: string;
+  task_order: number;
+  title: string;
+  objective: string;
+  ai_guidance: string;
+  completion_hint?: string | null;
+  is_active?: number;
+};
+
 type Fixtures = {
   scenes: SceneFixture[];
   companions: CompanionFixture[];
+  profileImages?: Array<{ art_key: string; companion_id: string; user_id: string }>;
   relationships: RelationshipFixture[];
   storyBeats?: StoryBeatFixture[];
+  sceneStories?: SceneStoryFixture[];
+  sceneStoryTasks?: SceneStoryTaskFixture[];
+  sceneStoryProgress?: Array<{ companion_id: string; completed_task_ids: string; current_task_id?: string | null; story_id: string; user_id: string }>;
   userSceneUnlocks?: Array<{ user_id: string; scene_id: string; source_companion_id?: string | null }>;
 };
 
@@ -82,7 +109,7 @@ describe("scenes module", () => {
   it("returns unlocked + locked scenes with hints and companions", async () => {
     const env = createEnv({
       companions: [
-        { id: "maya", name: "Maya" },
+        { art_url: "portraits/maya.webp", id: "maya", name: "Maya" },
         { id: "ryan", name: "Ryan", is_active: 0 }, // inactive should be filtered out
       ],
       relationships: [
@@ -138,13 +165,53 @@ describe("scenes module", () => {
     expect(cafe?.unlock_hint).toBeNull();
     expect(cafe?.tags).toEqual(["cafe"]);
     expect(cafe?.potential_companions).toEqual([
-      { art_cutout_url: null, art_url: null, id: "maya", level: "Friend", name: "Maya" },
+      { art_cutout_url: null, art_url: "portraits/maya.webp", id: "maya", level: "Friend", name: "Maya" },
     ]);
 
     const rooftop = body.scenes.find((s) => s.id === "rooftop");
     expect(rooftop?.unlocked).toBe(false);
     expect(rooftop?.unlock_hint).toMatch(/romance/);
     expect(rooftop?.potential_companions).toEqual([]);
+  });
+
+  it("filters no-avatar scene companions and uses profile image overrides", async () => {
+    const env = createEnv({
+      companions: [
+        { art_cutout_key: "cutouts/maya.webp", art_url: "portraits/maya.webp", id: "maya", name: "Maya" },
+        { id: "ghost", name: "Ghost" },
+        { art_cutout_key: "cutouts/iris.webp", art_url: "portraits/iris.webp", id: "iris", name: "Iris" },
+      ],
+      profileImages: [
+        { art_key: "uploads/user-1/iris-custom.webp", companion_id: "iris", user_id: "user-1" },
+      ],
+      relationships: [],
+      scenes: [
+        {
+          art_url: null,
+          default_companions: '["maya","ghost","iris"]',
+          display_order: 1,
+          id: "studio",
+          mood: "Focused",
+          name: "Studio",
+          tags: '["studio"]',
+          unlock_condition: null,
+        },
+      ],
+    });
+
+    const token = await issueDevToken(env, "player@example.com", "user-1");
+    const response = await handleScenesRequest(authedRequest("http://localhost/scenes", token), env, "/scenes");
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as {
+      scenes: Array<{
+        potential_companions: Array<{ art_cutout_url: string | null; art_url: string | null; id: string }>;
+      }>;
+    };
+    expect(body.scenes[0]?.potential_companions).toEqual([
+      { art_cutout_url: "cutouts/maya.webp", art_url: "portraits/maya.webp", id: "maya", level: null, name: "Maya" },
+      { art_cutout_url: null, art_url: "uploads/user-1/iris-custom.webp", id: "iris", level: null, name: "Iris" },
+    ]);
   });
 
   it("evaluates scene locks against the requested companion when companion_id is provided", async () => {
@@ -318,7 +385,7 @@ describe("scenes module", () => {
 
   it("returns scene + companions + null event on enter happy path", async () => {
     const env = createEnv({
-      companions: [{ id: "iris", name: "Iris" }],
+      companions: [{ art_url: "portraits/iris.webp", id: "iris", name: "Iris" }],
       relationships: [],
       scenes: [
         {
@@ -365,6 +432,7 @@ describe("scenes module", () => {
     expect(body.companions_present).toHaveLength(1);
     expect(body.companions_present[0]?.id).toBe("iris");
     expect(body.companions_present[0]).toMatchObject({ art_cutout_url: null });
+    expect(body.companions_present[0]?.art_url).toBe("portraits/iris.webp");
     expect(body.companions_present[0]?.name).toBe("Iris");
     expect(body.companions_present[0]?.opener).toContain("Iris");
     expect(body.companions_present[0]?.active_story_beat).toBeNull();
@@ -373,7 +441,7 @@ describe("scenes module", () => {
 
   it("returns an active story beat for a companion in the matching scene", async () => {
     const env = createEnv({
-      companions: [{ id: "maya", name: "Maya" }],
+      companions: [{ art_url: "portraits/maya.webp", id: "maya", name: "Maya" }],
       relationships: [{ companion_id: "maya", closeness: 0, user_id: "user-1" }],
       scenes: [
         {
@@ -434,6 +502,120 @@ describe("scenes module", () => {
       objective: "Ask about the sketch without pushing.",
     });
     expect(body.companions_present[0]?.story_moment?.choices.map((choice) => choice.id)).toContain("maya-b1:stay");
+  });
+
+  it("lists scene stories with current companion progress and hides other users' private stories", async () => {
+    const env = createEnv({
+      companions: [{ art_url: "portraits/maya.webp", id: "maya", name: "Maya" }],
+      relationships: [],
+      scenes: [
+        {
+          art_url: null,
+          default_companions: null,
+          display_order: 1,
+          id: "bookshop",
+          mood: "Rain at the windows",
+          name: "Bookshop",
+          tags: null,
+          unlock_condition: null,
+        },
+      ],
+      sceneStories: [
+        {
+          id: "official-story",
+          owner_user_id: null,
+          scene_id: "bookshop",
+          source_type: "official_preset",
+          synopsis: "A missing page is tucked into the wrong book.",
+          title: "The Missing Page",
+        },
+        {
+          id: "my-story",
+          owner_user_id: "user-1",
+          scene_id: "bookshop",
+          source_type: "user_written",
+          synopsis: "A private clue trail.",
+          title: "After Closing",
+        },
+        {
+          id: "other-story",
+          owner_user_id: "user-2",
+          scene_id: "bookshop",
+          title: "Other User Draft",
+        },
+      ],
+      sceneStoryTasks: [
+        {
+          ai_guidance: "Guide the user to ask about the torn margin.",
+          id: "official-task-1",
+          objective: "Ask where the page was found.",
+          story_id: "official-story",
+          task_order: 1,
+          title: "Find the torn margin",
+        },
+        {
+          ai_guidance: "Let the companion notice the checkout desk.",
+          id: "official-task-2",
+          objective: "Check the desk together.",
+          story_id: "official-story",
+          task_order: 2,
+          title: "Check the desk",
+        },
+        {
+          ai_guidance: "Keep the clue quiet.",
+          id: "my-task-1",
+          objective: "Choose a private shelf.",
+          story_id: "my-story",
+          task_order: 1,
+          title: "Pick a shelf",
+        },
+      ],
+      sceneStoryProgress: [
+        {
+          companion_id: "maya",
+          completed_task_ids: JSON.stringify(["official-task-1"]),
+          current_task_id: "official-task-2",
+          story_id: "official-story",
+          user_id: "user-1",
+        },
+      ],
+    });
+
+    const token = await issueDevToken(env, "player@example.com", "user-1");
+    const response = await handleScenesRequest(
+      authedRequest("http://localhost/scenes/bookshop/stories?companion_id=maya", token),
+      env,
+      "/scenes/bookshop/stories",
+    );
+
+    expect(response?.status).toBe(200);
+    const body = (await response?.json()) as {
+      stories: Array<{
+        can_edit: boolean;
+        current_task: { id: string; status: string; title: string } | null;
+        id: string;
+        progress_percent: number;
+        source_type: string;
+        task_count: number;
+        title: string;
+      }>;
+    };
+
+    expect(body.stories.map((story) => story.id)).toEqual(["official-story", "my-story"]);
+    expect(body.stories[0]).toMatchObject({
+      can_edit: false,
+      current_task: { id: "official-task-2", status: "active", title: "Check the desk" },
+      progress_percent: 50,
+      source_type: "official_preset",
+      task_count: 2,
+      title: "The Missing Page",
+    });
+    expect(body.stories[1]).toMatchObject({
+      can_edit: true,
+      current_task: { id: "my-task-1", status: "active", title: "Pick a shelf" },
+      progress_percent: 0,
+      source_type: "user_written",
+    });
   });
 });
 
@@ -546,6 +728,18 @@ function queryFirst<T>(
     return (found ?? null) as T | null;
   }
 
+  if (sql.includes("FROM scene_stories") && sql.includes("WHERE id = ?")) {
+    const [storyId, sceneId, userId] = values as [string, string, string];
+    const found = (fixtures.sceneStories ?? []).find(
+      (story) =>
+        story.id === storyId &&
+        story.scene_id === sceneId &&
+        (story.is_active ?? 1) === 1 &&
+        (story.owner_user_id === null || story.owner_user_id === userId),
+    );
+    return (found ? sceneStoryRow(found) : null) as T | null;
+  }
+
   if (sql.includes("FROM user_scene_unlocks")) {
     const [userId, sceneId] = values as [string, string];
     const found = (fixtures.userSceneUnlocks ?? []).find((row) => row.user_id === userId && row.scene_id === sceneId);
@@ -588,6 +782,20 @@ function queryFirst<T>(
     return { completed_beat_ids: "[]" } as T;
   }
 
+  if (sql.includes("FROM user_scene_story_progress")) {
+    const [userId, storyId, companionId] = values as [string, string, string];
+    const found = (fixtures.sceneStoryProgress ?? []).find(
+      (progress) =>
+        progress.user_id === userId &&
+        progress.story_id === storyId &&
+        progress.companion_id === companionId,
+    );
+    return (found ? {
+      completed_task_ids: found.completed_task_ids,
+      current_task_id: found.current_task_id ?? null,
+    } : null) as T | null;
+  }
+
   return null;
 }
 
@@ -599,21 +807,29 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
   }
 
   if (sql.includes("FROM companions c") && sql.includes("LEFT JOIN relationships r")) {
-    // values[0] = userId, values[1..] = companion ids
+    // values[0] = relationship userId, values[1] = profile image userId, values[2..] = companion ids
     const userId = values[0] as string;
-    const ids = values.slice(1) as string[];
+    const profileUserId = values[1] as string;
+    const ids = values.slice(2) as string[];
     const results = fixtures.companions
       .filter((c) => ids.includes(c.id) && (c.is_active ?? 1) === 1)
       .map((c) => {
-        const rel = fixtures.relationships.find((r) => r.user_id === userId && r.companion_id === c.id);
+        const override = (fixtures.profileImages ?? []).find(
+          (image) => image.user_id === profileUserId && image.companion_id === c.id,
+        );
+        return { companion: c, effectiveArt: override?.art_key ?? c.art_url ?? null, hasOverride: Boolean(override) };
+      })
+      .filter((entry) => entry.effectiveArt !== null)
+      .map((c) => {
+        const rel = fixtures.relationships.find((r) => r.user_id === userId && r.companion_id === c.companion.id);
         return {
-          art_url: c.art_url ?? null,
-          art_cutout_key: c.art_cutout_key ?? null,
-          gender: c.gender ?? null,
-          id: c.id,
+          art_url: c.effectiveArt,
+          art_cutout_key: c.hasOverride ? null : c.companion.art_cutout_key ?? null,
+          gender: c.companion.gender ?? null,
+          id: c.companion.id,
           level_label: rel?.level_label ?? null,
-          name: c.name,
-          source: c.source ?? "official",
+          name: c.companion.name,
+          source: c.companion.source ?? "official",
         };
       });
     return results as unknown as T[];
@@ -642,9 +858,60 @@ function queryAll<T>(sql: string, values: unknown[], fixtures: Fixtures): T[] {
       .sort((a, b) => a.beat_order - b.beat_order || a.id.localeCompare(b.id)) as unknown as T[];
   }
 
+  if (sql.includes("FROM scene_stories")) {
+    const [sceneId, userId] = values as [string, string];
+    return (fixtures.sceneStories ?? [])
+      .filter(
+        (story) =>
+          story.scene_id === sceneId &&
+          (story.is_active ?? 1) === 1 &&
+          (story.owner_user_id === null || story.owner_user_id === userId),
+      )
+      .sort((a, b) => {
+        const ownerSort = (a.owner_user_id === null ? 0 : 1) - (b.owner_user_id === null ? 0 : 1);
+        if (ownerSort !== 0) return ownerSort;
+        const updatedSort = (b.updated_at ?? 0) - (a.updated_at ?? 0);
+        return updatedSort || a.title.localeCompare(b.title);
+      })
+      .map(sceneStoryRow) as unknown as T[];
+  }
+
+  if (sql.includes("FROM scene_story_tasks")) {
+    const storyId = values[0] as string;
+    return (fixtures.sceneStoryTasks ?? [])
+      .filter((task) => task.story_id === storyId && (task.is_active ?? 1) === 1)
+      .sort((a, b) => a.task_order - b.task_order || a.id.localeCompare(b.id))
+      .map((task) => ({
+        ai_guidance: task.ai_guidance,
+        completion_hint: task.completion_hint ?? null,
+        created_at: 0,
+        id: task.id,
+        is_active: task.is_active ?? 1,
+        objective: task.objective,
+        story_id: task.story_id,
+        task_order: task.task_order,
+        title: task.title,
+        updated_at: 0,
+      })) as unknown as T[];
+  }
+
   return [];
 }
 
 function fixturesUserSceneUnlocks(env: Env) {
   return (env as unknown as { __fixtures?: Fixtures }).__fixtures?.userSceneUnlocks ?? [];
+}
+
+function sceneStoryRow(story: SceneStoryFixture) {
+  return {
+    created_at: story.created_at ?? 0,
+    id: story.id,
+    is_active: story.is_active ?? 1,
+    owner_user_id: story.owner_user_id,
+    scene_id: story.scene_id,
+    source_type: story.source_type ?? "user_written",
+    synopsis: story.synopsis ?? null,
+    title: story.title,
+    updated_at: story.updated_at ?? 0,
+  };
 }

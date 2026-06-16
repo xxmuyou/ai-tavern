@@ -7,6 +7,8 @@
 ## 实现记录（2026-06-05）
 
 > **2026-06-10 Web 口径更新：** 本实现记录中的“accepted 后立即切场景 / activity chat 自动 complete activity”是 spec-036 的历史行为。Web 新体验以 [spec-038](./spec-038-web-scene-immersion-and-unlocks.md) 为准：`invite_result.accepted === true` 只表示 companion 同意；前端创建 pending arrival，用户点击“立即到达”后才切 `scene_id` 并完成 activity。
+>
+> **2026-06-16 mode 口径更新：** 见 [spec-040](./spec-040-chat-scene-talk-story-modes.md)。邀约到达只改变物理 `scene_id`，不强制把当前 chat 切到 Story mode；Talk-in-scene 是合法状态。
 
 落地文件：
 - `scenes/invite.ts`（新）：`loadInviteTargets`（所有 active 且 `evaluateUnlock` 通过的场景 + 排除当前场景）、`resolveInviteTarget`（校验单个目标，messages 用）、`handleInviteTargetsRequest`（`GET /companions/:id/invite-targets`，含 companion 可见性校验）。
@@ -61,14 +63,14 @@
 ### 目标
 - 聊天界面内新增"邀请前往"入口 → 浮窗列出**所有 active 且已解锁场景**（排除当前所在场景）。
 - 选定并确认后，本轮把邀约作为上下文喂给大模型；大模型**在角色身份下自行决定**接受或拒绝。
-- **接受** → 切换聊天背景到目标场景预设图 + 切 `scene_id`，后续对话发生"在新场景里"。
+- **接受** → 用户确认到达后切换聊天背景到目标场景预设图 + 切 `scene_id`，后续对话发生"在新场景里"；当前 `chat_mode` 保持不变。
 - **拒绝** → 不切场景，仅展示角色（婉拒的）回复。
 - **不合适的邀约**（如关系不到位却约去亲密场景）→ 借现有每轮打分链路自然**扣关系分**（distance / tension 上升）。
 - 两端（`.tsx` / `.web.tsx`），Web 优先验收。
 
 ### 非目标
 - ❌ 重做 Scenes tab 的浏览—进入流程（保留）。
-- ❌ 进入目标场景时跑完整 `enter`（openers / 触发事件 / story beat 全套）——本 spec 走**轻量切换**：只更新活动 `scene_id` + 背景，不强插开场白/事件（后续可加）。
+- ❌ 进入目标场景时跑完整 `enter`（openers / 触发事件 / story beat 全套）——本 spec 走**轻量切换**：只更新活动 `scene_id` + 背景，不强插开场白/事件，也不强制切 Story mode（后续可加）。
 - ❌ 多人在场/群聊。
 - ❌ 新增"地点"数据模型——复用现有 `scenes` 表与 `default_companions` / `unlock_condition`。
 - ❌ 把邀约做成 `activities`/`events`（那是另一套日常/事件系统；本 spec 是轻量场景切换，不混用）。
@@ -117,7 +119,7 @@
 - 新增"邀请前往"入口（组合器附近的小按钮/图标）：点击 → `getInviteTargets(companionId, currentSceneId)` → 浮窗（Modal）列目的地（名称 + mood + 缩略图）。
 - 选中并确认 → 立即发送可见邀约动作 `<narration>I glance toward the way out, then back at you.</narration>Would you come with me to {sceneName}?`，本轮 `stream.send(text, { ..., inviteSceneId })`。
 - `use-chat-stream.ts`：新增入参 `inviteSceneId` 与回调 `onInviteResult`；解析 SSE `invite_result` 事件。
-- 收到 `accepted === true` → 更新 state：`sceneId = scene_id`、`sceneArt = scene_art_url`（PortraitBar 背景随之切换），后续轮次自动带新 `scene_id`。
+- 收到 `accepted === true` → 创建 pending arrival；用户确认到达后更新 state：`sceneId = scene_id`、`sceneArt = scene_art_url`（PortraitBar 背景随之切换），后续轮次自动带新 `scene_id`，但 `chat_mode` 保持原值。
 - `accepted === false` → 不切，仅展示角色回复；可附一行轻提示（复用 `SignalFeedback` 同款 chip："她没有答应"），不打断会话。
 
 ### 5. 类型与 API 契约
@@ -135,7 +137,7 @@
    - `pnpm --filter @app/api test` 全绿。
 2. **手测（Web 优先）：** 进角色聊天 → 点"邀请前往"：
    - 浮窗列出所有已解锁 active scenes；关系不到位的亲密场景**不出现**；
-   - 角色**同意** → 背景与 `scene_id` 切换，后续消息带新场景上下文；
+   - 角色**同意** → 用户确认到达后背景与 `scene_id` 切换，后续消息带新场景上下文，但不强制切 Story mode；
    - 角色**拒绝** → 不切，展示婉拒回复 + 轻提示；
    - 关系尚浅却邀约私密场所 → 角色拒绝 **且**该轮关系维度向负向变化（distance/tension 上升）。
 3. **Mobile：** 同样三屏渲染与切换正常。
@@ -145,11 +147,11 @@
 
 ## 完成定义
 - 聊天内可发起邀约、浮窗目的地正确过滤、大模型在角色身份下决定接受/拒绝。
-- 接受 → 背景 + scene_id 切换；拒绝 → 不切；越界邀约 → 经现有打分链路扣关系分。
+- 接受 → 用户确认后背景 + scene_id 切换，chat mode 保持不变；拒绝 → 不切；越界邀约 → 经现有打分链路扣关系分。
 - 复用 `evaluateUnlock` / `loadSceneForChat` / SSE 模式 / signal-extract 模式 / PortraitBar 背景；无新数据模型、无新依赖。
 
 ---
 
 ## 后续（不在本 spec）
-- 切换到目标场景时可选触发 opener / 场景事件 / story beat（复用 scenes `enter` 的部分逻辑）。
+- 切换到目标场景时可选触发 opener / 场景事件；story beat 只在用户进入或切换到 `chat_mode = "story"` 后注入，不能由 invite arrival 自动触发。
 - 邀约目的地的精排（按 mood / 时段 / 关系阶段推荐）。

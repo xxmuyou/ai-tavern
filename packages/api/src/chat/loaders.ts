@@ -14,6 +14,7 @@ export type ChatCompanionRow = {
   background: string | null;
   speech_style: string | null;
   relationship_role: string | null;
+  preferred_scenes: string | null;
   want: string | null;
   secret: string | null;
   boundary: string | null;
@@ -44,7 +45,7 @@ export async function loadCompanionForChat(
   return env.DB.prepare(
     `SELECT id, source, created_by, is_active,
             name, gender, voice_id, voice_speed, appearance, personality, background, speech_style, relationship_role,
-            want, secret, boundary, greeting, example_dialogues
+            preferred_scenes, want, secret, boundary, greeting, example_dialogues
      FROM companions
      WHERE id = ?`,
   )
@@ -115,6 +116,10 @@ export async function ensureThread(
 }
 
 export function parseSceneTags(raw: string | null): string[] {
+  return parseStringArray(raw);
+}
+
+export function parseStringArray(raw: string | null): string[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;

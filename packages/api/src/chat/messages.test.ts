@@ -42,6 +42,32 @@ type CompanionFixture = {
   is_active: number;
   example_dialogues?: string | null;
   greeting?: string | null;
+  preferred_scenes?: string | null;
+};
+
+type SceneFixture = {
+  art_url?: string | null;
+  display_order?: number;
+  id: string;
+  name: string;
+  mood: string;
+  tags: string | null;
+  is_active?: number;
+  unlock_condition?: string | null;
+};
+
+type StoryBeatFixture = {
+  id: string;
+  companion_id: string;
+  beat_order: number;
+  title: string;
+  stage_gate: string;
+  scene_id: string | null;
+  opener: string;
+  objective: string;
+  reward_unlock_key: string | null;
+  completion_mode?: "auto" | "manual";
+  is_active?: number;
 };
 
 type HistoryFixture = {
@@ -75,6 +101,8 @@ function createEnv(opts: {
   llmConfigSignal?: { provider: string; model: string };
   thread?: { id: string; message_count: number; summary: string | null };
   history?: HistoryFixture[];
+  scenes?: SceneFixture[];
+  storyBeats?: StoryBeatFixture[];
 }): { env: Env; state: Inserts } {
   const state: Inserts = {
     messages: [],
@@ -145,6 +173,7 @@ function createEnv(opts: {
                 greeting: opts.companion.greeting ?? null,
                 name: "Maya",
                 personality: null,
+                preferred_scenes: opts.companion.preferred_scenes ?? null,
                 relationship_role: null,
                 secret: null,
                 speech_style: null,
@@ -153,7 +182,10 @@ function createEnv(opts: {
                 want: null,
               } as unknown as T;
             }
-            if (sql.includes("FROM scenes")) return null;
+            if (sql.includes("FROM scenes")) {
+              const found = (opts.scenes ?? []).find((scene) => scene.id === values[0] && (scene.is_active ?? 1) === 1);
+              return (found ?? null) as T | null;
+            }
             if (sql.includes("FROM threads")) {
               if (!threadId) return null;
               return {
@@ -167,6 +199,9 @@ function createEnv(opts: {
             }
             if (sql.includes("FROM relationships") && sql.includes("first_met_at")) {
               return { closeness: 0, distance: 0, first_met_at: Date.now(), friendship: 0, hostility: 0, romance: 0, tension: 0, trust: 0 } as unknown as T;
+            }
+            if (sql.includes("FROM user_story_progress")) {
+              return { completed_beat_ids: "[]" } as unknown as T;
             }
             if (sql.includes("FROM llm_config")) {
               return (llmConfig.get(values[0] as string) ?? null) as T | null;
@@ -206,6 +241,34 @@ function createEnv(opts: {
                   created_at: row.created_at,
                   role: row.role,
                   scene_id: row.scene_id ?? null,
+                }));
+              return { results: rows as unknown as T[] };
+            }
+            if (sql.includes("FROM scenes")) {
+              const rows = (opts.scenes ?? [])
+                .filter((scene) => (scene.is_active ?? 1) === 1)
+                .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0) || a.id.localeCompare(b.id))
+                .map((scene) => ({
+                  art_url: scene.art_url ?? null,
+                  id: scene.id,
+                  mood: scene.mood,
+                  name: scene.name,
+                  unlock_condition: scene.unlock_condition ?? null,
+                }));
+              return { results: rows as unknown as T[] };
+            }
+            if (sql.includes("FROM companion_story_beats")) {
+              const companionId = values[0] as string;
+              const rows = (opts.storyBeats ?? [])
+                .filter((beat) => beat.companion_id === companionId && (beat.is_active ?? 1) === 1)
+                .sort((a, b) => a.beat_order - b.beat_order || a.id.localeCompare(b.id))
+                .map((beat) => ({
+                  ...beat,
+                  arc_id: null,
+                  completion_mode: beat.completion_mode ?? "auto",
+                  created_by_user_id: null,
+                  is_user_editable: 0,
+                  source_type: "official_seed",
                 }));
               return { results: rows as unknown as T[] };
             }
@@ -283,6 +346,21 @@ function nowMinuteUtc(): string {
 function buildStreamFetch(
   chunks: string[] | string[][] = ["Hello", " there"],
   onChatBody?: (body: { messages?: Array<{ content: string; role: string }> }) => void,
+  signalPayload: {
+    emotion: string;
+    signals: Record<string, number>;
+  } = {
+    emotion: "warm",
+    signals: {
+      closeness: 1,
+      distance: 0,
+      friendship: 1,
+      hostility: 0,
+      romance: 0,
+      tension: 0,
+      trust: 1,
+    },
+  },
 ): ReturnType<typeof vi.fn> {
   const attempts = (Array.isArray(chunks[0]) ? chunks : [chunks]) as string[][];
   let streamIndex = 0;
@@ -329,16 +407,8 @@ function buildStreamFetch(
           {
             message: {
               content: JSON.stringify({
-                emotion: "warm",
-                signals: {
-                  closeness: 1,
-                  distance: 0,
-                  friendship: 1,
-                  hostility: 0,
-                  romance: 0,
-                  tension: 0,
-                  trust: 1,
-                },
+                emotion: signalPayload.emotion,
+                signals: signalPayload.signals,
               }),
             },
           },
@@ -468,6 +538,363 @@ describe("handlePostMessage", () => {
     expect(promptText).not.toContain("<n narration>");
     expect(promptText).not.toContain("<x narration>");
     expect(promptText).not.toContain("<stage>");
+  });
+
+  it("defaults to Talk mode when scene_id is present and does not inject story beat", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env } = createEnv({
+      companion: COMPANION,
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "c-1",
+          id: "beat-1",
+          objective: "Find the unfinished sketch.",
+          opener: "A sketchbook is half hidden.",
+          reward_unlock_key: null,
+          scene_id: "pier_cafe",
+          stage_gate: "first_contact",
+          title: "The Sketch",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."], (body) => {
+      chatBodies.push(body);
+    }));
+
+    const response = await handlePostMessage(buildPost({ scene_id: "pier_cafe", text: "hi" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const promptText = (chatBodies[0]?.messages ?? []).map((message) => message.content).join("\n");
+    expect(promptText).toContain("# Current Scene");
+    expect(promptText).toContain("Pier Cafe");
+    expect(promptText).not.toContain("# Current story beat");
+    expect(promptText).not.toContain("Find the unfinished sketch.");
+  });
+
+  it("injects active story beat only when chat_mode is Story", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env } = createEnv({
+      companion: COMPANION,
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "c-1",
+          id: "beat-1",
+          objective: "Find the unfinished sketch.",
+          opener: "A sketchbook is half hidden.",
+          reward_unlock_key: null,
+          scene_id: "pier_cafe",
+          stage_gate: "first_contact",
+          title: "The Sketch",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."], (body) => {
+      chatBodies.push(body);
+    }));
+
+    const response = await handlePostMessage(
+      buildPost({ chat_mode: "story", scene_id: "pier_cafe", text: "hi" }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const promptText = (chatBodies[0]?.messages ?? []).map((message) => message.content).join("\n");
+    expect(promptText).toContain("# Current Scene");
+    expect(promptText).toContain("# Current story beat");
+    expect(promptText).toContain("Find the unfinished sketch.");
+  });
+
+  it("allows Story mode with a scene but no active beat without inventing story context", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env } = createEnv({
+      companion: COMPANION,
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."], (body) => {
+      chatBodies.push(body);
+    }));
+
+    const response = await handlePostMessage(
+      buildPost({ chat_mode: "story", scene_id: "pier_cafe", text: "hi" }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const promptText = (chatBodies[0]?.messages ?? []).map((message) => message.content).join("\n");
+    expect(promptText).toContain("# Current Scene");
+    expect(promptText).not.toContain("# Current story beat");
+  });
+
+  it("boosts saved and streamed relationship signals in a favorite scene", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: { ...COMPANION, preferred_scenes: '["pier_cafe"]' },
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."]));
+
+    const response = await handlePostMessage(buildPost({ scene_id: "pier_cafe", text: "hi" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(body).toContain(`event: signals\ndata: {"closeness":2`);
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      closeness: 2,
+      friendship: 2,
+      trust: 2,
+    });
+  });
+
+  it("boosts negative relationship signals too", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: { ...COMPANION, preferred_scenes: '["pier_cafe"]' },
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."], undefined, {
+      emotion: "guarded",
+      signals: {
+        closeness: 0,
+        distance: 1,
+        friendship: 0,
+        hostility: 1,
+        romance: 0,
+        tension: 1,
+        trust: -1,
+      },
+    }));
+
+    const response = await handlePostMessage(buildPost({ scene_id: "pier_cafe", text: "hi" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      distance: 2,
+      hostility: 2,
+      tension: 2,
+      trust: -2,
+    });
+  });
+
+  it("does not stack favorite-scene and story-progress boosts", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: { ...COMPANION, preferred_scenes: '["pier_cafe"]' },
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "c-1",
+          id: "beat-1",
+          objective: "Find the unfinished sketch.",
+          opener: "A sketchbook is half hidden.",
+          reward_unlock_key: null,
+          scene_id: "pier_cafe",
+          stage_gate: "first_contact",
+          title: "The Sketch",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."]));
+
+    const response = await handlePostMessage(
+      buildPost({ chat_mode: "story", scene_id: "pier_cafe", text: "hi" }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      closeness: 2,
+      friendship: 2,
+      trust: 2,
+    });
+  });
+
+  it("does not apply story-progress boost when Story mode has no active beat", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: COMPANION,
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."]));
+
+    const response = await handlePostMessage(
+      buildPost({ chat_mode: "story", scene_id: "pier_cafe", text: "hi" }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      closeness: 1,
+      friendship: 1,
+      trust: 1,
+    });
+  });
+
+  it("does not apply story-progress boost for manual story beats", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: COMPANION,
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "c-1",
+          completion_mode: "manual",
+          id: "beat-1",
+          objective: "Find the unfinished sketch.",
+          opener: "A sketchbook is half hidden.",
+          reward_unlock_key: null,
+          scene_id: "pier_cafe",
+          stage_gate: "first_contact",
+          title: "The Sketch",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."]));
+
+    const response = await handlePostMessage(
+      buildPost({ chat_mode: "story", scene_id: "pier_cafe", text: "hi" }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      closeness: 1,
+      friendship: 1,
+      trust: 1,
+    });
+  });
+
+  it("does not use scene actions as story-progress boost triggers", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: COMPANION,
+      scenes: [{ id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' }],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "c-1",
+          id: "beat-1",
+          objective: "Find the unfinished sketch.",
+          opener: "A sketchbook is half hidden.",
+          reward_unlock_key: null,
+          scene_id: "pier_cafe",
+          stage_gate: "first_contact",
+          title: "The Sketch",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."]));
+
+    const response = await handlePostMessage(
+      buildPost({
+        chat_mode: "story",
+        quick_action: { item_id: "coffee", type: "gift" },
+        scene_id: "pier_cafe",
+        text: "I order coffee.",
+      }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      closeness: 1,
+      friendship: 1,
+      trust: 1,
+    });
+  });
+
+  it("does not use invite turns as story-progress boost triggers", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({
+      companion: COMPANION,
+      scenes: [
+        { id: "pier_cafe", is_active: 1, mood: "Golden hour", name: "Pier Cafe", tags: '["cafe"]' },
+        { id: "library", is_active: 1, mood: "Quiet", name: "Library", tags: '["library"]' },
+      ],
+      storyBeats: [
+        {
+          beat_order: 1,
+          companion_id: "c-1",
+          id: "beat-1",
+          objective: "Find the unfinished sketch.",
+          opener: "A sketchbook is half hidden.",
+          reward_unlock_key: null,
+          scene_id: "pier_cafe",
+          stage_gate: "first_contact",
+          title: "The Sketch",
+        },
+      ],
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."]));
+
+    const response = await handlePostMessage(
+      buildPost({
+        chat_mode: "story",
+        invite_scene_id: "library",
+        scene_id: "pier_cafe",
+        text: "Let's go to the library.",
+      }),
+      env,
+      buildCtx(),
+      USER,
+      "c-1",
+    );
+    expect(response.status).toBe(200);
+    await response.text();
+
+    expect(JSON.parse(state.messages[1]?.signals ?? "{}")).toMatchObject({
+      closeness: 1,
+      friendship: 1,
+      trust: 1,
+    });
+  });
+
+  it("returns 400 for Story mode without a valid scene before reserving credits", async () => {
+    pendingSignal(false);
+    const { env } = createEnv({ companion: COMPANION });
+    vi.stubGlobal("fetch", buildStreamFetch());
+
+    const response = await handlePostMessage(buildPost({ chat_mode: "story", text: "hi" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(400);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("story_mode_requires_scene");
+    expect(reserveCreditsMock).not.toHaveBeenCalled();
   });
 
   it("does not send old seeded English greetings as prompt history when the latest user message is Chinese", async () => {

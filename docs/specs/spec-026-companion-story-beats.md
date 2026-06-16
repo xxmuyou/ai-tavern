@@ -3,6 +3,8 @@
 > **类型：** 后端 + 前端 + 内容 seed  |  **依赖：** spec-005(relationships), spec-006(chat), spec-007(scenes), spec-008(events), spec-024/025(沉浸感)  |  **估时：** 4-6 天  |  **状态：** ✅ done（已合并 `0b8f31c` / 合并点 `99a0548`）
 
 > **进度备注：** 本 spec 已实现并合入 main。已完成项：阶段边界 `closeness >= 20 → familiar`（[stage.ts](../../packages/api/src/relationships/stage.ts)）、`title:familiar` unlock 接入 chat 与 event resolve（[unlocks.ts](../../packages/api/src/relationships/unlocks.ts)）、`companion_story_beats` / `user_story_progress`（migration 0027）、`/scenes/{id}/enter` 返回 `active_story_beat`、chat prompt 注入 active beat、官方 companion 示例 seed。spec-027 在此基础上消费 scene/chat 上下文。
+>
+> **2026-06-16 口径更新：** 见 [spec-040](./spec-040-chat-scene-talk-story-modes.md)。`scene_id` 只表示物理场景；后续 chat 只有在 `chat_mode = "story"` 时才注入 active story beat。普通 `talk` 模式可以带 `scene_id`，但不得因此进入剧情剧本。Story authoring 的新入口是 Scene 页面 `Create story`，不是 companion create 的尾部步骤；本 spec 的 companion beat 表可作为兼容/基础设施继续被消费。
 
 ---
 
@@ -18,11 +20,11 @@
 
 ## Related Spec
 
-- [`spec-027: Chat Moment Images`](./spec-027-chat-moment-images.md) 是本框架的后续视觉奖励层：story beat 负责“当前 companion 正在推进什么剧情目标”，Chat Moment Image 负责把某一轮有场景上下文的聊天捕捉成图片记忆。
-- spec-026 不直接实现生图按钮、prompt snapshot 或图片 job；只保证 scene/chat 能提供足够稳定的 companion、scene、activity、stage、story beat 上下文，供 spec-027 后续复用。
+- [`spec-027: Chat Moment Images`](./spec-027-chat-moment-images.md) 是本框架的后续视觉奖励层：Story mode 中的 story beat 负责“当前 companion 正在推进什么剧情目标”，Chat Moment Image 负责把某一轮有场景上下文的聊天捕捉成图片记忆。
+- spec-026 不直接实现生图按钮、prompt snapshot 或图片 job；只保证 scene/chat 能提供足够稳定的 companion、scene、activity、stage、story beat 上下文，供 spec-027 后续复用。普通 Talk mode 可有 scene/activity/stage，但不注入 story beat。
 - [`spec-028: 剧情引导与行动按钮重构`](./spec-028-guided-story-actions-ui.md) 消费本 spec 的 active beat，把“下一步做什么”呈现在 Today / Scene / Chat。
 - `spec-028` 的 2026-06-08 addendum 进一步修正本 spec 早期“prompt 注入 + 自动完成”的割裂体验：剧情推进必须落到可见 scene event / story action，而不是只让 AI 在一句回复里完成物理转场。
-- [`spec-029: User-created Story Arcs`](./spec-029-user-created-story-arcs.md) 承接自建角色剧情包、用户轻量编辑、AI 辅助草稿和手动完成。它修正本 spec 早期切片里“自创角色可无 beat”的产品假设。
+- [`spec-029: User-created Story Arcs`](./spec-029-user-created-story-arcs.md) 承接剧情包、用户轻量编辑、AI 辅助草稿和手动完成能力；其入口按 spec-040 迁移到 Scene story authoring。
 
 ## 目标 / 非目标
 
@@ -31,7 +33,7 @@
 - event resolve 后和 chat 一样跑 `detectAndRecordUnlocks`，返回新增 unlocks。
 - 新增 `companion_story_beats` 与 `user_story_progress`，支持任意 companion 挂 3-5 拍线性 arc。
 - `/scenes/{id}/enter` 的 `companions_present[]` 返回 `active_story_beat`。
-- chat prompt 注入 active beat 的 `opener/objective`，让 companion 主动推进当前剧情。
+- 在 Story mode 的 chat prompt 中注入 active beat 的 `opener/objective`，让 companion 主动推进当前剧情。
 - seed 少量官方 companion 示例内容，但实现不得绑定具体角色。
 
 ### 非目标
@@ -41,7 +43,7 @@
 - ❌ 在 spec-026 当期交付里，把自创 companion 强行生成完整 arc。
 - ❌ 聊天瞬间图生成；该功能单独放入 spec-027，避免把剧情拍框架和 image-gen 管线耦合。
 
-> **历史边界说明（2026-06-03）：** spec-026 只交付 story beat 基础设施和官方 seed 示例。当前产品路线已更新：自建角色需要剧情包 / 用户自写 / AI 辅助 arc，详见 `spec-029`。同理，本 spec 的自动完成规则属于早期基础框架；UI-managed / user-owned arcs 以后以用户手动完成为默认。
+> **历史边界说明（2026-06-03）：** spec-026 只交付 story beat 基础设施和官方 seed 示例。当前产品路线已更新：故事编辑应从 Scene 进入，使用剧情包 / 用户自写 / AI 辅助 story tasks，详见 `spec-029` 与 `spec-040`。同理，本 spec 的自动完成规则属于早期基础框架；UI-managed / user-owned stories 以后以用户手动完成或明确 story action 为默认。
 
 ## 数据模型
 
@@ -86,7 +88,7 @@ CREATE TABLE user_story_progress (
   - `companions_present[].active_story_beat`
   - shape：`{ id, title, beat_order, stage_gate, opener, objective, scene_id, reward_unlock_key, status }`
   - `status` 为 `active | waiting_stage | completed`
-- `POST /chat/{companionId}/messages` 请求不新增必填字段；若传 `scene_id`，后端自动查该 user/companion/scene 的 active beat 并注入 prompt。
+- `POST /chat/{companionId}/messages` 请求不新增必填字段；后续由 spec-040 增加 optional `chat_mode`。只有 `chat_mode = "story"` 且传入合法 `scene_id` 时，后端才查该 user/companion/scene 的 active beat 并注入 prompt。`chat_mode = "talk"` 可带同一个 `scene_id`，但不注入 story beat。
 - prompt 新增一小段 `# Current story beat`：
   - `Beat title`
   - `Opening hook`

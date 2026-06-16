@@ -12,6 +12,7 @@ import type { EventResponseItem } from "../events/types";
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 import { buildStoryMoment, loadStoryBeatForScene, type StoryBeatPublic, type StoryMomentPublic } from "../story-beats";
+import { handleSceneStoryRequest } from "./stories";
 import { evaluateUserSceneUnlock } from "./unlock";
 
 type SceneRow = {
@@ -96,6 +97,11 @@ export async function handleScenesRequest(
   env: Env,
   pathname: string,
 ): Promise<Response | null> {
+  const storyResponse = await handleSceneStoryRequest(request, env, pathname);
+  if (storyResponse) {
+    return storyResponse;
+  }
+
   if (pathname === "/scenes") {
     if (request.method !== "GET") {
       return jsonResponse({ error: "method_not_allowed" }, { status: 405 });
@@ -275,15 +281,19 @@ async function loadPotentialCompanions(
             c.name        AS name,
             c.gender      AS gender,
             c.source      AS source,
-            c.art_url     AS art_url,
-            c.art_cutout_key AS art_cutout_key,
+            COALESCE(p.art_key, c.art_url) AS art_url,
+            CASE WHEN p.art_key IS NULL THEN c.art_cutout_key ELSE NULL END AS art_cutout_key,
             r.level_label AS level_label
      FROM companions c
      LEFT JOIN relationships r
        ON r.companion_id = c.id AND r.user_id = ?
-     WHERE c.id IN (${placeholders}) AND c.is_active = 1`,
+     LEFT JOIN companion_profile_images p
+       ON p.companion_id = c.id AND p.user_id = ?
+     WHERE c.id IN (${placeholders})
+       AND c.is_active = 1
+       AND COALESCE(p.art_key, c.art_url) IS NOT NULL`,
   )
-    .bind(userId, ...ids)
+    .bind(userId, userId, ...ids)
     .all<CompanionPreviewRow>();
 
   return (results ?? []).map((row) => ({

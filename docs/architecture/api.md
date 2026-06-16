@@ -66,7 +66,7 @@ event: done
 data: {"message_id": "...", "usage": {...}}
 ```
 
-> `unlocks`、`invite_result` 为按需事件：仅在该轮产生新解锁、或请求带 `invite_scene_id`（spec-036）时出现。
+> `signals` 是后端已应用所有确定性 relationship modifier 后的最终关系变化值，例如 favorite scene / Story progress boost；客户端只展示该值，不再二次放大。`unlocks`、`invite_result` 为按需事件：仅在该轮产生新解锁、或请求带 `invite_scene_id`（spec-036）时出现。
 
 ### 1.4 鉴权
 
@@ -487,14 +487,16 @@ companion 或 message 分桶。
       "art_url": "...",
       "unlocked": true,
       "unlock_hint": null,                 // 未解锁时给提示
-      "potential_companions": [             // 当前可能在此出现的角色（仅展示已认识的）
-        { "id": "maya", "name": "Maya", "level": "Friend" }
+      "potential_companions": [             // compatibility/supporting data；过滤无有效头像，不从全站 public/online companion 自动补位
+        { "id": "maya", "name": "Maya", "level": "Friend", "art_url": "...", "art_cutout_url": null }
       ]
     },
     ...
   ]
 }
 ```
+
+> **Scene page UX（spec-040 vNext）：** `potential_companions` 可为旧客户端和后台逻辑保留，但新 Scene 页面不再把 “X companions nearby / companion is here” 作为主文案。Scene 点击后的主流程应显示当前 scene 可选择/确认的 stories，以及 `Create story` 入口。
 
 ### `POST /scenes/{scene_id}/enter`
 
@@ -505,7 +507,7 @@ companion 或 message 分桶。
 {
   "scene": { /* scene 详情 */ },
   "companions_present": [
-    { "id": "maya", "name": "Maya", "opener": "Oh, hey! You're back." }
+    { "id": "maya", "name": "Maya", "opener": "Oh, hey! You're back.", "art_url": "...", "art_cutout_url": null }
   ],
   "event": null | { /* 触发的事件，见 §6 */ }
 }
@@ -513,6 +515,48 @@ companion 或 message 分桶。
 // 错误
 // 403 FORBIDDEN 场景未解锁
 ```
+
+### Scene stories（计划接口，spec-040）
+
+Story authoring belongs to Scene routes, not the final step of companion creation.
+
+- `GET /scenes/{scene_id}/stories?companion_id=...` — 返回该 scene 的官方预设 stories + 当前用户私有 stories；传 `companion_id` 时按 `user + story + companion` 返回 progress。
+- `POST /scenes/{scene_id}/stories` — 创建用户私有 scene story draft；第一版只支持手写 title/synopsis/tasks，不接 AI。
+- `PATCH /scenes/{scene_id}/stories/{story_id}` — 编辑当前用户可编辑的 scene story。
+- `GET /scenes/{scene_id}/stories/{story_id}` — 返回 story 全量信息、ordered tasks、当前用户 progress。
+- `POST /scenes/{scene_id}/stories/{story_id}/tasks/{task_id}/complete` — 当前用户手动完成某 companion 维度的当前 task。
+- `POST /scenes/{scene_id}/stories/{story_id}/tasks/{task_id}/reopen` — 撤回完成状态。
+- `GET /scenes/{scene_id}/story-invite-companions` — 返回当前用户可聊天、effective art 非空的 companion 候选；它不是 scene roster，也不会自动把 companion 注入 scene。
+- `POST /scenes/{scene_id}/stories/{story_id}/invite` — 邀请某 companion 进入 story。Body: `{ "companion_id": "...", "message": "optional" }`。
+
+Story invite billing:
+
+- accepted/refused 都按一次 `chat_message` credits 扣费。
+- LLM/provider/parse 失败 release reservation，不保存真实 chat message。
+- accepted 返回 `{ "chat": { "chat_mode": "story", "companion_id": "...", "scene_id": "...", "story_id": "..." } }`，客户端自动打开 Story chat。
+- refused 返回 companion `reply/reason`，`chat` 为 `null`，客户端停留 Scene 页面。
+
+```json
+// SceneStory shape
+{
+  "id": "rainlit_bookshop_missing_page",
+  "scene_id": "rainlit_bookshop",
+  "title": "The Missing Page",
+  "synopsis": "A quiet mystery starts between the shelves.",
+  "source_type": "official_preset",
+  "can_edit": false,
+  "progress_percent": 25,
+  "current_task": {
+    "id": "task_2",
+    "order": 2,
+    "title": "Ask what changed",
+    "objective": "Find out who moved the sealed notebook.",
+    "status": "active"
+  }
+}
+```
+
+> **Scene story decision:** chat still requires `companion_id`, so Scene story entry asks the user to invite a companion. Progress scope is `user + story + companion`. Stories do not declare a forced cast in v1.
 
 ---
 
@@ -525,7 +569,9 @@ companion 或 message 分桶。
 // Request
 {
   "text": "Hey, what are you reading?",
-  "scene_id": "pier_cafe",
+  "scene_id": "pier_cafe",              // optional physical scene context
+  "chat_mode": "talk",                  // optional: "talk" | "story"; default "talk"
+  "story_id": null,                     // optional selected scene story when chat_mode="story"
   "activity_id": null,                  // 可选：锁定到某日常活动（会强制 scene 匹配）
   "persona_id": null,                   // 可选：本 thread 以哪个用户人设说话
   "invite_scene_id": null,              // 可选（spec-036/037）：本轮发起"邀请前往某场景"
@@ -539,6 +585,12 @@ companion 或 message 分桶。
 // 429 rate_limited 一分钟过多消息
 // 503 LLM_UNAVAILABLE 所有 provider 失败
 ```
+
+> **Chat scene vs mode（spec-040）：** `scene_id` 只表示当前物理场景。它可用于 Talk 或 Story 两种模式，并决定背景、scene actions、moment image 和消息落库地点。`chat_mode` 决定是否尝试启用剧情剧本：`talk` 不注入 active story beat；`story` 只有在当前 user/companion/scene 存在 active story beat，或用户选择了合法 scene `story_id` 时，才加载 Story mode context、StoryActionBar/story choices。缺省为 `talk`。若请求 `chat_mode: "story"` 但没有合法 `scene_id`，API 返回 `400 story_mode_requires_scene`；若 scene 合法但没有 active story，API 不会编造 story objective。带 `story_id` 时 prompt 只注入当前 active task 的 title/objective/ai_guidance/completion_hint，不注入未来任务，避免剧透；没有 `story_id` 时才回退 legacy `companion_story_beats`。
+
+> **Relationship pacing modifiers（spec-040）：** `scene_id` 和 `chat_mode` 还会参与关系结算，但不改变 prompt 语义：若本轮 scene 命中 companion `preferred_scenes`，或 Story mode 正在推进 active scene story task / legacy auto-completable story beat，后端会把本轮非 0 relationship signals 按 `1.5x` 放大后再保存、应用并通过 SSE `signals` 返回。两个条件同时满足时不叠加；正向和负向 signals 都会放大。scene/custom action、legacy gift、invite-only 这类辅助动作不触发 Story progress boost。
+
+> **Scene roster 边界（spec-040）：** Scene roster 不等于 Discover/public companion 池。`GET /scenes` 和 `POST /scenes/{scene_id}/enter` 只返回当前 scene 的 authored/default roster 或既有显式放置候选，并过滤掉当前用户 effective `art_url` 为空的 companion；过滤后不从全站 public/online companion 自动补位。新 Scene UI 不应突出显示“companion 在这里”；故事选择/创建是 Scene 页主流程。
 
 > **聊天快捷动作（spec-037 + scene actions）：** 当请求带合法 `quick_action` 时，后端先校验当前 scene，再创建已完成 activity、写入 memory，并把动作作为“刚刚发生的可见行为”注入 LLM。旧 gift quick action 仅作兼容；Web 主要使用 catalog 动作 `{ "type": "scene_action", "action_id": "..." }`，以及一次性自定义动作 `{ "type": "custom_scene_action", "text": "..." }`。自定义动作不保存成按钮，`text` trim 后最多 120 字符，不应用固定关系分；catalog/gift 动作可按 tone 或 item 应用固定关系变化。不扣 credits。成功后 SSE 额外事件：
 > ```json
@@ -1065,8 +1117,8 @@ D1 连通性诊断（仅 admin / 内部）。
 
 ### 11.5 Chat 扩展（spec-006 / 024 / voice / variants）
 
-- `POST /chat/{companion_id}/messages/{message_id}/regenerate` — 重生成回复。
-- `POST /chat/{companion_id}/messages/{message_id}/edit` — 编辑消息。
+- `POST /chat/{companion_id}/messages/{message_id}/regenerate` — 重生成回复；body 可带 `chat_mode?: "talk" | "story"`，决定本次重生成是否可注入 story beat。
+- `POST /chat/{companion_id}/messages/{message_id}/edit` — 编辑消息；body 可带 `chat_mode?: "talk" | "story"`，不能仅凭历史 `scene_id` 自动进入 Story。
 - `GET/PATCH /chat/{companion_id}/voice-settings` — 当前用户的 companion 声音设置。
 - `POST /chat/{companion_id}/messages/{message_id}/voice` — 生成或复用语音，按首次成功生成扣 `voice_generation` credits。
 - `POST /chat/{companion_id}/messages/{message_id}/variant` — 候选回复切换。

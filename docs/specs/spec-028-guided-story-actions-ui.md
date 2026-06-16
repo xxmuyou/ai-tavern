@@ -3,6 +3,8 @@
 > **类型：** 前端体验/UI 重构 | **依赖：** spec-024/025/026 | **估时：** 2-3 天 | **状态：** 🟡 in-progress
 
 > **2026-06-08 addendum：** 当前实现把 story beat 主要作为 prompt 目标，并可能在普通 chat turn 后自动完成，用户缺少“剧情在场景中发生”的体感。本 addendum 扩展 spec-028 的范围：引入 scene-driven story moment，把剧情推进落到可见事件、选择、narration 和受校验的 scene transition。下面新增内容覆盖本 spec 早期“后端 API 不改 / 不重写推进规则”的非目标，仅限本 addendum 范围。
+>
+> **2026-06-16 口径更新：** 见 [spec-040](./spec-040-chat-scene-talk-story-modes.md)。StoryActionBar / story moment 是 `chat_mode = "story"` 的 UI，不是所有带 `scene_id` 的聊天都显示。Talk mode 可以在同一 scene 里自由聊天和使用 scene actions，但不注入 story beat。Story mode 也只消费当前 scene/companion 或用户选择的 scene story 真实存在的 active story moment；没有故事时不编造剧情、不从其它 scene 借剧情。Scene 页面 vNext 先展示 story list / `Create story`，不再把“companion 在这里”作为主入口。
 
 ---
 
@@ -23,7 +25,7 @@
 - 建立统一的前端 `Guided Next Action` 视图模型，让剧情拍优先于关系目标，关系目标优先于日常推荐。
 - 每个角色卡只展示一个主 CTA，最多两个次级 CTA；其余 activity 收进 `More actions`，不再同权重平铺。
 - Scene Web 页面合并重复的 companion 区域，以 companion-driven action card 展示剧情目标、今日状态和下一步。
-- Chat Web 的 activity banner 强化当前活动目标和完成/取消按钮层级，但不加入快捷话术 chips。
+- Chat Web 的 activity banner 强化当前活动目标和完成/取消按钮层级，但不加入快捷话术 chips。Story CTA 只在 Story mode 显示，不能污染普通 Talk mode。
 
 ### 非目标
 
@@ -113,9 +115,9 @@
 
 当前产品在剧情推进上有明显割裂：AI 可能在聊天里说“我送她回家了 / 我们去了某处”，但前端没有 scene transition、没有可见事件、没有玩家选择，用户不知道自己究竟在哪里。现有 `active_story_beat` 只把 `opener/objective` 注入 prompt，并在 chat/event 后 best-effort 完成；这更像“聊天目标”，不像游戏里的“场景剧情”。
 
-本 addendum 的目标是把 story beat 变成可玩的 scene moment：
+本 addendum 的目标是把 story beat 变成可玩的 scene moment；该 moment 只在 Story mode 中呈现：
 
-- 进入场景或打开聊天时，active beat 能自动呈现为一个可见剧情事件。
+- 进入场景或打开聊天时，当前 scene/companion 的 active beat 能呈现为一个可见剧情事件。
 - 玩家通过按钮选择动作，系统插入 narration、写进度/记忆/关系，并在合法时切换 scene。
 - AI 可以写剧情意图和 `scene_hint`，但最终 `scene_id` 必须由系统从预设 scene 表中匹配和校验。
 
@@ -170,7 +172,9 @@ API 增量：
   - 在 `companions_present[].active_story_beat` 旁返回可选 `story_moment`。
   - 当 active beat 与当前 scene 匹配且 stage 已满足时生成。
 - `GET /chat/{companionId}/story-moment?scene_id=...`
-  - 聊天页刷新/进入时读取当前可触发 moment，避免只依赖 scene enter。
+  - 聊天页处于 `chat_mode = "story"` 时读取当前可触发 moment，避免只依赖 scene enter。
+  - Talk mode 不调用或不展示该结果。
+  - 若当前 scene/companion 没有 active moment，返回 `story_moment: null`；客户端隐藏 StoryActionBar。
 - `POST /companions/{companionId}/story-choices/{choiceId}/resolve`
   - 请求带当前 `scene_id`、可选 `activity_id`。
   - 后端重新校验 beat 是否 active、choice 是否属于该 beat、target scene 是否 active/unlocked。
@@ -199,16 +203,17 @@ API 增量：
 
 ### 前端体验计划
 
-- **Scene enter：** 如果返回 `story_moment`，优先显示 `EventPopup` 风格的剧情弹窗。
+- **Scene enter / story selection：** vNext Scene 页面先展示当前 scene stories 和 `Create story`。用户选择 `Start story` / `Continue story` 后，如果返回 `story_moment`，再显示 `EventPopup` 风格的剧情弹窗。
   - 顶部显示当前 scene 名和 beat title。
   - 正文显示 `arrival_narration`。
   - 按钮显示 `choices[].label`。
 
-- **Chat：** 在输入框上方显示 `Story Action Bar`。
+- **Chat：** 仅在 `chat_mode = "story" && scene_id` 时，在输入框上方显示 `Story Action Bar`。
   - 文案：当前 objective。
   - 主按钮：第一个推荐 choice。
   - 次级按钮：展开全部 choices。
   - 用户点击 choice 后，聊天中插入 `user_narration`，resolve 成功后插入 `result_narration`。
+  - Talk mode 即使有 `scene_id` 也不显示 Story Action Bar；只保留自由输入和 scene actions。
 
 - **Scene transition：**
   - `transition_mode === "scene"`：前端切 `scene_id` / `scene_art`，再插入 `<narration>You arrive at {sceneName} together.</narration>`。

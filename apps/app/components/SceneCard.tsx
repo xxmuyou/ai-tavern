@@ -43,10 +43,8 @@ export function SceneCard({ onPress, scene }: SceneCardProps) {
 
         {!scene.unlocked && hint ? (
           <Text className="text-sm font-medium text-app-warning">{hint}</Text>
-        ) : scene.potential_companions.length ? (
-          <Text className="text-sm text-app-muted">
-            {scene.potential_companions.length} companion{scene.potential_companions.length === 1 ? '' : 's'} nearby
-          </Text>
+        ) : scene.unlocked ? (
+          <Text className="text-sm text-app-muted">Open this scene to choose or create a story.</Text>
         ) : null}
       </View>
     </Pressable>

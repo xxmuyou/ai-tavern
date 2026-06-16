@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 
 import {
+  completeSceneStoryTask,
   ensureCompanionCutout,
   getCompanion,
   getCompanionCutout,
@@ -34,6 +35,7 @@ import {
 import type {
   ChatInviteResult,
   ChatMessage,
+  ChatMode,
   ChatMomentImage,
   ChatVoiceSettingsResponse,
   CompanionDetail,
@@ -42,10 +44,12 @@ import type {
   InviteTarget,
   RelationshipDimensions,
   Scene,
+  SceneStory,
   StoryChoice,
   StoryMoment,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
+import { ChatModeSwitch } from '@/components/ChatModeSwitch';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { LiveStreamingBubble } from '@/components/LiveStreamingBubble';
 import { MessageBubble } from '@/components/MessageBubble';
@@ -67,6 +71,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { usePendingEvents } from '@/hooks/use-pending-events';
+import { useSceneStory } from '@/hooks/use-scenes';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { ProfileOutfitPanel } from '@/components/ProfileOutfitPanel';
 import { useStreamingChatMessages } from '@/hooks/use-streaming-chat-messages';
@@ -144,14 +149,17 @@ const ARRIVAL_COPY: Record<ChatLanguage, {
 };
 
 export default function WebChatScreen() {
-  const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneId?: string; sceneArt?: string }>();
+  const params = useLocalSearchParams<{ activityId?: string; chatMode?: string; companionId?: string; sceneId?: string; sceneArt?: string; storyId?: string }>();
   const companionId = typeof params.companionId === 'string' ? params.companionId : '';
   const activityId = typeof params.activityId === 'string' ? params.activityId : undefined;
   const initialSceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
+  const storyId = typeof params.storyId === 'string' && params.storyId.length > 0 ? params.storyId : null;
+  const initialChatMode: ChatMode = initialSceneId && params.chatMode === 'story' ? 'story' : 'talk';
   const initialSceneArt =
     typeof params.sceneArt === 'string' && params.sceneArt.length > 0 ? params.sceneArt : null;
   // spec-036: scene is mutable mid-chat — an accepted invitation switches it.
   const [sceneId, setSceneId] = useState<string | undefined>(initialSceneId);
+  const [chatMode, setChatMode] = useState<ChatMode>(initialChatMode);
   const [sceneArt, setSceneArt] = useState<string | null>(initialSceneArt);
   const [sceneName, setSceneName] = useState<string | null>(null);
   const [sceneSource, setSceneSource] = useState<SceneSource>(initialSceneId ? 'url' : null);
@@ -160,6 +168,7 @@ export default function WebChatScreen() {
   const history = useChatHistory(companionId);
   const streamingMessages = useStreamingChatMessages(companionId, history);
   const stream = useChatStream(companionId);
+  const activeChatMode: ChatMode = sceneId ? chatMode : 'talk';
   const relationship = useChatRelationship(companionId);
   const personasState = usePersonas();
   const personas = personasState.data?.personas ?? [];
@@ -177,7 +186,15 @@ export default function WebChatScreen() {
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
   const [quotaModalVisible, setQuotaModalVisible] = useState(false);
-  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true), streamingMessages);
+  const messageActions = useMessageActions(
+    companionId,
+    history,
+    pushError,
+    () => setQuotaModalVisible(true),
+    streamingMessages,
+    activeChatMode,
+    activeChatMode === 'story' ? storyId : null,
+  );
   const [rateLimitedUntil, setRateLimitedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [lastSignals, setLastSignals] = useState<Partial<RelationshipDimensions> | null>(null);
@@ -199,7 +216,9 @@ export default function WebChatScreen() {
   const [celebrationQueue, setCelebrationQueue] = useState<WebCelebrationItem[]>([]);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
+  const [storyMomentLoaded, setStoryMomentLoaded] = useState(false);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
+  const [isCompletingSceneStoryTask, setIsCompletingSceneStoryTask] = useState(false);
   const threadScrollRef = useRef<FlatList<ChatMessage>>(null);
   const activeSceneChangedThisSessionRef = useRef(Boolean(initialSceneId));
   const hasReconciledInitialSceneRef = useRef(Boolean(initialSceneId));
@@ -215,6 +234,22 @@ export default function WebChatScreen() {
     () => detectChatLanguage(history.messages, draft),
     [draft, history.messages],
   );
+  const sceneStoryState = useSceneStory(sceneId ?? '', activeChatMode === 'story' ? storyId : null, companionId);
+  const sceneStory = sceneStoryState.data?.story ?? null;
+  const sceneStoryTask = sceneStory?.current_task ?? null;
+  const relationshipBoostHint = useMemo(() => {
+    const favoriteScene = Boolean(sceneId && companion?.preferred_scenes?.includes(sceneId));
+    const storyProgress = activeChatMode === 'story' && Boolean(storyMoment || sceneStoryTask);
+    if (favoriteScene && storyProgress) return 'Relationship changes are amplified here';
+    if (favoriteScene) return 'Relationship grows faster here';
+    if (storyProgress) return 'Story progress affects relationship more';
+    return null;
+  }, [activeChatMode, companion?.preferred_scenes, sceneId, sceneStoryTask, storyMoment]);
+  const noStoryHintVisible = activeChatMode === 'story'
+    && storyMomentLoaded
+    && !storyMoment
+    && !sceneStoryTask
+    && !sceneStoryState.isLoading;
   const arrivalCopy = ARRIVAL_COPY[chatLanguage];
   const autoScroll = useChatAutoScroll({
     getItems: () => items,
@@ -233,6 +268,8 @@ export default function WebChatScreen() {
     resetForThread,
   } = autoScroll;
   const editMessage = useEditMessage(companionId, history, {
+    chatMode: activeChatMode,
+    storyId: activeChatMode === 'story' ? storyId : null,
     onError: pushError,
     onSaved: () => {
       notifyNewReply();
@@ -262,8 +299,9 @@ export default function WebChatScreen() {
     defaultDailySceneRef.current = false;
     historySceneTargetRef.current = null;
     restoredSceneSavedAtRef.current = null;
+    setChatMode(initialChatMode);
     setSceneSource(initialSceneId ? 'url' : null);
-  }, [companionId, initialSceneId]);
+  }, [companionId, initialChatMode, initialSceneId]);
 
   useEffect(() => {
     void refreshActivity();
@@ -271,21 +309,29 @@ export default function WebChatScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!sceneId) {
+    setStoryMomentLoaded(false);
+    if (activeChatMode !== 'story' || !sceneId || storyId) {
       setStoryMoment(null);
+      setStoryMomentLoaded(activeChatMode === 'story' && Boolean(sceneId));
       return;
     }
     getStoryMoment(companionId, sceneId)
       .then((payload) => {
-        if (!cancelled) setStoryMoment(payload.story_moment);
+        if (!cancelled) {
+          setStoryMoment(payload.story_moment);
+          setStoryMomentLoaded(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setStoryMoment(null);
+        if (!cancelled) {
+          setStoryMoment(null);
+          setStoryMomentLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [companionId, sceneId]);
+  }, [activeChatMode, companionId, sceneId, storyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -773,8 +819,10 @@ export default function WebChatScreen() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         inviteSceneId: target.id,
         personaId: activePersonaId ?? undefined,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -815,7 +863,7 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, handleInviteResult, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, handleInviteResult, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, storyId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -837,7 +885,9 @@ export default function WebChatScreen() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         personaId: activePersonaId ?? undefined,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -889,7 +939,7 @@ export default function WebChatScreen() {
       // already started a new message.
       setDraft((current) => (current.length > 0 ? current : text));
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, storyId, stream]);
 
   const sendSceneAction = useCallback(async (action: SceneAction) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -904,9 +954,11 @@ export default function WebChatScreen() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         personaId: activePersonaId ?? undefined,
         quickAction: { action_id: action.id, type: 'scene_action' },
         sceneId,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -952,7 +1004,7 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, storyId, stream]);
 
   const sendCustomSceneAction = useCallback(async () => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -983,9 +1035,11 @@ export default function WebChatScreen() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         personaId: activePersonaId ?? undefined,
         quickAction: { text: actionText, type: 'custom_scene_action' },
         sceneId,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -1032,10 +1086,10 @@ export default function WebChatScreen() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, customActionText, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, customActionText, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, storyId, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
-    if (!sceneId || stream.isStreaming || isResolvingStory) return;
+    if (activeChatMode !== 'story' || !storyMoment || !sceneId || stream.isStreaming || isResolvingStory) return;
     setIsResolvingStory(true);
     history.appendMessage({
       companion_id: companionId,
@@ -1085,7 +1139,21 @@ export default function WebChatScreen() {
     } finally {
       setIsResolvingStory(false);
     }
-  }, [activeActivityId, chatLanguage, companionId, enqueueCelebrations, followBottom, history, isResolvingStory, pushError, relationship, sceneId, stream.isStreaming]);
+  }, [activeActivityId, activeChatMode, chatLanguage, companionId, enqueueCelebrations, followBottom, history, isResolvingStory, pushError, relationship, sceneId, storyMoment, stream.isStreaming]);
+
+  const handleCompleteSceneStoryTask = useCallback(async () => {
+    if (!sceneId || !storyId || !sceneStoryTask || isCompletingSceneStoryTask) return;
+    setIsCompletingSceneStoryTask(true);
+    try {
+      await completeSceneStoryTask(sceneId, storyId, sceneStoryTask.id, companionId);
+      await sceneStoryState.refetch();
+      showInviteNotice('Story progress updated.');
+    } catch (error) {
+      pushError(error instanceof Error ? error.message : 'Story task could not be completed.');
+    } finally {
+      setIsCompletingSceneStoryTask(false);
+    }
+  }, [companionId, isCompletingSceneStoryTask, pushError, sceneId, sceneStoryState, sceneStoryTask, showInviteNotice, storyId]);
 
   const handleCompleteActivity = useCallback(async () => {
     if (!activityId) return;
@@ -1249,6 +1317,15 @@ export default function WebChatScreen() {
                 </View>
               </View>
               <View className="flex-row flex-wrap items-center justify-end gap-3">
+                {sceneId ? (
+                  <ChatModeSwitch
+                    compact
+                    disabled={stream.isStreaming || isResolvingStory}
+                    mode={activeChatMode}
+                    onChange={setChatMode}
+                    showHints={false}
+                  />
+                ) : null}
                 <View className="flex-row items-center overflow-hidden rounded-full border border-white/15 bg-app-sunken">
                   <Pressable
                     accessibilityRole="button"
@@ -1376,13 +1453,32 @@ export default function WebChatScreen() {
                 </View>
               </View>
             ) : null}
-            <StoryActionBar
-              disabled={stream.isStreaming || isResolvingStory}
-              moment={storyMoment}
-              onSelect={(choice) => {
-                void handleStoryChoice(choice);
-              }}
-            />
+            {sceneId && (noStoryHintVisible || relationshipBoostHint) ? (
+              <View className="gap-1 border-b border-white/10 px-5 py-2" style={twilightStyles.toolsPanel}>
+                {noStoryHintVisible ? (
+                  <Text className="text-caption text-white/55">No story here yet.</Text>
+                ) : null}
+                {relationshipBoostHint ? (
+                  <Text className="text-caption font-semibold text-app-rose">{relationshipBoostHint}</Text>
+                ) : null}
+              </View>
+            ) : null}
+            {activeChatMode === 'story' && sceneStory ? (
+              <SceneStoryTaskPanel
+                isCompleting={isCompletingSceneStoryTask}
+                onComplete={() => void handleCompleteSceneStoryTask()}
+                story={sceneStory}
+              />
+            ) : null}
+            {activeChatMode === 'story' && storyMoment ? (
+              <StoryActionBar
+                disabled={stream.isStreaming || isResolvingStory}
+                moment={storyMoment}
+                onSelect={(choice) => {
+                  void handleStoryChoice(choice);
+                }}
+              />
+            ) : null}
             <ActivityContextBanner
               activity={activity}
               isMutating={activityActions.isMutating}
@@ -1621,6 +1717,56 @@ export default function WebChatScreen() {
         title="Out of credits"
       />
     </WebAppShell>
+  );
+}
+
+function SceneStoryTaskPanel({
+  isCompleting,
+  onComplete,
+  story,
+}: {
+  isCompleting: boolean;
+  onComplete: () => void;
+  story: SceneStory;
+}) {
+  const task = story.current_task;
+  return (
+    <View className="border-b border-white/10 px-5 py-3" style={twilightStyles.toolsPanel}>
+      <View className="gap-3 rounded-2xl border border-app-rose/25 bg-app-solid-sunken p-4">
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="min-w-0 flex-1">
+            <Text className="text-caption font-semibold uppercase tracking-normal text-app-rose-deep">
+              {story.progress_percent >= 100 ? 'Story complete' : 'Story task'}
+            </Text>
+            <Text className="mt-1 font-serif text-title-sm text-white" numberOfLines={2}>{story.title}</Text>
+          </View>
+          <View className="rounded-full border border-white/10 bg-black/35 px-3 py-1">
+            <Text className="text-caption font-semibold text-white">{story.progress_percent}%</Text>
+          </View>
+        </View>
+        {task ? (
+          <View className="gap-2">
+            <Text className="text-body-sm font-semibold text-white">{task.title}</Text>
+            <Text className="text-body-sm leading-6 text-rose-50/75">{task.objective}</Text>
+            {task.completion_hint ? (
+              <Text className="text-caption leading-5 text-rose-50/55">{task.completion_hint}</Text>
+            ) : null}
+            <View className="items-start">
+              <WebButton
+                disabled={isCompleting}
+                isLoading={isCompleting}
+                label="Mark done"
+                onPress={onComplete}
+                size="sm"
+                variant="secondary"
+              />
+            </View>
+          </View>
+        ) : (
+          <Text className="text-body-sm leading-6 text-rose-50/70">All tasks are complete.</Text>
+        )}
+      </View>
+    </View>
   );
 }
 

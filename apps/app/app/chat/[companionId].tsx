@@ -16,25 +16,27 @@ import {
   type TextInputKeyPressEventData,
 } from 'react-native';
 
-import { clearChatHistory, getChatVoiceSettings, getCompanion, getInviteTargets, getScenes, getStoryMoment, resolveStoryChoice, updateChatVoiceSettings } from '@/api/companion-client';
+import { clearChatHistory, completeSceneStoryTask, getChatVoiceSettings, getCompanion, getInviteTargets, getScenes, getStoryMoment, resolveStoryChoice, updateChatVoiceSettings } from '@/api/companion-client';
 import type {
   ChatEmotionKey,
   ChatInviteResult,
   ChatMessage,
+  ChatMode,
   ChatMomentImage,
   ChatVoiceSettingsResponse,
   ChatUnlock,
   InviteTarget,
   RelationshipDimensions,
   Scene,
+  SceneStory,
   StoryChoice,
   StoryMoment,
 } from '@/api/types';
 import { ActivityContextBanner } from '@/components/ActivityContextBanner';
 import { AuthGuard } from '@/components/AuthGuard';
 import { Button } from '@/components/Button';
+import { ChatModeSwitch } from '@/components/ChatModeSwitch';
 import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
-import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { EventPopup } from '@/components/EventPopup';
 import { InvitePopup } from '@/components/InvitePopup';
@@ -58,6 +60,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { usePendingEvents } from '@/hooks/use-pending-events';
+import { useSceneStory } from '@/hooks/use-scenes';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { useStreamingChatMessages } from '@/hooks/use-streaming-chat-messages';
 import { useMessageActions } from '@/hooks/use-message-actions';
@@ -74,6 +77,7 @@ type CompanionPortraitState = {
   art_url: string | null;
   gender: 'female' | 'male' | null;
   name: string;
+  preferred_scenes: string[];
 };
 
 export default function ChatScreen() {
@@ -85,14 +89,17 @@ export default function ChatScreen() {
 }
 
 function ChatScreenInner() {
-  const params = useLocalSearchParams<{ activityId?: string; companionId?: string; sceneArt?: string; sceneId?: string }>();
+  const params = useLocalSearchParams<{ activityId?: string; chatMode?: string; companionId?: string; sceneArt?: string; sceneId?: string; storyId?: string }>();
   const companionId = typeof params.companionId === 'string' ? params.companionId : '';
   const activityId = typeof params.activityId === 'string' ? params.activityId : undefined;
   const initialSceneId = typeof params.sceneId === 'string' ? params.sceneId : undefined;
+  const storyId = typeof params.storyId === 'string' && params.storyId.length > 0 ? params.storyId : null;
+  const initialChatMode: ChatMode = initialSceneId && params.chatMode === 'story' ? 'story' : 'talk';
   const initialSceneArt =
     typeof params.sceneArt === 'string' && params.sceneArt.length > 0 ? params.sceneArt : null;
   // spec-036: scene is mutable mid-chat — an accepted invitation switches it.
   const [sceneId, setSceneId] = useState<string | undefined>(initialSceneId);
+  const [chatMode, setChatMode] = useState<ChatMode>(initialChatMode);
   const [sceneArt, setSceneArt] = useState<string | null>(initialSceneArt);
   const router = useRouter();
   const { pushError } = useErrorBanner();
@@ -102,6 +109,7 @@ function ChatScreenInner() {
     art_url: null,
     gender: null,
     name: 'Chat',
+    preferred_scenes: [],
   });
   const [currentEmotion, setCurrentEmotion] = useState<ChatEmotion>('neutral');
   const [draft, setDraft] = useState('');
@@ -121,7 +129,9 @@ function ChatScreenInner() {
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [storyMoment, setStoryMoment] = useState<StoryMoment | null>(null);
+  const [storyMomentLoaded, setStoryMomentLoaded] = useState(false);
   const [isResolvingStory, setIsResolvingStory] = useState(false);
+  const [isCompletingSceneStoryTask, setIsCompletingSceneStoryTask] = useState(false);
   const [voiceSettingsVisible, setVoiceSettingsVisible] = useState(false);
   const [voiceSettings, setVoiceSettings] = useState<ChatVoiceSettingsResponse | null>(null);
   const [isSavingVoiceSettings, setIsSavingVoiceSettings] = useState(false);
@@ -131,6 +141,10 @@ function ChatScreenInner() {
   const history = useChatHistory(companionId);
   const streamingMessages = useStreamingChatMessages(companionId, history);
   const stream = useChatStream(companionId);
+  const activeChatMode: ChatMode = sceneId ? chatMode : 'talk';
+  const sceneStoryState = useSceneStory(sceneId ?? '', activeChatMode === 'story' ? storyId : null, companionId);
+  const sceneStory = sceneStoryState.data?.story ?? null;
+  const sceneStoryTask = sceneStory?.current_task ?? null;
   // Streaming replies are real local messages now, so the same bubble grows in place.
   const items = history.messages;
   const autoScroll = useChatAutoScroll({
@@ -154,7 +168,28 @@ function ChatScreenInner() {
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const activePersonaId =
     selectedPersonaId ?? personas.find((p) => p.is_default)?.id ?? personas[0]?.id ?? null;
-  const messageActions = useMessageActions(companionId, history, pushError, () => setQuotaModalVisible(true), streamingMessages);
+  const relationshipBoostHint = useMemo(() => {
+    const favoriteScene = Boolean(sceneId && companion.preferred_scenes.includes(sceneId));
+    const storyProgress = activeChatMode === 'story' && Boolean(storyMoment || sceneStoryTask);
+    if (favoriteScene && storyProgress) return 'Relationship changes are amplified here';
+    if (favoriteScene) return 'Relationship grows faster here';
+    if (storyProgress) return 'Story progress affects relationship more';
+    return null;
+  }, [activeChatMode, companion.preferred_scenes, sceneId, sceneStoryTask, storyMoment]);
+  const noStoryHintVisible = activeChatMode === 'story'
+    && storyMomentLoaded
+    && !storyMoment
+    && !sceneStoryTask
+    && !sceneStoryState.isLoading;
+  const messageActions = useMessageActions(
+    companionId,
+    history,
+    pushError,
+    () => setQuotaModalVisible(true),
+    streamingMessages,
+    activeChatMode,
+    activeChatMode === 'story' ? storyId : null,
+  );
   const autoVoice = useAutoVoice();
   const {
     appendLocalUserMessage,
@@ -167,6 +202,8 @@ function ChatScreenInner() {
     subscribeStream,
   } = streamingMessages;
   const editMessage = useEditMessage(companionId, history, {
+    chatMode: activeChatMode,
+    storyId: activeChatMode === 'story' ? storyId : null,
     onError: pushError,
     onSaved: () => {
       notifyNewReply();
@@ -185,25 +222,34 @@ function ChatScreenInner() {
 
   useEffect(() => {
     resetForThread();
-  }, [companionId, resetForThread]);
+    setChatMode(initialChatMode);
+  }, [companionId, initialChatMode, resetForThread]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!sceneId) {
+    setStoryMomentLoaded(false);
+    if (activeChatMode !== 'story' || !sceneId || storyId) {
       setStoryMoment(null);
+      setStoryMomentLoaded(activeChatMode === 'story' && Boolean(sceneId));
       return;
     }
     getStoryMoment(companionId, sceneId)
       .then((payload) => {
-        if (!cancelled) setStoryMoment(payload.story_moment);
+        if (!cancelled) {
+          setStoryMoment(payload.story_moment);
+          setStoryMomentLoaded(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setStoryMoment(null);
+        if (!cancelled) {
+          setStoryMoment(null);
+          setStoryMomentLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [companionId, sceneId]);
+  }, [activeChatMode, companionId, sceneId, storyId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,11 +294,12 @@ function ChatScreenInner() {
             art_url: detail.art_url ?? null,
             gender: detail.gender ?? null,
             name: detail.name ?? 'Chat',
+            preferred_scenes: detail.preferred_scenes ?? [],
           });
         }
       } catch {
         if (!cancelled) {
-          setCompanion({ art_emotions: null, art_url: null, gender: null, name: 'Chat' });
+          setCompanion({ art_emotions: null, art_url: null, gender: null, name: 'Chat', preferred_scenes: [] });
         }
       }
     })();
@@ -359,8 +406,10 @@ function ChatScreenInner() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         inviteSceneId: target.id,
         personaId: activePersonaId ?? undefined,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -416,7 +465,7 @@ function ChatScreenInner() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, companionId, finishStreamingCompanionMessage, handleInviteResult, history, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, companionId, finishStreamingCompanionMessage, handleInviteResult, history, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, storyId, stream]);
 
   const handleInviteSelect = useCallback((target: InviteTarget) => {
     setInvitePickerVisible(false);
@@ -448,7 +497,9 @@ function ChatScreenInner() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         personaId: activePersonaId ?? undefined,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -500,7 +551,7 @@ function ChatScreenInner() {
       // already started a new message.
       setDraft((current) => (current.length > 0 ? current : text));
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, draft, finishStreamingCompanionMessage, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, cleanupFailedStreamingCompanionMessage, draft, finishStreamingCompanionMessage, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, rateLimitedUntil, relationship, sceneId, storyId, stream]);
 
   const sendQuickAction = useCallback(async (itemId: QuickGiftItemId) => {
     if (stream.isStreaming || remainingSeconds > 0) return;
@@ -514,9 +565,11 @@ function ChatScreenInner() {
     try {
       const result = await stream.send(text, {
         activityId: activeActivityId,
+        chatMode: activeChatMode,
         personaId: activePersonaId ?? undefined,
         quickAction: { item_id: itemId, type: 'gift' },
         sceneId,
+        storyId: activeChatMode === 'story' ? storyId ?? undefined : undefined,
         onDone: (info) => {
           serverMessageId = info.messageId;
         },
@@ -550,10 +603,10 @@ function ChatScreenInner() {
       }
       cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
     }
-  }, [activeActivityId, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, cleanupFailedStreamingCompanionMessage, finishStreamingCompanionMessage, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, cleanupFailedStreamingCompanionMessage, finishStreamingCompanionMessage, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, showInviteNotice, storyId, stream]);
 
   const handleStoryChoice = useCallback(async (choice: StoryChoice) => {
-    if (!sceneId || stream.isStreaming || isResolvingStory) return;
+    if (activeChatMode !== 'story' || !storyMoment || !sceneId || stream.isStreaming || isResolvingStory) return;
     setIsResolvingStory(true);
     history.appendMessage({
       companion_id: companionId,
@@ -600,7 +653,21 @@ function ChatScreenInner() {
     } finally {
       setIsResolvingStory(false);
     }
-  }, [activeActivityId, companionId, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, stream.isStreaming]);
+  }, [activeActivityId, activeChatMode, companionId, history, isResolvingStory, notifyNewReply, pushError, relationship, sceneId, storyMoment, stream.isStreaming]);
+
+  const handleCompleteSceneStoryTask = useCallback(async () => {
+    if (!sceneId || !storyId || !sceneStoryTask || isCompletingSceneStoryTask) return;
+    setIsCompletingSceneStoryTask(true);
+    try {
+      await completeSceneStoryTask(sceneId, storyId, sceneStoryTask.id, companionId);
+      await sceneStoryState.refetch();
+      showInviteNotice('Story progress updated.');
+    } catch (error) {
+      pushError(error instanceof Error ? error.message : 'Story task could not be completed.');
+    } finally {
+      setIsCompletingSceneStoryTask(false);
+    }
+  }, [companionId, isCompletingSceneStoryTask, pushError, sceneId, sceneStoryState, sceneStoryTask, showInviteNotice, storyId]);
 
   const handleClearConfirm = useCallback(async () => {
     setIsClearing(true);
@@ -786,6 +853,15 @@ function ChatScreenInner() {
         title={companion.name}
         right={
           <View className="flex-row items-center gap-2">
+            {sceneId ? (
+              <ChatModeSwitch
+                compact
+                disabled={stream.isStreaming || isResolvingStory}
+                mode={activeChatMode}
+                onChange={setChatMode}
+                showHints={false}
+              />
+            ) : null}
             <View className="flex-row items-center overflow-hidden rounded-xl border border-app-line bg-app-card">
               <Pressable
                 accessibilityLabel={autoVoice.enabled ? 'Turn off auto voice' : 'Turn on auto voice'}
@@ -851,15 +927,6 @@ function ChatScreenInner() {
           if (unlock.scene_id) router.push(`/scene/${encodeURIComponent(unlock.scene_id)}` as Href);
         }}
       />
-
-      <View className="border-b border-app-line bg-app-bg px-3 py-3">
-        <CompanionStoryPanel
-          companionId={companionId}
-          compact
-          onChanged={relationship.refresh}
-          showEditor={false}
-        />
-      </View>
 
       <ActivityContextBanner
         activity={activity}
@@ -938,13 +1005,34 @@ function ChatScreenInner() {
           </View>
         ) : null}
 
-        <StoryActionBar
-          disabled={stream.isStreaming || isResolvingStory}
-          moment={storyMoment}
-          onSelect={(choice) => {
-            void handleStoryChoice(choice);
-          }}
-        />
+        {sceneId && (noStoryHintVisible || relationshipBoostHint) ? (
+          <View className="gap-1 border-t border-app-line bg-app-card px-4 py-2">
+            {noStoryHintVisible ? (
+              <Text className="text-xs text-app-muted">No story here yet.</Text>
+            ) : null}
+            {relationshipBoostHint ? (
+              <Text className="text-xs font-medium text-app-primary">{relationshipBoostHint}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {activeChatMode === 'story' && sceneStory ? (
+          <SceneStoryTaskPanel
+            isCompleting={isCompletingSceneStoryTask}
+            onComplete={() => void handleCompleteSceneStoryTask()}
+            story={sceneStory}
+          />
+        ) : null}
+
+        {activeChatMode === 'story' && storyMoment ? (
+          <StoryActionBar
+            disabled={stream.isStreaming || isResolvingStory}
+            moment={storyMoment}
+            onSelect={(choice) => {
+              void handleStoryChoice(choice);
+            }}
+          />
+        ) : null}
 
         <View className="border-t border-app-line bg-app-card px-3 py-3">
           <View className="mb-2 flex-row flex-wrap gap-2">
@@ -1138,6 +1226,52 @@ function ChatScrollNotice({ label, onPress }: { label: string; onPress: () => vo
         <Ionicons color="#FFFFFF" name="arrow-down" size={16} />
         <Text className="text-sm font-semibold text-white">{label}</Text>
       </Pressable>
+    </View>
+  );
+}
+
+function SceneStoryTaskPanel({
+  isCompleting,
+  onComplete,
+  story,
+}: {
+  isCompleting: boolean;
+  onComplete: () => void;
+  story: SceneStory;
+}) {
+  const task = story.current_task;
+  return (
+    <View className="border-t border-app-line bg-app-card px-4 py-3">
+      <View className="gap-3 rounded-xl border border-app-primary/20 bg-app-primarySoft p-4">
+        <View className="flex-row items-start justify-between gap-3">
+          <View className="min-w-0 flex-1">
+            <Text className="text-xs font-semibold uppercase text-app-primary">
+              {story.progress_percent >= 100 ? 'Story complete' : 'Story task'}
+            </Text>
+            <Text className="mt-1 text-base font-semibold text-app-text" numberOfLines={2}>{story.title}</Text>
+          </View>
+          <View className="rounded-full bg-app-card px-3 py-1">
+            <Text className="text-xs font-semibold text-app-text">{story.progress_percent}%</Text>
+          </View>
+        </View>
+        {task ? (
+          <View className="gap-2">
+            <Text className="text-sm font-semibold text-app-text">{task.title}</Text>
+            <Text className="text-sm leading-5 text-app-muted">{task.objective}</Text>
+            {task.completion_hint ? (
+              <Text className="text-xs leading-4 text-app-muted">{task.completion_hint}</Text>
+            ) : null}
+            <Button
+              isLoading={isCompleting}
+              label="Mark done"
+              onPress={onComplete}
+              variant="secondary"
+            />
+          </View>
+        ) : (
+          <Text className="text-sm leading-5 text-app-muted">All tasks are complete.</Text>
+        )}
+      </View>
     </View>
   );
 }

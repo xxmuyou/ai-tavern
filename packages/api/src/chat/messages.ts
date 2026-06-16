@@ -27,6 +27,7 @@ import {
   loadSceneForChat,
   parseExampleDialogues,
   parseSceneTags,
+  parseStringArray,
   type ChatThreadRow,
 } from "./loaders";
 import {
@@ -37,6 +38,9 @@ import {
 } from "./memory";
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type UserPersonaForPrompt } from "./prompt";
+import { parseChatMode, storyModeRequiresScene, type ChatMode } from "./chat-mode";
+import { applyRelationshipSignalBoost } from "./relationship-boost";
+import { loadSceneStoryPromptContext } from "../scenes/stories";
 import {
   assessReplyLanguage,
   buildLanguageRetryInstruction,
@@ -74,6 +78,8 @@ type PostBody = {
   persona_id?: unknown;
   invite_scene_id?: unknown;
   quick_action?: unknown;
+  chat_mode?: unknown;
+  story_id?: unknown;
 };
 
 type HistoryRow = { role: "user" | "companion"; content: string; scene_id: string | null };
@@ -123,7 +129,9 @@ export async function handlePostMessage(
   if (!userText) {
     return jsonResponse({ error: "invalid_request", field: "text" }, { status: 400 });
   }
+  const chatMode = parseChatMode(body.chat_mode);
   let sceneIdInput = typeof body.scene_id === "string" && body.scene_id.length > 0 ? body.scene_id : null;
+  const storyIdInput = typeof body.story_id === "string" && body.story_id.length > 0 ? body.story_id : null;
   const activityIdInput = typeof body.activity_id === "string" && body.activity_id.length > 0 ? body.activity_id : null;
   let activity = activityIdInput
     ? await loadActiveActivityForChat(env, user.id, activityIdInput)
@@ -165,23 +173,13 @@ export async function handlePostMessage(
     }
   }
 
-  const subscriber = isAdmin || (await isSubscriberActive(env, user.id, now));
-  // Pure-credits model (spec-021): each message costs chat_message credits;
-  // admins are exempt. Reserve up front so an empty balance is a clean 402
-  // before any LLM call; commit after the reply persists, release on failure.
-  let chatReservationId: string | null = null;
-  if (!isAdmin) {
-    const reservation = await reserveChatCredits(env, user.id);
-    if (!reservation.ok) {
-      return jsonResponse(
-        { error: "credits_insufficient", message: "Not enough credits." },
-        { status: 402 },
-      );
-    }
-    chatReservationId = reservation.reservationId;
-  }
-
   const scene = sceneIdInput ? await loadSceneForChat(env, sceneIdInput) : null;
+  if (storyModeRequiresScene(chatMode, Boolean(scene))) {
+    return jsonResponse({ error: "story_mode_requires_scene" }, { status: 400 });
+  }
+  if (storyIdInput && chatMode !== "story") {
+    return jsonResponse({ error: "story_requires_story_mode" }, { status: 400 });
+  }
   const sceneForContext = scene
     ? { id: scene.id, mood: scene.mood, name: scene.name, tags: parseSceneTags(scene.tags) }
     : null;
@@ -212,6 +210,22 @@ export async function handlePostMessage(
   const inviteTarget: InviteTarget | null = inviteSceneIdInput
     ? await resolveInviteTarget(env, user.id, companionId, inviteSceneIdInput)
     : null;
+
+  const subscriber = isAdmin || (await isSubscriberActive(env, user.id, now));
+  // Pure-credits model (spec-021): each message costs chat_message credits;
+  // admins are exempt. Reserve after request validation so 4xx validation errors
+  // never consume a credit; commit after the reply persists, release on failure.
+  let chatReservationId: string | null = null;
+  if (!isAdmin) {
+    const reservation = await reserveChatCredits(env, user.id);
+    if (!reservation.ok) {
+      return jsonResponse(
+        { error: "credits_insufficient", message: "Not enough credits." },
+        { status: 402 },
+      );
+    }
+    chatReservationId = reservation.reservationId;
+  }
 
   await ensureRelationship(env, user.id, companionId, now);
   const relationship = await loadRelationship(env, user.id, companionId);
@@ -246,9 +260,28 @@ export async function handlePostMessage(
   const stage = deriveStage(relationship?.dimensions ?? { ...ZERO_DIMENSIONS }).stage;
   const unlockedKeys = await loadUnlockedKeys(env, user.id, companionId);
   const secretToReveal = isSecretUnlocked(unlockedKeys) ? companion.secret : null;
-  const storyBeat = sceneIdInput
-    ? await loadStoryBeatForScene(env, user.id, companionId, sceneIdInput)
+  const storyBeat = chatMode === "story" && scene
+    ? await loadStoryBeatForScene(env, user.id, companionId, scene.id)
     : null;
+  const sceneStory = chatMode === "story" && scene && storyIdInput
+    ? await loadSceneStoryPromptContext(env, user.id, companionId, scene.id, storyIdInput)
+    : null;
+  if (storyIdInput && !sceneStory) {
+    return jsonResponse({ error: "story_unavailable" }, { status: 404 });
+  }
+  const preferredSceneIds = parseStringArray(companion.preferred_scenes);
+  const legacyStoryCompletionEligible =
+    !sceneStory &&
+    chatMode === "story" &&
+    storyBeat?.status === "active" &&
+    storyBeat.completion_mode !== "manual" &&
+    !quickAction &&
+    !inviteTarget;
+  const storyProgressBoostEligible =
+    chatMode === "story" &&
+    Boolean(sceneStory?.task || (storyBeat?.status === "active" && storyBeat.completion_mode !== "manual")) &&
+    !quickAction &&
+    !inviteTarget;
   const threadMemories = await loadThreadMemories(env, thread.id);
 
   const promptArtifacts = buildChatPromptArtifacts({
@@ -257,6 +290,7 @@ export async function handlePostMessage(
     recentMessages,
     secretToReveal,
     stage,
+    sceneStory,
     storyBeat,
     threadMemories,
     userPersona: userPersonaForPrompt,
@@ -319,6 +353,7 @@ export async function handlePostMessage(
       activity_id: activityIdForChat,
       chatReservationId,
       chatRequest,
+      chatMode,
       companionId,
       ctx,
       env,
@@ -327,10 +362,13 @@ export async function handlePostMessage(
       narrative,
       now,
       previousDimensions: relationship?.dimensions ?? { ...ZERO_DIMENSIONS },
+      preferredSceneIds,
       quickAction,
       relationship_role: companion.relationship_role,
       scene_id: sceneIdInput,
       sse,
+      storyProgressBoostEligible,
+      legacyStoryCompletionEligible,
       streamStart,
       subscriber,
       thread,
@@ -348,6 +386,7 @@ type RunChatArgs = {
   sse: SSEHandle;
   streamStart: ChatStreamStart;
   chatRequest: LLMRequest;
+  chatMode: ChatMode;
   languageTarget: ReplyLanguageTarget;
   user: UserRecord;
   companionId: string;
@@ -356,6 +395,9 @@ type RunChatArgs = {
   activity_id: string | null;
   inviteTarget: InviteTarget | null;
   quickAction: QuickActionContext | null;
+  preferredSceneIds: string[];
+  storyProgressBoostEligible: boolean;
+  legacyStoryCompletionEligible: boolean;
   previousDimensions: DimensionValues;
   narrative: string;
   companionName: string;
@@ -369,7 +411,7 @@ type RunChatArgs = {
 };
 
 async function runChat(args: RunChatArgs): Promise<void> {
-  const { env, sse, streamStart, chatRequest, languageTarget, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, chatReservationId, now, ctx } =
+  const { env, sse, streamStart, chatRequest, chatMode, languageTarget, user, companionId, thread, scene_id, activity_id, inviteTarget, quickAction, preferredSceneIds, storyProgressBoostEligible, legacyStoryCompletionEligible, previousDimensions, narrative, companionName, relationship_role, userText, userPersona, subscriber, chatReservationId, now, ctx } =
     args;
 
   let replyBuffer = "";
@@ -454,16 +496,25 @@ async function runChat(args: RunChatArgs): Promise<void> {
   });
   const hostilityAssessment = assessHostileInput(userText);
   const finalExtract = applyHostilityOverride(extract, hostilityAssessment);
+  const boosted = finalExtract.ok
+    ? applyRelationshipSignalBoost({
+        preferredSceneIds,
+        sceneId: scene_id,
+        signals: finalExtract.signals,
+        storyProgressEligible: storyProgressBoostEligible,
+      })
+    : { multiplier: 1, reasons: [], signals: finalExtract.signals };
+  const relationshipSignals = boosted.signals;
 
   if (finalExtract.ok && companionMessageId) {
     try {
       await env.DB.prepare(
         `UPDATE messages SET signals = ?, emotion = ? WHERE id = ?`,
       )
-        .bind(JSON.stringify(finalExtract.signals), finalExtract.emotion, companionMessageId)
+        .bind(JSON.stringify(relationshipSignals), finalExtract.emotion, companionMessageId)
         .run();
-      const newState = await applySignals(env, user.id, companionId, finalExtract.signals, now);
-      conflictSignals = finalExtract.signals;
+      const newState = await applySignals(env, user.id, companionId, relationshipSignals, now);
+      conflictSignals = relationshipSignals;
       // spec-025: detect stage-transition unlocks off the freshly applied
       // dimensions and surface any newly granted unlocks to the client.
       try {
@@ -485,10 +536,12 @@ async function runChat(args: RunChatArgs): Promise<void> {
       } catch {
         // Unlock detection is best-effort; never break the reply for it.
       }
-      try {
-        await completeCurrentStoryBeat(env, user.id, companionId, scene_id, now);
-      } catch {
-        // Story progression is best-effort; never break the reply for it.
+      if (legacyStoryCompletionEligible) {
+        try {
+          await completeCurrentStoryBeat(env, user.id, companionId, scene_id, now);
+        } catch {
+          // Story progression is best-effort; never break the reply for it.
+        }
       }
     } catch (err) {
       // Persistence of signals failed but reply is already saved; degrade to warning.
@@ -511,7 +564,7 @@ async function runChat(args: RunChatArgs): Promise<void> {
     }
   }
 
-  sse.writeEvent("signals", finalExtract.signals);
+  sse.writeEvent("signals", relationshipSignals);
   sse.writeEvent("emotion", { value: finalExtract.emotion satisfies Emotion });
   sse.writeEvent("unlocks", unlockEvents);
   if (quickAction) {

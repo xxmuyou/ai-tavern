@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { editChatMessage } from '@/api/companion-client';
+import type { ChatMode } from '@/api/types';
 
 type HistoryLike = {
   refresh: (options?: { silent?: boolean }) => Promise<void>;
@@ -24,7 +25,7 @@ export type UseEditMessageResult = {
 export function useEditMessage(
   companionId: string,
   history: HistoryLike,
-  opts?: { onSaved?: () => void; onError?: (message: string) => void },
+  opts?: { chatMode?: ChatMode; storyId?: string | null; onSaved?: () => void; onError?: (message: string) => void },
 ): UseEditMessageResult {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
@@ -50,7 +51,7 @@ export function useEditMessage(
     }
     setIsSaving(true);
     try {
-      await editChatMessage(companionId, editingId, text);
+      await editChatMessage(companionId, editingId, text, { chat_mode: opts?.chatMode, story_id: opts?.storyId ?? undefined });
       await history.refresh({ silent: true });
       opts?.onSaved?.();
       setEditingId(null);
