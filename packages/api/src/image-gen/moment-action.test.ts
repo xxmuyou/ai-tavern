@@ -23,6 +23,7 @@ function sampleInput() {
     sceneMood: "warm cafe",
     sceneName: "Pier Coffee Shop",
     scenePrivacy: "public" as const,
+    sceneTags: ["cafe", "waterfront", "warm", "day"],
     sceneVenue: "dining" as const,
     sourceReply: "<narration>Maya wraps her hands around the cup.</narration>Thank you.",
     stage: "familiar" as const,
@@ -116,6 +117,13 @@ describe("parseMomentVisualAction", () => {
     expect(action?.hairstyle).toHaveLength(120);
   });
 
+  it("truncates overlong body poses to 160 characters", () => {
+    const action = parseMomentVisualAction({
+      body_pose: "x".repeat(220),
+    });
+    expect(action?.body_pose).toHaveLength(160);
+  });
+
   it("rejects output that would summon a second person", () => {
     expect(
       parseMomentVisualAction({
@@ -183,7 +191,7 @@ describe("extractMomentVisualAction", () => {
           }),
           expect.objectContaining({
             content: expect.stringContaining(
-              "Plan a safe solo pose and choose one outfit candidate",
+              "choosing from the pose, expression, and outfit candidates",
             ),
             role: "user",
           }),
@@ -201,22 +209,36 @@ describe("extractMomentVisualAction", () => {
     expect(system).toContain("receiving flowers becomes");
     expect(system).toContain("receiving coffee becomes");
     expect(system).toContain("leaving someone's lap or bed contact becomes");
+    expect(system).toContain("Only one primary hand action or primary prop is allowed");
+    expect(system).toContain("companion reply first");
+    expect(system).toContain("cafe cup plus received flowers becomes");
+    expect(system).toContain("body_pose must be 160 characters or less");
     // The restyle mandate, the nudity ceiling and the fixed-background rule.
     expect(system).toContain("Always restyle");
     expect(system).toContain("Pose quality:");
-    expect(system).toContain("graceful three-quarter body angle");
+    expect(system).toContain("The face must be oriented toward the viewer");
     expect(system).toContain("never nude");
     expect(system).toContain("The background location is already fixed");
 
     const user = request.messages[1]?.content ?? "";
     expect(user).toContain("Companion gender: female");
     expect(user).toContain("Style profile: sharp urban");
+    expect(user).toContain("Scene tags: cafe, waterfront, warm, day");
     expect(user).toContain("Venue type: dining; setting: public");
     expect(user).toContain("Styling boldness:");
     expect(user).toContain("no sleepwear"); // familiar -> reserved tier guidance
+    expect(user).toContain("Pose candidates:");
+    expect(user).toContain("full-body seated cross-legged at a cafe table");
+    expect(user).toContain("Expression candidates:");
+    expect(user).toContain("soft genuine smile");
+    expect(user).toContain("Body attitude modifier:");
+    expect(user).toContain("relaxed shoulders, body subtly leaning toward the viewer");
+    expect(user).toContain("Scene prop hints (optional and replaceable):");
+    expect(user).toContain("coffee cup");
     expect(user).toContain("Outfit candidates:");
-    expect(user).toContain("tailored cardigan over a silk camisole and pleated skirt");
+    expect(user).toContain("fitted blouse with a high-waisted short skirt and sheer stockings");
     expect(user).toContain("Pose/body quality:");
+    expect(user).toContain("Keep body_pose <= 160 chars");
   });
 
   it("retries once with a nudge and higher temperature when the first attempt errors", async () => {

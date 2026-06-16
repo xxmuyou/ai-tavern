@@ -8,9 +8,13 @@ import {
   formatMomentStyleProfile,
   presetMomentStyle,
   resolveMomentStyleProfile,
+  suggestMomentBodyAttitude,
+  suggestMomentExpressionOptions,
   stageStyleGuidance,
   stageStyleTier,
   suggestMomentOutfitOptions,
+  suggestMomentPoseOptions,
+  suggestMomentScenePropHints,
   type MomentVenue,
   type StyleTier,
 } from "./moment-style";
@@ -129,7 +133,7 @@ describe("stageStyleTier", () => {
 describe("presetMomentStyle", () => {
   it("unlocks towel/slip looks only at the intimate tier in bedroom venues", () => {
     expect(presetMomentStyle("bedroom", "intimate", "female").outfit).toContain("bath towel");
-    expect(presetMomentStyle("bedroom", "romantic", "female").outfit).toContain("silk slip");
+    expect(presetMomentStyle("bedroom", "romantic", "female").outfit).toContain("slip nightdress");
     expect(presetMomentStyle("bedroom", "reserved", "female").outfit).not.toMatch(/towel|slip/);
     expect(presetMomentStyle("bedroom", "warm", "female").outfit).not.toMatch(/towel/);
   });
@@ -219,6 +223,88 @@ describe("moment style profiles and outfit candidates", () => {
     expect(new Set(elegantOptions.map((option) => option.outfit))).toEqual(
       new Set(sharpOptions.map((option) => option.outfit)),
     );
-    expect(sharpOptions[0]?.outfit).toBe("tailored cardigan over a silk camisole and pleated skirt");
+    expect(sharpOptions[0]?.outfit).toBe(
+      "fitted blouse with a high-waisted short skirt and sheer stockings",
+    );
+  });
+});
+
+describe("moment pose, expression, and scene prop candidates", () => {
+  it("returns four full-body pose candidates for every venue and gender", () => {
+    for (const venue of ALL_VENUES) {
+      for (const gender of ["female", "male"]) {
+        const options = suggestMomentPoseOptions(venue, gender);
+        expect(options).toHaveLength(4);
+        for (const option of options) {
+          expect(option.bodyPose.length).toBeLessThanOrEqual(160);
+          expect(option.bodyPose).toContain("full-body");
+          expect(option.bodyPose).toContain("face toward the viewer");
+          expect(option.bodyPose).not.toMatch(/S-curve|feet|shoes|legs-to-feet/i);
+          expect(
+            parseMomentVisualAction({
+              body_pose: option.bodyPose,
+              hairstyle: "simple styled hair",
+              outfit: "fitted outfit",
+            }),
+            `${venue}/${gender} pose tripped the risky-word guard`,
+          ).not.toBeNull();
+        }
+      }
+    }
+  });
+
+  it("returns four emotion-specific expression candidates for every emotion and gender", () => {
+    for (const emotion of ["warm", "playful", "guarded", "tense", "annoyed", "neutral"]) {
+      for (const gender of ["female", "male"]) {
+        const options = suggestMomentExpressionOptions(emotion, gender);
+        expect(options).toHaveLength(4);
+        for (const option of options) {
+          expect(option.expression.length).toBeLessThanOrEqual(120);
+          expect(
+            parseMomentVisualAction({
+              body_pose: "standing alone in the scene",
+              expression: option.expression,
+              hairstyle: "simple styled hair",
+              outfit: "fitted outfit",
+            }),
+            `${emotion}/${gender} expression tripped the risky-word guard`,
+          ).not.toBeNull();
+        }
+      }
+    }
+
+    expect(suggestMomentExpressionOptions("playful", "female")[2]?.expression).toContain("wink");
+    expect(suggestMomentExpressionOptions("playful", "female")[3]?.expression).toContain("tongue-out");
+    expect(suggestMomentExpressionOptions("annoyed", "female")[0]?.expression).toContain("pout");
+    expect(suggestMomentExpressionOptions("annoyed", "female")[0]?.expression).toContain("cheeks puffed");
+  });
+
+  it("keeps body attitude modifiers short and conflict-aware", () => {
+    expect(suggestMomentBodyAttitude("playful")).toContain("only if hands are free");
+    expect(suggestMomentBodyAttitude("tense")).toContain("current prop");
+    expect(suggestMomentBodyAttitude("unknown")).toBe(
+      "balanced posture, relaxed shoulders, natural hands, clean silhouette",
+    );
+    for (const emotion of ["warm", "playful", "guarded", "tense", "annoyed", "neutral"]) {
+      expect(suggestMomentBodyAttitude(emotion).length).toBeLessThanOrEqual(120);
+    }
+  });
+
+  it("returns scene-matched prop hints without forcing the wrong venue prop", () => {
+    expect(suggestMomentScenePropHints("indoor_quiet", "Indie Cinema", ["cinema", "date"])).toEqual(
+      ["ticket stub", "popcorn cup", "lobby poster wall as unreadable shapes"],
+    );
+    expect(
+      suggestMomentScenePropHints("indoor_quiet", "Indie Cinema", ["cinema", "date"]).join(" "),
+    ).not.toMatch(/book/i);
+    expect(suggestMomentScenePropHints("indoor_quiet", "Rainlit Bookshop", ["bookshop"])).toContain(
+      "book",
+    );
+    expect(suggestMomentScenePropHints("active", "Mountain Trail", ["hiking"])).toContain(
+      "hiking pole",
+    );
+    expect(suggestMomentScenePropHints("home_private", "Shared Laundry Room", ["laundry"])).toContain(
+      "washing machine counter",
+    );
   });
 });

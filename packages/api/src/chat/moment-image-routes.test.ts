@@ -236,11 +236,12 @@ describe("moment image routes", () => {
     // LLM extractor (unavailable in this test env) falls back to a profile-ordered
     // home_private/reserved styling candidate instead of a vague default.
     expect(jobs[0]?.prompt).toContain("The background is empty of other people");
+    expect(jobs[0]?.prompt).toContain("Moment pose: full-body seated cross-legged on a scene-matched seat");
     expect(jobs[0]?.prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): ribbed cardigan over a camisole with tailored lounge shorts",
+      "Outfit (overrides any clothing mentioned in the reference): soft fitted lounge dress with a defined waist",
     );
     expect(jobs[0]?.prompt).toContain("Style profile: sharp urban");
-    expect(jobs[0]?.prompt).toContain("Pose/body quality: flattering natural proportions");
+    expect(jobs[0]?.prompt).toContain("Pose/body quality: flattering full-body proportions");
     expect(jobs[0]?.prompt).toContain("Change the hairstyle to: casual messy bun");
     expect(jobs[0]?.prompt).not.toContain("an outfit that naturally fits the scene");
     expect(moments[0]).toMatchObject({

@@ -26,6 +26,9 @@ import {
   presetMomentStyle,
   resolveMomentStyleProfile,
   stageStyleTier,
+  suggestMomentBodyAttitude,
+  suggestMomentExpressionOptions,
+  suggestMomentPoseOptions,
   type MomentScenePrivacy,
   type MomentVenue,
 } from "./moment-style";
@@ -96,16 +99,21 @@ function resolveMomentVenue(ctx: MomentPromptContext): MomentVenue {
 }
 
 function presetFallbackAction(ctx: MomentPromptContext): MomentVisualAction {
+  const venue = resolveMomentVenue(ctx);
   const style = presetMomentStyle(
-    resolveMomentVenue(ctx),
+    venue,
     stageStyleTier(ctx.stage),
     ctx.companion.gender,
     resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender),
   );
+  const pose = suggestMomentPoseOptions(venue, ctx.companion.gender)[0]?.bodyPose
+    ?? "full-body standing alone in the scene, face toward the viewer, relaxed shoulders and natural hands";
+  const expression = suggestMomentExpressionOptions(ctx.emotion, ctx.companion.gender)[0]?.expression
+    ?? "calm attentive expression, clear eyes, relaxed brows, natural mouth";
   return {
-    body_pose: "standing or seated alone in the scene, posture matching the emotional tone",
-    expression: `${ctx.emotion ?? "neutral"} expression`,
-    gaze: "eyes toward the viewer",
+    body_pose: pose,
+    expression,
+    gaze: "face oriented toward the viewer, eyes may meet the viewer or lower softly",
     hairstyle: style.hairstyle,
     ...(style.makeup ? { makeup: style.makeup } : {}),
     outfit: style.outfit,
@@ -113,21 +121,27 @@ function presetFallbackAction(ctx: MomentPromptContext): MomentVisualAction {
 }
 
 // The restyle is the whole point of the moment image (spec-027): even when the
-// extractor succeeded but under-delivered, missing outfit/hairstyle fall back
-// to the venue/stage preset so the look always changes from the reference.
+// extractor succeeded but under-delivered, missing visual details fall back to
+// the controlled venue/stage/emotion candidates so the look still changes from
+// the reference without returning to vague generic prompt text.
 function ensureRestyle(
   action: MomentVisualAction,
   ctx: MomentPromptContext,
 ): MomentVisualAction {
-  if (action.outfit?.trim() && action.hairstyle?.trim()) return action;
   const style = presetMomentStyle(
     resolveMomentVenue(ctx),
     stageStyleTier(ctx.stage),
     ctx.companion.gender,
     resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender),
   );
+  const expression = suggestMomentExpressionOptions(ctx.emotion, ctx.companion.gender)[0]?.expression
+    ?? "calm attentive expression, clear eyes, relaxed brows, natural mouth";
   return {
     ...action,
+    expression: action.expression?.trim() ? action.expression : expression,
+    gaze: action.gaze?.trim()
+      ? action.gaze
+      : "face oriented toward the viewer, eyes may meet the viewer or lower softly",
     hairstyle: action.hairstyle?.trim() ? action.hairstyle : style.hairstyle,
     outfit: action.outfit?.trim() ? action.outfit : style.outfit,
   };
@@ -185,15 +199,20 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     isPublic
       ? "Keep exactly one person in focus — this companion only. Do not add a second main subject, the user, an opponent, or anyone near the companion; no duplicate bodies."
       : "Keep exactly one person in the image — this companion only. Do not add any other people, a second person, the user, an opponent, a crowd, bystanders, reflections of another person, or duplicate bodies.",
-    "The companion looks directly at the viewer, both eyes meeting the viewer's gaze; do not render any camera, phone, or photographic device.",
+    "The companion's face is oriented toward the viewer; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.",
   );
 
   const momentPose = ensureRestyle(ctx.visualAction ?? presetFallbackAction(ctx), ctx);
   pushMomentPoseLines(lines, momentPose);
   const styleProfile = resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender);
+  const bodyAttitude = suggestMomentBodyAttitude(ctx.emotion);
   lines.push(
     formatMomentStyleProfile(styleProfile) + ".",
+    `Body attitude: ${bodyAttitude}.`,
     `Pose/body quality: ${MOMENT_POSE_BODY_QUALITY}.`,
+    "Pose variety: use the selected full-body moment pose as the main body structure; avoid a generic standing portrait and use natural full-body framing.",
+    "Expression quality: visibly emotion-specific and different from the reference portrait, with clear eyes, brows, and mouth.",
+    "Primary action rule: keep only one primary hand action or prop; do not combine incompatible hand poses or scene props.",
   );
   lines.push(
     isPublic
@@ -219,10 +238,6 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
         : "The background is empty of other people."
     }`,
   );
-
-  if (ctx.emotion && !momentPose.expression?.trim()) {
-    lines.push(`Expression: ${ctx.emotion}.`);
-  }
 
   if (ctx.activity) {
     const activityBits = [ctx.activity.activity_type, ctx.activity.activity_hint, ctx.activity.mood]

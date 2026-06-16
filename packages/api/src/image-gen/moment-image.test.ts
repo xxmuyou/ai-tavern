@@ -279,15 +279,19 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("soft sweater");
     expect(prompt).not.toContain("identity reference");
     expect(prompt).toContain("warm");
-    expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
-    expect(prompt).toContain("Gaze: eyes toward the viewer");
-    expect(prompt).toContain("Expression: warm expression");
+    expect(prompt).toContain("Moment pose: full-body leaning lightly against a railing or bench");
+    expect(prompt).toContain("Gaze: face oriented toward the viewer");
+    expect(prompt).toContain("Expression: soft genuine smile");
     expect(prompt).toContain("Style profile: sharp urban");
-    expect(prompt).toContain("Pose/body quality: flattering natural proportions");
+    expect(prompt).toContain("Body attitude: relaxed shoulders, body subtly leaning toward the viewer");
+    expect(prompt).toContain("Pose/body quality: flattering full-body proportions");
+    expect(prompt).toContain("Pose variety: use the selected full-body moment pose");
+    expect(prompt).toContain("Expression quality: visibly emotion-specific");
+    expect(prompt).toContain("Primary action rule: keep only one primary hand action or prop");
     // Fallback styling comes from the venue/stage preset (harbor tags ->
     // outdoor_public, familiar stage -> reserved tier), never a vague default.
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): tailored cropped jacket over a fitted dress",
+      "Outfit (overrides any clothing mentioned in the reference): fitted blouse with high-waisted shorts and polished accessories",
     );
     expect(prompt).toContain("Change the hairstyle to: high ponytail with a ribbon");
     expect(prompt).toContain("Makeup: fresh light makeup");
@@ -324,8 +328,8 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("single-character scene image");
     expect(prompt).toContain("Keep exactly one person in focus — this companion only");
     expect(prompt).toContain("Do not add a second main subject, the user, an opponent");
-    expect(prompt).toContain("looks directly at the viewer");
-    expect(prompt).toContain("do not render any camera, phone, or photographic device");
+    expect(prompt).toContain("face is oriented toward the viewer");
+    expect(prompt).toContain("Do not render any camera, phone, or photographic device");
     expect(prompt).toContain("no second main character");
     expect(prompt).not.toContain("first-person perspective from the user's point of view");
   });
@@ -368,7 +372,7 @@ describe("buildMomentPrompt", () => {
       visualAction: null,
     });
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): soft satin wrap dress styled as refined nightwear",
+      "Outfit (overrides any clothing mentioned in the reference): strappy satin short nightdress under an open robe",
     );
     expect(prompt).toContain("Change the hairstyle to: damp tousled hair");
   });
@@ -437,10 +441,11 @@ describe("buildMomentPrompt", () => {
       visualAction: null,
     });
 
-    expect(prompt).toContain("Moment pose: standing or seated alone in the scene");
+    expect(prompt).toContain("Moment pose: full-body leaning lightly against a railing or bench");
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): tailored cropped jacket over a fitted dress",
+      "Outfit (overrides any clothing mentioned in the reference): fitted blouse with high-waisted shorts and polished accessories",
     );
+    expect(prompt).toContain("Expression: soft genuine smile");
     expect(prompt).not.toContain("slid off");
     expect(prompt).not.toContain("lap");
     expect(prompt).not.toContain("sheet ar");

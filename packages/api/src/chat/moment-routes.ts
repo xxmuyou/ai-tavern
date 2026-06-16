@@ -251,6 +251,7 @@ async function composePrompt(
     sceneMood: ctx.scene.mood,
     sceneName: ctx.scene.name,
     scenePrivacy: privacy,
+    sceneTags: ctx.scene.tags,
     sceneVenue: venue,
     sourceReply: ctx.sourceReply,
     stage: ctx.stage,
