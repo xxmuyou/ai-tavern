@@ -423,6 +423,53 @@ describe("handlePostMessage", () => {
     expect(state.messages[1]?.content).toBe("<narration>x</narration>\n\n嗯。");
   });
 
+  it("canonicalizes malformed narration tags in streamed and saved replies", async () => {
+    pendingSignal(false);
+    const { env, state } = createEnv({ companion: COMPANION });
+    vi.stubGlobal("fetch", buildStreamFetch(["<n nar", "ration>她笑了。</x narration>", "早。<stage>ignored tag</stage>"]));
+
+    const response = await handlePostMessage(buildPost({ text: "hi" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+
+    const body = await response.text();
+    expect(body).toContain(`event: chunk\ndata: {"text":"<narration>她笑了。</narration>"}\n\n`);
+    expect(body).toContain(`event: chunk\ndata: {"text":"早。ignored tag"}\n\n`);
+    expect(body).not.toContain("<n nar");
+    expect(body).not.toContain("<x narration>");
+    expect(body).not.toContain("<stage>");
+    expect(state.messages[1]?.content).toBe("<narration>她笑了。</narration>早。ignored tag");
+  });
+
+  it("sanitizes malformed companion history before sending prompt context", async () => {
+    pendingSignal(false);
+    const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];
+    const { env } = createEnv({
+      companion: COMPANION,
+      history: [
+        { content: "hi", created_at: 1, role: "user" },
+        {
+          content: "<n narration>Maya nodded.</x narration>Hello.<stage>bad tag</stage>",
+          created_at: 2,
+          role: "companion",
+        },
+      ],
+      thread: { id: "t-1", message_count: 2, summary: null },
+    });
+    vi.stubGlobal("fetch", buildStreamFetch(["Hello."], (body) => {
+      chatBodies.push(body);
+    }));
+
+    const response = await handlePostMessage(buildPost({ text: "how are you?" }), env, buildCtx(), USER, "c-1");
+    expect(response.status).toBe(200);
+    await response.text();
+
+    const promptText = (chatBodies[0]?.messages ?? []).map((message) => message.content).join("\n");
+    expect(promptText).toContain("<narration>Maya nodded.</narration>Hello.bad tag");
+    expect(promptText).not.toContain("<n narration>");
+    expect(promptText).not.toContain("<x narration>");
+    expect(promptText).not.toContain("<stage>");
+  });
+
   it("does not send old seeded English greetings as prompt history when the latest user message is Chinese", async () => {
     pendingSignal(false);
     const chatBodies: Array<{ messages?: Array<{ content: string; role: string }> }> = [];

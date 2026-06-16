@@ -40,6 +40,32 @@ describe("handleSelectVariant", () => {
     expect(message.selected_variant).toBe(0);
   });
 
+  it("sanitizes malformed tags when selecting an old variant", async () => {
+    const message: MessageState = {
+      content: "v1",
+      id: "m1",
+      role: "companion",
+      selected_variant: 1,
+      thread_id: "t-1",
+      variants: JSON.stringify(["<x narration>旧。</x narration>Hi<stage>bad</stage>", "v1"]),
+    };
+    const env = createEnv(message);
+    const token = await issueTestSessionToken(env, "player@example.com");
+
+    const res = await handleSelectVariant(
+      reqWithBody(token, { index: 0 }),
+      env,
+      { email: "player@example.com", id: "user-1" },
+      "c-1",
+      "m1",
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { content: string; variants: string[] };
+    expect(body.content).toBe("<narration>旧。</narration>Hibad");
+    expect(body.variants[0]).toBe("<narration>旧。</narration>Hibad");
+    expect(message.content).toBe("<narration>旧。</narration>Hibad");
+  });
+
   it("rejects an out-of-range index", async () => {
     const message: MessageState = {
       content: "v0",

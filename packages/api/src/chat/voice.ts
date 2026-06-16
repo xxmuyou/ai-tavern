@@ -13,6 +13,7 @@ import { loadMiniMaxVoiceConfig, speedValueForPreset } from "../voice/config";
 import { synthesizeSpeech, VoiceError } from "../voice/minimax-t2a";
 import { canChatWithCompanion, loadCompanionForChat, loadThread } from "./loaders";
 import { checkRateLimit } from "./quota";
+import { normalizeChatReplyText } from "./reply-normalize";
 import { loadMessageRow } from "./variants";
 import { resolveEffectiveVoiceSetting } from "./voice-settings";
 
@@ -158,10 +159,11 @@ export async function handleMessageVoice(
  * narration, so we never return silence for a valid message.
  */
 export function spokenText(content: string): string {
-  const withoutNarration = content.replace(/<narration>[\s\S]*?<\/narration>/gi, " ");
+  const normalized = normalizeChatReplyText(content);
+  const withoutNarration = normalized.replace(/<narration>[\s\S]*?<\/narration>/gi, " ");
   const dialogue = stripTags(withoutNarration);
   if (dialogue) return dialogue;
-  return stripTags(content);
+  return stripTags(normalized);
 }
 
 function stripTags(value: string): string {

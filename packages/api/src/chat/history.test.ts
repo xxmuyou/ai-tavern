@@ -8,6 +8,8 @@ type MessageRow = {
   thread_id: string;
   role: string;
   content: string;
+  variants?: string | null;
+  selected_variant?: number | null;
   signals: string | null;
   emotion: string | null;
   created_at: number;
@@ -193,6 +195,36 @@ describe("handleGetHistory", () => {
     expect(body.messages.map((m) => m.id)).toEqual(["m3", "m4"]);
     expect(body.messages[1]?.signals).toEqual({ closeness: 1, trust: 1 });
     expect(body.next_cursor).toBe("m3"); // next page would be < m3.created_at
+  });
+
+  it("sanitizes malformed companion tags in history content and variants", async () => {
+    const thread = { created_at: 0, id: "t-1", message_count: 2, summary: null, updated_at: 0 };
+    const { env } = createEnv({
+      companion: { created_by: null, id: "c-1", is_active: 1, source: "official" },
+      messages: [
+        { content: "2 < 3", created_at: 1, emotion: null, id: "m1", role: "user", signals: null, thread_id: "t-1" },
+        {
+          content: "<n narration>她笑了。</x narration>早。<stage>bad</stage>",
+          created_at: 2,
+          emotion: "warm",
+          id: "m2",
+          role: "companion",
+          selected_variant: 1,
+          signals: null,
+          thread_id: "t-1",
+          variants: JSON.stringify(["<x narration>旧。</x narration>", "<stage>bad</stage>早。"]),
+        },
+      ],
+      thread,
+    });
+
+    const response = await handleGetHistory(env, USER, "c-1", new URL("https://x/chat/c-1/history"));
+    const body = (await response.json()) as {
+      messages: Array<{ content: string; role: string; variants: string[] | null }>;
+    };
+    expect(body.messages[0]?.content).toBe("2 < 3");
+    expect(body.messages[1]?.content).toBe("<narration>她笑了。</narration>早。bad");
+    expect(body.messages[1]?.variants).toEqual(["<narration>旧。</narration>", "bad早。"]);
   });
 
   it("clamps limit to 1..100", async () => {

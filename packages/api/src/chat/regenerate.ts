@@ -25,7 +25,7 @@ import {
 import { buildRelationshipNarrative } from "./narrative";
 import { buildChatPromptArtifacts, type HistoryMessage, type UserPersonaForPrompt } from "./prompt";
 import { checkRateLimit, incrementQuota, isSubscriberActive } from "./quota";
-import { createStreamingReplyNormalizer } from "./reply-normalize";
+import { createStreamingReplyNormalizer, normalizeChatReplyText } from "./reply-normalize";
 import { commitReservation, releaseReservation } from "../credits";
 import { reserveChatCredits } from "./messages";
 import { createSSEStream, type SSEHandle } from "./sse";
@@ -195,7 +195,7 @@ export async function handleRegenerateMessage(
     );
   }
 
-  const existingVariants = parseVariants(target.variants, target.content);
+  const existingVariants = parseVariants(target.variants, target.content).map((variant) => normalizeChatReplyText(variant));
   const sse = createSSEStream();
   ctx.waitUntil(
     runRegenerate({

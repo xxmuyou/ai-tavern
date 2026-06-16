@@ -1,6 +1,7 @@
 import { jsonResponse, notFound } from "../http";
 import type { UserRecord } from "../identity";
 import { canChatWithCompanion, loadCompanionForChat, loadThread } from "./loaders";
+import { normalizeChatReplyText } from "./reply-normalize";
 import { parseVariants } from "./variants";
 
 const DEFAULT_LIMIT = 50;
@@ -103,19 +104,23 @@ export async function handleGetHistory(
     .slice()
     .reverse()
     .map((row) => {
-      const variants = row.role === "companion" ? parseVariants(row.variants, row.content) : null;
+      const isCompanion = row.role === "companion";
+      const content = isCompanion ? normalizeChatReplyText(row.content) : row.content;
+      const variants = isCompanion
+        ? parseVariants(row.variants, row.content).map((variant) => normalizeChatReplyText(variant))
+        : null;
       return {
-        content: row.content,
+        content,
         created_at: row.created_at,
         emotion: row.emotion,
         id: row.id,
-        moment_image: row.role === "companion" ? moments.get(row.id) ?? null : null,
-        outfit_image: row.role === "companion" ? outfits.get(row.id) ?? null : null,
+        moment_image: isCompanion ? moments.get(row.id) ?? null : null,
+        outfit_image: isCompanion ? outfits.get(row.id) ?? null : null,
         role: row.role,
         scene_id: row.scene_id ?? null,
         // Only expose variant state when there is more than one wording to swipe.
         selected_variant: variants && variants.length > 1 ? row.selected_variant ?? variants.length - 1 : null,
-        signals: row.role === "companion" ? parseSignals(row.signals) : null,
+        signals: isCompanion ? parseSignals(row.signals) : null,
         variants: variants && variants.length > 1 ? variants : null,
       };
     });

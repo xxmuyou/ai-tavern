@@ -196,6 +196,14 @@ facial expressions, scene description, and inner observations use
 <narration>...</narration>; spoken dialogue stays outside tags.
 ```
 
+Chat reply text is also passed through a deterministic markup sanitizer before
+streaming, persistence, prompt-history reuse, voice extraction, and moment-image
+context. The sanitizer allows only `<narration>` / `</narration>` tags:
+malformed narration-like tags such as `<n narration>` or `<x narrative>` are
+canonicalized, and other XML-like tags are stripped while keeping their body
+text. This is a lightweight string pass; it does not retry the LLM, change
+credits, or change the SSE wire format.
+
 当前 chat 主调用只负责**流式文本回复**。关系 `signals` 与 `emotion` 由第二次 `task='signal'` structured-output 调用独立提取；长期 thread memory 由异步 `task='memory_extract'` 提取。不要把 chat 回复重新设计为 JSON，否则会破坏 SSE 文本体验与现有 signal extraction 分工。
 
 ### 5.2 信号值约束

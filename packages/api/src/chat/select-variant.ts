@@ -1,6 +1,7 @@
 import { jsonResponse, notFound, readJson } from "../http";
 import type { UserRecord } from "../identity";
 import { canChatWithCompanion, loadCompanionForChat, loadThread } from "./loaders";
+import { normalizeChatReplyText } from "./reply-normalize";
 import { loadMessageRow, parseVariants } from "./variants";
 
 type SelectBody = { index?: unknown };
@@ -40,13 +41,13 @@ export async function handleSelectVariant(
     return jsonResponse({ error: "invalid_request" }, { status: 400 });
   }
 
-  const variants = parseVariants(target.variants, target.content);
+  const variants = parseVariants(target.variants, target.content).map((variant) => normalizeChatReplyText(variant));
   const index = typeof body.index === "number" ? body.index : Number.NaN;
   if (!Number.isInteger(index) || index < 0 || index >= variants.length) {
     return jsonResponse({ error: "invalid_index", count: variants.length }, { status: 400 });
   }
 
-  const content = variants[index] ?? target.content;
+  const content = variants[index] ?? normalizeChatReplyText(target.content);
   await env.DB.prepare(`UPDATE messages SET content = ?, selected_variant = ? WHERE id = ?`)
     .bind(content, index, messageId)
     .run();

@@ -127,6 +127,14 @@ export type PromptSegment = {
 - Use `<narration>...</narration>` for actions and plain text only for spoken dialogue.
 - Match the user's current language.
 
+### Chat markup sanitizer
+
+- 模型仍被要求只输出 `<narration>` / `</narration>` 作为旁白标签；其他 XML-like tags 不属于合法输出格式。
+- 后端在 streaming chunk、持久化、history 返回、prompt history 注入、voice/moment-image 派生上下文前执行确定性 sanitizer：
+  - `<n narration>`、`<x narration>`、`< narrative >` 等 narration-like tag 统一 canonicalize 为 `<narration>` / `</narration>`。
+  - 非 narration 的 XML-like tag 只剥离 tag 本身，正文保留。
+- Sanitizer 不调用 LLM、不重试、不改变计费、不改变 SSE 协议；它只是防止坏格式进入 UI、DB 和下一轮 prompt。
+
 ---
 
 ## Thread Memory

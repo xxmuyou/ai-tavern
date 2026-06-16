@@ -8,9 +8,15 @@ const ASTERISK_NARRATION_RE = /\*([^*\n][^*]*?)\*/g;
 // never leaks into the bubble as literal text.
 const NARRATION_TAG_RE = /<\s*\/?\s*narrat[a-z]*\s*>?/gi;
 const NARRATION_TAG_SCAN_RE = /<\s*(\/?)\s*narrat[a-z]*\s*>/gi;
+const BLOCKQUOTE_LINE_START_RE = /(^|\n)[ \t]{0,3}>[ \t]?/g;
+const COMPLETE_TAG_RE = /<[^>\n]{0,96}>/g;
+const NARRATION_TAG_WORD_RE = /\bnarrat[a-z]*\b/i;
+const XML_LIKE_TAG_RE = /^<\/?[A-Za-z][A-Za-z0-9_-]*(?:\s+[^>]*)?>$/;
 
 export function normalizeChatDisplayText(content: string): string {
-  return content.replace(/(^|\n)[ \t]{0,3}>[ \t]?/g, '$1');
+  return content
+    .replace(BLOCKQUOTE_LINE_START_RE, '$1')
+    .replace(COMPLETE_TAG_RE, (tag) => normalizeChatDisplayTag(tag));
 }
 
 export function parseNarration(content: string, options: { tolerateUnclosed?: boolean } = {}): NarrationSegment[] {
@@ -128,4 +134,27 @@ function looksLikeNarration(text: string): boolean {
   if (/<\s*\/?\s*narrat/i.test(trimmed)) return true;
   if (/^[(（].+[)）]$/.test(trimmed)) return true;
   return false;
+}
+
+function normalizeChatDisplayTag(tag: string): string {
+  if (!tag.startsWith('<') || !tag.endsWith('>')) {
+    return tag;
+  }
+
+  const inner = tag.slice(1, -1).trim();
+  if (!inner) {
+    return tag;
+  }
+
+  const isClosing = inner.startsWith('/');
+  const body = isClosing ? inner.slice(1).trim() : inner;
+  if (NARRATION_TAG_WORD_RE.test(body)) {
+    return isClosing ? '</narration>' : '<narration>';
+  }
+
+  if (XML_LIKE_TAG_RE.test(tag)) {
+    return '';
+  }
+
+  return tag;
 }

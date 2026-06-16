@@ -82,6 +82,29 @@ describe("buildChatPrompt", () => {
     expect(messages[5]?.content).toContain("Every visible word");
   });
 
+  it("sanitizes malformed companion tags before injecting prompt history", () => {
+    const messages = buildChatPrompt({
+      companion,
+      narrative: "Stranger.",
+      recentMessages: [
+        { content: "Hi", role: "user" },
+        { content: "<n narration>Maya nodded.</x narration>Hello.<stage>bad</stage>", role: "companion" },
+      ],
+      scene: null,
+      secretToReveal: null,
+      stage: "first_contact",
+      threadSummary: null,
+      userText: "Want to grab coffee later?",
+    });
+
+    expect(messages[2]).toEqual({
+      content: "<narration>Maya nodded.</narration>Hello.bad",
+      role: "assistant",
+    });
+    expect(messages.map((message) => message.content).join("\n")).not.toContain("<n narration>");
+    expect(messages.map((message) => message.content).join("\n")).not.toContain("<stage>");
+  });
+
   it("omits the scene section when scene is null", () => {
     const messages = buildChatPrompt({
       companion,

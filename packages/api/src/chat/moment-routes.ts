@@ -23,6 +23,7 @@ import {
 import { extractMomentVisualAction } from "../image-gen/moment-action";
 import { classifyMomentScene } from "../image-gen/moment-style";
 import { loadCompanionForChat, loadSceneForChat, parseSceneTags } from "./loaders";
+import { normalizeChatReplyText } from "./reply-normalize";
 
 /**
  * spec-027 Chat Moment Images:
@@ -234,7 +235,7 @@ async function composePrompt(
       name: scene?.name ?? "Private chat",
       tags: sceneTags,
     },
-    sourceReply: message.content,
+    sourceReply: normalizeChatReplyText(message.content),
     stage,
     storyBeat: storyBeat?.status === "active" ? { objective: storyBeat.objective, title: storyBeat.title } : null,
     timeSlot: computeTimeSlot(new Date(), tz),

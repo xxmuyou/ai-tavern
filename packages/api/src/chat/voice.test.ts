@@ -62,6 +62,10 @@ describe("spokenText", () => {
   it("falls back to the full stripped text when it is all narration", () => {
     expect(spokenText("<narration>She just watched, silent.</narration>")).toBe("She just watched, silent.");
   });
+
+  it("normalizes malformed narration tags before choosing spoken text", () => {
+    expect(spokenText("<n narration>她笑了。</x narration>早。<stage>bad tag</stage>")).toBe("早。bad tag");
+  });
 });
 
 describe("chat voice settings", () => {

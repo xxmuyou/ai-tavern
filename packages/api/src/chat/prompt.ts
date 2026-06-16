@@ -9,6 +9,7 @@ import {
   shouldQuoteExampleDialogueForTarget,
   type ReplyLanguageTarget,
 } from "./language";
+import { normalizeChatReplyText } from "./reply-normalize";
 
 export type CompanionForPrompt = {
   name: string;
@@ -683,15 +684,16 @@ function buildRecentHistoryForPrompt(
 }
 
 function prepareHistoryContent(input: ChatPromptInput, message: HistoryMessage): string {
+  const content = message.role === "companion" ? normalizeChatReplyText(message.content) : message.content;
   const currentSceneId = input.scene?.id ?? null;
   if (!currentSceneId || !message.scene_id || message.scene_id === currentSceneId) {
-    return message.content;
+    return content;
   }
-  return stripNarration(message.content);
+  return stripNarration(content);
 }
 
 function stripNarration(content: string): string {
-  return content
+  return normalizeChatReplyText(content)
     .replace(/<narration>[\s\S]*?<\/narration>/gi, " ")
     .replace(/<narration>[\s\S]*$/gi, " ")
     .replace(/<\/narration>/gi, " ")
