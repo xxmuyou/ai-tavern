@@ -8,6 +8,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
+import { ME_ROUTE } from '@/constants/routes';
 import { usePersonas } from '@/hooks/use-personas';
 
 type Draft = {
@@ -105,7 +106,7 @@ export default function PersonasScreen() {
 
   return (
     <View className="flex-1 bg-app-bg">
-      <TopBar showBack title="Your personas" />
+      <TopBar backFallback={ME_ROUTE} showBack title="Personas" />
       <ScrollView className="flex-1">
         <View className="mx-auto w-full max-w-3xl gap-4 px-4 py-6">
           <Text className="text-sm text-app-muted">

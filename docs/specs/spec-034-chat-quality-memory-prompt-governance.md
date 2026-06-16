@@ -90,6 +90,12 @@ export type PromptSegment = {
 | `thread_memory` | 结构化长期记忆 |
 | `thread_summary` | 旧消息摘要 |
 
+### 用户人设入口
+
+- Web 顶部导航提供 `Personas` 一级入口；Me 页保留 `Manage personas` 入口，直接打开 `/personas` 也应有清晰返回路径。
+- Chat 内 persona selector 用于当前会话切换“用户正在扮演谁”；默认使用用户标记的 default persona。
+- User persona 只描述用户身份并注入 prompt / memory extraction，不改 companion 角色卡、头像、公开资料或 Discover 排序。
+
 ### 可裁剪段
 
 - 旧的 recent history。

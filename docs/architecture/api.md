@@ -1049,6 +1049,8 @@ D1 连通性诊断（仅 admin / 内部）。
 
 - `GET /personas`、`POST /personas` — 列出 / 创建用户 persona。
 - `PATCH /personas/{id}`、`DELETE /personas/{id}` — 更新 / 删除。
+- Product UI：用户可从 web 顶部 `Personas`、Me 页 `Manage personas`、chat 内 persona selector 找到或切换用户人设。
+- Boundary：user persona 描述“用户在 chat 中是谁”，只进入 chat prompt / thread context；不修改 companion 本体资料、官方角色卡或 public discovery 展示。
 
 ### 11.3 Life / 日常模拟（daily-life-sim）
 

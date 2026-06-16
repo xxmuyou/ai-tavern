@@ -1,25 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { QuotaBadge } from './QuotaBadge';
 
 type TopBarProps = {
+  backFallback?: Href;
   right?: ReactNode;
   showQuota?: boolean;
   showBack?: boolean;
   title: string;
 };
 
-export function TopBar({ right, showBack, showQuota, title }: TopBarProps) {
+export function TopBar({ backFallback, right, showBack, showQuota, title }: TopBarProps) {
   const router = useRouter();
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (backFallback) {
+      router.replace(backFallback);
+    }
+  };
 
   return (
     <View className="min-h-16 flex-row items-center justify-between border-b border-app-line bg-app-card px-4">
       <View className="flex-1 flex-row items-center gap-3">
         {showBack ? (
-          <Pressable accessibilityRole="button" onPress={() => router.back()} className="h-10 w-10 items-center justify-center rounded-lg">
+          <Pressable accessibilityLabel="Go back" accessibilityRole="button" onPress={handleBack} className="h-10 w-10 items-center justify-center rounded-lg">
             <Ionicons color="#11181C" name="chevron-back" size={24} />
           </Pressable>
         ) : null}
