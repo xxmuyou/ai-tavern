@@ -23,6 +23,7 @@ type Phase = 'idle' | 'choosing' | 'generating' | 'ready' | 'applying' | 'error'
 
 type ProfileOutfitPanelProps = {
   companionId: string;
+  density?: 'default' | 'compact';
   hasOverride: boolean;
   name: string;
   onChanged: () => Promise<unknown> | void;
@@ -41,7 +42,14 @@ function messageForError(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, onError }: ProfileOutfitPanelProps) {
+export function ProfileOutfitPanel({
+  companionId,
+  density = 'default',
+  hasOverride,
+  name,
+  onChanged,
+  onError,
+}: ProfileOutfitPanelProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [recommendations, setRecommendations] = useState<OutfitRecommendation[]>([]);
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
@@ -210,9 +218,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
 
   const previewSource = mediaSource(outputKey);
   const canGenerate = customPrompt.trim().length > 0 || selectedRecommendationId !== null;
+  const isCompact = density === 'compact';
 
   return (
-    <WebCard padding="md" className="gap-4 border-white/12 bg-[#1B0F22]">
+    <WebCard padding={isCompact ? 'sm' : 'md'} className="gap-4 border-white/12 bg-[#1B0F22]">
       <View className="gap-3">
         <View className="min-w-0">
           <Text className="text-overline text-rose-200">Profile image</Text>
@@ -283,7 +292,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
           />
 
           {previewSource ? (
-            <View className="overflow-hidden rounded-2xl border border-white/12 bg-[#130A18]">
+            <View
+              className={`overflow-hidden rounded-2xl border border-white/12 bg-[#130A18] ${isCompact ? 'self-center' : ''}`}
+              style={isCompact ? styles.previewFrameCompact : undefined}
+            >
               <Image accessibilityLabel="Generated profile outfit preview" resizeMode="cover" source={previewSource} style={styles.preview} />
             </View>
           ) : null}
@@ -342,6 +354,10 @@ export function ProfileOutfitPanel({ companionId, hasOverride, name, onChanged, 
 const styles = StyleSheet.create({
   preview: {
     aspectRatio: 4 / 5,
+    width: '100%',
+  },
+  previewFrameCompact: {
+    maxWidth: 280,
     width: '100%',
   },
 });

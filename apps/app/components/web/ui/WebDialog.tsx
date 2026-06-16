@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
 import { cn } from './cn';
@@ -66,7 +66,11 @@ export function WebDialog({
         <Pressable
           accessibilityRole="none"
           onPress={(e) => e.stopPropagation?.()}
-          className={cn('w-full overflow-hidden rounded-2xl border shadow-float', tone.panel, sizeClass[size])}
+          className={cn(
+            'min-h-0 max-h-[calc(100vh-48px)] w-full overflow-hidden rounded-2xl border shadow-float',
+            tone.panel,
+            sizeClass[size],
+          )}
         >
           <View className={cn('flex-row items-start justify-between gap-4 border-b px-7 py-5', tone.chrome)}>
             <View className="min-w-0 flex-1">
@@ -82,10 +86,23 @@ export function WebDialog({
               <Ionicons color={PALETTE.muted} name="close" size={20} />
             </Pressable>
           </View>
-          <View className="px-7 py-6">{children}</View>
+          <ScrollView
+            className="min-h-0"
+            contentContainerClassName="px-7 py-6"
+            keyboardShouldPersistTaps="handled"
+            style={styles.bodyScroll}
+          >
+            {children}
+          </ScrollView>
           {footer ? <View className={cn('border-t px-7 py-4', tone.chrome)}>{footer}</View> : null}
         </Pressable>
       </Pressable>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  bodyScroll: {
+    flexShrink: 1,
+  },
+});

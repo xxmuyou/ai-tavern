@@ -1535,6 +1535,7 @@ export default function WebChatScreen() {
       >
         <ProfileOutfitPanel
           companionId={companionId}
+          density="compact"
           hasOverride={Boolean(companion?.profile_image_override)}
           name={companion?.name ?? 'Companion'}
           onChanged={async () => {
