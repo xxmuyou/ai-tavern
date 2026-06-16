@@ -262,6 +262,107 @@ describe("RunningHub stale image job recovery", () => {
     });
   });
 
+  it("records the concrete RunningHub failedReason when task output validation fails", async () => {
+    vi.setSystemTime(new Date("2026-06-05T00:00:00.000Z"));
+    const now = Date.now();
+    const failedReason = [
+      "433",
+      JSON.stringify({
+        error: { message: "Prompt outputs failed validation", type: "prompt_outputs_failed_validation" },
+        node_errors: {
+          "1": {
+            class_type: "CheckpointLoaderSimple",
+            errors: [
+              {
+                details: "ckpt_name - Model not found in checkpoints or unet: Twilight-Illustrious-v2.safetensors",
+                message: "Custom validation failed for node",
+                type: "custom_validation_failed",
+              },
+            ],
+            node_name: "Load Checkpoint",
+          },
+        },
+      }),
+    ].join("||");
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ code: 805, data: { failedReason }, msg: "APIKEY_TASK_STATUS_ERROR" }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { env, jobs } = createEnv([
+      imageJob({
+        id: "job-validation-failed",
+        provider_task_id: "rh-validation-failed",
+        updated_at: now - 61_000,
+      }),
+    ]);
+
+    const polled = await pollRunningHubImageJobIfDue(env, jobs.get("job-validation-failed") as ImageGenJobRow, {
+      now,
+      staleAfterMs: 60_000,
+    });
+
+    expect(polled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(jobs.get("job-validation-failed")).toMatchObject({
+      error_code: "provider_error",
+      error_message:
+        "Checkpoint asset error: selected checkpoint is unavailable in RunningHub. Please choose another model. Details: ckpt_name - Model not found in checkpoints or unet: Twilight-Illustrious-v2.safetensors",
+      status: "failed",
+    });
+  });
+
+  it("records a clear LoRA asset message when RunningHub rejects a LoRA file", async () => {
+    vi.setSystemTime(new Date("2026-06-05T00:00:00.000Z"));
+    const now = Date.now();
+    const failedReason = [
+      "433",
+      JSON.stringify({
+        error: { message: "Prompt outputs failed validation", type: "prompt_outputs_failed_validation" },
+        node_errors: {
+          "2": {
+            class_type: "LoraLoader",
+            errors: [
+              {
+                details: "file_name - LoRA file not found: api-lora-cn/missing.safetensors",
+                message: "Custom validation failed for node",
+                type: "custom_validation_failed",
+              },
+            ],
+            node_name: "Load LoRA",
+          },
+        },
+      }),
+    ].join("||");
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ code: 805, data: { failedReason }, msg: "APIKEY_TASK_STATUS_ERROR" }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { env, jobs } = createEnv([
+      imageJob({
+        id: "job-lora-failed",
+        provider_task_id: "rh-lora-failed",
+        updated_at: now - 61_000,
+      }),
+    ]);
+
+    const polled = await pollRunningHubImageJobIfDue(env, jobs.get("job-lora-failed") as ImageGenJobRow, {
+      now,
+      staleAfterMs: 60_000,
+    });
+
+    expect(polled).toBe(true);
+    expect(jobs.get("job-lora-failed")).toMatchObject({
+      error_code: "provider_error",
+      error_message:
+        "LoRA asset error: selected LoRA is unavailable in RunningHub. Please choose another LoRA. Details: file_name - LoRA file not found: api-lora-cn/missing.safetensors",
+      status: "failed",
+    });
+  });
+
   it("does not repeat provider polls inside the throttle window", async () => {
     vi.setSystemTime(new Date("2026-06-05T00:00:00.000Z"));
     const now = Date.now();

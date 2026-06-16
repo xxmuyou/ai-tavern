@@ -265,7 +265,7 @@ function parseTaskResult(payload: unknown): RunningHubTaskResult {
     }
     return {
       errorCode: "provider_error",
-      errorMessage: obj.msg ?? `RunningHub returned code ${obj.code}`,
+      errorMessage: readErrorMessage(obj.data) ?? readErrorMessage(obj) ?? obj.msg ?? `RunningHub returned code ${obj.code}`,
       status: "failed",
     };
   }
@@ -300,7 +300,7 @@ function parseStatusResult(payload: RunningHubApiResponse): RunningHubTaskResult
     }
     return {
       errorCode: "provider_error",
-      errorMessage: payload.msg ?? `RunningHub returned code ${payload.code}`,
+      errorMessage: readErrorMessage(payload.data) ?? readErrorMessage(payload) ?? payload.msg ?? `RunningHub returned code ${payload.code}`,
       status: "failed",
     };
   }
@@ -411,8 +411,94 @@ function readErrorMessage(value: unknown): string | null {
   const obj = value as Record<string, unknown>;
   for (const key of ["errorMessage", "error_message", "failedReason", "msg"]) {
     const item = obj[key];
-    if (typeof item === "string" && item) return item;
-    if (item && typeof item === "object") return JSON.stringify(item).slice(0, 1000);
+    const summarized = summarizeProviderError(item);
+    if (summarized) return summarized;
+  }
+  const summarized = summarizeProviderError(obj);
+  if (summarized) return summarized;
+  return null;
+}
+
+function summarizeProviderError(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return summarizeProviderErrorString(value) ?? value.slice(0, 1000);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const obj = value as Record<string, unknown>;
+
+  const failedReason = summarizeProviderError(obj.failedReason);
+  if (failedReason) return failedReason;
+
+  const nodeName = typeof obj.node_name === "string" && obj.node_name ? obj.node_name : null;
+  const exceptionType = typeof obj.exception_type === "string" && obj.exception_type ? obj.exception_type : null;
+  const exceptionMessage =
+    typeof obj.exception_message === "string" && obj.exception_message ? obj.exception_message : null;
+  if (exceptionMessage) {
+    const assetError = formatProviderAssetError(exceptionMessage, nodeName);
+    if (assetError) return assetError;
+  }
+  if (nodeName && exceptionType && exceptionMessage) return `${nodeName}: ${exceptionType}: ${exceptionMessage}`.slice(0, 1000);
+  if (nodeName && exceptionMessage) return `${nodeName}: ${exceptionMessage}`.slice(0, 1000);
+  if (exceptionType && exceptionMessage) return `${exceptionType}: ${exceptionMessage}`.slice(0, 1000);
+
+  const nodeErrors = summarizeNodeErrors(obj.node_errors);
+  if (nodeErrors) return nodeErrors;
+
+  const error = obj.error && typeof obj.error === "object" && !Array.isArray(obj.error)
+    ? (obj.error as Record<string, unknown>)
+    : null;
+  if (typeof error?.message === "string" && error.message) return error.message.slice(0, 1000);
+
+  return null;
+}
+
+function summarizeProviderErrorString(value: string): string | null {
+  const trimmed = value.trim();
+  const jsonStart = trimmed.includes("||") ? trimmed.slice(trimmed.indexOf("||") + 2) : trimmed;
+  if (!jsonStart.startsWith("{") && !jsonStart.startsWith("[")) return null;
+  try {
+    return summarizeProviderError(JSON.parse(jsonStart));
+  } catch {
+    return null;
+  }
+}
+
+function summarizeNodeErrors(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  for (const nodeError of Object.values(value as Record<string, unknown>)) {
+    if (!nodeError || typeof nodeError !== "object" || Array.isArray(nodeError)) continue;
+    const obj = nodeError as Record<string, unknown>;
+    const nodeName = typeof obj.node_name === "string" && obj.node_name ? obj.node_name : "RunningHub node";
+    const errors = Array.isArray(obj.errors) ? obj.errors : [];
+    for (const error of errors) {
+      if (!error || typeof error !== "object" || Array.isArray(error)) continue;
+      const detail = (error as Record<string, unknown>).details;
+      const message = (error as Record<string, unknown>).message;
+      if (typeof detail === "string" && detail) {
+        return (formatProviderAssetError(detail, nodeName) ?? `${nodeName}: ${detail}`).slice(0, 1000);
+      }
+      if (typeof message === "string" && message) {
+        return (formatProviderAssetError(message, nodeName) ?? `${nodeName}: ${message}`).slice(0, 1000);
+      }
+    }
+  }
+  return null;
+}
+
+function formatProviderAssetError(message: string, nodeName: string | null): string | null {
+  const normalized = `${nodeName ?? ""} ${message}`.toLowerCase();
+  const isLoraError = normalized.includes("lora") || normalized.includes("loraloader");
+  const isCheckpointError =
+    normalized.includes("ckpt_name") ||
+    normalized.includes("checkpoint") ||
+    normalized.includes("checkpoints") ||
+    normalized.includes("unet");
+
+  if (isLoraError) {
+    return `LoRA asset error: selected LoRA is unavailable in RunningHub. Please choose another LoRA. Details: ${message}`;
+  }
+  if (isCheckpointError) {
+    return `Checkpoint asset error: selected checkpoint is unavailable in RunningHub. Please choose another model. Details: ${message}`;
   }
   return null;
 }
