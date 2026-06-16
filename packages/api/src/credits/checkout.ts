@@ -16,7 +16,7 @@ export async function createCreditsCheckout(
   const pkg = CREDIT_PACKAGES[packageRaw];
 
   const secretKey = await getSetting(env, "billing.stripe_secret_key");
-  const priceId = await getCreditPriceId(env, pkg.priceEnv);
+  const priceId = await getSetting(env, pkg.priceSettingKey);
   const successUrl = (await getSetting(env, "billing.credits_success_url")) ||
     (await getSetting(env, "billing.success_url"));
   const cancelUrl = (await getSetting(env, "billing.credits_cancel_url")) ||
@@ -72,22 +72,4 @@ export async function createCreditsCheckout(
     console.error(JSON.stringify({ error: String(err), message: "Credits checkout failed" }));
     throw new CreditsError("stripe_error", 502);
   }
-}
-
-function priceSettingKey(priceEnv: string): string {
-  switch (priceEnv) {
-    case "STRIPE_PRICE_CREDITS_SMALL":
-      return "billing.credits_small_price";
-    case "STRIPE_PRICE_CREDITS_MEDIUM":
-      return "billing.credits_medium_price";
-    case "STRIPE_PRICE_CREDITS_LARGE":
-      return "billing.credits_large_price";
-    default:
-      return "";
-  }
-}
-
-async function getCreditPriceId(env: CreditsEnv, priceEnv: string): Promise<string | null> {
-  const key = priceSettingKey(priceEnv);
-  return key ? getSetting(env, key) : null;
 }

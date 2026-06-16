@@ -134,6 +134,7 @@ export const SETTINGS: readonly SettingDef[] = [
     label: "Pro monthly price ID",
     type: "text",
     envKey: "STRIPE_PRICE_PRO_MONTHLY",
+    description: "Public Stripe Price ID. Admin Settings override the env fallback.",
   },
   {
     key: "billing.credits_small_price",
@@ -141,6 +142,7 @@ export const SETTINGS: readonly SettingDef[] = [
     label: "Credits small price ID",
     type: "text",
     envKey: "STRIPE_PRICE_CREDITS_SMALL",
+    description: "Public Stripe Price ID. Admin Settings override the env fallback.",
   },
   {
     key: "billing.credits_medium_price",
@@ -148,6 +150,7 @@ export const SETTINGS: readonly SettingDef[] = [
     label: "Credits medium price ID",
     type: "text",
     envKey: "STRIPE_PRICE_CREDITS_MEDIUM",
+    description: "Public Stripe Price ID. Admin Settings override the env fallback.",
   },
   {
     key: "billing.credits_large_price",
@@ -155,6 +158,7 @@ export const SETTINGS: readonly SettingDef[] = [
     label: "Credits large price ID",
     type: "text",
     envKey: "STRIPE_PRICE_CREDITS_LARGE",
+    description: "Public Stripe Price ID. Admin Settings override the env fallback.",
   },
   {
     key: "billing.success_url",

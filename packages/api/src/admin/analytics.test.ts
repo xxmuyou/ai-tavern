@@ -67,7 +67,13 @@ function createEnv(options: {
 
   const db = {
     prepare(sql: string) {
-      return buildStatement(sql, { identitiesStore, sessionsStore, subscriptions, usersStore });
+      return buildStatement(sql, {
+        identitiesStore,
+        proMonthlyPriceId: options.proMonthlyPriceId ?? "price_pro_monthly",
+        sessionsStore,
+        subscriptions,
+        usersStore,
+      });
     },
   };
 
@@ -78,7 +84,6 @@ function createEnv(options: {
     CONFIG: kvStore.asKV(),
     DB: db,
     STRIPE_SECRET_KEY: options.stripeSecretKey ?? "sk_test_123",
-    STRIPE_PRICE_PRO_MONTHLY: options.proMonthlyPriceId ?? "price_pro_monthly",
     subscriptions,
     usersStore,
   } as unknown as TestEnv;
@@ -88,6 +93,7 @@ function buildStatement(
   sql: string,
   stores: {
     identitiesStore: ReturnType<typeof createIdentitiesStore>;
+    proMonthlyPriceId: string;
     sessionsStore: ReturnType<typeof createSessionsStore>;
     subscriptions: SubscriptionFixture[];
     usersStore: UsersStore;
@@ -127,7 +133,11 @@ function buildStatement(
     },
     async all<T>(): Promise<{ results: T[] }> {
       if (sql.includes("SELECT key, value FROM app_settings")) {
-        return { results: [] };
+        return {
+          results: [
+            { key: "billing.pro_monthly_price", value: stores.proMonthlyPriceId },
+          ] as T[],
+        };
       }
       if (sql.includes("CASE WHEN active_sub.user_id IS NULL THEN 'free' ELSE 'pro' END AS tier")) {
         const [now] = values as [number];

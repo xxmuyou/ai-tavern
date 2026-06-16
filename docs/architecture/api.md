@@ -719,7 +719,7 @@ render version 参与缓存 key，避免改声音后复用旧音频。
 
 ### `POST /billing/checkout`
 
-创建 Stripe Pro Monthly Checkout Session。服务端只使用 `STRIPE_PRICE_PRO_MONTHLY`，不接受客户端传任意 price。
+创建 Stripe Pro Monthly Checkout Session。服务端只使用配置好的 Pro Monthly Price ID（Admin Settings / D1 优先，缺省回退 `STRIPE_PRICE_PRO_MONTHLY`），不接受客户端传任意 price。
 
 ```json
 // Request body 可以为空

@@ -113,9 +113,12 @@
 ### 5.1 Stripe 后台预建 Product / Price
 
 - 订阅：`Pro Monthly` $9.99/month、`Pro Annual` $79.99/year（v1.x）。
-- 积分包：Small / Medium / Large 一次性 price，price ID 写入环境变量：
-  - `STRIPE_PRICE_PRO_MONTHLY`
-  - `STRIPE_PRICE_CREDITS_SMALL` / `_MEDIUM` / `_LARGE`
+- 积分包：Small / Medium / Large 一次性 price。
+- Stripe Price ID 是公开配置，可通过环境变量提供默认值，也可在 Admin Settings / D1 `app_settings` 中覆盖：
+  - `billing.pro_monthly_price`
+  - `billing.credits_small_price` / `billing.credits_medium_price` / `billing.credits_large_price`
+- 对应 env fallback 为 `STRIPE_PRICE_PRO_MONTHLY`、`STRIPE_PRICE_CREDITS_SMALL`、`STRIPE_PRICE_CREDITS_MEDIUM`、`STRIPE_PRICE_CREDITS_LARGE`。
+- 改 Stripe 金额时，在 Stripe Dashboard 创建新的 Price，然后替换 Admin Settings 或环境变量中的对应 Price ID。若要改 credits 数量，则属于业务计费规则变更，需要同步代码、测试与页面口径。
 
 ### 5.2 订阅流程
 
