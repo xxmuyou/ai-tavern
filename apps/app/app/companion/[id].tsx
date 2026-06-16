@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { deleteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { Button } from '@/components/Button';
+import { CompanionArtwork } from '@/components/CompanionArtwork';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
 import { CompanionMemoriesPreview } from '@/components/CompanionMemoriesPreview';
 import { CompanionStoryPanel } from '@/components/CompanionStoryPanel';
@@ -168,24 +169,11 @@ export default function CompanionDetailScreen() {
         <View className="mx-auto w-full max-w-4xl gap-5 px-4 py-6">
           <View className="rounded-lg border border-app-line bg-app-card p-5">
             <View className="flex-row gap-4">
-              <View
-                className="h-28 w-28 items-center justify-end overflow-hidden rounded-lg border border-app-line bg-app-primarySoft"
-                style={styles.portraitFrame}
-              >
-                <View pointerEvents="none" style={styles.portraitFloor} />
-                {imageSource ? (
-                  <Image
-                    accessibilityLabel={companion.name}
-                    resizeMode="contain"
-                    source={imageSource}
-                    style={styles.portraitImage}
-                  />
-                ) : (
-                  <View className="h-full w-full items-center justify-center">
-                    <Text className="text-5xl font-semibold text-app-primary">{companion.name.slice(0, 1).toUpperCase()}</Text>
-                  </View>
-                )}
-              </View>
+              <CompanionArtwork
+                className="h-28 w-28 rounded-lg border border-app-line bg-app-primarySoft"
+                label={companion.name}
+                source={imageSource}
+              />
               <View className="min-w-0 flex-1 justify-center gap-2">
                 <View className="flex-row flex-wrap items-center gap-2">
                   <Text className="text-3xl font-semibold text-app-text">{companion.name}</Text>
@@ -260,22 +248,3 @@ function TextBlock({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.42)',
-    bottom: 0,
-    height: 34,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
-  portraitFrame: {
-    backgroundColor: '#EEF1F4',
-  },
-  portraitImage: {
-    height: '112%',
-    transform: [{ translateY: 9 }],
-    width: '112%',
-  },
-});

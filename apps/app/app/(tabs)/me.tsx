@@ -2,11 +2,12 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { fetchMe, listImageAssets, mediaSource, openBillingPortal, updateRomancePreference } from '@/api/companion-client';
 import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types';
 import { Button } from '@/components/Button';
+import { CompanionArtwork } from '@/components/CompanionArtwork';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { TopBar } from '@/components/TopBar';
 import { ADMIN_ROUTE, BILLING_ROUTE, PERSONAS_ROUTE } from '@/constants/routes';
@@ -212,32 +213,68 @@ export default function MeScreen() {
 }
 
 function ImageAssetGrid({ assets }: { assets: UserImageAsset[] }) {
+  const [selectedAsset, setSelectedAsset] = useState<UserImageAsset | null>(null);
+  const selectedSource = selectedAsset ? mediaSource(selectedAsset.art_key) : null;
+
   if (!assets.length) {
     return <Text className="text-sm text-app-muted">No saved images yet.</Text>;
   }
 
   return (
-    <View className="flex-row flex-wrap gap-3">
-      {assets.map((asset) => {
-        const source = mediaSource(asset.art_key);
-        return (
-          <View key={asset.id} className="w-[30%] min-w-[92px] overflow-hidden rounded-lg border border-app-line bg-app-primarySoft">
-            {source ? (
-              <Image
-                accessibilityLabel="Saved image asset"
-                resizeMode="cover"
+    <>
+      <View className="flex-row flex-wrap gap-3">
+        {assets.map((asset) => {
+          const source = mediaSource(asset.art_key);
+          return (
+            <Pressable
+              key={asset.id}
+              accessibilityRole="button"
+              accessibilityLabel="View saved image asset"
+              onPress={() => setSelectedAsset(asset)}
+              className="w-[30%] min-w-[92px] overflow-hidden rounded-lg border border-app-line bg-app-primarySoft"
+            >
+              <CompanionArtwork
+                className="aspect-[4/5] w-full bg-app-primarySoft"
+                label="Saved image asset"
                 source={source}
-                style={{ aspectRatio: 4 / 5, width: '100%' }}
+                fallback={
+                  <View className="aspect-[4/5] w-full items-center justify-center">
+                    <Text className="text-xs text-app-muted">Image</Text>
+                  </View>
+                }
               />
-            ) : (
-              <View className="aspect-[4/5] w-full items-center justify-center">
-                <Text className="text-xs text-app-muted">Image</Text>
-              </View>
-            )}
+            </Pressable>
+          );
+        })}
+      </View>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={Boolean(selectedAsset)}
+        onRequestClose={() => setSelectedAsset(null)}
+      >
+        <View className="flex-1 gap-4 bg-black/90 px-4 py-8">
+          <View className="flex-row items-center justify-between gap-3">
+            <Text className="min-w-0 flex-1 text-base font-semibold text-white" numberOfLines={1}>
+              {selectedAsset?.source === 'generated' ? 'Generated image' : 'Uploaded image'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close image preview"
+              onPress={() => setSelectedAsset(null)}
+              className="rounded-full bg-white/15 px-4 py-2"
+            >
+              <Text className="text-sm font-semibold text-white">Close</Text>
+            </Pressable>
           </View>
-        );
-      })}
-    </View>
+          <CompanionArtwork
+            className="flex-1 rounded-xl bg-black"
+            label="Saved image asset full preview"
+            source={selectedSource}
+          />
+        </View>
+      </Modal>
+    </>
   );
 }
 

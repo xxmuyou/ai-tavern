@@ -2182,12 +2182,10 @@ const twilightStyles = StyleSheet.create({
     width: 300,
   },
   stageCompanion: {
-    height: '62%',
+    height: '70%',
     maxHeight: 480,
     maxWidth: 360,
-    minHeight: 300,
-    transform: [{ translateY: -8 }],
-    width: '72%',
+    width: '78%',
   },
   stageCompanionEntered: {
     opacity: 1,

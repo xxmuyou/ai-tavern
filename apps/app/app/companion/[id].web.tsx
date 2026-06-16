@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { deleteCompanion, favoriteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
+import { CompanionArtwork } from '@/components/CompanionArtwork';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, WebTabs, WebTag } from '@/components/web/ui';
 import { CompanionGalleryPanel } from '@/components/CompanionGalleryPanel';
@@ -151,28 +152,17 @@ export default function WebCompanionDetailScreen() {
         <View className="gap-5">
           <WebCard padding="lg" className="gap-5">
             <View className="items-center gap-4">
-              <View className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-app-rose/25 bg-app-rose-soft shadow-glow">
-                <View pointerEvents="none" style={portraitStyles.portraitFloor} />
-                {imageSource ? (
-                  <Image
-                    accessibilityLabel={companion.name}
-                    resizeMode="contain"
-                    source={imageSource}
-                    style={portraitStyles.portraitImage}
-                  />
-                ) : (
-                  <View className="h-full w-full items-center justify-center">
-                    <Text className="font-serif text-display-2xl text-app-rose-deep/60">
-                      {companion.name.slice(0, 1).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
+              <CompanionArtwork
+                className="aspect-[4/5] w-full rounded-2xl border border-app-rose/25 bg-app-rose-soft shadow-glow"
+                label={companion.name}
+                source={imageSource}
+              >
                 <View className="absolute left-3 top-3">
                   <WebTag size="sm" variant={companion.source === 'user' ? 'ember' : 'rose'}>
                     {companion.source === 'user' ? 'Yours' : 'Official'}
                   </WebTag>
                 </View>
-              </View>
+              </CompanionArtwork>
               <View className="items-center gap-2">
                 <Text className="font-serif text-display-sm text-white">{companion.name}</Text>
                 {companion.relationship_role ? (
@@ -368,22 +358,6 @@ export default function WebCompanionDetailScreen() {
     </WebAppShell>
   );
 }
-
-const portraitStyles = StyleSheet.create({
-  portraitFloor: {
-    backgroundColor: 'rgba(255,77,126,0.10)',
-    bottom: 0,
-    height: 64,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
-  portraitImage: {
-    height: '112%',
-    transform: [{ translateY: 12 }],
-    width: '112%',
-  },
-});
 
 function TextBlock({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;

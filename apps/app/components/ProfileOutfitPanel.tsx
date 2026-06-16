@@ -296,7 +296,7 @@ export function ProfileOutfitPanel({
               className={`overflow-hidden rounded-2xl border border-white/12 bg-[#130A18] ${isCompact ? 'self-center' : ''}`}
               style={isCompact ? styles.previewFrameCompact : undefined}
             >
-              <Image accessibilityLabel="Generated profile outfit preview" resizeMode="cover" source={previewSource} style={styles.preview} />
+              <Image accessibilityLabel="Generated profile outfit preview" resizeMode="contain" source={previewSource} style={styles.preview} />
             </View>
           ) : null}
 

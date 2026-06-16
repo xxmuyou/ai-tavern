@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
 import { mediaSource } from '@/api/companion-client';
 import type { CompanionCreateInput, CompanionDetail, Gender, Scene } from '@/api/types';
 import { Button } from '@/components/Button';
+import { CompanionArtwork } from '@/components/CompanionArtwork';
 
 const ROLES = ['friend', 'crush', 'stranger', 'colleague', 'neighbor', 'family'] as const;
 const PERSONALITY_PRESETS = ['warm', 'reserved', 'playful', 'protective', 'ambitious', 'mysterious'];
@@ -111,9 +112,12 @@ export function CompanionForm({ initial, initialArtUrl, isSubmitting, mode, onPi
             onPress={() => void pickArt()}
             className="aspect-[4/5] items-center justify-end overflow-hidden rounded-lg border border-dashed border-app-line bg-app-primarySoft"
           >
-            <View pointerEvents="none" style={styles.portraitFloor} />
             {imageSource ? (
-              <Image accessibilityLabel={values.name || 'Companion portrait'} resizeMode="contain" source={imageSource} style={styles.portraitImage} />
+              <CompanionArtwork
+                className="h-full w-full bg-app-primarySoft"
+                label={values.name || 'Companion portrait'}
+                source={imageSource}
+              />
             ) : (
               <View className="h-full w-full items-center justify-center px-4">
                 <Text className="text-center text-base font-semibold text-app-primary">
@@ -453,19 +457,3 @@ function Choice({ active, label, onPress }: { active: boolean; label: string; on
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  portraitFloor: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    bottom: 0,
-    height: 58,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-  },
-  portraitImage: {
-    height: '108%',
-    transform: [{ translateY: 10 }],
-    width: '108%',
-  },
-});

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { PALETTE } from '@/constants/palette';
 
 import {
@@ -15,12 +15,14 @@ import {
   updateRomancePreference,
 } from '@/api/companion-client';
 import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types';
+import { CompanionArtwork } from '@/components/CompanionArtwork';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import {
   WebAvatar,
   WebButton,
   WebCard,
+  WebDialog,
   WebEmptyState,
   WebFieldRow,
   WebSection,
@@ -302,6 +304,9 @@ export default function WebMeScreen() {
 }
 
 function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDelete: (id: string) => void }) {
+  const [selectedAsset, setSelectedAsset] = useState<UserImageAsset | null>(null);
+  const selectedSource = selectedAsset ? mediaSource(selectedAsset.art_key) : null;
+
   if (!assets.length) {
     return (
       <WebCard padding="md" className="items-center">
@@ -315,49 +320,86 @@ function ImageAssetGrid({ assets, onDelete }: { assets: UserImageAsset[]; onDele
   }
 
   return (
-    <View className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {assets.map((asset) => {
-        const source = mediaSource(asset.art_key);
-        return (
-          <View
-            key={asset.id}
-            className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-card"
-          >
-            {source ? (
-              <Image
-                accessibilityLabel="Saved image asset"
-                resizeMode="cover"
-                source={source}
-                style={{ aspectRatio: 4 / 5, width: '100%' }}
-              />
-            ) : (
-              <View className="aspect-[4/5] w-full items-center justify-center bg-app-sunken">
-                <Ionicons color={PALETTE.muted} name="image-outline" size={24} />
-              </View>
-            )}
-            <View className="gap-2 p-3">
-              <Text className="text-caption text-rose-50/60">{asset.source === 'generated' ? 'Generated image' : 'Uploaded image'}</Text>
-              <View className="flex-row flex-wrap gap-2">
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => downloadAsset(asset)}
-                  className="rounded-full border border-white/10 bg-[#10070d] px-3 py-1.5"
-                >
-                  <Text className="text-xs font-semibold text-rose-50/75">Download</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => onDelete(asset.id)}
-                  className="rounded-full border border-app-danger/25 bg-rose-500/12 px-3 py-1.5"
-                >
-                  <Text className="text-xs font-semibold text-rose-300">Delete</Text>
-                </Pressable>
+    <>
+      <View className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {assets.map((asset) => {
+          const source = mediaSource(asset.art_key);
+          return (
+            <View
+              key={asset.id}
+              className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-card"
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="View saved image asset"
+                onPress={() => setSelectedAsset(asset)}
+              >
+                <CompanionArtwork
+                  className="aspect-[4/5] w-full bg-[#130A18]"
+                  label="Saved image asset"
+                  source={source}
+                  fallback={
+                    <View className="aspect-[4/5] w-full items-center justify-center bg-app-sunken">
+                      <Ionicons color={PALETTE.muted} name="image-outline" size={24} />
+                    </View>
+                  }
+                />
+              </Pressable>
+              <View className="gap-2 p-3">
+                <Text className="text-caption text-rose-50/60">{asset.source === 'generated' ? 'Generated image' : 'Uploaded image'}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => downloadAsset(asset)}
+                    className="rounded-full border border-white/10 bg-[#10070d] px-3 py-1.5"
+                  >
+                    <Text className="text-xs font-semibold text-rose-50/75">Download</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => onDelete(asset.id)}
+                    className="rounded-full border border-app-danger/25 bg-rose-500/12 px-3 py-1.5"
+                  >
+                    <Text className="text-xs font-semibold text-rose-300">Delete</Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
-          </View>
-        );
-      })}
-    </View>
+          );
+        })}
+      </View>
+
+      <WebDialog
+        description={selectedAsset ? `${selectedAsset.source === 'generated' ? 'Generated image' : 'Uploaded image'} · ${formatDateTime(selectedAsset.created_at)}` : undefined}
+        footer={
+          selectedAsset ? (
+            <View className="flex-row flex-wrap items-center justify-end gap-2">
+              <WebButton label="Download" onPress={() => downloadAsset(selectedAsset)} variant="outline" />
+              <WebButton
+                label="Delete"
+                onPress={() => {
+                  onDelete(selectedAsset.id);
+                  setSelectedAsset(null);
+                }}
+                variant="danger"
+              />
+            </View>
+          ) : null
+        }
+        onClose={() => setSelectedAsset(null)}
+        open={Boolean(selectedAsset)}
+        size="xl"
+        title="Image preview"
+      >
+        {selectedAsset ? (
+          <CompanionArtwork
+            className="h-[70vh] max-h-[680px] w-full rounded-2xl border border-white/10 bg-[#130A18]"
+            label="Saved image asset full preview"
+            source={selectedSource}
+          />
+        ) : null}
+      </WebDialog>
+    </>
   );
 }
 
