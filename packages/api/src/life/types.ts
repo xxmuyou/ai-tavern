@@ -136,6 +136,11 @@ export type MemoryRecord = {
   id: string;
   user_id: string;
   companion_id: string;
+  companion: {
+    art_url: string | null;
+    id: string;
+    name: string;
+  } | null;
   memory_type: MemoryType;
   memory_subtype: string;
   scene_id: string | null;

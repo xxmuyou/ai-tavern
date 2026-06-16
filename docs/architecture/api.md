@@ -1056,7 +1056,7 @@ D1 连通性诊断（仅 admin / 内部）。
 
 - `GET /today` — 今日状态聚合。
 - `GET /activities`、`POST /activities/{id}/complete`、`POST /activities/{id}/cancel` — 日常活动。
-- `GET /memories` — 记忆列表。
+- `GET /memories` — 全局记忆相册；`companion_id` 是可选过滤条件。返回每条 memory 的 companion 名字和当前用户有效头像，避免全局相册卡片脱离角色上下文。
 - `POST /push/tokens`、`DELETE /push/tokens/{token}` — 推送 token 注册 / 注销。
 
 ### 11.4 Me / 用户资产（spec-033）

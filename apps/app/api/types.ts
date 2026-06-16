@@ -214,6 +214,11 @@ export type EventResolveResponse = {
 export type Memory = {
   cg_template: string | null;
   cg_url: string | null;
+  companion?: {
+    art_url: string | null;
+    id: string;
+    name: string;
+  } | null;
   companion_id: string;
   created_at: string;
   date: string;

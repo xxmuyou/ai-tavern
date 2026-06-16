@@ -247,7 +247,7 @@ Memory 是用户长期付费价值的核心资产。它把 AI 过程沉淀成可
 **规则：**
 - 同一 companion 的同一 milestone 默认只生成一次
 - 没有 CG 时仍生成日记卡，不阻塞玩法
-- Memory 出现在全局相册和 companion 详情页时间线
+- Memory 出现在全局相册和 companion 详情页时间线；全局相册卡片必须显示 companion 名字和头像，避免回忆脱离角色上下文
 
 ## 9. 里程碑 CG（程序化合成）
 

@@ -139,8 +139,10 @@ reply and relationship signal extraction carry the emotional consequence.
 
 ## GET /memories?companion_id=...&limit=...
 
-Auth required. Returns memories newest-first. Free users get at most 20 items
-in the response (oldest fade out). Pro users have no cap.
+Auth required. `companion_id` is optional: omit it for the global memory
+album, or pass it to filter to one companion. Returns memories newest-first.
+Free users get at most 20 items in the response (oldest fade out). Pro users
+have no album cap.
 
 ```jsonc
 {
@@ -149,6 +151,11 @@ in the response (oldest fade out). Pro users have no cap.
       "id": "mem_xxx",
       "user_id": "...",
       "companion_id": "maya",
+      "companion": {
+        "id": "maya",
+        "name": "Maya Chen",
+        "art_url": "portraits/maya.webp"
+      },
       "memory_type": "first_hangout",
       "memory_subtype": "",
       "scene_id": "underground_livehouse",

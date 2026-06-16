@@ -17,6 +17,8 @@ type MemoryRow = {
   id: string;
   user_id: string;
   companion_id: string;
+  companion_art_url: string | null;
+  companion_name: string | null;
   memory_type: string;
   memory_subtype: string;
   scene_id: string | null;
@@ -44,9 +46,6 @@ export async function handleMemoryRequest(
   const user = await requireAuthUser(env, request);
   const url = new URL(request.url);
   const companionId = url.searchParams.get("companion_id");
-  if (!companionId) {
-    return jsonResponse({ error: "missing_companion_id" }, { status: 400 });
-  }
   const limitRaw = Number(url.searchParams.get("limit") ?? 50);
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 200) : 50;
   return listMemories(env, user, companionId, limit);
@@ -55,25 +54,49 @@ export async function handleMemoryRequest(
 async function listMemories(
   env: Env,
   user: UserRecord,
-  companionId: string,
+  companionId: string | null,
   limit: number,
 ): Promise<Response> {
-  const { results } = await env.DB.prepare(
-    `SELECT id, user_id, companion_id, memory_type, memory_subtype, scene_id, activity_id,
-            title, summary, key_choice, relationship_delta, cg_template, cg_url, created_at
-     FROM memories
-     WHERE user_id = ? AND companion_id = ?
-     ORDER BY created_at DESC
-     LIMIT ?`,
-  )
-    .bind(user.id, companionId, limit)
-    .all<MemoryRow>();
-
-  const total = results?.length ?? 0;
   const pro = await isProUser(env, user.id);
   const cap = pro ? null : FREE_MEMORY_CAP;
-  const visible = pro ? (results ?? []) : (results ?? []).slice(0, FREE_MEMORY_CAP);
-  const truncated = !pro && total > FREE_MEMORY_CAP;
+  const visibleLimit = cap === null ? limit : Math.min(limit, cap);
+  const where = ["m.user_id = ?"];
+  const whereBinds: unknown[] = [user.id];
+  if (companionId) {
+    where.push("m.companion_id = ?");
+    whereBinds.push(companionId);
+  }
+  const whereSql = where.join(" AND ");
+
+  const countRow = await env.DB.prepare(
+    `SELECT COUNT(*) AS n
+     FROM memories m
+     WHERE ${whereSql}`,
+  )
+    .bind(...whereBinds)
+    .first<{ n: number }>();
+
+  const { results } = await env.DB.prepare(
+    `SELECT m.id, m.user_id, m.companion_id,
+            c.name AS companion_name,
+            COALESCE(p.art_key, c.art_url) AS companion_art_url,
+            m.memory_type, m.memory_subtype, m.scene_id, m.activity_id,
+            m.title, m.summary, m.key_choice, m.relationship_delta,
+            m.cg_template, m.cg_url, m.created_at
+     FROM memories m
+     LEFT JOIN companions c ON c.id = m.companion_id
+     LEFT JOIN companion_profile_images p
+       ON p.companion_id = m.companion_id AND p.user_id = m.user_id
+     WHERE ${whereSql}
+     ORDER BY m.created_at DESC
+     LIMIT ?`,
+  )
+    .bind(...whereBinds, visibleLimit)
+    .all<MemoryRow>();
+
+  const total = Number(countRow?.n ?? 0);
+  const visible = results ?? [];
+  const truncated = total > visible.length;
 
   return jsonResponse({
     memories: visible.map(rowToRecord),
@@ -97,6 +120,13 @@ function rowToRecord(row: MemoryRow): MemoryRecord {
     id: row.id,
     user_id: row.user_id,
     companion_id: row.companion_id,
+    companion: row.companion_name
+      ? {
+          art_url: row.companion_art_url,
+          id: row.companion_id,
+          name: row.companion_name,
+        }
+      : null,
     memory_type: row.memory_type as MemoryType,
     memory_subtype: row.memory_subtype,
     scene_id: row.scene_id,

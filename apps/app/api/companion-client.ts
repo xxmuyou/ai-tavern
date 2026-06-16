@@ -1143,6 +1143,11 @@ type LifeMemoriesWire = {
     activity_id: string | null;
     cg_template: string | null;
     cg_url: string | null;
+    companion?: {
+      art_url: string | null;
+      id: string;
+      name: string;
+    } | null;
     companion_id: string;
     created_at: number;
     id: string;
@@ -1238,6 +1243,7 @@ function normalizeMemories(payload: LifeMemoriesWire): MemoriesResponse {
     items: payload.memories.map((item) => ({
       cg_template: item.cg_template,
       cg_url: item.cg_url,
+      companion: item.companion ?? null,
       companion_id: item.companion_id,
       created_at: new Date(item.created_at).toISOString(),
       date: new Date(item.created_at).toISOString().slice(0, 10),

@@ -11,7 +11,8 @@ type MemoryCardProps = {
 
 export function MemoryCard({ memory, portraitUrl }: MemoryCardProps) {
   const sceneImage = mediaSource(memory.cg_url ?? memory.scene?.art_url ?? null);
-  const portrait = mediaSource(portraitUrl);
+  const portrait = mediaSource(memory.companion?.art_url ?? portraitUrl ?? null);
+  const companionName = memory.companion?.name ?? null;
   const hasCg = Boolean(memory.cg_url || memory.cg_template);
   const overlay = milestoneOverlay(memory.cg_template);
 
@@ -39,6 +40,16 @@ export function MemoryCard({ memory, portraitUrl }: MemoryCardProps) {
         <View className="flex-row items-start justify-between gap-4">
           <View className="min-w-0 flex-1">
             <Text className="text-lg font-semibold text-app-text">{memory.title}</Text>
+            {companionName ? (
+              <View className="mt-2 flex-row items-center gap-2">
+                {portrait ? (
+                  <Image source={portrait} resizeMode="cover" style={styles.avatar} />
+                ) : null}
+                <Text numberOfLines={1} className="min-w-0 flex-1 text-sm font-semibold text-app-text">
+                  With {companionName}
+                </Text>
+              </View>
+            ) : null}
             <Text className="mt-1 text-xs uppercase tracking-normal text-app-muted">{memory.type.replace(/_/g, ' ')}</Text>
           </View>
           <Text className="text-sm font-semibold text-app-muted">{memory.date}</Text>
@@ -56,6 +67,11 @@ export function MemoryCard({ memory, portraitUrl }: MemoryCardProps) {
 }
 
 const styles = StyleSheet.create({
+  avatar: {
+    borderRadius: 14,
+    height: 28,
+    width: 28,
+  },
   portrait: {
     bottom: -18,
     height: '118%',
