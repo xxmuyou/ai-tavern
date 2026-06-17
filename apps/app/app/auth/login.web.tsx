@@ -6,6 +6,7 @@ import { Pressable, Text, View } from 'react-native';
 import { isApiRequestError } from '@/api/companion-client';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { WebButton, WebInput } from '@/components/web/ui';
+import { BRAND_NAME } from '@/constants/brand';
 import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
@@ -70,7 +71,7 @@ export default function WebLoginScreen() {
             <View className="h-8 w-8 items-center justify-center rounded-xl border border-rose-200/20 bg-white/8">
               <Ionicons color="#FBE6EC" name="sparkles" size={15} />
             </View>
-            <Text className="font-serif text-title-sm text-white">AI Apps Box</Text>
+            <Text className="font-serif text-title-sm text-white">{BRAND_NAME}</Text>
           </Pressable>
           <Text className="font-serif text-display-sm text-white">Sign in</Text>
           <Text className="mt-2 text-body-sm leading-6 text-rose-50/64">

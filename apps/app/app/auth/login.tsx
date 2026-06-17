@@ -6,6 +6,7 @@ import { Text, TextInput, View } from 'react-native';
 import { isApiRequestError } from '@/api/companion-client';
 import { Button } from '@/components/Button';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { BRAND_NAME } from '@/constants/brand';
 import { SCENES_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
@@ -61,7 +62,7 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 items-center justify-center bg-app-bg px-5 py-10">
       <View className="w-full max-w-md rounded-lg border border-app-line bg-app-card p-6 shadow-sm">
-        <Text className="text-center text-3xl font-semibold text-app-text">XTBit</Text>
+        <Text className="text-center text-3xl font-semibold text-app-text">{BRAND_NAME}</Text>
         <Text className="mt-2 text-center text-sm leading-5 text-app-muted">Sign in to enter an urban fantasy relationship sandbox.</Text>
 
         <View className="mt-8 gap-3">
