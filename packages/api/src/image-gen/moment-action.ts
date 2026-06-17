@@ -25,10 +25,10 @@ export type MomentVisualAction = {
   hairstyle?: string;
   makeup?: string;
   prop_name?: string;
-  prop_relation?: MomentPropRelation;
+  prop_state?: MomentPropState;
 };
 
-export type MomentPropRelation = "held_in_one_hand" | "nearby_on_table";
+export type MomentPropState = "nearby" | "held_one_hand" | "near_lips" | "just_set_down";
 
 export type ExtractMomentVisualActionInput = {
   userId: string;
@@ -57,7 +57,7 @@ const ACTION_SCHEMA: Record<string, unknown> = {
     makeup: { maxLength: 100, type: "string" },
     outfit: { maxLength: 120, type: "string" },
     prop_name: { maxLength: 80, type: "string" },
-    prop_relation: { enum: ["nearby_on_table", "held_in_one_hand"], type: "string" },
+    prop_state: { enum: ["nearby", "held_one_hand", "near_lips", "just_set_down"], type: "string" },
   },
   required: ["body_pose", "camera_view", "outfit", "hairstyle"],
   type: "object",
@@ -87,18 +87,20 @@ const ACTION_SYSTEM_PROMPT =
   "Keep the companion's recognizable face from the reference image, but change hairstyle, outfit, expression, and body pose to fit the current scene. " +
   "Convert the current chat turn into one drawable solo pose plus a venue-appropriate restyle for the companion only. " +
   "Do not summarize the chat, copy narration, or preserve physical interactions literally. " +
-  "Return one JSON object only with body_pose, camera_view, outfit, hairstyle and optional expression, makeup, prop_name, prop_relation. " +
+  "Return one JSON object only with body_pose, camera_view, outfit, hairstyle and optional expression, makeup, prop_name, prop_state. " +
   "Keep output compact: body_pose and camera_view must be 100 characters or less; every other field should be 120 characters or less. " +
   "Always restyle: outfit and hairstyle must be deliberate for this venue and time of day, never a generic default. " +
   "Match the styling boldness level given in the request. Whatever the level: never nude, never topless, no exposed nipples, no transparent fabric over the chest, no underwear-only looks in public venues. " +
   "The background location is fixed; body_pose must fit inside the given scene without naming scene objects. " +
+  "Choose ONE primary visual moment from multi-action narration. Prefer the last emotionally meaningful stable moment over the first hand/prop action. Do not try to render the whole sequence. " +
+  "For sip/set-down/appraising narration, compress it into a single stable frame such as seated slight forward lean, torso angled toward viewer, with the glass as prop_state just_set_down or nearby. " +
   "Derive body_pose from the companion reply narration first. Use previous user message and activity only as supporting context. Use fallback poses only when the narration contains no drawable body action. " +
   "When the narration contains a subtle action, rewrite it into a clearer, more expressive anime-style solo body pose while preserving the same intent. " +
   "body_pose describes only body structure and direction; never mention full-body, tables, counters, chairs, benches, beds, doorways, windows, railings, shoreline, bars, sofas, stage, cups, flowers, menus, books, towels, hands, arms, fingers, holding, gripping, giving, or receiving. " +
   "Choose one camera_view from the venue-safe candidates. camera_view describes only viewpoint and composition; it must not mention props, hands, outfit, expression, body pose, visible camera devices, phones, selfies, viewfinders, or under-table views. Avoid repeating plain eye-level front view unless it best fits the narration. " +
   "Choose one expression candidate and keep expression facial only; never mention body pose, hands, arms, props, or body attitude inside expression. " +
   "Choose one outfit candidate and keep outfit clothing-only; never mention pose, hands, body action, or props inside outfit. " +
-  "Props are optional: include prop_name only when the current turn clearly implies exactly one drawable object; omit props when unclear. Default prop_relation to nearby_on_table. Use held_in_one_hand only when the companion reply clearly says she/he picks up, holds, raises, or receives that object. Never write hand_action, held_or_nearby_props, fingers, both hands, or detailed hand wording. " +
+  "Props are optional: include prop_name only when the current turn clearly implies exactly one drawable object; omit props when unclear. Use prop_state nearby, held_one_hand, near_lips, or just_set_down. Prefer nearby or just_set_down for public/table scenes. Use held_one_hand only when the chosen visual moment clearly needs the object in one hand. Use near_lips only for a single sip moment. Never write hand_action, held_or_nearby_props, fingers, both hands, or detailed hand wording. " +
   "Describe exactly one visible person: the companion. The viewer/user may be implied but must never be visible. " +
   "Never mention: user, another person, second person, couple, crowd, bystanders, together, holding hands with someone, sitting on someone, being held, touching another body, lap, embrace, kiss, reflection of another person, duplicate body. " +
   "Convert interactions into solo reactions: flowers may become one bouquet prop, coffee may become one cup or glass prop, invitations become the companion turning toward the viewer alone. " +
@@ -108,7 +110,8 @@ const ACTION_SYSTEM_PROMPT =
 // same rejected output, so the retry both raises temperature and appends this.
 const RETRY_NUDGE =
   "Your previous answer was rejected. Strict reminder: describe exactly ONE person — the companion alone; " +
-  "never mention the user, anyone else, or body contact; always include outfit and hairstyle; return valid JSON only.";
+  "never mention the user, anyone else, or body contact. If body_pose included hands, props, cups, glasses, tables, chairs, or scene objects, rewrite it as pure body structure and direction only. " +
+  "Keep hand/prop narration in prop_name + prop_state, not body_pose. Always include outfit and hairstyle; return valid JSON only.";
 
 function buildUserPrompt(input: ExtractMomentVisualActionInput): string {
   const activity = input.activity
@@ -143,7 +146,7 @@ function buildUserPrompt(input: ExtractMomentVisualActionInput): string {
     `Previous user message: ${input.previousUserText ?? "(none)"}`,
     `Companion reply: ${input.sourceReply}`,
     "",
-    "Extract body_pose from the companion reply narration first. Rewrite subtle narration into one clearer expressive anime-style solo body pose. Use fallback pose family only when narration has no drawable body action. Choose camera_view from the venue-safe candidates; avoid plain eye-level front view unless necessary. Keep body_pose and camera_view <= 100 chars. Props are optional; output prop_name + prop_relation only when one object is clearly implied. Return JSON only.",
+    "Pick one primary visual moment, preferring the last emotionally meaningful stable action over the first hand/prop action. Extract body_pose from the companion reply narration first, but rewrite hand/prop actions into pure body structure. Use fallback pose family only when narration has no drawable body action. Choose camera_view from the venue-safe candidates; avoid plain eye-level front view unless necessary. Keep body_pose and camera_view <= 100 chars. Props are optional; output prop_name + prop_state only when one object is clearly implied. Return JSON only.",
   ].join("\n");
 }
 
@@ -270,7 +273,7 @@ export function parseMomentVisualAction(raw: unknown): MomentVisualAction | null
   const propName = cleanPropName(record.prop_name);
   if (propName) {
     action.prop_name = propName;
-    action.prop_relation = cleanPropRelation(record.prop_relation) ?? "nearby_on_table";
+    action.prop_state = cleanPropState(record.prop_state, record.prop_relation) ?? "nearby";
   }
 
   return hasRiskyMultiSubject(action) ? null : action;
@@ -292,6 +295,7 @@ function cleanPropName(value: unknown): string | null {
     .replace(/\b(on the table|nearby|held in one hand|in one hand)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
+    .replace(/^(?:one|a|an)\s+/i, "")
     .replace(/^[,.;:\-\s]+|[,.;:\-\s]+$/g, "");
   if (!withoutHandDetails || PROP_HAND_DETAIL_PATTERN.test(withoutHandDetails)) {
     return null;
@@ -299,8 +303,18 @@ function cleanPropName(value: unknown): string | null {
   return withoutHandDetails.length > 80 ? withoutHandDetails.slice(0, 80).trim() : withoutHandDetails;
 }
 
-function cleanPropRelation(value: unknown): MomentPropRelation | null {
-  return value === "held_in_one_hand" || value === "nearby_on_table" ? value : null;
+function cleanPropState(value: unknown, legacyRelation?: unknown): MomentPropState | null {
+  if (
+    value === "nearby"
+    || value === "held_one_hand"
+    || value === "near_lips"
+    || value === "just_set_down"
+  ) {
+    return value;
+  }
+  if (legacyRelation === "held_in_one_hand") return "held_one_hand";
+  if (legacyRelation === "nearby_on_table") return "nearby";
+  return null;
 }
 
 function hasRiskyMultiSubject(action: MomentVisualAction): boolean {

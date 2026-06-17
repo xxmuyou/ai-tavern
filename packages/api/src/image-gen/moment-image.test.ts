@@ -280,10 +280,10 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("identity reference");
     expect(prompt).toContain("warm");
     expect(prompt).toContain(
-      "Change the reference pose to: standing three-quarter pose, face toward viewer",
+      "Change the reference pose to: seated slight forward lean, torso angled toward viewer",
     );
+    expect(prompt).toContain("Camera view: side-view table-side composition");
     expect(prompt).toContain("Do not keep the original portrait pose");
-    expect(prompt).toContain("Camera view: front three-quarter view, medium angled shot");
     expect(prompt).toContain("Keep the face visible and recognizable");
     expect(prompt).toContain("Expression: soft genuine smile");
     expect(prompt).not.toContain("Gaze:");
@@ -293,12 +293,12 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("Pose/body quality:");
     expect(prompt).not.toContain("Pose variety:");
     expect(prompt).not.toContain("Primary action rule:");
-    // Fallback styling comes from the venue/stage preset (harbor tags ->
-    // outdoor_public, familiar stage -> reserved tier), never a vague default.
+    // Fallback styling comes from the venue/stage preset (Coffee Shop name ->
+    // dining, familiar stage -> reserved tier), never a vague default.
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): fitted blouse with high-waisted shorts and polished accessories",
+      "Outfit (overrides any clothing mentioned in the reference): fitted blouse with a high-waisted short skirt and sheer stockings",
     );
-    expect(prompt).toContain("Change the hairstyle to: high ponytail with a ribbon");
+    expect(prompt).toContain("Change the hairstyle to: neat half-up hairstyle");
     expect(prompt).toContain("Makeup: fresh light makeup");
     expect(prompt).not.toContain("an outfit that naturally fits the scene");
     expect(prompt).not.toContain("Maya wraps her hands around the cup");
@@ -400,7 +400,7 @@ describe("buildMomentPrompt", () => {
     );
     // The extractor delivered no hairstyle, so the preset fills it in to make
     // sure the look still visibly changes from the reference image.
-    expect(prompt).toContain("Change the hairstyle to: high ponytail with a ribbon");
+    expect(prompt).toContain("Change the hairstyle to: neat half-up hairstyle");
   });
 
   it("keeps extractor styling untouched when outfit and hairstyle are present", () => {
@@ -431,7 +431,7 @@ describe("buildMomentPrompt", () => {
         camera_view: "front three-quarter view, medium angled shot",
         expression: "warm shy smile",
         prop_name: "small bouquet",
-        prop_relation: "held_in_one_hand",
+        prop_state: "held_one_hand",
       },
     });
 
@@ -456,7 +456,7 @@ describe("buildMomentPrompt", () => {
         expression: "curious slight smile",
         outfit: "fitted knit mini dress with sheer stockings",
         prop_name: "iced americano glass",
-        prop_relation: "nearby_on_table",
+        prop_state: "nearby",
       },
     });
 
@@ -467,6 +467,49 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("fingers wrapped");
     expect(prompt).not.toContain("both hands");
     expect(prompt.match(/iced americano glass/g)).toHaveLength(1);
+  });
+
+  it("renders single-frame drink prop states without free-form hand wording", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      visualAction: {
+        body_pose: "seated slight forward lean, torso angled toward viewer",
+        camera_view: "side-view table-side composition",
+        expression: "lazy appraising gaze, curious eyes, relaxed mouth",
+        outfit: "fitted knit mini dress with sheer stockings",
+        prop_name: "cold glass",
+        prop_state: "just_set_down",
+      },
+    });
+
+    expect(prompt).toContain(
+      "Change the reference pose to: seated slight forward lean, torso angled toward viewer",
+    );
+    expect(prompt).toContain(
+      "Prop: one cold glass just set nearby in the scene, not held. Hands relaxed and natural.",
+    );
+    expect(prompt).toContain("Expression: lazy appraising gaze, curious eyes, relaxed mouth.");
+    expect(prompt).not.toContain("fingers wrapped");
+    expect(prompt).not.toContain("both hands");
+    expect(prompt).not.toContain("wooden table");
+  });
+
+  it("renders near-lips drink state as one-hand only", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      visualAction: {
+        body_pose: "seated slight forward lean, torso angled toward viewer",
+        camera_view: "side-view table-side composition",
+        outfit: "fitted knit mini dress with sheer stockings",
+        prop_name: "cold glass",
+        prop_state: "near_lips",
+      },
+    });
+
+    expect(prompt).toContain(
+      "Prop: one cold glass close to the lips, held in one hand. Other hand relaxed and visible.",
+    );
+    expect(prompt).not.toContain("both hands");
   });
 
   it("renders camera view as composition without summoning a physical camera", () => {
@@ -502,10 +545,11 @@ describe("buildMomentPrompt", () => {
     });
 
     expect(prompt).toContain(
-      "Change the reference pose to: standing three-quarter pose, face toward viewer",
+      "Change the reference pose to: seated slight forward lean, torso angled toward viewer",
     );
+    expect(prompt).toContain("Camera view: side-view table-side composition");
     expect(prompt).toContain(
-      "Outfit (overrides any clothing mentioned in the reference): fitted blouse with high-waisted shorts and polished accessories",
+      "Outfit (overrides any clothing mentioned in the reference): fitted blouse with a high-waisted short skirt and sheer stockings",
     );
     expect(prompt).toContain("Expression: soft genuine smile");
     expect(prompt).not.toContain("slid off");

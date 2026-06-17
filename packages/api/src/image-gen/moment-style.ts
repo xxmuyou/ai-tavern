@@ -144,6 +144,7 @@ const OUTDOOR_TAGS = new Set([
   "balcony",
 ]);
 const DINING_TAGS = new Set(["cafe", "restaurant", "dessert", "dinner"]);
+const DINING_KEYWORDS = /\b(cafe|coffee|restaurant|dessert|dinner|tea shop|barista)\b/i;
 const ACTIVE_TAGS = new Set(["gym", "active", "arcade", "sport"]);
 
 export function classifyMomentVenue(
@@ -161,7 +162,9 @@ export function classifyMomentVenue(
   }
   if (has("stage") || NIGHTLIFE_KEYWORDS.test(sceneName)) return "nightlife";
   if (lower.some((tag) => ACTIVE_TAGS.has(tag))) return "active";
-  if (lower.some((tag) => DINING_TAGS.has(tag))) return "dining";
+  if (DINING_KEYWORDS.test(sceneName) || lower.some((tag) => DINING_TAGS.has(tag))) {
+    return "dining";
+  }
   if (lower.some((tag) => OUTDOOR_TAGS.has(tag))) return "outdoor_public";
   return privacy === "private" ? "home_private" : "indoor_quiet";
 }
@@ -717,6 +720,14 @@ const FALLBACK_POSE_OPTIONS: readonly string[] = [
   "reclining side pose, face toward viewer",
 ];
 
+const DINING_FALLBACK_POSE_OPTIONS: readonly string[] = [
+  "seated slight forward lean, torso angled toward viewer",
+  "seated relaxed turn, face toward viewer",
+  "leaning pose, torso angled toward viewer",
+  "seated upright pose, shoulders relaxed, face toward viewer",
+  "standing three-quarter pose, face toward viewer",
+];
+
 const CAMERA_VIEW_OPTIONS: Record<MomentVenue, readonly string[]> = {
   active: [
     "side-view action composition",
@@ -739,10 +750,10 @@ const CAMERA_VIEW_OPTIONS: Record<MomentVenue, readonly string[]> = {
     "low-angle view from below eye level, tasteful intimate composition",
   ],
   dining: [
-    "front three-quarter view, medium angled shot",
     "side-view table-side composition",
     "high-angle table-side view",
     "rear three-quarter over-the-shoulder view",
+    "front three-quarter view, medium angled shot",
   ],
   home_private: [
     "low-angle sofa-side view from below eye level",
@@ -875,9 +886,12 @@ function isMaleGender(gender: string | null | undefined): boolean {
 }
 
 export function suggestMomentPoseOptions(
-  _venue?: MomentVenue,
+  venue?: MomentVenue,
   _gender?: string | null,
 ): MomentPoseCandidate[] {
+  if (venue === "dining") {
+    return DINING_FALLBACK_POSE_OPTIONS.map((bodyPose) => ({ bodyPose }));
+  }
   return suggestMomentFallbackPoseOptions();
 }
 

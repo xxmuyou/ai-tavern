@@ -90,7 +90,7 @@ type MomentVisualAction = {
   hairstyle?: string; // v1.5：随场景换发型，命令式行注入（schema 层 required）
   makeup?: string; // v1.5：可选妆容
   prop_name?: string;
-  prop_relation?: "nearby_on_table" | "held_in_one_hand";
+  prop_state?: "nearby" | "held_one_hand" | "near_lips" | "just_set_down";
 };
 ```
 
@@ -99,6 +99,7 @@ type MomentVisualAction = {
 - 输出必须只描述 companion 一个人；禁止出现 `user`、`another person`、`two people`、`couple`、`crowd`、`together`、`lap`、`embrace`、`kiss`、`held by`、`holding hands`、`reflection`、`duplicate body` 等会引入第二人、亲密身体接触或重复肢体的描述。
 - `body_pose` 优先从 companion narration 抽取并轻度夸张化；不得原样复制旁白，也不得写第二人、场景实物、手部细节或道具。
 - `camera_view` 是独立的视角/构图 slot；不得写身体动作、道具、服装、表情，也不得写可见相机、手机、自拍、viewfinder。它解决“所有图都平视”的问题，但必须按 venue/privacy 选择合理视角。
+- **主视觉瞬间（v1.12）**：多段旁白只取一个最适合成图的稳定瞬间，不追完整时间线；优先选择最后一个有情绪意义的动作，而不是第一个手部/道具动作。喝咖啡/拿杯/放杯/看人这类序列应压缩成“刚放下杯子后，坐姿微微前倾，用懒散好奇眼神打量 viewer”这一类单帧。
 - 用户动作只补足 props、触发动作和可见反应：用户送花 → `prop_name: small bouquet`；用户点咖啡 → `prop_name: coffee cup / iced americano glass`。手部文字不由 LLM 自由生成。
 - 亲密互动不画第二个人，也不逐字保留身体接触：牵手、拥抱、靠近、从某人腿上起身等动作转译成 viewer 视角的单人身体方向，例如 `leaning pose, face toward viewer` 或 `seated relaxed pose, face toward viewer`。
 - **强制换装（v1.5）**：`outfit` 与 `hairstyle` 必须是为当前场所刻意选择的新造型，禁止默认素色便装（cardigan/sweater/jeans 仅限寒冷户外）；场所→造型映射示例写入 system prompt（夜店→裙装+妆发、白天广场/公园→俏皮街拍、卧室→居家/睡衣、海滩→泳装/夏裙、健身房→运动装），尺度按 `Styling boldness:`（stage 4 档）执行，硬上限不露点。
@@ -116,22 +117,22 @@ type MomentVisualAction = {
 
 - **body_pose 来源优先级**：`companion reply` 旁白第一，`previous user message / activity` 只作辅助；只有旁白没有可画身体动作时，才使用 fallback pose family。
 - **轻度夸张化**：如果旁白动作很轻，例如“转头看你/靠近一点/坐直”，extractor 可以改写成更清楚、更有表现力的 anime-style solo body pose，但必须保留原意并保持短句。
-- **pose 边界**：`body_pose <= 100 chars`，只写身体骨架和方向；禁止 `full-body`、场景实物、道具、手/胳膊/手指/握持/递接等词。场景由 `Change the background to:` 单独负责，道具由 `prop_name + prop_relation` 单独负责。
+- **pose 边界**：`body_pose <= 100 chars`，只写身体骨架和方向；禁止 `full-body`、场景实物、道具、手/胳膊/手指/握持/递接等词。场景由 `Change the background to:` 单独负责，道具由 `prop_name + prop_state` 单独负责。
 - **expression / outfit 边界**：`expression` 只写脸部表情；`outfit` 只写衣服。当前 `style profile + outfit candidates` 保留，因为它稳定了服装审美。
-- **道具结构化保留**：`prop_name` 只管一个道具名；`prop_relation` 只能是 `nearby_on_table` 或 `held_in_one_hand`。默认 nearby；只有当前 turn 明确“拿起/握着/举着/收到”时才允许 held。
+- **道具结构化保留（v1.12）**：`prop_name` 只管一个道具名；`prop_state` 只能是 `nearby / held_one_hand / near_lips / just_set_down`。默认优先 `nearby` 或 `just_set_down`；只有当前选定单帧确实需要单手持物时才用 `held_one_hand`，单次啜饮才用 `near_lips`。
 - **最终 prompt 继续短模板**：保留 `Change the reference pose to: {body_pose}. Do not keep the original portrait pose.`；不再注入 `Pose/body quality`、`Pose variety`、`Body attitude`、`Gaze`、`Position in scene`、`activity context`、完整 style profile。
-- **道具模板**：`nearby_on_table` 渲染为 `Prop: one {prop_name} nearby in the scene, not held. Hands relaxed and natural.`；`held_in_one_hand` 渲染为 `Prop: one {prop_name} held in one hand. Other hand relaxed and visible.`
+- **道具模板**：`nearby` → `Prop: one {prop_name} nearby in the scene, not held. Hands relaxed and natural.`；`held_one_hand` → `Prop: one {prop_name} held in one hand. Other hand relaxed and visible.`；`near_lips` → `Prop: one {prop_name} close to the lips, held in one hand. Other hand relaxed and visible.`；`just_set_down` → `Prop: one {prop_name} just set nearby in the scene, not held. Hands relaxed and natural.`
 - **明确禁止反例**：`fingers wrapped around a cold glass, iced americano glass on table`。这是“手拿杯子”和“桌上杯子”同时出现的冲突 prompt，会诱发多手/错手。
 
 **视角/构图 slot（v1.11）**：当前 workflow 保脸效果不错，但如果不显式控制 camera framing，模型容易继承参考图的平视正面构图。v1.11 新增 `camera_view`，但不把视角混入 `body_pose`：
 
-- **slot 边界**：`body_pose` 只管身体骨架；`camera_view` 只管镜头角度和构图；`expression` 只管脸；`outfit` 只管衣服；`prop_name + prop_relation` 只管一个道具。
+- **slot 边界**：`body_pose` 只管身体骨架；`camera_view` 只管镜头角度和构图；`expression` 只管脸；`outfit` 只管衣服；`prop_name + prop_state` 只管一个道具。
 - **平视不再是默认**：fallback 和候选不再使用 plain eye-level front view 作为默认。只有公共、正式、旁白确实适合时，才允许接近平视的 front three-quarter view。
 - **场景配平**：公共咖啡厅/餐厅不允许 `under-table / floor-level / extreme low-angle close-up`；沙发、卧室、夜店可以使用低机位、俯视、近景或背面回眸，但必须保脸可见。
 - **最终 prompt 短行**：`Camera view: {camera_view}. Keep the face visible and recognizable.`
 - **禁用设备词**：`camera_view` 不是画面里的相机；最终 prompt 仍保留 `Do not render any camera, phone, or photographic device.`
 
-### v1.11 Candidate Library Appendix
+### v1.12 Candidate Library Appendix
 
 以下英文为进入 prompt 的候选原文；中文说明仅用于审查。候选库先作为代码常量维护，不做后台配置。v1.10 不再维护按 venue/gender 展开的 pose 表；pose 主要来自旁白抽取，下面 5 条只作为无动作时的兜底。
 
@@ -145,16 +146,18 @@ type MomentVisualAction = {
 
 这些 fallback 不含场景实物、不含道具、不含手部动作、不含 `full-body`。如果旁白已有动作，不应使用这些兜底覆盖旁白。
 
+Dining / Cafe fallback 为 v1.12 特化：咖啡厅/餐厅不再默认普通站姿，首选 `seated slight forward lean, torso angled toward viewer`，其次 `seated relaxed turn, face toward viewer`，普通站姿只作为最后兜底。
+
 #### Camera View Candidates
 
 `camera_view` 是场景安全的构图候选，不写身体动作、不写手部、不写道具、不写衣服/表情。LLM 从当前 venue 的候选里选一个；如果旁白明确需要背面回眸或俯视，可选相近候选，但仍要保脸可见。
 
 **Dining / Cafe / Restaurant**
 
-1. `front three-quarter view, medium angled shot`
-2. `side-view table-side composition`
-3. `high-angle table-side view`
-4. `rear three-quarter over-the-shoulder view`
+1. `side-view table-side composition`
+2. `high-angle table-side view`
+3. `rear three-quarter over-the-shoulder view`
+4. `front three-quarter view, medium angled shot`
 
 禁用：`under-table view`、`floor-level low angle`、`extreme low-angle close-up`。咖啡厅可以有桌边侧面或稍高角度，但不能像钻桌底。
 
@@ -648,20 +651,20 @@ Bold:
 2. `open short-sleeve shirt over a tank with tailored shorts`
 3. `fitted knit polo with tailored shorts or slim trousers`
 
-最终 prompt 示例结构（v1.11：脸靠 cutout/reference 锁定；无 appearance/名字/relationship/personality/story_beat/原始旁白，仅留 gender 锚点；pose 与 camera_view 分离，道具由模板渲染）：
+最终 prompt 示例结构（v1.12：脸靠 cutout/reference 锁定；无 appearance/名字/relationship/personality/story_beat/原始旁白，仅留 gender 锚点；pose 与 camera_view 分离，道具由模板渲染）：
 
 ```text
 Edit the input image into a single-character scene image of the same companion.
 Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene.
 Keep exactly one person in the image — this companion only. Do not add any other people, ...
 The companion's face remains visible and recognizable; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.
-Change the reference pose to: expressive seated turn, face toward viewer. Do not keep the original portrait pose.
+Change the reference pose to: seated slight forward lean, torso angled toward viewer. Do not keep the original portrait pose.
 Camera view: side-view table-side composition. Keep the face visible and recognizable.
-Prop: one iced americano glass nearby in the scene, not held. Hands relaxed and natural.
+Prop: one cold glass just set nearby in the scene, not held. Hands relaxed and natural.
 Outfit (overrides any clothing mentioned in the reference): fitted blouse with a high-waisted short skirt and sheer stockings.
 Change the hairstyle to: soft curled hair.
 Makeup: natural date makeup.
-Expression: shy warm smile.
+Expression: lazy appraising gaze, curious eyes, relaxed mouth.
 Companion gender: female.
 Change the background to: Pier Coffee Shop, morning, warm cafe atmosphere, ...tags. The background is empty of other people.
 Single companion only, viewer/user not visible, natural composition, no other people, ..., no text, no UI, no speech bubbles, no visible camera or photographic device.

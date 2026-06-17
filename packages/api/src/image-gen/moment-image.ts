@@ -176,8 +176,14 @@ function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void 
 function renderPropLine(action: MomentVisualAction): string | null {
   const propName = action.prop_name?.trim();
   if (!propName) return null;
-  if (action.prop_relation === "held_in_one_hand") {
+  if (action.prop_state === "held_one_hand") {
     return `Prop: one ${propName} held in one hand. Other hand relaxed and visible.`;
+  }
+  if (action.prop_state === "near_lips") {
+    return `Prop: one ${propName} close to the lips, held in one hand. Other hand relaxed and visible.`;
+  }
+  if (action.prop_state === "just_set_down") {
+    return `Prop: one ${propName} just set nearby in the scene, not held. Hands relaxed and natural.`;
   }
   return `Prop: one ${propName} nearby in the scene, not held. Hands relaxed and natural.`;
 }

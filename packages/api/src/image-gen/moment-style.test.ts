@@ -232,11 +232,11 @@ describe("moment pose and expression candidates", () => {
   it("returns short fallback pose family entries without scene objects or hand details", () => {
     for (const venue of ALL_VENUES) {
       for (const gender of ["female", "male"]) {
-        const options = suggestMomentPoseOptions(venue, gender);
-        expect(options).toHaveLength(5);
-        for (const option of options) {
-          expect(option.bodyPose.length).toBeLessThanOrEqual(100);
-          expect(option.bodyPose).toContain("face toward viewer");
+          const options = suggestMomentPoseOptions(venue, gender);
+          expect(options).toHaveLength(5);
+          for (const option of options) {
+            expect(option.bodyPose.length).toBeLessThanOrEqual(100);
+          expect(option.bodyPose).toContain("viewer");
           expect(option.bodyPose).not.toMatch(/full-body|feet|shoes|legs-to-feet/i);
           expect(option.bodyPose).not.toMatch(
             /\b(cafe|table|counter|chair|bench|bed|doorway|window|railing|shoreline|bar|sofa|stage|cups?|glasses?|menus?|books?|towels?|coffee|flowers?|hands?|arms?|fingers?|holding|gripping)\b/i,
@@ -254,14 +254,18 @@ describe("moment pose and expression candidates", () => {
     }
   });
 
-  it("uses the same generic fallback pose family across venues", () => {
+  it("keeps dining fallback seated while other venues use the generic fallback family", () => {
     expect(suggestMomentPoseOptions("beach", "female")).toEqual(
-      suggestMomentPoseOptions("dining", "male"),
+      suggestMomentPoseOptions("outdoor_public", "male"),
     );
     expect(suggestMomentPoseOptions("beach", "female")[0]?.bodyPose).toBe(
       "standing three-quarter pose, face toward viewer",
     );
     expect(suggestMomentPoseOptions("beach", "female")[0]?.bodyPose).not.toContain("shoreline");
+    expect(suggestMomentPoseOptions("dining", "female")[0]?.bodyPose).toBe(
+      "seated slight forward lean, torso angled toward viewer",
+    );
+    expect(suggestMomentPoseOptions("dining", "female")[0]?.bodyPose).not.toContain("standing");
   });
 
   it("returns venue-safe camera candidates without prop, outfit, or body-pose pollution", () => {
@@ -285,8 +289,10 @@ describe("moment pose and expression candidates", () => {
 
   it("keeps public dining camera views tasteful and reserves intimate angles for private scenes", () => {
     const dining = suggestMomentCameraOptions("dining", "public").map((option) => option.cameraView);
+    expect(dining[0]).toBe("side-view table-side composition");
     expect(dining).toContain("side-view table-side composition");
     expect(dining).toContain("high-angle table-side view");
+    expect(dining.at(-1)).toBe("front three-quarter view, medium angled shot");
     expect(dining.join(" ")).not.toMatch(/under-table|floor-level|sofa-side|close intimate crop/i);
 
     const homePrivate = suggestMomentCameraOptions("home_private", "private").map(

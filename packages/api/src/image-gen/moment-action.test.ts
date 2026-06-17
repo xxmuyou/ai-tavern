@@ -51,7 +51,7 @@ describe("parseMomentVisualAction", () => {
       expression: "warm shy smile",
       outfit: "cozy knit sweater and jeans",
       prop_name: "coffee cup",
-      prop_relation: "nearby_on_table",
+      prop_state: "nearby",
     });
 
     expect(action).toEqual({
@@ -60,11 +60,11 @@ describe("parseMomentVisualAction", () => {
       expression: "warm shy smile",
       outfit: "cozy knit sweater and jeans",
       prop_name: "coffee cup",
-      prop_relation: "nearby_on_table",
+      prop_state: "nearby",
     });
   });
 
-  it("defaults clear props to nearby_on_table and ignores old free-form hand fields", () => {
+  it("defaults clear props to nearby and ignores old free-form hand fields", () => {
     expect(
       parseMomentVisualAction({
         body_pose: "seated relaxed pose, face toward viewer",
@@ -79,7 +79,52 @@ describe("parseMomentVisualAction", () => {
       camera_view: "high-angle table-side view",
       outfit: "cozy knit sweater and jeans",
       prop_name: "iced americano glass",
-      prop_relation: "nearby_on_table",
+      prop_state: "nearby",
+    });
+  });
+
+  it("supports single-frame prop states for drink narration", () => {
+    expect(
+      parseMomentVisualAction({
+        body_pose: "seated slight forward lean, torso angled toward viewer",
+        camera_view: "side-view table-side composition",
+        expression: "lazy appraising gaze, curious eyes, relaxed mouth",
+        outfit: "fitted knit mini dress",
+        prop_name: "cold glass",
+        prop_state: "just_set_down",
+      }),
+    ).toEqual({
+      body_pose: "seated slight forward lean, torso angled toward viewer",
+      camera_view: "side-view table-side composition",
+      expression: "lazy appraising gaze, curious eyes, relaxed mouth",
+      outfit: "fitted knit mini dress",
+      prop_name: "cold glass",
+      prop_state: "just_set_down",
+    });
+
+    expect(
+      parseMomentVisualAction({
+        body_pose: "seated slight forward lean, torso angled toward viewer",
+        camera_view: "side-view table-side composition",
+        outfit: "fitted knit mini dress",
+        prop_name: "cold glass",
+        prop_state: "near_lips",
+      }),
+    ).toMatchObject({ prop_state: "near_lips" });
+  });
+
+  it("maps legacy prop_relation values for old internal callers", () => {
+    expect(
+      parseMomentVisualAction({
+        body_pose: "seated relaxed pose, face toward viewer",
+        camera_view: "side-view table-side composition",
+        outfit: "cozy knit sweater and jeans",
+        prop_name: "small bouquet",
+        prop_relation: "held_in_one_hand",
+      }),
+    ).toMatchObject({
+      prop_name: "small bouquet",
+      prop_state: "held_one_hand",
     });
   });
 
@@ -212,7 +257,7 @@ describe("parseMomentVisualAction", () => {
         body_pose: "seated relaxed pose, face toward viewer",
         outfit: "cozy knit sweater and jeans",
         prop_name: "fingers wrapped around a cold glass of iced americano",
-        prop_relation: "held_in_one_hand",
+        prop_state: "held_one_hand",
       }),
     ).toEqual({
       body_pose: "seated relaxed pose, face toward viewer",
@@ -261,7 +306,7 @@ describe("extractMomentVisualAction", () => {
         hairstyle: "soft curled hair",
         outfit: "stylish fitted midi dress",
         prop_name: "coffee cup",
-        prop_relation: "nearby_on_table",
+        prop_state: "nearby",
       }),
     );
 
@@ -281,6 +326,7 @@ describe("extractMomentVisualAction", () => {
           properties: expect.not.objectContaining({
             hand_action: expect.anything(),
             held_or_nearby_props: expect.anything(),
+            prop_relation: expect.anything(),
           }),
           required: expect.arrayContaining(["body_pose", "camera_view", "outfit", "hairstyle"]),
         }),
@@ -319,7 +365,10 @@ describe("extractMomentVisualAction", () => {
     expect(system).toContain("Avoid repeating plain eye-level front view");
     expect(system).toContain("expression facial only");
     expect(system).toContain("outfit clothing-only");
-    expect(system).toContain("Default prop_relation to nearby_on_table");
+    expect(system).toContain("Choose ONE primary visual moment");
+    expect(system).toContain("Prefer the last emotionally meaningful stable moment");
+    expect(system).toContain("Use prop_state nearby, held_one_hand, near_lips, or just_set_down");
+    expect(system).toContain("Prefer nearby or just_set_down");
     expect(system).toContain("Never write hand_action");
     expect(system).toContain("body_pose and camera_view must be 100 characters or less");
     expect(system).toContain("never mention full-body");
@@ -357,7 +406,42 @@ describe("extractMomentVisualAction", () => {
     expect(user).toContain("camera_view <= 100 chars");
     expect(user).toContain("Use fallback pose family only when narration has no drawable body action");
     expect(user).toContain("Props are optional");
-    expect(user).toContain("prop_name + prop_relation");
+    expect(user).toContain("prop_name + prop_state");
+  });
+
+  it("extracts drink narration as one stable visual moment instead of a standing fallback", async () => {
+    mockLlmCall.mockResolvedValue(
+      llmResponse({
+        body_pose: "seated slight forward lean, torso angled toward viewer",
+        camera_view: "side-view table-side composition",
+        expression: "lazy appraising gaze, curious eyes, relaxed mouth",
+        hairstyle: "neat half-up hairstyle",
+        outfit: "fitted knit mini dress with sheer stockings",
+        prop_name: "cold glass",
+        prop_state: "just_set_down",
+      }),
+    );
+
+    const action = await extractMomentVisualAction({} as Env, {
+      ...sampleInput(),
+      sourceReply:
+        "Mika's fingers wrapped around the cold glass, condensation bleeding onto the wooden table. She lifted it, took a measured sip, and set it down with a soft click.\n\nHer eyes flicked to his cup, then to his face, appraising with lazy curiosity.",
+    });
+
+    expect(action).toMatchObject({
+      body_pose: "seated slight forward lean, torso angled toward viewer",
+      camera_view: "side-view table-side composition",
+      expression: "lazy appraising gaze, curious eyes, relaxed mouth",
+      prop_name: "cold glass",
+      prop_state: "just_set_down",
+    });
+    expect(action?.body_pose).not.toMatch(/\b(glass|table|hand|finger|hold|standing)\b/i);
+
+    const request = mockLlmCall.mock.calls[0]?.[1] as {
+      messages: Array<{ content: string; role: string }>;
+    };
+    expect(request.messages[1]?.content).toContain("Pick one primary visual moment");
+    expect(request.messages[1]?.content).toContain("last emotionally meaningful stable action");
   });
 
   it("retries once with a nudge and higher temperature when the first attempt errors", async () => {
@@ -383,6 +467,8 @@ describe("extractMomentVisualAction", () => {
     expect(retry.temperature).toBe(0.5);
     expect(retry.messages).toHaveLength(3);
     expect(retry.messages[2]?.content).toContain("previous answer was rejected");
+    expect(retry.messages[2]?.content).toContain("body_pose included hands, props, cups, glasses, tables");
+    expect(retry.messages[2]?.content).toContain("pure body structure and direction only");
   });
 
   it("retries when the first output trips the multi-subject guard", async () => {
