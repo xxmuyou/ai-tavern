@@ -37,6 +37,10 @@ export type MomentPoseCandidate = {
   bodyPose: string;
 };
 
+export type MomentCameraCandidate = {
+  cameraView: string;
+};
+
 export type MomentExpressionCandidate = {
   expression: string;
 };
@@ -705,105 +709,67 @@ const MALE_OUTFIT_OPTIONS: Record<MomentVenue, { modest: readonly string[]; bold
   },
 };
 
-const FEMALE_POSE_OPTIONS: Record<MomentVenue, readonly string[]> = {
-  active: [
-    "full-body leaning against gym equipment, face toward viewer, one hand at waist, athletic angled posture",
-    "full-body seated on a workout bench, face toward viewer, legs angled aside, energetic posture",
-    "full-body mid-action turn in the activity area, face toward viewer, hand adjusting ponytail",
-    "full-body standing beside an arcade cabinet, face toward viewer, playful confident stance",
-  ],
-  beach: [
-    "full-body standing near shoreline or pool edge, face toward viewer, relaxed resort body angle",
-    "full-body reclining on a beach lounge chair, face toward viewer, one knee softly bent",
-    "full-body leaning against a pool railing, face toward viewer, hips angled, clean waistline",
-    "full-body walking turn along beach or poolside, face toward viewer, hair moving slightly",
-  ],
-  bedroom: [
-    "full-body seated on the bed edge, face toward viewer, eyes lowered softly, shy waistline",
-    "full-body sitting sideways on the bed edge, face toward viewer, legs angled aside",
-    "full-body standing beside the bed, face toward viewer, one hand behind neck, softly arched back",
-    "full-body leaning against bedroom doorway, face toward viewer, one knee subtly bent",
-  ],
-  dining: [
-    "full-body seated sideways at a cafe table, face toward viewer, torso leaning forward",
-    "full-body leaning forward against cafe counter, face toward viewer, one hand at waist",
-    "full-body standing beside a window table, face toward viewer, hand brushing hair",
-    "full-body half-turn beside the table, face toward viewer, one hand on chair back",
-  ],
-  home_private: [
-    "full-body seated on a soft chair, face toward viewer, one arm held close, cozy posture",
-    "full-body leaning against a window frame, face toward viewer, soft bashful angle",
-    "full-body standing near doorway, face toward viewer, weight shifted, one hand on frame",
-    "full-body half-turn by a doorway, face toward viewer, hand fixing hair or sleeve",
-  ],
-  indoor_quiet: [
-    "full-body standing in a quiet aisle, face toward viewer, hands relaxed, poised waistline",
-    "full-body seated on a quiet chair, face toward viewer, legs angled aside, calm posture",
-    "full-body leaning against a shelf or wall, face toward viewer, hand brushing hair aside",
-    "full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture",
-  ],
-  nightlife: [
-    "full-body leaning over a lounge bar counter, face toward viewer, hips angled back",
-    "full-body seated on a lounge sofa, face toward viewer, torso leaning forward",
-    "full-body standing in stage light, face toward viewer, one hand behind neck",
-    "full-body slow dance-floor turn, face toward viewer, one hand brushing over hip",
-  ],
-  outdoor_public: [
-    "full-body leaning against a railing or bench, face toward viewer, one hand at waist",
-    "full-body mid-step turn on a walkway, face toward viewer, hair moving slightly",
-    "full-body seated on a bench or low wall, face toward viewer, torso angled forward",
-    "full-body standing beside a street fixture, face toward viewer, hand brushing hair back",
-  ],
-};
+const FALLBACK_POSE_OPTIONS: readonly string[] = [
+  "standing three-quarter pose, face toward viewer",
+  "seated relaxed pose, face toward viewer",
+  "leaning pose, face toward viewer",
+  "mid-step turn pose, face toward viewer",
+  "reclining side pose, face toward viewer",
+];
 
-const MALE_POSE_OPTIONS: Record<MomentVenue, readonly string[]> = {
+const CAMERA_VIEW_OPTIONS: Record<MomentVenue, readonly string[]> = {
   active: [
-    "full-body leaning against gym equipment, face toward viewer, one hand at side, athletic posture",
-    "full-body seated on a workout bench, face toward viewer, forearms on knees, strong shoulders",
-    "full-body mid-action turn in the activity area, face toward viewer, one hand adjusting jacket",
-    "full-body standing beside an arcade cabinet, face toward viewer, relaxed competitive stance",
+    "side-view action composition",
+    "low-angle athletic view",
+    "three-quarter dynamic view",
+    "medium shot with angled composition",
   ],
   beach: [
-    "full-body standing near shoreline or pool edge, face toward viewer, one hand adjusting collar",
-    "full-body reclining on a beach lounge chair, face toward viewer, forearm behind head",
-    "full-body leaning against a pool railing, face toward viewer, one hand in pocket",
-    "full-body walking turn along beach or poolside, face toward viewer, shirt moving slightly",
+    "low-angle seaside view",
+    "side-view composition",
+    "rear three-quarter over-the-shoulder view",
+    "high-angle seaside view",
+    "dynamic three-quarter seaside view",
   ],
   bedroom: [
-    "full-body seated on the bed edge, face toward viewer, forearms on knees, relaxed shoulders",
-    "full-body standing beside the window, face toward viewer, one hand adjusting collar",
-    "full-body leaning against bedroom doorway, face toward viewer, one hand in pocket",
-    "full-body sitting sideways on the bed edge, face toward viewer, one hand resting beside body",
+    "high-angle view from above, close intimate crop",
+    "overhead view from above",
+    "side-view intimate composition",
+    "rear three-quarter over-the-shoulder view",
+    "low-angle view from below eye level, tasteful intimate composition",
   ],
   dining: [
-    "full-body seated sideways at a cafe table, face toward viewer, forearm resting on table",
-    "full-body leaning against cafe counter, face toward viewer, one hand in pocket",
-    "full-body standing beside a window table, face toward viewer, one hand adjusting cuff",
-    "full-body half-turn beside the table, face toward viewer, one hand on chair back",
+    "front three-quarter view, medium angled shot",
+    "side-view table-side composition",
+    "high-angle table-side view",
+    "rear three-quarter over-the-shoulder view",
   ],
   home_private: [
-    "full-body seated on a soft chair, face toward viewer, one forearm resting on knee",
-    "full-body leaning against a window frame, face toward viewer, easy calm posture",
-    "full-body standing near doorway, face toward viewer, one hand in pocket",
-    "full-body half-turn by a doorway, face toward viewer, one hand adjusting sleeve",
+    "low-angle sofa-side view from below eye level",
+    "close intimate crop",
+    "side-view composition",
+    "rear three-quarter over-the-shoulder view",
+    "high-angle intimate view from above",
   ],
   indoor_quiet: [
-    "full-body standing in a quiet aisle, face toward viewer, hands relaxed, composed posture",
-    "full-body seated on a quiet chair, face toward viewer, one ankle crossed",
-    "full-body leaning against a shelf or wall, face toward viewer, one hand in pocket",
-    "full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture",
+    "front three-quarter view, medium angled shot",
+    "side-view composition",
+    "high-angle quiet indoor view",
+    "rear three-quarter over-the-shoulder view",
   ],
   nightlife: [
-    "full-body leaning against the bar counter, face toward viewer, one hand in pocket",
-    "full-body seated on a lounge sofa, face toward viewer, one arm along the sofa back",
-    "full-body standing near stage lights, face toward viewer, one hand adjusting jacket",
-    "full-body half-turn beside the bar, face toward viewer, sleeves rolled",
+    "low-angle dramatic view",
+    "side-view neon composition",
+    "rear three-quarter over-the-shoulder view",
+    "close intimate crop",
+    "dynamic angled composition",
   ],
   outdoor_public: [
-    "full-body leaning against a railing or bench, face toward viewer, one hand in pocket",
-    "full-body mid-step turn on a walkway, face toward viewer, jacket moving slightly",
-    "full-body seated on a bench or low wall, face toward viewer, forearm resting on knee",
-    "full-body standing beside a street fixture, face toward viewer, one hand adjusting jacket",
+    "front three-quarter view, medium angled shot",
+    "side-view composition",
+    "rear three-quarter over-the-shoulder view",
+    "high-angle outdoor view",
+    "dynamic three-quarter outdoor view",
   ],
 };
 
@@ -909,11 +875,21 @@ function isMaleGender(gender: string | null | undefined): boolean {
 }
 
 export function suggestMomentPoseOptions(
-  venue: MomentVenue,
-  gender: string | null,
+  _venue?: MomentVenue,
+  _gender?: string | null,
 ): MomentPoseCandidate[] {
-  const options = isMaleGender(gender) ? MALE_POSE_OPTIONS[venue] : FEMALE_POSE_OPTIONS[venue];
-  return options.map((bodyPose) => ({ bodyPose }));
+  return suggestMomentFallbackPoseOptions();
+}
+
+export function suggestMomentFallbackPoseOptions(): MomentPoseCandidate[] {
+  return FALLBACK_POSE_OPTIONS.map((bodyPose) => ({ bodyPose }));
+}
+
+export function suggestMomentCameraOptions(
+  venue: MomentVenue,
+  _privacy: MomentScenePrivacy,
+): MomentCameraCandidate[] {
+  return CAMERA_VIEW_OPTIONS[venue].map((cameraView) => ({ cameraView }));
 }
 
 export function suggestMomentExpressionOptions(

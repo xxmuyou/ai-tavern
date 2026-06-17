@@ -84,25 +84,25 @@ v1.2 使用受控 `visual action extractor` / pose planner 提炼姿态，再由
 ```ts
 type MomentVisualAction = {
   body_pose: string;
-  hand_action?: string;
-  gaze?: string;
+  camera_view?: string; // v1.11: 视角/构图 slot，schema 层 required，fallback 可补
   expression?: string;
   outfit?: string; // 贴合场所/季节/活动的单人服装，覆盖参考图原服装（schema 层 required）
   hairstyle?: string; // v1.5：随场景换发型，命令式行注入（schema 层 required）
   makeup?: string; // v1.5：可选妆容
-  held_or_nearby_props?: string;
-  scene_position?: string;
+  prop_name?: string;
+  prop_relation?: "nearby_on_table" | "held_in_one_hand";
 };
 ```
 
 提取规则：
 
 - 输出必须只描述 companion 一个人；禁止出现 `user`、`another person`、`two people`、`couple`、`crowd`、`together`、`lap`、`embrace`、`kiss`、`held by`、`holding hands`、`reflection`、`duplicate body` 等会引入第二人、亲密身体接触或重复肢体的描述。
-- 用户动作要转译成 companion 的单人反应：用户送花 → `she holds a small bouquet close to her chest`；用户点咖啡 → `she sits with a coffee cup near her hands`；用户邀请去某处 → `she stands near the doorway, turning back toward the viewer`。
-- 亲密互动不画第二个人，也不逐字保留身体接触：牵手、拥抱、靠近、从某人腿上起身等动作转译成 viewer 视角的单人姿态，例如 `she reaches one hand slightly toward the viewer`、`she leans a little closer while looking at the viewer`、`she sits alone near the bed edge, adjusting fabric with one hand`。
-- companion narration 只作为上下文，不允许原样复制；用户消息只补足 props、触发动作和可见反应。
+- `body_pose` 优先从 companion narration 抽取并轻度夸张化；不得原样复制旁白，也不得写第二人、场景实物、手部细节或道具。
+- `camera_view` 是独立的视角/构图 slot；不得写身体动作、道具、服装、表情，也不得写可见相机、手机、自拍、viewfinder。它解决“所有图都平视”的问题，但必须按 venue/privacy 选择合理视角。
+- 用户动作只补足 props、触发动作和可见反应：用户送花 → `prop_name: small bouquet`；用户点咖啡 → `prop_name: coffee cup / iced americano glass`。手部文字不由 LLM 自由生成。
+- 亲密互动不画第二个人，也不逐字保留身体接触：牵手、拥抱、靠近、从某人腿上起身等动作转译成 viewer 视角的单人身体方向，例如 `leaning pose, face toward viewer` 或 `seated relaxed pose, face toward viewer`。
 - **强制换装（v1.5）**：`outfit` 与 `hairstyle` 必须是为当前场所刻意选择的新造型，禁止默认素色便装（cardigan/sweater/jeans 仅限寒冷户外）；场所→造型映射示例写入 system prompt（夜店→裙装+妆发、白天广场/公园→俏皮街拍、卧室→居家/睡衣、海滩→泳装/夏裙、健身房→运动装），尺度按 `Styling boldness:`（stage 4 档）执行，硬上限不露点。
-- **背景锁定（v1.5）**：背景位置已固定并单独渲染，extractor 不得迁移场景；`body_pose` / `scene_position` 必须发生在给定 scene 内。
+- **背景锁定（v1.10）**：背景位置已固定并单独渲染，extractor 不得迁移场景；`body_pose` 必须适配给定 scene，但不得在 pose 字段里命名场景物件。
 - **重试与预设兜底（v1.5）**：首次调用失败（异常/JSON 不合法/风险词命中）时升温重试一次（`temperature: 0.5` + 追加 strict reminder user message；temp=0 重复相同输入会复现同样的坏输出）。两次均失败时使用按 场所×尺度档 的预设造型表（`presetMomentStyle`，女表 8×4 + 男装精简表）拼出 fallback action，保证任何路径出图都换装换发型；旧的 `an outfit that naturally fits the scene` 泛化兜底已废弃。extractor 成功但缺 outfit/hairstyle 时由 `ensureRestyle` 用同一预设表补齐。图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
 
 **审美控制层（v1.6）**：`chat_moment` 的换装不再让 LLM 完全自由发挥。后端在 image-gen 模块内用纯函数生成可独立调整的审美控制，不新增 DB 字段、不改前端、不改 RunningHub workflow：
@@ -110,157 +110,121 @@ type MomentVisualAction = {
 - `MomentStyleProfile`：按 `companionId + gender` deterministic 选择稳定角色审美 archetype（如 elegant minimalist / soft romantic / sharp urban / relaxed premium），包含色系、廓形、材质/气质和身材线条偏好。同一 companion 的 moment 图应保持稳定穿搭方向。
 - `suggestMomentOutfitOptions`：按 `venue + style tier + gender + profile` 返回 3 个高质量候选 outfit。extractor 必须从候选中选择，可轻微改写但不能改变 profile 方向；fallback 也从候选取默认项，避免随机低质服装。
 
-这些层互相解耦：profile 负责角色审美方向，outfit candidates 负责具体穿搭，pose candidates 负责身体骨架。调整某一层不需要改 API、DB、前端或 job 流程。
+这些层互相解耦：profile 负责角色审美方向，outfit candidates 负责具体穿搭，fallback pose family 只在旁白没有可画动作时兜底。调整某一层不需要改 API、DB、前端或 job 流程。
 
-**姿态/表情/服装候选库（v1.7）**：在 v1.6 的服装审美层上继续收紧 prompt 选择，不让 LLM 自由发明 posture/expression/outfit。后端仍只改 image-gen prompt 生成层，不改公开 API、DB、前端或 RunningHub workflow。v1.7 的核心分层是：
+**旁白优先短 prompt（v1.10）**：当前 RunningHub `chat_moment` workflow 在短而明确的编辑指令下表现更好。v1.10 不再让场景 pose 候选抢主导，而是恢复 LLM 从 companion reply 旁白里抽动作的能力：
 
-- **主 pose**：由 `venue + gender` 选择候选，负责坐、站、靠、转身、躺椅等身体骨架；全身优先展示整体身材和穿搭，但不写 `feet / shoes / legs-to-feet` 等强制脚部入镜词。
-- **主动作/道具**：只从当前聊天或明确场景文本里自然抽取。没有明确道具时不输出道具，不再给 extractor 预设 cafe cup / book / towel / menu 等 scene prop hints。
-- **情绪**：主要进入 `expression`，不再以单独 `Body attitude` 长行进入最终 prompt，避免和主 pose / hand action 打架。
-- **服装**：使用重写后的 `venue + tier + gender + style profile` 候选库。服装候选本身不写具体颜色，颜色主要交给 style profile / workflow / LoRA；公共场景整体性感度上调但不拉满，私密场景更大胆但仍不写 nude/topless/explicit。
-- **脸部策略不变**：使用 cutout 后的 companion 图片作为参考图保证脸不变；`appearance` 原文不进最终生图 prompt。
+- **body_pose 来源优先级**：`companion reply` 旁白第一，`previous user message / activity` 只作辅助；只有旁白没有可画身体动作时，才使用 fallback pose family。
+- **轻度夸张化**：如果旁白动作很轻，例如“转头看你/靠近一点/坐直”，extractor 可以改写成更清楚、更有表现力的 anime-style solo body pose，但必须保留原意并保持短句。
+- **pose 边界**：`body_pose <= 100 chars`，只写身体骨架和方向；禁止 `full-body`、场景实物、道具、手/胳膊/手指/握持/递接等词。场景由 `Change the background to:` 单独负责，道具由 `prop_name + prop_relation` 单独负责。
+- **expression / outfit 边界**：`expression` 只写脸部表情；`outfit` 只写衣服。当前 `style profile + outfit candidates` 保留，因为它稳定了服装审美。
+- **道具结构化保留**：`prop_name` 只管一个道具名；`prop_relation` 只能是 `nearby_on_table` 或 `held_in_one_hand`。默认 nearby；只有当前 turn 明确“拿起/握着/举着/收到”时才允许 held。
+- **最终 prompt 继续短模板**：保留 `Change the reference pose to: {body_pose}. Do not keep the original portrait pose.`；不再注入 `Pose/body quality`、`Pose variety`、`Body attitude`、`Gaze`、`Position in scene`、`activity context`、完整 style profile。
+- **道具模板**：`nearby_on_table` 渲染为 `Prop: one {prop_name} nearby in the scene, not held. Hands relaxed and natural.`；`held_in_one_hand` 渲染为 `Prop: one {prop_name} held in one hand. Other hand relaxed and visible.`
+- **明确禁止反例**：`fingers wrapped around a cold glass, iced americano glass on table`。这是“手拿杯子”和“桌上杯子”同时出现的冲突 prompt，会诱发多手/错手。
 
-**Prompt 精简（v1.8）**：当前 RunningHub `chat_moment` workflow 的脸部五官保持效果较好，但对过长姿势提示词容易困惑。因此 v1.8 优先减少 prompt 干扰，而不是继续堆规则：
+**视角/构图 slot（v1.11）**：当前 workflow 保脸效果不错，但如果不显式控制 camera framing，模型容易继承参考图的平视正面构图。v1.11 新增 `camera_view`，但不把视角混入 `body_pose`：
 
-- Extractor 输出保持短句：`body_pose <= 120 chars`，其他字段尽量 `<= 120 chars`；不要在复制候选后继续追加长从句。
-- 最终 prompt 使用明确姿势编辑指令：`Change the reference pose to: {body_pose}. Do not keep the original portrait pose.`
-- 最终 prompt 不再注入 `Pose/body quality`、`Pose variety`、`Primary action rule`、单独 `Body attitude`。
-- `Hands/props` 只在 extractor 明确输出时出现；没有明确道具就空手。
-- 单人、无用户、无第二人、无文字/UI/相机限制仍保留。
+- **slot 边界**：`body_pose` 只管身体骨架；`camera_view` 只管镜头角度和构图；`expression` 只管脸；`outfit` 只管衣服；`prop_name + prop_relation` 只管一个道具。
+- **平视不再是默认**：fallback 和候选不再使用 plain eye-level front view 作为默认。只有公共、正式、旁白确实适合时，才允许接近平视的 front three-quarter view。
+- **场景配平**：公共咖啡厅/餐厅不允许 `under-table / floor-level / extreme low-angle close-up`；沙发、卧室、夜店可以使用低机位、俯视、近景或背面回眸，但必须保脸可见。
+- **最终 prompt 短行**：`Camera view: {camera_view}. Keep the face visible and recognizable.`
+- **禁用设备词**：`camera_view` 不是画面里的相机；最终 prompt 仍保留 `Do not render any camera, phone, or photographic device.`
 
-### v1.8 Candidate Library Appendix
+### v1.11 Candidate Library Appendix
 
-以下英文为进入 prompt 的候选原文；中文说明仅用于审查。候选库先作为代码常量维护，不做后台配置。v1.8 pose 候选必须短、明确、无预设道具；道具只能由聊天或明确场景文本自然抽取。
+以下英文为进入 prompt 的候选原文；中文说明仅用于审查。候选库先作为代码常量维护，不做后台配置。v1.10 不再维护按 venue/gender 展开的 pose 表；pose 主要来自旁白抽取，下面 5 条只作为无动作时的兜底。
 
-#### Pose Candidates
+#### Fallback Pose Family
 
-**Dining（cafe / restaurant / dessert）**
+1. `standing three-quarter pose, face toward viewer`
+2. `seated relaxed pose, face toward viewer`
+3. `leaning pose, face toward viewer`
+4. `mid-step turn pose, face toward viewer`
+5. `reclining side pose, face toward viewer`
 
-Female:
+这些 fallback 不含场景实物、不含道具、不含手部动作、不含 `full-body`。如果旁白已有动作，不应使用这些兜底覆盖旁白。
 
-1. `full-body seated sideways at a cafe table, face toward viewer, torso leaning forward`
-2. `full-body leaning forward against cafe counter, face toward viewer, one hand at waist`
-3. `full-body standing beside a window table, face toward viewer, hand brushing hair`
-4. `full-body half-turn beside the table, face toward viewer, one hand on chair back`
+#### Camera View Candidates
 
-Male:
+`camera_view` 是场景安全的构图候选，不写身体动作、不写手部、不写道具、不写衣服/表情。LLM 从当前 venue 的候选里选一个；如果旁白明确需要背面回眸或俯视，可选相近候选，但仍要保脸可见。
 
-1. `full-body seated sideways at a cafe table, face toward viewer, forearm resting on table`
-2. `full-body leaning against cafe counter, face toward viewer, one hand in pocket`
-3. `full-body standing beside a window table, face toward viewer, one hand adjusting cuff`
-4. `full-body half-turn beside the table, face toward viewer, one hand on chair back`
+**Dining / Cafe / Restaurant**
 
-**Nightlife（livehouse / bar / lounge / club）**
+1. `front three-quarter view, medium angled shot`
+2. `side-view table-side composition`
+3. `high-angle table-side view`
+4. `rear three-quarter over-the-shoulder view`
 
-Female:
+禁用：`under-table view`、`floor-level low angle`、`extreme low-angle close-up`。咖啡厅可以有桌边侧面或稍高角度，但不能像钻桌底。
 
-1. `full-body leaning over a lounge bar counter, face toward viewer, hips angled back`
-2. `full-body seated on a lounge sofa, face toward viewer, torso leaning forward`
-3. `full-body standing in stage light, face toward viewer, one hand behind neck`
-4. `full-body slow dance-floor turn, face toward viewer, one hand brushing over hip`
+**Home Private / Sofa / Private Chat**
 
-Male:
+1. `low-angle sofa-side view from below eye level`
+2. `close intimate crop`
+3. `side-view composition`
+4. `rear three-quarter over-the-shoulder view`
+5. `high-angle intimate view from above`
 
-1. `full-body leaning against the bar counter, face toward viewer, one hand in pocket`
-2. `full-body seated on a lounge sofa, face toward viewer, one arm along the sofa back`
-3. `full-body standing near stage lights, face toward viewer, one hand adjusting jacket`
-4. `full-body half-turn beside the bar, face toward viewer, sleeves rolled`
+这些视角适合沙发、客厅、私密聊天；低机位可用，但不得写成可见相机或偷拍设备。
 
-**Bedroom（hotel suite / apartment bedroom）**
+**Bedroom / Hotel**
 
-Female:
+1. `high-angle view from above, close intimate crop`
+2. `overhead view from above`
+3. `side-view intimate composition`
+4. `rear three-quarter over-the-shoulder view`
+5. `low-angle view from below eye level, tasteful intimate composition`
 
-1. `full-body seated on the bed edge, face toward viewer, eyes lowered softly, shy waistline`
-2. `full-body sitting sideways on the bed edge, face toward viewer, legs angled aside`
-3. `full-body standing beside the bed, face toward viewer, one hand behind neck, softly arched back`
-4. `full-body leaning against bedroom doorway, face toward viewer, one knee subtly bent`
+卧室/床/酒店场景适合俯视、overhead、侧面和背面回眸；低机位只允许 tasteful intimate composition。
 
-Male:
+**Beach / Pool**
 
-1. `full-body seated on the bed edge, face toward viewer, forearms on knees, relaxed shoulders`
-2. `full-body standing beside the window, face toward viewer, one hand adjusting collar`
-3. `full-body leaning against bedroom doorway, face toward viewer, one hand in pocket`
-4. `full-body sitting sideways on the bed edge, face toward viewer, one hand resting beside body`
+1. `low-angle seaside view`
+2. `side-view composition`
+3. `rear three-quarter over-the-shoulder view`
+4. `high-angle seaside view`
+5. `dynamic three-quarter seaside view`
 
-**Home Private（Private chat / lobby / laundry / lounge / balcony）**
+沙滩/泳池可用低机位、侧面和背面回眸，但不写 `full-body`，不强制脚入镜。
 
-Female:
+**Nightlife / Bar / Stage**
 
-1. `full-body seated on a soft chair, face toward viewer, one arm held close, cozy posture`
-2. `full-body leaning against a window frame, face toward viewer, soft bashful angle`
-3. `full-body standing near doorway, face toward viewer, weight shifted, one hand on frame`
-4. `full-body half-turn by a doorway, face toward viewer, hand fixing hair or sleeve`
+1. `low-angle dramatic view`
+2. `side-view neon composition`
+3. `rear three-quarter over-the-shoulder view`
+4. `close intimate crop`
+5. `dynamic angled composition`
 
-Male:
+夜店/酒吧/舞台允许更戏剧化的低角度和霓虹侧面构图。
 
-1. `full-body seated on a soft chair, face toward viewer, one forearm resting on knee`
-2. `full-body leaning against a window frame, face toward viewer, easy calm posture`
-3. `full-body standing near doorway, face toward viewer, one hand in pocket`
-4. `full-body half-turn by a doorway, face toward viewer, one hand adjusting sleeve`
+**Active / Gym / Arcade**
 
-**Indoor Quiet（bookshop / library / cinema / studio / record shop）**
+1. `side-view action composition`
+2. `low-angle athletic view`
+3. `three-quarter dynamic view`
+4. `medium shot with angled composition`
 
-Female:
+活动场景允许运动感角度，但不使用卧室式俯视或暧昧近景。
 
-1. `full-body standing in a quiet aisle, face toward viewer, hands relaxed, poised waistline`
-2. `full-body seated on a quiet chair, face toward viewer, legs angled aside, calm posture`
-3. `full-body leaning against a shelf or wall, face toward viewer, hand brushing hair aside`
-4. `full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture`
+**Outdoor Public**
 
-Male:
+1. `front three-quarter view, medium angled shot`
+2. `side-view composition`
+3. `rear three-quarter over-the-shoulder view`
+4. `high-angle outdoor view`
+5. `dynamic three-quarter outdoor view`
 
-1. `full-body standing in a quiet aisle, face toward viewer, hands relaxed, composed posture`
-2. `full-body seated on a quiet chair, face toward viewer, one ankle crossed`
-3. `full-body leaning against a shelf or wall, face toward viewer, one hand in pocket`
-4. `full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture`
+户外公共场景以街拍/自然构图为主，避免过度私密视角。
 
-**Outdoor Public（plaza / park / riverside / rooftop / market / street）**
+**Indoor Quiet**
 
-Female:
+1. `front three-quarter view, medium angled shot`
+2. `side-view composition`
+3. `high-angle quiet indoor view`
+4. `rear three-quarter over-the-shoulder view`
 
-1. `full-body leaning against a railing or bench, face toward viewer, one hand at waist`
-2. `full-body mid-step turn on a walkway, face toward viewer, hair moving slightly`
-3. `full-body seated on a bench or low wall, face toward viewer, torso angled forward`
-4. `full-body standing beside a street fixture, face toward viewer, hand brushing hair back`
-
-Male:
-
-1. `full-body leaning against a railing or bench, face toward viewer, one hand in pocket`
-2. `full-body mid-step turn on a walkway, face toward viewer, jacket moving slightly`
-3. `full-body seated on a bench or low wall, face toward viewer, forearm resting on knee`
-4. `full-body standing beside a street fixture, face toward viewer, one hand adjusting jacket`
-
-**Active（gym / arcade / game / sport / hiking future tags）**
-
-Female:
-
-1. `full-body leaning against gym equipment, face toward viewer, one hand at waist, athletic angled posture`
-2. `full-body seated on a workout bench, face toward viewer, legs angled aside, energetic posture`
-3. `full-body mid-action turn in the activity area, face toward viewer, hand adjusting ponytail`
-4. `full-body standing beside an arcade cabinet, face toward viewer, playful confident stance`
-
-Male:
-
-1. `full-body leaning against gym equipment, face toward viewer, one hand at side, athletic posture`
-2. `full-body seated on a workout bench, face toward viewer, forearms on knees, strong shoulders`
-3. `full-body mid-action turn in the activity area, face toward viewer, one hand adjusting jacket`
-4. `full-body standing beside an arcade cabinet, face toward viewer, relaxed competitive stance`
-
-**Beach（beach / pool / seaside / hot spring future tags）**
-
-Female:
-
-1. `full-body standing near shoreline or pool edge, face toward viewer, relaxed resort body angle`
-2. `full-body reclining on a beach lounge chair, face toward viewer, one knee softly bent`
-3. `full-body leaning against a pool railing, face toward viewer, hips angled, clean waistline`
-4. `full-body walking turn along beach or poolside, face toward viewer, hair moving slightly`
-
-Male:
-
-1. `full-body standing near shoreline or pool edge, face toward viewer, one hand adjusting collar`
-2. `full-body reclining on a beach lounge chair, face toward viewer, forearm behind head`
-3. `full-body leaning against a pool railing, face toward viewer, one hand in pocket`
-4. `full-body walking turn along beach or poolside, face toward viewer, shirt moving slightly`
+书店/影院等安静公共室内以自然侧面、斜侧和稍高角度为主。
 
 #### Expression Candidates
 
@@ -684,22 +648,20 @@ Bold:
 2. `open short-sleeve shirt over a tank with tailored shorts`
 3. `fitted knit polo with tailored shorts or slim trousers`
 
-最终 prompt 示例结构（v1.8：脸靠 cutout/reference 锁定；无 appearance/名字/relationship/personality/story_beat，仅留 gender 锚点）：
+最终 prompt 示例结构（v1.11：脸靠 cutout/reference 锁定；无 appearance/名字/relationship/personality/story_beat/原始旁白，仅留 gender 锚点；pose 与 camera_view 分离，道具由模板渲染）：
 
 ```text
 Edit the input image into a single-character scene image of the same companion.
 Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene.
 Keep exactly one person in the image — this companion only. Do not add any other people, ...
-The companion's face is oriented toward the viewer; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.
-Change the reference pose to: full-body seated sideways at a cafe table, face toward viewer, torso leaning forward. Do not keep the original portrait pose.
+The companion's face remains visible and recognizable; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.
+Change the reference pose to: expressive seated turn, face toward viewer. Do not keep the original portrait pose.
+Camera view: side-view table-side composition. Keep the face visible and recognizable.
+Prop: one iced americano glass nearby in the scene, not held. Hands relaxed and natural.
 Outfit (overrides any clothing mentioned in the reference): fitted blouse with a high-waisted short skirt and sheer stockings.
 Change the hairstyle to: soft curled hair.
 Makeup: natural date makeup.
-Gaze: face oriented toward the viewer, eyes may meet the viewer or lower softly.
 Expression: shy warm smile.
-Position in scene: near the cafe window.
-Style profile: soft romantic; soft feminine styling with graceful fabrics and romantic detail; palette: ivory, rose, warm beige, soft blue, delicate gold accents; silhouette: fitted waist, flowing hems, delicate but intentional styling; body aesthetic: soft curves, poised shoulders, gentle flattering angles.
-Expression quality: visibly emotion-specific facial expression, not the neutral expression from the reference.
 Companion gender: female.
 Change the background to: Pier Coffee Shop, morning, warm cafe atmosphere, ...tags. The background is empty of other people.
 Single companion only, viewer/user not visible, natural composition, no other people, ..., no text, no UI, no speech bubbles, no visible camera or photographic device.

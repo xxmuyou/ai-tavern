@@ -21,10 +21,10 @@ import { CHAT_MOMENT_WORKFLOW_KEY } from "./workflow-keys";
 import type { MomentVisualAction } from "./moment-action";
 import {
   classifyMomentVenue,
-  formatMomentStyleProfile,
   presetMomentStyle,
   resolveMomentStyleProfile,
   stageStyleTier,
+  suggestMomentCameraOptions,
   suggestMomentExpressionOptions,
   suggestMomentPoseOptions,
   type MomentScenePrivacy,
@@ -105,13 +105,15 @@ function presetFallbackAction(ctx: MomentPromptContext): MomentVisualAction {
     resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender),
   );
   const pose = suggestMomentPoseOptions(venue, ctx.companion.gender)[0]?.bodyPose
-    ?? "full-body standing alone in the scene, face toward viewer, relaxed shoulders";
+    ?? "standing three-quarter pose, face toward viewer";
+  const cameraView = suggestMomentCameraOptions(venue, ctx.privacy)[0]?.cameraView
+    ?? "front three-quarter view, medium angled shot";
   const expression = suggestMomentExpressionOptions(ctx.emotion, ctx.companion.gender)[0]?.expression
     ?? "calm attentive expression, clear eyes, relaxed brows, natural mouth";
   return {
     body_pose: pose,
+    camera_view: cameraView,
     expression,
-    gaze: "face oriented toward the viewer, eyes may meet the viewer or lower softly",
     hairstyle: style.hairstyle,
     ...(style.makeup ? { makeup: style.makeup } : {}),
     outfit: style.outfit,
@@ -134,12 +136,12 @@ function ensureRestyle(
   );
   const expression = suggestMomentExpressionOptions(ctx.emotion, ctx.companion.gender)[0]?.expression
     ?? "calm attentive expression, clear eyes, relaxed brows, natural mouth";
+  const cameraView = suggestMomentCameraOptions(resolveMomentVenue(ctx), ctx.privacy)[0]?.cameraView
+    ?? "front three-quarter view, medium angled shot";
   return {
     ...action,
+    camera_view: action.camera_view?.trim() ? action.camera_view : cameraView,
     expression: action.expression?.trim() ? action.expression : expression,
-    gaze: action.gaze?.trim()
-      ? action.gaze
-      : "face oriented toward the viewer, eyes may meet the viewer or lower softly",
     hairstyle: action.hairstyle?.trim() ? action.hairstyle : style.hairstyle,
     outfit: action.outfit?.trim() ? action.outfit : style.outfit,
   };
@@ -147,12 +149,13 @@ function ensureRestyle(
 
 function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void {
   lines.push(`Change the reference pose to: ${action.body_pose}. Do not keep the original portrait pose.`);
+  if (action.camera_view?.trim()) {
+    lines.push(`Camera view: ${action.camera_view.trim()}. Keep the face visible and recognizable.`);
+  }
 
-  const handsAndProps = [action.hand_action, action.held_or_nearby_props]
-    .map((part) => part?.trim())
-    .filter(Boolean);
-  if (handsAndProps.length > 0) {
-    lines.push(`Hands/props: ${handsAndProps.join(", ")}.`);
+  const propLine = renderPropLine(action);
+  if (propLine) {
+    lines.push(propLine);
   }
   if (action.outfit?.trim()) {
     lines.push(
@@ -165,15 +168,18 @@ function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void 
   if (action.makeup?.trim()) {
     lines.push(`Makeup: ${action.makeup.trim()}.`);
   }
-  if (action.gaze?.trim()) {
-    lines.push(`Gaze: ${action.gaze.trim()}.`);
-  }
   if (action.expression?.trim()) {
     lines.push(`Expression: ${action.expression.trim()}.`);
   }
-  if (action.scene_position?.trim()) {
-    lines.push(`Position in scene: ${action.scene_position.trim()}.`);
+}
+
+function renderPropLine(action: MomentVisualAction): string | null {
+  const propName = action.prop_name?.trim();
+  if (!propName) return null;
+  if (action.prop_relation === "held_in_one_hand") {
+    return `Prop: one ${propName} held in one hand. Other hand relaxed and visible.`;
   }
+  return `Prop: one ${propName} nearby in the scene, not held. Hands relaxed and natural.`;
 }
 
 export function buildMomentPrompt(ctx: MomentPromptContext): string {
@@ -197,16 +203,11 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
     isPublic
       ? "Keep exactly one person in focus — this companion only. Do not add a second main subject, the user, an opponent, or anyone near the companion; no duplicate bodies."
       : "Keep exactly one person in the image — this companion only. Do not add any other people, a second person, the user, an opponent, a crowd, bystanders, reflections of another person, or duplicate bodies.",
-    "The companion's face is oriented toward the viewer; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.",
+    "The companion's face remains visible and recognizable; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.",
   );
 
   const momentPose = ensureRestyle(ctx.visualAction ?? presetFallbackAction(ctx), ctx);
   pushMomentPoseLines(lines, momentPose);
-  const styleProfile = resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender);
-  lines.push(
-    formatMomentStyleProfile(styleProfile) + ".",
-    "Expression quality: visibly emotion-specific and different from the reference portrait, with clear eyes, brows, and mouth.",
-  );
 
   // The companion's face is locked by the reference image the edit model holds,
   // not by text. We deliberately do NOT describe the face/appearance here: free-text
@@ -226,15 +227,6 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
         : "The background is empty of other people."
     }`,
   );
-
-  if (ctx.activity) {
-    const activityBits = [ctx.activity.activity_type, ctx.activity.activity_hint, ctx.activity.mood]
-      .map((b) => b?.trim())
-      .filter(Boolean);
-    if (activityBits.length) {
-      lines.push(`Context: ${activityBits.join(", ")}.`);
-    }
-  }
 
   lines.push(
     isPublic

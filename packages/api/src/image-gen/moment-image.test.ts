@@ -280,13 +280,15 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("identity reference");
     expect(prompt).toContain("warm");
     expect(prompt).toContain(
-      "Change the reference pose to: full-body leaning against a railing or bench",
+      "Change the reference pose to: standing three-quarter pose, face toward viewer",
     );
     expect(prompt).toContain("Do not keep the original portrait pose");
-    expect(prompt).toContain("Gaze: face oriented toward the viewer");
+    expect(prompt).toContain("Camera view: front three-quarter view, medium angled shot");
+    expect(prompt).toContain("Keep the face visible and recognizable");
     expect(prompt).toContain("Expression: soft genuine smile");
-    expect(prompt).toContain("Style profile: sharp urban");
-    expect(prompt).toContain("Expression quality: visibly emotion-specific");
+    expect(prompt).not.toContain("Gaze:");
+    expect(prompt).not.toContain("Style profile: sharp urban");
+    expect(prompt).not.toContain("Expression quality:");
     expect(prompt).not.toContain("Body attitude:");
     expect(prompt).not.toContain("Pose/body quality:");
     expect(prompt).not.toContain("Pose variety:");
@@ -300,6 +302,7 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Makeup: fresh light makeup");
     expect(prompt).not.toContain("an outfit that naturally fits the scene");
     expect(prompt).not.toContain("Maya wraps her hands around the cup");
+    expect(prompt).not.toContain("sketching by the window");
     expect(prompt).toContain("no text, no UI");
   });
 
@@ -309,6 +312,7 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain(
       "The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene",
     );
+    expect(prompt).toContain("Camera view:");
     // Abstract, non-visual metadata is kept out of the final image prompt.
     expect(prompt).not.toContain("Maya");
     expect(prompt).not.toContain("shy but warm");
@@ -331,7 +335,7 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("single-character scene image");
     expect(prompt).toContain("Keep exactly one person in focus — this companion only");
     expect(prompt).toContain("Do not add a second main subject, the user, an opponent");
-    expect(prompt).toContain("face is oriented toward the viewer");
+    expect(prompt).toContain("face remains visible and recognizable");
     expect(prompt).toContain("Do not render any camera, phone, or photographic device");
     expect(prompt).toContain("no second main character");
     expect(prompt).not.toContain("first-person perspective from the user's point of view");
@@ -358,6 +362,7 @@ describe("buildMomentPrompt", () => {
     expect(prompt).toContain("Keep exactly one person in the image — this companion only");
     expect(prompt).toContain("Do not add any other people, a second person, the user, an opponent");
     expect(prompt).toContain("The background is empty of other people");
+    expect(prompt).toContain("Camera view: high-angle view from above, close intimate crop");
     expect(prompt).toContain("no extra characters");
     expect(prompt).not.toContain("distant passersby");
   });
@@ -384,10 +389,12 @@ describe("buildMomentPrompt", () => {
     const prompt = buildMomentPrompt({
       ...sampleContext(),
       visualAction: {
-        body_pose: "standing alone on the warm sand",
+        body_pose: "standing three-quarter pose, face toward viewer",
+        camera_view: "side-view composition",
         outfit: "light summer dress",
       },
     });
+    expect(prompt).toContain("Camera view: side-view composition");
     expect(prompt).toContain(
       "Outfit (overrides any clothing mentioned in the reference): light summer dress",
     );
@@ -400,7 +407,8 @@ describe("buildMomentPrompt", () => {
     const prompt = buildMomentPrompt({
       ...sampleContext(),
       visualAction: {
-        body_pose: "leaning against the pier railing",
+        body_pose: "leaning pose, face toward viewer",
+        camera_view: "rear three-quarter over-the-shoulder view",
         hairstyle: "wind-blown loose waves",
         outfit: "flowy white sundress",
       },
@@ -409,6 +417,7 @@ describe("buildMomentPrompt", () => {
       "Outfit (overrides any clothing mentioned in the reference): flowy white sundress",
     );
     expect(prompt).toContain("Change the hairstyle to: wind-blown loose waves");
+    expect(prompt).toContain("Camera view: rear three-quarter over-the-shoulder view");
     expect(prompt).not.toContain("playful sundress with sneakers");
   });
 
@@ -419,21 +428,69 @@ describe("buildMomentPrompt", () => {
       sourceReply: "<narration>Maya blushes.</narration>Thank you.",
       visualAction: {
         body_pose: "standing slightly turned toward the viewer",
+        camera_view: "front three-quarter view, medium angled shot",
         expression: "warm shy smile",
-        gaze: "looking directly at the viewer",
-        hand_action: "both hands gently around the bouquet",
-        held_or_nearby_props: "small bouquet",
-        scene_position: "near the cafe table",
+        prop_name: "small bouquet",
+        prop_relation: "held_in_one_hand",
       },
     });
 
     expect(prompt).toContain("Change the reference pose to: standing slightly turned toward the viewer");
-    expect(prompt).toContain("Hands/props: both hands gently around the bouquet, small bouquet");
-    expect(prompt).toContain("Position in scene: near the cafe table");
+    expect(prompt).toContain("Camera view: front three-quarter view, medium angled shot");
+    expect(prompt).toContain("Prop: one small bouquet held in one hand. Other hand relaxed and visible.");
     expect(prompt).toContain("viewer/user not visible");
+    expect(prompt).not.toContain("Position in scene:");
+    expect(prompt).not.toContain("Hands/props:");
+    expect(prompt).not.toContain("both hands");
     expect(prompt).not.toContain("Render this exact visible moment");
     expect(prompt).not.toContain("You offer a small bouquet");
     expect(prompt).not.toContain("Maya blushes");
+  });
+
+  it("renders nearby props with relaxed hands and no free-form hand wording", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      visualAction: {
+        body_pose: "expressive seated turn, face toward viewer",
+        camera_view: "high-angle table-side view",
+        expression: "curious slight smile",
+        outfit: "fitted knit mini dress with sheer stockings",
+        prop_name: "iced americano glass",
+        prop_relation: "nearby_on_table",
+      },
+    });
+
+    expect(prompt).toContain("Camera view: high-angle table-side view");
+    expect(prompt).toContain("Prop: one iced americano glass nearby in the scene, not held. Hands relaxed and natural.");
+    expect(prompt).not.toContain("Hands/props:");
+    expect(prompt).not.toContain("on the table");
+    expect(prompt).not.toContain("fingers wrapped");
+    expect(prompt).not.toContain("both hands");
+    expect(prompt.match(/iced americano glass/g)).toHaveLength(1);
+  });
+
+  it("renders camera view as composition without summoning a physical camera", () => {
+    const prompt = buildMomentPrompt({
+      ...sampleContext(),
+      privacy: "private",
+      scene: {
+        mood: "soft sofa lounge",
+        name: "Private Lounge",
+        tags: ["home", "lounge", "intimate", "night"],
+      },
+      visualAction: {
+        body_pose: "reclining side pose, face toward viewer",
+        camera_view: "low-angle sofa-side view from below eye level",
+        expression: "teasing half-smile",
+        outfit: "fitted lounge dress",
+      },
+    });
+
+    expect(prompt).toContain("Camera view: low-angle sofa-side view from below eye level. Keep the face visible and recognizable.");
+    expect(prompt).toContain("Do not render any camera, phone, or photographic device");
+    expect(prompt).toContain("no visible camera or photographic device");
+    expect(prompt).not.toContain("viewfinder");
+    expect(prompt).not.toContain("selfie");
   });
 
   it("never falls back to raw narration for risky intimate body actions", () => {
@@ -445,7 +502,7 @@ describe("buildMomentPrompt", () => {
     });
 
     expect(prompt).toContain(
-      "Change the reference pose to: full-body leaning against a railing or bench",
+      "Change the reference pose to: standing three-quarter pose, face toward viewer",
     );
     expect(prompt).toContain(
       "Outfit (overrides any clothing mentioned in the reference): fitted blouse with high-waisted shorts and polished accessories",

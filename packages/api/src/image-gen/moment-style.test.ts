@@ -8,6 +8,7 @@ import {
   formatMomentStyleProfile,
   presetMomentStyle,
   resolveMomentStyleProfile,
+  suggestMomentCameraOptions,
   suggestMomentExpressionOptions,
   stageStyleGuidance,
   stageStyleTier,
@@ -163,7 +164,7 @@ describe("presetMomentStyle", () => {
             expect(field.length).toBeLessThanOrEqual(120);
           }
           const parsed = parseMomentVisualAction({
-            body_pose: "standing alone in the scene",
+            body_pose: "standing three-quarter pose, face toward viewer",
             hairstyle: preset.hairstyle,
             ...(preset.makeup ? { makeup: preset.makeup } : {}),
             outfit: preset.outfit,
@@ -198,7 +199,7 @@ describe("moment style profiles and outfit candidates", () => {
             expect(option.outfit.length).toBeLessThanOrEqual(120);
             expect(option.outfit).not.toMatch(/random costume|cheap|oversized shapeless/i);
             const parsed = parseMomentVisualAction({
-              body_pose: "standing alone in the scene",
+              body_pose: "standing three-quarter pose, face toward viewer",
               hairstyle: option.hairstyle,
               ...(option.makeup ? { makeup: option.makeup } : {}),
               outfit: option.outfit,
@@ -228,18 +229,17 @@ describe("moment style profiles and outfit candidates", () => {
 });
 
 describe("moment pose and expression candidates", () => {
-  it("returns four short prop-free full-body pose candidates for every venue and gender", () => {
+  it("returns short fallback pose family entries without scene objects or hand details", () => {
     for (const venue of ALL_VENUES) {
       for (const gender of ["female", "male"]) {
         const options = suggestMomentPoseOptions(venue, gender);
-        expect(options).toHaveLength(4);
+        expect(options).toHaveLength(5);
         for (const option of options) {
-          expect(option.bodyPose.length).toBeLessThanOrEqual(110);
-          expect(option.bodyPose).toContain("full-body");
+          expect(option.bodyPose.length).toBeLessThanOrEqual(100);
           expect(option.bodyPose).toContain("face toward viewer");
-          expect(option.bodyPose).not.toMatch(/S-curve|feet|shoes|legs-to-feet/i);
+          expect(option.bodyPose).not.toMatch(/full-body|feet|shoes|legs-to-feet/i);
           expect(option.bodyPose).not.toMatch(
-            /\b(cup|menu|book|towel|coffee|flowers?|scene-matched prop|prop held low)\b/i,
+            /\b(cafe|table|counter|chair|bench|bed|doorway|window|railing|shoreline|bar|sofa|stage|cups?|glasses?|menus?|books?|towels?|coffee|flowers?|hands?|arms?|fingers?|holding|gripping)\b/i,
           );
           expect(
             parseMomentVisualAction({
@@ -254,6 +254,52 @@ describe("moment pose and expression candidates", () => {
     }
   });
 
+  it("uses the same generic fallback pose family across venues", () => {
+    expect(suggestMomentPoseOptions("beach", "female")).toEqual(
+      suggestMomentPoseOptions("dining", "male"),
+    );
+    expect(suggestMomentPoseOptions("beach", "female")[0]?.bodyPose).toBe(
+      "standing three-quarter pose, face toward viewer",
+    );
+    expect(suggestMomentPoseOptions("beach", "female")[0]?.bodyPose).not.toContain("shoreline");
+  });
+
+  it("returns venue-safe camera candidates without prop, outfit, or body-pose pollution", () => {
+    for (const venue of ALL_VENUES) {
+      const options = suggestMomentCameraOptions(
+        venue,
+        venue === "bedroom" || venue === "home_private" ? "private" : "public",
+      );
+      expect(options.length).toBeGreaterThanOrEqual(4);
+      for (const option of options) {
+        expect(option.cameraView.length).toBeLessThanOrEqual(100);
+        expect(option.cameraView).not.toMatch(
+          /\b(cups?|glasses?|coffee|flowers?|menus?|books?|towels?|hands?|arms?|fingers?|dress|skirt|shirt|stockings|smile|pout|standing|seated|walking|reclining|leaning|turning)\b/i,
+        );
+        expect(option.cameraView).not.toMatch(
+          /\b(visible camera|camera visible|phone|selfie|viewfinder|dslr|photographic device|under-table|under table)\b/i,
+        );
+      }
+    }
+  });
+
+  it("keeps public dining camera views tasteful and reserves intimate angles for private scenes", () => {
+    const dining = suggestMomentCameraOptions("dining", "public").map((option) => option.cameraView);
+    expect(dining).toContain("side-view table-side composition");
+    expect(dining).toContain("high-angle table-side view");
+    expect(dining.join(" ")).not.toMatch(/under-table|floor-level|sofa-side|close intimate crop/i);
+
+    const homePrivate = suggestMomentCameraOptions("home_private", "private").map(
+      (option) => option.cameraView,
+    );
+    const bedroom = suggestMomentCameraOptions("bedroom", "private").map(
+      (option) => option.cameraView,
+    );
+    expect(homePrivate).toContain("low-angle sofa-side view from below eye level");
+    expect(bedroom).toContain("high-angle view from above, close intimate crop");
+    expect(bedroom).toContain("overhead view from above");
+  });
+
   it("returns four emotion-specific expression candidates for every emotion and gender", () => {
     for (const emotion of ["warm", "playful", "guarded", "tense", "annoyed", "neutral"]) {
       for (const gender of ["female", "male"]) {
@@ -263,7 +309,7 @@ describe("moment pose and expression candidates", () => {
           expect(option.expression.length).toBeLessThanOrEqual(120);
           expect(
             parseMomentVisualAction({
-              body_pose: "standing alone in the scene",
+              body_pose: "standing three-quarter pose, face toward viewer",
               expression: option.expression,
               hairstyle: "simple styled hair",
               outfit: "fitted outfit",

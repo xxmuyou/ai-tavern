@@ -236,11 +236,14 @@ describe("moment image routes", () => {
     // LLM extractor (unavailable in this test env) falls back to a profile-ordered
     // home_private/reserved styling candidate instead of a vague default.
     expect(jobs[0]?.prompt).toContain("The background is empty of other people");
-    expect(jobs[0]?.prompt).toContain("Change the reference pose to: full-body seated on a soft chair");
+    expect(jobs[0]?.prompt).toContain(
+      "Change the reference pose to: standing three-quarter pose, face toward viewer",
+    );
+    expect(jobs[0]?.prompt).toContain("Camera view: low-angle sofa-side view from below eye level");
     expect(jobs[0]?.prompt).toContain(
       "Outfit (overrides any clothing mentioned in the reference): soft fitted lounge dress with a defined waist",
     );
-    expect(jobs[0]?.prompt).toContain("Style profile: sharp urban");
+    expect(jobs[0]?.prompt).not.toContain("Style profile:");
     expect(jobs[0]?.prompt).not.toContain("Pose/body quality:");
     expect(jobs[0]?.prompt).toContain("Change the hairstyle to: casual messy bun");
     expect(jobs[0]?.prompt).not.toContain("an outfit that naturally fits the scene");
