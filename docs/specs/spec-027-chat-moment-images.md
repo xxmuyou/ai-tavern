@@ -105,45 +105,32 @@ type MomentVisualAction = {
 - **背景锁定（v1.5）**：背景位置已固定并单独渲染，extractor 不得迁移场景；`body_pose` / `scene_position` 必须发生在给定 scene 内。
 - **重试与预设兜底（v1.5）**：首次调用失败（异常/JSON 不合法/风险词命中）时升温重试一次（`temperature: 0.5` + 追加 strict reminder user message；temp=0 重复相同输入会复现同样的坏输出）。两次均失败时使用按 场所×尺度档 的预设造型表（`presetMomentStyle`，女表 8×4 + 男装精简表）拼出 fallback action，保证任何路径出图都换装换发型；旧的 `an outfit that naturally fits the scene` 泛化兜底已废弃。extractor 成功但缺 outfit/hairstyle 时由 `ensureRestyle` 用同一预设表补齐。图片生成不能因为动作提取失败而失败，也不能回退到 raw narration。
 
-**审美控制层（v1.6）**：`chat_moment` 的换装不再让 LLM 完全自由发挥。后端在 image-gen 模块内用纯函数生成三层可独立调整的审美控制，不新增 DB 字段、不改前端、不改 RunningHub workflow：
+**审美控制层（v1.6）**：`chat_moment` 的换装不再让 LLM 完全自由发挥。后端在 image-gen 模块内用纯函数生成可独立调整的审美控制，不新增 DB 字段、不改前端、不改 RunningHub workflow：
 
 - `MomentStyleProfile`：按 `companionId + gender` deterministic 选择稳定角色审美 archetype（如 elegant minimalist / soft romantic / sharp urban / relaxed premium），包含色系、廓形、材质/气质和身材线条偏好。同一 companion 的 moment 图应保持稳定穿搭方向。
 - `suggestMomentOutfitOptions`：按 `venue + style tier + gender + profile` 返回 3 个高质量候选 outfit。extractor 必须从候选中选择，可轻微改写但不能改变 profile 方向；fallback 也从候选取默认项，避免随机低质服装。
-- `MOMENT_POSE_BODY_QUALITY`：独立控制姿态/身材审美，例如自然比例、优雅姿态、放松肩颈、自然手部、清晰腰线、三分之四角度、平衡解剖。该规则同时进入 extractor 和最终 prompt，但不改变单人约束。
 
-这三层互相解耦：profile 负责角色审美方向，outfit candidates 负责具体穿搭，pose/body quality 负责姿态和身体线条。调整某一层不需要改 API、DB、前端或 job 流程。
+这些层互相解耦：profile 负责角色审美方向，outfit candidates 负责具体穿搭，pose candidates 负责身体骨架。调整某一层不需要改 API、DB、前端或 job 流程。
 
 **姿态/表情/服装候选库（v1.7）**：在 v1.6 的服装审美层上继续收紧 prompt 选择，不让 LLM 自由发明 posture/expression/outfit。后端仍只改 image-gen prompt 生成层，不改公开 API、DB、前端或 RunningHub workflow。v1.7 的核心分层是：
 
-- **主 pose**：由 `venue + gender + sceneTags/name` 选择候选，负责坐、站、靠、转身、躺椅等身体骨架；全身优先展示整体身材和穿搭，但不写 `feet / shoes / legs-to-feet` 等强制脚部入镜词。
-- **主动作/道具**：由当前聊天决定，优先级为 `companion reply > previous user message > activity > scene default`。只允许一个 primary hand action / primary prop。
-- **情绪**：不再生成另一套 pose；只提供 `expression + body attitude modifier`。情绪可以改变肩颈、重心、靠近/后退、手部紧张度，但不能覆盖主 pose、不能新增第二个道具、不能抢主手部动作。
+- **主 pose**：由 `venue + gender` 选择候选，负责坐、站、靠、转身、躺椅等身体骨架；全身优先展示整体身材和穿搭，但不写 `feet / shoes / legs-to-feet` 等强制脚部入镜词。
+- **主动作/道具**：只从当前聊天或明确场景文本里自然抽取。没有明确道具时不输出道具，不再给 extractor 预设 cafe cup / book / towel / menu 等 scene prop hints。
+- **情绪**：主要进入 `expression`，不再以单独 `Body attitude` 长行进入最终 prompt，避免和主 pose / hand action 打架。
 - **服装**：使用重写后的 `venue + tier + gender + style profile` 候选库。服装候选本身不写具体颜色，颜色主要交给 style profile / workflow / LoRA；公共场景整体性感度上调但不拉满，私密场景更大胆但仍不写 nude/topless/explicit。
 - **脸部策略不变**：使用 cutout 后的 companion 图片作为参考图保证脸不变；`appearance` 原文不进最终生图 prompt。
 
-**Primary action / prop conflict rules（v1.7）**：
+**Prompt 精简（v1.8）**：当前 RunningHub `chat_moment` workflow 的脸部五官保持效果较好，但对过长姿势提示词容易困惑。因此 v1.8 优先减少 prompt 干扰，而不是继续堆规则：
 
-- Extractor 必须先识别当前 turn 的 primary action / prop；如果 companion reply 里有明确动作或道具，以 companion reply 为准。
-- Extractor 输出保持短句：`body_pose <= 160 chars`，其他字段尽量 `<= 120 chars`；不要在复制候选后继续追加长从句。
-- Scene pose 自带的 cup/book/towel/bag 等只作为可替换的 scene prop hint，不是硬约束。
-- 如果主动作与场景默认道具冲突，场景道具只能降级为 nearby prop。例如咖啡厅 pose 默认有 cup，但 reply 是接花：输出应是 companion 拿花，coffee cup 可放在桌上 nearby；不能同时写双手拿花和双手捧咖啡。
-- Emotion body attitude 只能修饰已有主 pose 和主动作。例如 `tense` 可以让 fingers lightly grip the current prop；如果没有 compatible prop 才可改为 grip hem/sleeve。
-- Fallback 走少道具策略：extractor 两次失败时只用安全 pose / expression / outfit 候选，不主动加咖啡、花、书等具体道具，避免错配。
+- Extractor 输出保持短句：`body_pose <= 120 chars`，其他字段尽量 `<= 120 chars`；不要在复制候选后继续追加长从句。
+- 最终 prompt 使用明确姿势编辑指令：`Change the reference pose to: {body_pose}. Do not keep the original portrait pose.`
+- 最终 prompt 不再注入 `Pose/body quality`、`Pose variety`、`Primary action rule`、单独 `Body attitude`。
+- `Hands/props` 只在 extractor 明确输出时出现；没有明确道具就空手。
+- 单人、无用户、无第二人、无文字/UI/相机限制仍保留。
 
-**Body attitude modifiers（v1.7）**：
+### v1.8 Candidate Library Appendix
 
-| Emotion | Modifier |
-|---|---|
-| `warm` | `relaxed shoulders, body subtly leaning toward the viewer, gentle open posture` |
-| `playful` | `weight shifted to one side, slight head tilt, playful hand near hair or waist only if hands are free` |
-| `guarded` | `torso held slightly back, composed shoulders, hands close to body only if hands are free` |
-| `tense` | `shoulders slightly drawn in, fingers lightly gripping the current prop, hem, or sleeve only if compatible` |
-| `annoyed` | `chin slightly lifted, weight shifted slightly away, one hand at waist only if hands are free` |
-| `neutral` | `balanced posture, relaxed shoulders, natural hands, clean silhouette` |
-
-### v1.7 Candidate Library Appendix
-
-以下英文为进入 prompt 的候选原文；中文说明仅用于审查。候选库先作为代码常量维护，不做后台配置。全局审美规则：脸朝 viewer；眼神可低垂、害羞或不完全直视；不用 `S-curve` 这类土味曲线词，改用具体身体语言如 `weight shifted`、`defined waistline`、`angled torso`、`clean silhouette`。
+以下英文为进入 prompt 的候选原文；中文说明仅用于审查。候选库先作为代码常量维护，不做后台配置。v1.8 pose 候选必须短、明确、无预设道具；道具只能由聊天或明确场景文本自然抽取。
 
 #### Pose Candidates
 
@@ -151,169 +138,129 @@ type MomentVisualAction = {
 
 Female:
 
-1. `full-body seated cross-legged at a cafe table, face toward the viewer, torso leaning forward, one hand near cup, teasing defined waistline`
-2. `full-body leaning forward lightly against the cafe counter, face toward the viewer, hips angled, one hand at the waist, flirtatious body angle`
-3. `full-body standing beside a window table, face toward the viewer, one hand brushing hair away from the neck, alluring fitted silhouette`
-4. `full-body half-turn beside the table, face toward the viewer, one hand on the chair back, subtle hip pop, inviting playful stance`
+1. `full-body seated sideways at a cafe table, face toward viewer, torso leaning forward`
+2. `full-body leaning forward against cafe counter, face toward viewer, one hand at waist`
+3. `full-body standing beside a window table, face toward viewer, hand brushing hair`
+4. `full-body half-turn beside the table, face toward viewer, one hand on chair back`
 
 Male:
 
-1. `full-body seated sideways at a cafe table, face toward the viewer, one forearm resting on the table, relaxed confident shoulders`
-2. `full-body leaning lightly against the cafe counter, face toward the viewer, one hand in pocket, clean shoulder-to-waist line`
-3. `full-body standing beside a window table, face toward the viewer, one hand adjusting cuff or collar, fitted torso line`
-4. `full-body half-turn beside the table, face toward the viewer, one hand on the chair back, confident stance`
+1. `full-body seated sideways at a cafe table, face toward viewer, forearm resting on table`
+2. `full-body leaning against cafe counter, face toward viewer, one hand in pocket`
+3. `full-body standing beside a window table, face toward viewer, one hand adjusting cuff`
+4. `full-body half-turn beside the table, face toward viewer, one hand on chair back`
 
 **Nightlife（livehouse / bar / lounge / club）**
 
 Female:
 
-1. `full-body leaning forward over a lounge bar counter, face toward the viewer, hips angled back, one elbow on the counter, flirtatious body angle`
-2. `full-body seated cross-legged on a lounge sofa, face toward the viewer, torso leaning forward, one hand on sofa edge, teasing confident pose`
-3. `full-body standing in stage light, face toward the viewer, one hand behind the neck, arched posture, sharp waist-to-hip line`
-4. `full-body slow dance-floor turn, face toward the viewer, one hand brushing over the hip, playful provocative body angle`
+1. `full-body leaning over a lounge bar counter, face toward viewer, hips angled back`
+2. `full-body seated on a lounge sofa, face toward viewer, torso leaning forward`
+3. `full-body standing in stage light, face toward viewer, one hand behind neck`
+4. `full-body slow dance-floor turn, face toward viewer, one hand brushing over hip`
 
 Male:
 
-1. `full-body leaning against the bar counter, face toward the viewer, one hand in pocket, relaxed confident shoulders`
-2. `full-body seated on a lounge sofa, face toward the viewer, one arm resting along the sofa back, composed confident posture`
-3. `full-body standing near stage lights, face toward the viewer, one hand adjusting jacket or collar, sharp torso line`
-4. `full-body half-turn beside the bar, face toward the viewer, sleeves rolled, confident stance`
+1. `full-body leaning against the bar counter, face toward viewer, one hand in pocket`
+2. `full-body seated on a lounge sofa, face toward viewer, one arm along the sofa back`
+3. `full-body standing near stage lights, face toward viewer, one hand adjusting jacket`
+4. `full-body half-turn beside the bar, face toward viewer, sleeves rolled`
 
 **Bedroom（hotel suite / apartment bedroom）**
 
 Female:
 
-1. `full-body seated on the bed edge, face toward the viewer, eyes lowered softly, one hand holding robe collar, shy defined waistline`
-2. `full-body sitting sideways on the bed edge, face toward the viewer, legs angled aside, hands on knees, bashful covered silhouette`
-3. `full-body standing beside the bed, face toward the viewer, one hand behind the neck, softly arched back, clear waist-to-hip curve`
-4. `full-body leaning against the bedroom doorway, face toward the viewer, one knee subtly bent, hips angled, flirtatious private stance`
+1. `full-body seated on the bed edge, face toward viewer, eyes lowered softly, shy waistline`
+2. `full-body sitting sideways on the bed edge, face toward viewer, legs angled aside`
+3. `full-body standing beside the bed, face toward viewer, one hand behind neck, softly arched back`
+4. `full-body leaning against bedroom doorway, face toward viewer, one knee subtly bent`
 
 Male:
 
-1. `full-body seated on the bed edge, face toward the viewer, forearms resting on knees, relaxed shoulders and confident torso line`
-2. `full-body standing beside the window, face toward the viewer, one hand adjusting collar, calm intimate stance`
-3. `full-body leaning against the bedroom doorway, face toward the viewer, one hand in pocket, relaxed confident posture`
-4. `full-body sitting sideways on the bed edge, face toward the viewer, one hand resting beside the body, composed private pose`
+1. `full-body seated on the bed edge, face toward viewer, forearms on knees, relaxed shoulders`
+2. `full-body standing beside the window, face toward viewer, one hand adjusting collar`
+3. `full-body leaning against bedroom doorway, face toward viewer, one hand in pocket`
+4. `full-body sitting sideways on the bed edge, face toward viewer, one hand resting beside body`
 
 **Home Private（Private chat / lobby / laundry / lounge / balcony）**
 
 Female:
 
-1. `full-body seated cross-legged on a scene-matched seat, face toward the viewer, one arm held close softly, shy cozy posture with a defined waistline`
-2. `full-body leaning lightly against a scene-matched counter, railing, or window frame, face toward the viewer, soft bashful body angle`
-3. `full-body standing near a doorway, window, or railing, face toward the viewer, weight shifted, one hand on the frame, quiet intimate posture`
-4. `full-body half-turn beside a scene-matched fixture, face toward the viewer, one hand lightly fixing hair or sleeve, playful private posture`
+1. `full-body seated on a soft chair, face toward viewer, one arm held close, cozy posture`
+2. `full-body leaning against a window frame, face toward viewer, soft bashful angle`
+3. `full-body standing near doorway, face toward viewer, weight shifted, one hand on frame`
+4. `full-body half-turn by a doorway, face toward viewer, hand fixing hair or sleeve`
 
 Male:
 
-1. `full-body seated on a scene-matched seat, face toward the viewer, one forearm resting on the knee, relaxed domestic confidence`
-2. `full-body leaning lightly against a scene-matched counter, railing, or window frame, face toward the viewer, easy calm posture`
-3. `full-body standing near a doorway, window, or railing, face toward the viewer, one hand in pocket, relaxed confident stance`
-4. `full-body half-turn beside a scene-matched fixture, face toward the viewer, one hand adjusting sleeve or collar, clean torso line`
-
-Scene-matched anchor hints:
-
-- `Private chat/no scene`: `sofa, soft chair, desk edge`
-- `home/lobby/neighbor`: `entryway wall, lobby bench, mailboxes as background shapes`
-- `laundry`: `washing machine counter, folded towel, laundry basket nearby`
-- `lounge/rain/window`: `window frame, lounge chair, rain-streaked glass`
-- `balcony`: `balcony railing, simple chair, drying rack if activity mentions laundry`
-- fallback: `soft chair or doorway`
+1. `full-body seated on a soft chair, face toward viewer, one forearm resting on knee`
+2. `full-body leaning against a window frame, face toward viewer, easy calm posture`
+3. `full-body standing near doorway, face toward viewer, one hand in pocket`
+4. `full-body half-turn by a doorway, face toward viewer, one hand adjusting sleeve`
 
 **Indoor Quiet（bookshop / library / cinema / studio / record shop）**
 
 Female:
 
-1. `full-body standing in a quiet aisle or lobby, face toward the viewer, one hand near a scene-matched prop, shy poised waistline`
-2. `full-body seated cross-legged on a quiet chair, face toward the viewer, a scene-matched prop held low or nearby, quiet alluring posture`
-3. `full-body leaning lightly against a shelf, wall, or window, face toward the viewer, one hand brushing hair aside, softly angled body line`
-4. `full-body half-turn in the aisle or lobby, face toward the viewer, one hand reaching toward a nearby scene fixture, elegant fitted body line`
+1. `full-body standing in a quiet aisle, face toward viewer, hands relaxed, poised waistline`
+2. `full-body seated on a quiet chair, face toward viewer, legs angled aside, calm posture`
+3. `full-body leaning against a shelf or wall, face toward viewer, hand brushing hair aside`
+4. `full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture`
 
 Male:
 
-1. `full-body standing in a quiet aisle or lobby, face toward the viewer, one hand near a scene-matched prop, calm composed posture`
-2. `full-body seated on a quiet chair, face toward the viewer, one ankle crossed, relaxed shoulders and clean torso line`
-3. `full-body leaning lightly against a shelf, wall, or window, face toward the viewer, one hand in pocket, thoughtful stance`
-4. `full-body half-turn in the aisle or lobby, face toward the viewer, one hand reaching toward a nearby scene fixture, quiet confident posture`
-
-Scene-matched prop hints:
-
-- `bookshop/library/study`: `book, bookshelf, reading chair`
-- `cinema`: `ticket stub, popcorn cup, lobby poster wall as unreadable shapes`
-- `studio/creative/work`: `sketchbook, portfolio, drawing table`
-- `music/record`: `vinyl record sleeve, listening station`
-- fallback: `no required prop`
+1. `full-body standing in a quiet aisle, face toward viewer, hands relaxed, composed posture`
+2. `full-body seated on a quiet chair, face toward viewer, one ankle crossed`
+3. `full-body leaning against a shelf or wall, face toward viewer, one hand in pocket`
+4. `full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture`
 
 **Outdoor Public（plaza / park / riverside / rooftop / market / street）**
 
 Female:
 
-1. `full-body leaning lightly against a railing or bench, face toward the viewer, one hand at the waist, playful hip angle`
-2. `full-body mid-step turn on a walkway or plaza, face toward the viewer, hair or jacket moving slightly, lively fitted body line`
-3. `full-body seated cross-legged on a bench or low wall, face toward the viewer, torso angled forward, teasing public pose`
-4. `full-body standing beside a street fixture or market stall, face toward the viewer, one hand brushing hair back, clean angled silhouette`
+1. `full-body leaning against a railing or bench, face toward viewer, one hand at waist`
+2. `full-body mid-step turn on a walkway, face toward viewer, hair moving slightly`
+3. `full-body seated on a bench or low wall, face toward viewer, torso angled forward`
+4. `full-body standing beside a street fixture, face toward viewer, hand brushing hair back`
 
 Male:
 
-1. `full-body leaning lightly against a railing or bench, face toward the viewer, one hand in pocket, relaxed confident posture`
-2. `full-body mid-step turn on a walkway or plaza, face toward the viewer, jacket moving slightly, clean athletic body line`
-3. `full-body seated on a bench or low wall, face toward the viewer, one forearm resting on the knee, composed casual stance`
-4. `full-body standing beside a street fixture or market stall, face toward the viewer, one hand adjusting jacket, confident silhouette`
-
-Scene-matched prop hints:
-
-- `park`: `bench, path, trees`
-- `riverside/harbor/waterfront`: `railing, water view, small food bag if activity mentions food`
-- `rooftop/balcony`: `glass railing, city lights, plants`
-- `market`: `small snack bag, shopping bag, stall counter`
-- `transit/plaza/city`: `ticket, small bag, station railing`
-- fallback: `no required prop`
+1. `full-body leaning against a railing or bench, face toward viewer, one hand in pocket`
+2. `full-body mid-step turn on a walkway, face toward viewer, jacket moving slightly`
+3. `full-body seated on a bench or low wall, face toward viewer, forearm resting on knee`
+4. `full-body standing beside a street fixture, face toward viewer, one hand adjusting jacket`
 
 **Active（gym / arcade / game / sport / hiking future tags）**
 
 Female:
 
-1. `full-body leaning lightly against gym equipment or an arcade cabinet, face toward the viewer, one hand at the waist, athletic angled posture`
-2. `full-body seated on a workout bench or game stool, face toward the viewer, legs angled to one side, energetic teasing posture`
-3. `full-body mid-action turn beside the activity area, face toward the viewer, one hand adjusting ponytail or jacket, dynamic fitted body line`
-4. `full-body standing beside an activity station, face toward the viewer, one hand holding a scene-matched prop, confident playful stance`
+1. `full-body leaning against gym equipment, face toward viewer, one hand at waist, athletic angled posture`
+2. `full-body seated on a workout bench, face toward viewer, legs angled aside, energetic posture`
+3. `full-body mid-action turn in the activity area, face toward viewer, hand adjusting ponytail`
+4. `full-body standing beside an arcade cabinet, face toward viewer, playful confident stance`
 
 Male:
 
-1. `full-body leaning lightly against gym equipment or an arcade cabinet, face toward the viewer, one hand resting at the side, athletic confident posture`
-2. `full-body seated on a workout bench or game stool, face toward the viewer, forearms resting on knees, strong shoulder line`
-3. `full-body mid-action turn beside the activity area, face toward the viewer, one hand adjusting towel or jacket, dynamic torso line`
-4. `full-body standing beside an activity station, face toward the viewer, one hand holding a scene-matched prop, relaxed competitive stance`
-
-Scene-matched prop hints:
-
-- `gym/sport/training`: `water bottle, towel, training bench, weights in background`
-- `arcade/game/playful`: `game cabinet, prize token, claw machine prize nearby`
-- future `mountain/hiking/trail`: `hiking pole, backpack strap, trail railing`
-- fallback: `no required prop`
+1. `full-body leaning against gym equipment, face toward viewer, one hand at side, athletic posture`
+2. `full-body seated on a workout bench, face toward viewer, forearms on knees, strong shoulders`
+3. `full-body mid-action turn in the activity area, face toward viewer, one hand adjusting jacket`
+4. `full-body standing beside an arcade cabinet, face toward viewer, relaxed competitive stance`
 
 **Beach（beach / pool / seaside / hot spring future tags）**
 
 Female:
 
-1. `full-body standing near the shoreline or pool edge, face toward the viewer, one hand holding a light cover-up, relaxed resort body angle`
-2. `full-body reclining on a beach lounge chair, face toward the viewer, one knee softly bent, hand near cover-up, teasing resort posture`
-3. `full-body leaning lightly against a pool railing or beach umbrella pole, face toward the viewer, hips angled, clean waistline`
-4. `full-body walking turn along the beach or poolside, face toward the viewer, hair moving slightly, playful resort body line`
+1. `full-body standing near shoreline or pool edge, face toward viewer, relaxed resort body angle`
+2. `full-body reclining on a beach lounge chair, face toward viewer, one knee softly bent`
+3. `full-body leaning against a pool railing, face toward viewer, hips angled, clean waistline`
+4. `full-body walking turn along beach or poolside, face toward viewer, hair moving slightly`
 
 Male:
 
-1. `full-body standing near the shoreline or pool edge, face toward the viewer, one hand adjusting the shirt collar, relaxed athletic posture`
-2. `full-body reclining on a beach lounge chair, face toward the viewer, one forearm resting behind the head, relaxed confident resort posture`
-3. `full-body leaning lightly against a pool railing or beach umbrella pole, face toward the viewer, one hand in pocket, clean torso line`
-4. `full-body walking turn along the beach or poolside, face toward the viewer, shirt moving slightly, easy confident body line`
-
-Scene-matched prop hints:
-
-- `beach/seaside`: `light cover-up, beach towel, shoreline`
-- `pool`: `pool railing, lounge chair, towel`
-- `hot spring/onsen`: `towel or robe only if tier/privacy allows`
-- fallback: `no required prop`
+1. `full-body standing near shoreline or pool edge, face toward viewer, one hand adjusting collar`
+2. `full-body reclining on a beach lounge chair, face toward viewer, forearm behind head`
+3. `full-body leaning against a pool railing, face toward viewer, one hand in pocket`
+4. `full-body walking turn along beach or poolside, face toward viewer, shirt moving slightly`
 
 #### Expression Candidates
 
@@ -737,15 +684,14 @@ Bold:
 2. `open short-sleeve shirt over a tank with tailored shorts`
 3. `fitted knit polo with tailored shorts or slim trousers`
 
-最终 prompt 示例结构（v1.7：脸靠 cutout/reference 锁定；无 appearance/名字/relationship/personality/story_beat，仅留 gender 锚点）：
+最终 prompt 示例结构（v1.8：脸靠 cutout/reference 锁定；无 appearance/名字/relationship/personality/story_beat，仅留 gender 锚点）：
 
 ```text
 Edit the input image into a single-character scene image of the same companion.
 Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change to match the new scene.
 Keep exactly one person in the image — this companion only. Do not add any other people, ...
 The companion's face is oriented toward the viewer; the eyes may meet the viewer or lower softly to match the expression. Do not render any camera, phone, or photographic device.
-Moment pose: full-body seated cross-legged at a cafe table, face toward the viewer, torso leaning forward, one hand near cup, teasing defined waistline.
-Hands/props: one hand near a coffee cup.
+Change the reference pose to: full-body seated sideways at a cafe table, face toward viewer, torso leaning forward. Do not keep the original portrait pose.
 Outfit (overrides any clothing mentioned in the reference): fitted blouse with a high-waisted short skirt and sheer stockings.
 Change the hairstyle to: soft curled hair.
 Makeup: natural date makeup.
@@ -753,15 +699,10 @@ Gaze: face oriented toward the viewer, eyes may meet the viewer or lower softly.
 Expression: shy warm smile.
 Position in scene: near the cafe window.
 Style profile: soft romantic; soft feminine styling with graceful fabrics and romantic detail; palette: ivory, rose, warm beige, soft blue, delicate gold accents; silhouette: fitted waist, flowing hems, delicate but intentional styling; body aesthetic: soft curves, poised shoulders, gentle flattering angles.
-Body attitude: relaxed shoulders, body subtly leaning toward the viewer, gentle open posture.
-Pose/body quality: flattering full-body proportions, elegant posture, relaxed shoulders, natural hands, defined waistline, clean silhouette, balanced anatomy, face toward viewer.
-Pose variety: use the selected full-body moment pose as the body skeleton; do not collapse it into a generic standing pose.
 Expression quality: visibly emotion-specific facial expression, not the neutral expression from the reference.
-Primary action rule: keep only one primary hand action or prop. If the chat action conflicts with a scene prop, keep the chat action and move the scene prop nearby or omit it.
-Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.
 Companion gender: female.
 Change the background to: Pier Coffee Shop, morning, warm cafe atmosphere, ...tags. The background is empty of other people.
-Single companion only, natural composition, no other people, ..., no text, no UI, no speech bubbles, no visible camera or photographic device.
+Single companion only, viewer/user not visible, natural composition, no other people, ..., no text, no UI, no speech bubbles, no visible camera or photographic device.
 ```
 
 **背景路人双措辞（v1.5）**：上面示例是 private 场景的严格措辞。public 场景（如 Plaza/Livehouse）为真实感放宽为远景虚化路人，但单主体守卫保留：

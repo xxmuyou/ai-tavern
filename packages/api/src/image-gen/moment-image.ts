@@ -22,11 +22,9 @@ import type { MomentVisualAction } from "./moment-action";
 import {
   classifyMomentVenue,
   formatMomentStyleProfile,
-  MOMENT_POSE_BODY_QUALITY,
   presetMomentStyle,
   resolveMomentStyleProfile,
   stageStyleTier,
-  suggestMomentBodyAttitude,
   suggestMomentExpressionOptions,
   suggestMomentPoseOptions,
   type MomentScenePrivacy,
@@ -107,7 +105,7 @@ function presetFallbackAction(ctx: MomentPromptContext): MomentVisualAction {
     resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender),
   );
   const pose = suggestMomentPoseOptions(venue, ctx.companion.gender)[0]?.bodyPose
-    ?? "full-body standing alone in the scene, face toward the viewer, relaxed shoulders and natural hands";
+    ?? "full-body standing alone in the scene, face toward viewer, relaxed shoulders";
   const expression = suggestMomentExpressionOptions(ctx.emotion, ctx.companion.gender)[0]?.expression
     ?? "calm attentive expression, clear eyes, relaxed brows, natural mouth";
   return {
@@ -148,7 +146,7 @@ function ensureRestyle(
 }
 
 function pushMomentPoseLines(lines: string[], action: MomentVisualAction): void {
-  lines.push(`Moment pose: ${action.body_pose}.`);
+  lines.push(`Change the reference pose to: ${action.body_pose}. Do not keep the original portrait pose.`);
 
   const handsAndProps = [action.hand_action, action.held_or_nearby_props]
     .map((part) => part?.trim())
@@ -205,19 +203,9 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
   const momentPose = ensureRestyle(ctx.visualAction ?? presetFallbackAction(ctx), ctx);
   pushMomentPoseLines(lines, momentPose);
   const styleProfile = resolveMomentStyleProfile(ctx.companion.id, ctx.companion.gender);
-  const bodyAttitude = suggestMomentBodyAttitude(ctx.emotion);
   lines.push(
     formatMomentStyleProfile(styleProfile) + ".",
-    `Body attitude: ${bodyAttitude}.`,
-    `Pose/body quality: ${MOMENT_POSE_BODY_QUALITY}.`,
-    "Pose variety: use the selected full-body moment pose as the main body structure; avoid a generic standing portrait and use natural full-body framing.",
     "Expression quality: visibly emotion-specific and different from the reference portrait, with clear eyes, brows, and mouth.",
-    "Primary action rule: keep only one primary hand action or prop; do not combine incompatible hand poses or scene props.",
-  );
-  lines.push(
-    isPublic
-      ? "Exactly one person in focus: this companion only. The viewer/user is not visible. No second main subject, no hand from another person."
-      : "Exactly one person: this companion only. The viewer/user is not visible. No second person, no crowd, no extra body, no hand from another person.",
   );
 
   // The companion's face is locked by the reference image the edit model holds,
@@ -250,8 +238,8 @@ export function buildMomentPrompt(ctx: MomentPromptContext): string {
 
   lines.push(
     isPublic
-      ? "Single companion in focus, natural composition, no crowd, no second main character, no one near the companion, no text, no UI, no speech bubbles, no visible camera or photographic device."
-      : "Single companion only, natural composition, no other people, no crowd, no second person, no extra characters, no text, no UI, no speech bubbles, no visible camera or photographic device.",
+      ? "Single companion in focus, viewer/user not visible, natural composition, no crowd, no second main character, no one near the companion, no text, no UI, no speech bubbles, no visible camera or photographic device."
+      : "Single companion only, viewer/user not visible, natural composition, no other people, no crowd, no second person, no extra characters, no text, no UI, no speech bubbles, no visible camera or photographic device.",
   );
 
   return lines.join("\n");

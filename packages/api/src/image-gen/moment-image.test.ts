@@ -279,15 +279,18 @@ describe("buildMomentPrompt", () => {
     expect(prompt).not.toContain("soft sweater");
     expect(prompt).not.toContain("identity reference");
     expect(prompt).toContain("warm");
-    expect(prompt).toContain("Moment pose: full-body leaning lightly against a railing or bench");
+    expect(prompt).toContain(
+      "Change the reference pose to: full-body leaning against a railing or bench",
+    );
+    expect(prompt).toContain("Do not keep the original portrait pose");
     expect(prompt).toContain("Gaze: face oriented toward the viewer");
     expect(prompt).toContain("Expression: soft genuine smile");
     expect(prompt).toContain("Style profile: sharp urban");
-    expect(prompt).toContain("Body attitude: relaxed shoulders, body subtly leaning toward the viewer");
-    expect(prompt).toContain("Pose/body quality: flattering full-body proportions");
-    expect(prompt).toContain("Pose variety: use the selected full-body moment pose");
     expect(prompt).toContain("Expression quality: visibly emotion-specific");
-    expect(prompt).toContain("Primary action rule: keep only one primary hand action or prop");
+    expect(prompt).not.toContain("Body attitude:");
+    expect(prompt).not.toContain("Pose/body quality:");
+    expect(prompt).not.toContain("Pose variety:");
+    expect(prompt).not.toContain("Primary action rule:");
     // Fallback styling comes from the venue/stage preset (harbor tags ->
     // outdoor_public, familiar stage -> reserved tier), never a vague default.
     expect(prompt).toContain(
@@ -424,10 +427,10 @@ describe("buildMomentPrompt", () => {
       },
     });
 
-    expect(prompt).toContain("Moment pose: standing slightly turned toward the viewer");
+    expect(prompt).toContain("Change the reference pose to: standing slightly turned toward the viewer");
     expect(prompt).toContain("Hands/props: both hands gently around the bouquet, small bouquet");
     expect(prompt).toContain("Position in scene: near the cafe table");
-    expect(prompt).toContain("The viewer/user is not visible");
+    expect(prompt).toContain("viewer/user not visible");
     expect(prompt).not.toContain("Render this exact visible moment");
     expect(prompt).not.toContain("You offer a small bouquet");
     expect(prompt).not.toContain("Maya blushes");
@@ -441,7 +444,9 @@ describe("buildMomentPrompt", () => {
       visualAction: null,
     });
 
-    expect(prompt).toContain("Moment pose: full-body leaning lightly against a railing or bench");
+    expect(prompt).toContain(
+      "Change the reference pose to: full-body leaning against a railing or bench",
+    );
     expect(prompt).toContain(
       "Outfit (overrides any clothing mentioned in the reference): fitted blouse with high-waisted shorts and polished accessories",
     );

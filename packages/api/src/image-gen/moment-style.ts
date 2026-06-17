@@ -56,9 +56,6 @@ export type MomentStyleProfile = {
   bodyAesthetic: string;
 };
 
-export const MOMENT_POSE_BODY_QUALITY =
-  "flattering full-body proportions, elegant posture, relaxed shoulders, natural hands, defined waistline, clean silhouette, balanced anatomy, face toward viewer";
-
 const STYLE_PROFILES: readonly MomentStyleProfile[] = [
   {
     bodyAesthetic: "graceful proportions, refined posture, clean body line",
@@ -710,103 +707,103 @@ const MALE_OUTFIT_OPTIONS: Record<MomentVenue, { modest: readonly string[]; bold
 
 const FEMALE_POSE_OPTIONS: Record<MomentVenue, readonly string[]> = {
   active: [
-    "full-body leaning lightly against gym equipment or an arcade cabinet, face toward the viewer, one hand at the waist, athletic angled posture",
-    "full-body seated on a workout bench or game stool, face toward the viewer, legs angled to one side, energetic teasing posture",
-    "full-body mid-action turn beside the activity area, face toward the viewer, one hand adjusting ponytail or jacket, dynamic fitted body line",
-    "full-body standing beside an activity station, face toward the viewer, one hand holding a scene-matched prop, confident playful stance",
+    "full-body leaning against gym equipment, face toward viewer, one hand at waist, athletic angled posture",
+    "full-body seated on a workout bench, face toward viewer, legs angled aside, energetic posture",
+    "full-body mid-action turn in the activity area, face toward viewer, hand adjusting ponytail",
+    "full-body standing beside an arcade cabinet, face toward viewer, playful confident stance",
   ],
   beach: [
-    "full-body standing near the shoreline or pool edge, face toward the viewer, one hand holding a light cover-up, relaxed resort body angle",
-    "full-body reclining on a beach lounge chair, face toward the viewer, one knee softly bent, hand near cover-up, teasing resort posture",
-    "full-body leaning lightly against a pool railing or beach umbrella pole, face toward the viewer, hips angled, clean waistline",
-    "full-body walking turn along the beach or poolside, face toward the viewer, hair moving slightly, playful resort body line",
+    "full-body standing near shoreline or pool edge, face toward viewer, relaxed resort body angle",
+    "full-body reclining on a beach lounge chair, face toward viewer, one knee softly bent",
+    "full-body leaning against a pool railing, face toward viewer, hips angled, clean waistline",
+    "full-body walking turn along beach or poolside, face toward viewer, hair moving slightly",
   ],
   bedroom: [
-    "full-body seated on the bed edge, face toward the viewer, eyes lowered softly, one hand holding robe collar, shy defined waistline",
-    "full-body sitting sideways on the bed edge, face toward the viewer, legs angled aside, hands on knees, bashful covered silhouette",
-    "full-body standing beside the bed, face toward the viewer, one hand behind the neck, softly arched back, clear waist-to-hip curve",
-    "full-body leaning against the bedroom doorway, face toward the viewer, one knee subtly bent, hips angled, flirtatious private stance",
+    "full-body seated on the bed edge, face toward viewer, eyes lowered softly, shy waistline",
+    "full-body sitting sideways on the bed edge, face toward viewer, legs angled aside",
+    "full-body standing beside the bed, face toward viewer, one hand behind neck, softly arched back",
+    "full-body leaning against bedroom doorway, face toward viewer, one knee subtly bent",
   ],
   dining: [
-    "full-body seated cross-legged at a cafe table, face toward the viewer, torso leaning forward, one hand near cup, teasing defined waistline",
-    "full-body leaning forward lightly against the cafe counter, face toward the viewer, hips angled, one hand at the waist, flirtatious body angle",
-    "full-body standing beside a window table, face toward the viewer, one hand brushing hair away from the neck, alluring fitted silhouette",
-    "full-body half-turn beside the table, face toward the viewer, one hand on the chair back, subtle hip pop, inviting playful stance",
+    "full-body seated sideways at a cafe table, face toward viewer, torso leaning forward",
+    "full-body leaning forward against cafe counter, face toward viewer, one hand at waist",
+    "full-body standing beside a window table, face toward viewer, hand brushing hair",
+    "full-body half-turn beside the table, face toward viewer, one hand on chair back",
   ],
   home_private: [
-    "full-body seated cross-legged on a scene-matched seat, face toward the viewer, one arm held close softly, shy cozy posture with a defined waistline",
-    "full-body leaning lightly against a scene-matched counter, railing, or window frame, face toward the viewer, soft bashful body angle",
-    "full-body standing near a doorway, window, or railing, face toward the viewer, weight shifted, one hand on the frame, quiet intimate posture",
-    "full-body half-turn beside a scene-matched fixture, face toward the viewer, one hand lightly fixing hair or sleeve, playful private posture",
+    "full-body seated on a soft chair, face toward viewer, one arm held close, cozy posture",
+    "full-body leaning against a window frame, face toward viewer, soft bashful angle",
+    "full-body standing near doorway, face toward viewer, weight shifted, one hand on frame",
+    "full-body half-turn by a doorway, face toward viewer, hand fixing hair or sleeve",
   ],
   indoor_quiet: [
-    "full-body standing in a quiet aisle or lobby, face toward the viewer, one hand near a scene-matched prop, shy poised waistline",
-    "full-body seated cross-legged on a quiet chair, face toward the viewer, a scene-matched prop held low or nearby, quiet alluring posture",
-    "full-body leaning lightly against a shelf, wall, or window, face toward the viewer, one hand brushing hair aside, softly angled body line",
-    "full-body half-turn in the aisle or lobby, face toward the viewer, one hand reaching toward a nearby scene fixture, elegant fitted body line",
+    "full-body standing in a quiet aisle, face toward viewer, hands relaxed, poised waistline",
+    "full-body seated on a quiet chair, face toward viewer, legs angled aside, calm posture",
+    "full-body leaning against a shelf or wall, face toward viewer, hand brushing hair aside",
+    "full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture",
   ],
   nightlife: [
-    "full-body leaning forward over a lounge bar counter, face toward the viewer, hips angled back, one elbow on the counter, flirtatious body angle",
-    "full-body seated cross-legged on a lounge sofa, face toward the viewer, torso leaning forward, one hand on sofa edge, teasing confident pose",
-    "full-body standing in stage light, face toward the viewer, one hand behind the neck, arched posture, sharp waist-to-hip line",
-    "full-body slow dance-floor turn, face toward the viewer, one hand brushing over the hip, playful provocative body angle",
+    "full-body leaning over a lounge bar counter, face toward viewer, hips angled back",
+    "full-body seated on a lounge sofa, face toward viewer, torso leaning forward",
+    "full-body standing in stage light, face toward viewer, one hand behind neck",
+    "full-body slow dance-floor turn, face toward viewer, one hand brushing over hip",
   ],
   outdoor_public: [
-    "full-body leaning lightly against a railing or bench, face toward the viewer, one hand at the waist, playful hip angle",
-    "full-body mid-step turn on a walkway or plaza, face toward the viewer, hair or jacket moving slightly, lively fitted body line",
-    "full-body seated cross-legged on a bench or low wall, face toward the viewer, torso angled forward, teasing public pose",
-    "full-body standing beside a street fixture or market stall, face toward the viewer, one hand brushing hair back, clean angled silhouette",
+    "full-body leaning against a railing or bench, face toward viewer, one hand at waist",
+    "full-body mid-step turn on a walkway, face toward viewer, hair moving slightly",
+    "full-body seated on a bench or low wall, face toward viewer, torso angled forward",
+    "full-body standing beside a street fixture, face toward viewer, hand brushing hair back",
   ],
 };
 
 const MALE_POSE_OPTIONS: Record<MomentVenue, readonly string[]> = {
   active: [
-    "full-body leaning lightly against gym equipment or an arcade cabinet, face toward the viewer, one hand resting at the side, athletic confident posture",
-    "full-body seated on a workout bench or game stool, face toward the viewer, forearms resting on knees, strong shoulder line",
-    "full-body mid-action turn beside the activity area, face toward the viewer, one hand adjusting towel or jacket, dynamic torso line",
-    "full-body standing beside an activity station, face toward the viewer, one hand holding a scene-matched prop, relaxed competitive stance",
+    "full-body leaning against gym equipment, face toward viewer, one hand at side, athletic posture",
+    "full-body seated on a workout bench, face toward viewer, forearms on knees, strong shoulders",
+    "full-body mid-action turn in the activity area, face toward viewer, one hand adjusting jacket",
+    "full-body standing beside an arcade cabinet, face toward viewer, relaxed competitive stance",
   ],
   beach: [
-    "full-body standing near the shoreline or pool edge, face toward the viewer, one hand adjusting the shirt collar, relaxed athletic posture",
-    "full-body reclining on a beach lounge chair, face toward the viewer, one forearm resting behind the head, relaxed confident resort posture",
-    "full-body leaning lightly against a pool railing or beach umbrella pole, face toward the viewer, one hand in pocket, clean torso line",
-    "full-body walking turn along the beach or poolside, face toward the viewer, shirt moving slightly, easy confident body line",
+    "full-body standing near shoreline or pool edge, face toward viewer, one hand adjusting collar",
+    "full-body reclining on a beach lounge chair, face toward viewer, forearm behind head",
+    "full-body leaning against a pool railing, face toward viewer, one hand in pocket",
+    "full-body walking turn along beach or poolside, face toward viewer, shirt moving slightly",
   ],
   bedroom: [
-    "full-body seated on the bed edge, face toward the viewer, forearms resting on knees, relaxed shoulders and confident torso line",
-    "full-body standing beside the window, face toward the viewer, one hand adjusting collar, calm intimate stance",
-    "full-body leaning against the bedroom doorway, face toward the viewer, one hand in pocket, relaxed confident posture",
-    "full-body sitting sideways on the bed edge, face toward the viewer, one hand resting beside the body, composed private pose",
+    "full-body seated on the bed edge, face toward viewer, forearms on knees, relaxed shoulders",
+    "full-body standing beside the window, face toward viewer, one hand adjusting collar",
+    "full-body leaning against bedroom doorway, face toward viewer, one hand in pocket",
+    "full-body sitting sideways on the bed edge, face toward viewer, one hand resting beside body",
   ],
   dining: [
-    "full-body seated sideways at a cafe table, face toward the viewer, one forearm resting on the table, relaxed confident shoulders",
-    "full-body leaning lightly against the cafe counter, face toward the viewer, one hand in pocket, clean shoulder-to-waist line",
-    "full-body standing beside a window table, face toward the viewer, one hand adjusting cuff or collar, fitted torso line",
-    "full-body half-turn beside the table, face toward the viewer, one hand on the chair back, confident stance",
+    "full-body seated sideways at a cafe table, face toward viewer, forearm resting on table",
+    "full-body leaning against cafe counter, face toward viewer, one hand in pocket",
+    "full-body standing beside a window table, face toward viewer, one hand adjusting cuff",
+    "full-body half-turn beside the table, face toward viewer, one hand on chair back",
   ],
   home_private: [
-    "full-body seated on a scene-matched seat, face toward the viewer, one forearm resting on the knee, relaxed domestic confidence",
-    "full-body leaning lightly against a scene-matched counter, railing, or window frame, face toward the viewer, easy calm posture",
-    "full-body standing near a doorway, window, or railing, face toward the viewer, one hand in pocket, relaxed confident stance",
-    "full-body half-turn beside a scene-matched fixture, face toward the viewer, one hand adjusting sleeve or collar, clean torso line",
+    "full-body seated on a soft chair, face toward viewer, one forearm resting on knee",
+    "full-body leaning against a window frame, face toward viewer, easy calm posture",
+    "full-body standing near doorway, face toward viewer, one hand in pocket",
+    "full-body half-turn by a doorway, face toward viewer, one hand adjusting sleeve",
   ],
   indoor_quiet: [
-    "full-body standing in a quiet aisle or lobby, face toward the viewer, one hand near a scene-matched prop, calm composed posture",
-    "full-body seated on a quiet chair, face toward the viewer, one ankle crossed, relaxed shoulders and clean torso line",
-    "full-body leaning lightly against a shelf, wall, or window, face toward the viewer, one hand in pocket, thoughtful stance",
-    "full-body half-turn in the aisle or lobby, face toward the viewer, one hand reaching toward a nearby scene fixture, quiet confident posture",
+    "full-body standing in a quiet aisle, face toward viewer, hands relaxed, composed posture",
+    "full-body seated on a quiet chair, face toward viewer, one ankle crossed",
+    "full-body leaning against a shelf or wall, face toward viewer, one hand in pocket",
+    "full-body half-turn in the aisle, face toward viewer, one hand reaching toward a fixture",
   ],
   nightlife: [
-    "full-body leaning against the bar counter, face toward the viewer, one hand in pocket, relaxed confident shoulders",
-    "full-body seated on a lounge sofa, face toward the viewer, one arm resting along the sofa back, composed confident posture",
-    "full-body standing near stage lights, face toward the viewer, one hand adjusting jacket or collar, sharp torso line",
-    "full-body half-turn beside the bar, face toward the viewer, sleeves rolled, confident stance",
+    "full-body leaning against the bar counter, face toward viewer, one hand in pocket",
+    "full-body seated on a lounge sofa, face toward viewer, one arm along the sofa back",
+    "full-body standing near stage lights, face toward viewer, one hand adjusting jacket",
+    "full-body half-turn beside the bar, face toward viewer, sleeves rolled",
   ],
   outdoor_public: [
-    "full-body leaning lightly against a railing or bench, face toward the viewer, one hand in pocket, relaxed confident posture",
-    "full-body mid-step turn on a walkway or plaza, face toward the viewer, jacket moving slightly, clean athletic body line",
-    "full-body seated on a bench or low wall, face toward the viewer, one forearm resting on the knee, composed casual stance",
-    "full-body standing beside a street fixture or market stall, face toward the viewer, one hand adjusting jacket, confident silhouette",
+    "full-body leaning against a railing or bench, face toward viewer, one hand in pocket",
+    "full-body mid-step turn on a walkway, face toward viewer, jacket moving slightly",
+    "full-body seated on a bench or low wall, face toward viewer, forearm resting on knee",
+    "full-body standing beside a street fixture, face toward viewer, one hand adjusting jacket",
   ],
 };
 
@@ -890,15 +887,6 @@ const MALE_EXPRESSION_OPTIONS: Record<MomentEmotionBucket, readonly string[]> = 
   ],
 };
 
-const BODY_ATTITUDE_OPTIONS: Record<MomentEmotionBucket, string> = {
-  annoyed: "chin slightly lifted, weight shifted slightly away, one hand at waist only if hands are free",
-  guarded: "torso held slightly back, composed shoulders, hands close to body only if hands are free",
-  neutral: "balanced posture, relaxed shoulders, natural hands, clean silhouette",
-  playful: "weight shifted to one side, slight head tilt, playful hand near hair or waist only if hands are free",
-  tense: "shoulders slightly drawn in, fingers lightly gripping the current prop, hem, or sleeve only if compatible",
-  warm: "relaxed shoulders, body subtly leaning toward the viewer, gentle open posture",
-};
-
 function normalizeEmotionBucket(emotion: string | null | undefined): MomentEmotionBucket {
   switch (emotion?.trim().toLowerCase()) {
     case "annoyed":
@@ -937,92 +925,6 @@ export function suggestMomentExpressionOptions(
     ? MALE_EXPRESSION_OPTIONS[bucket]
     : FEMALE_EXPRESSION_OPTIONS[bucket];
   return options.map((expression) => ({ expression }));
-}
-
-export function suggestMomentBodyAttitude(emotion: string | null | undefined): string {
-  return BODY_ATTITUDE_OPTIONS[normalizeEmotionBucket(emotion)];
-}
-
-export function suggestMomentScenePropHints(
-  venue: MomentVenue,
-  sceneName: string,
-  tags: readonly string[],
-): string[] {
-  const text = `${sceneName} ${tags.join(" ")}`.toLowerCase();
-  const has = (pattern: RegExp) => pattern.test(text);
-
-  switch (venue) {
-    case "active":
-      if (has(/\b(mountain|hiking|trail)\b/)) {
-        return ["hiking pole", "backpack strap", "trail railing"];
-      }
-      if (has(/\b(gym|sport|training)\b/)) {
-        return ["water bottle", "towel", "training bench", "weights in background"];
-      }
-      if (has(/\b(arcade|game|playful)\b/)) {
-        return ["game cabinet", "prize token", "claw machine prize nearby"];
-      }
-      return ["no required prop"];
-    case "beach":
-      if (has(/\b(hot spring|onsen)\b/)) {
-        return ["towel or robe only if tier/privacy allows"];
-      }
-      if (has(/\b(pool|swim)\b/)) {
-        return ["pool railing", "lounge chair", "towel"];
-      }
-      return ["light cover-up", "beach towel", "shoreline"];
-    case "dining":
-      return ["coffee cup", "menu", "small plate only if no conflicting primary prop"];
-    case "home_private":
-      if (has(/\b(laundry)\b/)) {
-        return ["washing machine counter", "folded towel", "laundry basket nearby"];
-      }
-      if (has(/\b(balcony)\b/)) {
-        return ["balcony railing", "simple chair", "drying rack if activity mentions laundry"];
-      }
-      if (has(/\b(lounge|rain|window)\b/)) {
-        return ["window frame", "lounge chair", "rain-streaked glass"];
-      }
-      if (has(/\b(home|lobby|neighbor)\b/)) {
-        return ["entryway wall", "lobby bench", "mailboxes as background shapes"];
-      }
-      return ["sofa", "soft chair", "desk edge"];
-    case "indoor_quiet":
-      if (has(/\b(bookshop|library|study)\b/)) {
-        return ["book", "bookshelf", "reading chair"];
-      }
-      if (has(/\b(cinema)\b/)) {
-        return ["ticket stub", "popcorn cup", "lobby poster wall as unreadable shapes"];
-      }
-      if (has(/\b(studio|creative|work)\b/)) {
-        return ["sketchbook", "portfolio", "drawing table"];
-      }
-      if (has(/\b(music|record)\b/)) {
-        return ["vinyl record sleeve", "listening station"];
-      }
-      return ["no required prop"];
-    case "nightlife":
-      return ["bar counter", "stage lights", "drink glass only if no conflicting primary prop"];
-    case "outdoor_public":
-      if (has(/\b(market)\b/)) {
-        return ["small snack bag", "shopping bag", "stall counter"];
-      }
-      if (has(/\b(rooftop|balcony)\b/)) {
-        return ["glass railing", "city lights", "plants"];
-      }
-      if (has(/\b(riverside|harbor|waterfront)\b/)) {
-        return ["railing", "water view", "small food bag if activity mentions food"];
-      }
-      if (has(/\b(park)\b/)) {
-        return ["bench", "path", "trees"];
-      }
-      if (has(/\b(transit|plaza|city)\b/)) {
-        return ["ticket", "small bag", "station railing"];
-      }
-      return ["no required prop"];
-    default:
-      return ["no required prop"];
-  }
 }
 
 function profileOrder(profile?: MomentStyleProfile | null): readonly number[] {
