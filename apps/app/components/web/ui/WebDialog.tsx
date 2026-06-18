@@ -61,18 +61,18 @@ export function WebDialog({
         accessibilityRole="button"
         accessibilityLabel="Close dialog"
         onPress={onClose}
-        className="flex-1 items-center justify-center bg-black/72 px-3 sm:px-6"
+        className="flex-1 items-center justify-center bg-black/72 px-6"
       >
         <Pressable
           accessibilityRole="none"
           onPress={(e) => e.stopPropagation?.()}
           className={cn(
-            'min-h-0 max-h-[calc(100vh-48px)] w-full max-w-[calc(100vw-24px)] overflow-hidden rounded-xl border shadow-float sm:max-w-[calc(100vw-48px)] sm:rounded-2xl',
+            'min-h-0 max-h-[calc(100vh-48px)] w-full overflow-hidden rounded-2xl border shadow-float',
             tone.panel,
             sizeClass[size],
           )}
         >
-          <View className={cn('shrink-0 flex-row items-start justify-between gap-4 border-b px-4 py-4 sm:px-7 sm:py-5', tone.chrome)}>
+          <View className={cn('flex-row items-start justify-between gap-4 border-b px-7 py-5', tone.chrome)}>
             <View className="min-w-0 flex-1">
               <Text className="font-serif text-title text-white">{title}</Text>
               {description ? <Text className={cn('mt-1 text-body-sm', tone.description)}>{description}</Text> : null}
@@ -81,20 +81,20 @@ export function WebDialog({
               accessibilityRole="button"
               accessibilityLabel="Close"
               onPress={onClose}
-              className={cn('h-9 w-9 shrink-0 items-center justify-center rounded-full', tone.close)}
+              className={cn('h-9 w-9 items-center justify-center rounded-full', tone.close)}
             >
               <Ionicons color={PALETTE.muted} name="close" size={20} />
             </Pressable>
           </View>
           <ScrollView
-            className="min-h-0 min-w-0"
-            contentContainerClassName="min-w-0 px-4 py-5 sm:px-7 sm:py-6"
+            className="min-h-0"
+            contentContainerClassName="px-7 py-6"
             keyboardShouldPersistTaps="handled"
             style={styles.bodyScroll}
           >
             {children}
           </ScrollView>
-          {footer ? <View className={cn('shrink-0 border-t px-4 py-4 sm:px-7', tone.chrome)}>{footer}</View> : null}
+          {footer ? <View className={cn('border-t px-7 py-4', tone.chrome)}>{footer}</View> : null}
         </Pressable>
       </Pressable>
     </Modal>
