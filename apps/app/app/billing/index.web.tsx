@@ -12,6 +12,7 @@ import {
 } from '@/api/companion-client';
 import type { CreditLedgerEntry, CreditLedgerType, CreditPackageId } from '@/api/types';
 import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import {
   cn,
   WebButton,
@@ -508,6 +509,9 @@ export default function WebBillingScreen() {
             </WebSection>
           </>
         )}
+        <View className="border-t border-white/10 pt-5">
+          <WebLegalLinks />
+        </View>
       </View>
     </WebAppShell>
   );

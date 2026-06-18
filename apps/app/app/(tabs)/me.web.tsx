@@ -18,6 +18,7 @@ import type { MeResponse, RomancePreference, UserImageAsset } from '@/api/types'
 import { CompanionArtwork } from '@/components/CompanionArtwork';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import {
   WebAvatar,
   WebButton,
@@ -298,6 +299,9 @@ export default function WebMeScreen() {
             </WebCard>
           </WebSection>
         </View>
+      </View>
+      <View className="mt-8 border-t border-white/10 pt-5">
+        <WebLegalLinks />
       </View>
     </WebAppShell>
   );
