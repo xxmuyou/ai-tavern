@@ -858,6 +858,8 @@ export type MomentImageJobResponse = {
   output_key?: string;
   error_code?: string;
   error_message?: string;
+  queue_reason?: 'provider_capacity';
+  status_label?: 'Queued';
 };
 
 export type OutfitRecommendation = {

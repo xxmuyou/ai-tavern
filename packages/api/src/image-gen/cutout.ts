@@ -7,6 +7,8 @@ import {
   completeImageJobWithImage,
   failImageJob,
   loadBaseArtJob,
+  maybeDelayRunningHubCapacityError,
+  maybeDelayRunningHubImageJob,
   reenqueueImageJob,
   updateImageJob,
   type ImageGenJobRow,
@@ -150,10 +152,20 @@ export async function processCutoutJob(
       workflow_key: job.workflow_key ?? CUTOUT_WORKFLOW_KEY,
     };
     const provider = await getImageGenProvider(env, "cutout", request.workflow_key);
+    const capacityDelay = await maybeDelayRunningHubImageJob(env, job, provider);
+    if (capacityDelay !== "continue") {
+      if (capacityDelay === "timed_out") {
+        const failed = await loadBaseArtJob(env, job.id);
+        if (failed) await syncCutoutFromImageJob(env, failed);
+      }
+      return null;
+    }
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {
       await updateImageJob(env, job.id, {
+        error_code: null,
+        error_message: null,
         model: response.model,
         provider: response.provider,
         provider_task_id: response.external_task_id,
@@ -172,12 +184,20 @@ export async function processCutoutJob(
     const completed = await loadBaseArtJob(env, job.id);
     if (!completed) return null;
     const synced = await syncCutoutFromImageJob(env, completed);
-    return synced?.status === "succeeded" ? { companionId: synced.companion_id } : null;
+    return synced && TERMINAL.has(synced.status) ? { companionId: synced.companion_id } : null;
   } catch (err) {
+    const capacityDelay = await maybeDelayRunningHubCapacityError(env, job, err);
+    if (capacityDelay !== "continue") {
+      if (capacityDelay === "timed_out") {
+        const failed = await loadBaseArtJob(env, job.id);
+        if (failed) await syncCutoutFromImageJob(env, failed);
+      }
+      return null;
+    }
     if (err instanceof ImageGenError && !err.retryable) {
       await failImageJob(env, job, err.code, err.message);
       await syncCutoutFromImageJob(env, { ...job, error_code: err.code, error_message: err.message, status: "failed" });
-      return null;
+      return { companionId: cutout.companion_id };
     }
     const code = err instanceof ImageGenError ? err.code : "provider_error";
     const message = err instanceof Error ? err.message : String(err);

@@ -859,6 +859,31 @@ describe("runningHubImageGenProvider", () => {
     ).rejects.toMatchObject({ code: "provider_not_configured", retryable: false });
   });
 
+  it("classifies RunningHub task queue maxed responses as capacity waits", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 400, msg: "TASK_QUEUE_MAXED" }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const env = createEnv(
+      {},
+      {
+        "image_gen.workflows": JSON.stringify({
+          portrait_create: { mode: "create", promptNodeId: "6", workflowId: "portrait-workflow" },
+        }),
+      },
+    );
+
+    await expect(
+      (await getImageGenProvider(env, "create")).generate(
+        { mode: "create", prompt: "x", workflow_key: "portrait_create" },
+        env,
+      ),
+    ).rejects.toMatchObject({ code: "provider_capacity", retryable: true });
+  });
+
   it("fails as non-retryable when required config is missing", async () => {
     const provider = await getImageGenProvider({ IMAGE_GEN_PROVIDER: "runninghub" } as Env, "variation");
 

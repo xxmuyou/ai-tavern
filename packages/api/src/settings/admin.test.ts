@@ -9,7 +9,7 @@ import {
 } from "../auth/test-fixtures";
 import type { AuthEnv } from "../auth/types";
 import { handleAdminSettingsRequest } from "./admin";
-import { getSetting } from "./store";
+import { getSetting, resolveImageGenConfig } from "./store";
 
 const ADMIN_EMAIL = "admin@aiappsbox.com";
 const PLAIN_EMAIL = "player@example.com";
@@ -83,6 +83,14 @@ describe("admin settings", () => {
       source: "db",
       value: "{\"portrait_create\":{\"mode\":\"create\",\"workflowId\":\"workflow\",\"promptNodeId\":\"6\"}}",
     });
+
+    const runningHubMax = body.settings.find((row) => row.key === "image_gen.runninghub_max_active_tasks")!;
+    expect(runningHubMax).toMatchObject({
+      admin_mode: "editable",
+      env_key: "RUNNINGHUB_MAX_ACTIVE_TASKS",
+      group: "image_gen",
+      type: "number",
+    });
   });
 
   it("requires confirmation for high-risk settings", async () => {
@@ -140,6 +148,23 @@ describe("admin settings", () => {
       value: "120",
     });
     expect(env.settingsRows.has("limits.rate_limit_per_minute")).toBe(false);
+  });
+
+  it("resolves RunningHub max active tasks from admin override, env, then default", async () => {
+    const defaultEnv = createEnv();
+    expect((await resolveImageGenConfig(defaultEnv)).runninghubMaxActiveTasks).toBe(3);
+
+    const envFallback = createEnv({ RUNNINGHUB_MAX_ACTIVE_TASKS: "5" });
+    expect((await resolveImageGenConfig(envFallback)).runninghubMaxActiveTasks).toBe(5);
+
+    const override = createEnv({ RUNNINGHUB_MAX_ACTIVE_TASKS: "5" });
+    override.settingsRows.set("image_gen.runninghub_max_active_tasks", {
+      key: "image_gen.runninghub_max_active_tasks",
+      updated_at: 123,
+      updated_by: "admin-1",
+      value: "2",
+    });
+    expect((await resolveImageGenConfig(override)).runninghubMaxActiveTasks).toBe(2);
   });
 
   it("validates json settings", async () => {

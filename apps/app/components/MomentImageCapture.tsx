@@ -10,6 +10,7 @@ const POLL_INTERVAL_MS = 2500;
 const MAX_POLLS = 120;
 
 type Phase = 'idle' | 'capturing' | 'ready' | 'error';
+type CaptureSubstate = 'normal' | 'queued';
 
 type MomentImageCaptureProps = {
   messageId: string;
@@ -44,6 +45,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
   });
   const [outputKey, setOutputKey] = useState<string | null>(initialMoment?.output_key ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [substate, setSubstate] = useState<CaptureSubstate>('normal');
   // Natural width/height ratio of the rendered moment, measured from the file so
   // the bubble matches the image's real shape instead of a hard-coded crop.
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
@@ -65,13 +67,19 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
   function markReady(jobId: string, key: string) {
     setOutputKey(key);
     setErrorMessage(null);
+    setSubstate('normal');
     setPhase('ready');
     onMomentReadyRef.current?.({ job_id: jobId, output_key: key, status: 'succeeded' });
   }
 
   function markError(message?: string | null) {
     setErrorMessage(message?.trim() || 'Moment capture could not finish. Try again.');
+    setSubstate('normal');
     setPhase('error');
+  }
+
+  function syncQueueSubstate(res: { queue_reason?: string | null; status_label?: string | null }) {
+    setSubstate(res.queue_reason === 'provider_capacity' || res.status_label === 'Queued' ? 'queued' : 'normal');
   }
 
   async function poll(jobId: string) {
@@ -101,6 +109,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         pollingJobRef.current = null;
         return;
       }
+      if (activeRef.current && pollingJobRef.current === jobId) syncQueueSubstate(res);
       await delay(POLL_INTERVAL_MS);
     }
     if (activeRef.current && pollingJobRef.current === jobId) markError('Moment capture timed out.');
@@ -113,6 +122,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
       if (phase !== 'capturing') {
         setOutputKey(null);
         setErrorMessage(null);
+        setSubstate('normal');
         setPhase('idle');
       }
       return;
@@ -129,6 +139,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
     }
     setOutputKey(initialMoment.output_key ?? null);
     setErrorMessage(null);
+    setSubstate('normal');
     setPhase('capturing');
     void poll(initialMoment.job_id);
     // This effect is keyed only by server-provided moment identity/status. The
@@ -166,6 +177,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
   async function capture(force = false) {
     pollingJobRef.current = null;
     setErrorMessage(null);
+    setSubstate('normal');
     setPhase('capturing');
     try {
       const res = await generateMomentImage(messageId, force);
@@ -178,6 +190,7 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
         markError(res.error_message ?? res.error_code);
         return;
       }
+      syncQueueSubstate(res);
       onMomentReadyRef.current?.({
         job_id: res.job_id,
         output_key: res.output_key ?? null,
@@ -222,7 +235,13 @@ export function MomentImageCapture({ messageId, initialMoment, onMomentReady }: 
   }
 
   const label =
-    phase === 'capturing' ? 'Capturing…' : phase === 'error' ? 'Try again' : 'Capture this moment';
+    phase === 'capturing'
+      ? substate === 'queued'
+        ? 'Queued…'
+        : 'Capturing…'
+      : phase === 'error'
+        ? 'Try again'
+        : 'Capture this moment';
 
   return (
     <View className="w-full px-4 pb-2 pt-0.5">

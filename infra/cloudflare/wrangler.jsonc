@@ -28,6 +28,7 @@
     "LLM_RATE_LIMIT_PER_MINUTE": "30",
     "IMAGE_GEN_PROVIDER": "runninghub",
     "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
+    "RUNNINGHUB_MAX_ACTIVE_TASKS": "3",
     "STRIPE_PUBLISHABLE_KEY": "",
     "GOOGLE_OAUTH_CLIENT_ID": "285229330091-i88vp1sic03pkohr5k1prumtn2233c74.apps.googleusercontent.com"
   },
@@ -63,6 +64,7 @@
         "queue": "xtbit-apps-dev-jobs",
         "max_batch_size": 10,
         "max_batch_timeout": 5,
+        "max_concurrency": 3,
         "max_retries": 3
       }
     ]
@@ -108,6 +110,7 @@
         "LLM_RATE_LIMIT_PER_MINUTE": "30",
         "IMAGE_GEN_PROVIDER": "runninghub",
         "RUNNINGHUB_BASE_URL": "https://www.runninghub.ai",
+        "RUNNINGHUB_MAX_ACTIVE_TASKS": "3",
         "STRIPE_PUBLISHABLE_KEY": "",
         "GOOGLE_OAUTH_CLIENT_ID": "285229330091-i88vp1sic03pkohr5k1prumtn2233c74.apps.googleusercontent.com"
       },
@@ -143,6 +146,7 @@
             "queue": "xtbit-apps-prod-jobs",
             "max_batch_size": 10,
             "max_batch_timeout": 30,
+            "max_concurrency": 3,
             "max_retries": 3
           }
         ]

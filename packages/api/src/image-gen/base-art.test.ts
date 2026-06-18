@@ -22,6 +22,17 @@ function createEnv(extra: Record<string, unknown> = {}): {
       return { results: [...settings.entries()].map(([key, value]) => ({ key, value })) };
     }
 
+    if (sql.includes("COUNT(*) AS count") && sql.includes("FROM image_generation_jobs")) {
+      return {
+        count: [...jobs.values()].filter(
+          (r) =>
+            r.provider === "runninghub" &&
+            r.status === "processing" &&
+            r.provider_task_id != null,
+        ).length,
+      };
+    }
+
     if (sql.includes("FROM image_workflow_model_loras wml")) {
       const [workflowKey, modelId, loraId] = values as [string, string, string];
       if (
@@ -170,7 +181,11 @@ function createEnv(extra: Record<string, unknown> = {}): {
       },
     },
     DB: { prepare },
-    JOB_QUEUE: { send: async (msg: unknown) => void queue.push(msg) },
+    JOB_QUEUE: {
+      send: async (msg: unknown, options?: unknown) => {
+        queue.push(options ? { msg, options } : msg);
+      },
+    },
     ...extra,
   } as unknown as Env;
 
@@ -343,6 +358,89 @@ describe("base-art job pipeline", () => {
     expect(job.status).toBe("processing");
     expect(job.provider_task_id).toBe("rh-async-1");
     expect(job.output_key).toBeNull();
+  });
+
+  it("queues RunningHub jobs locally when active task cap is reached", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { env, jobs, queue, settings } = createEnv({
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "k",
+    });
+    settings.set("image_gen.runninghub_max_active_tasks", "3");
+    for (let i = 0; i < 3; i += 1) {
+      jobs.set(`active-${i}`, {
+        id: `active-${i}`,
+        provider: "runninghub",
+        provider_task_id: `rh-${i}`,
+        status: "processing",
+      });
+    }
+
+    const jobId = await createBaseArtJob(env, {
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "portrait_create",
+      userId: "usr_1",
+    });
+    await processBaseArtJob(env, jobId);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const job = jobs.get(jobId)!;
+    expect(job).toMatchObject({
+      error_code: "provider_queue_wait",
+      error_message: "Queued",
+      provider: "runninghub",
+      retry_count: 1,
+      status: "processing",
+    });
+    expect(queue[1]).toMatchObject({
+      msg: { job_id: jobId, type: "image.generate" },
+      options: { delaySeconds: 10 },
+    });
+  });
+
+  it("requeues instead of failing when RunningHub reports TASK_QUEUE_MAXED", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ code: 400, msg: "TASK_QUEUE_MAXED" }),
+        { headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { env, jobs, queue, settings } = createEnv({
+      IMAGE_GEN_PROVIDER: "runninghub",
+      RUNNINGHUB_API_KEY: "k",
+    });
+    settings.set(
+      "image_gen.workflows",
+      JSON.stringify({
+        portrait_create: { mode: "create", promptNodeId: "6", workflowId: "portrait-workflow" },
+      }),
+    );
+
+    const jobId = await createBaseArtJob(env, {
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "portrait_create",
+      userId: "usr_1",
+    });
+    await processBaseArtJob(env, jobId);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const job = jobs.get(jobId)!;
+    expect(job).toMatchObject({
+      error_code: "provider_queue_wait",
+      error_message: "Queued",
+      retry_count: 1,
+      status: "processing",
+    });
+    expect(queue[1]).toMatchObject({
+      msg: { job_id: jobId, type: "image.generate" },
+      options: { delaySeconds: 10 },
+    });
   });
 
   it("processBaseArtJob sends checkpoint, LoRA, and generation params to RunningHub", async () => {

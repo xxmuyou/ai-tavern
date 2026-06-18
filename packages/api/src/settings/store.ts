@@ -116,6 +116,7 @@ export type ImageGenConfig = {
   chatMomentBasePrompt: string | null;
   publicBaseUrl: string | null;
   runninghubBaseUrl: string | null;
+  runninghubMaxActiveTasks: number;
   apiKey: string | null;
   webhookUrl: string | null;
   webhookSecret: string | null;
@@ -136,6 +137,10 @@ export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
   const legacyEnv = (envKey: string) => readEnv(env, envKey);
   const pCompat = (key: string, oldKey: string, oldEnvKey: string) =>
     p(key) ?? map.get(oldKey)?.trim() ?? legacyEnv(oldEnvKey);
+  const pNumber = (key: string, fallback: number) => {
+    const n = Number(p(key));
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+  };
   return {
     provider: p("image_gen.provider") ?? "mock",
     portraitCreateProvider: pCompat(
@@ -180,6 +185,7 @@ export async function resolveImageGenConfig(env: Env): Promise<ImageGenConfig> {
     ),
     publicBaseUrl: p("image_gen.public_base_url"),
     runninghubBaseUrl: p("image_gen.runninghub_base_url"),
+    runninghubMaxActiveTasks: pNumber("image_gen.runninghub_max_active_tasks", 3),
     apiKey: p("image_gen.api_key"),
     webhookUrl: p("image_gen.webhook_url"),
     webhookSecret: p("image_gen.webhook_secret"),

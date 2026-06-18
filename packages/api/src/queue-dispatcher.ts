@@ -6,7 +6,11 @@ import { isBaseArtJobPayload, loadBaseArtJob, processBaseArtJob } from "./image-
 import { TASK_CUTOUT, processCutoutJob } from "./image-gen/cutout";
 import { TASK_MOMENT_IMAGE, processMomentImageJob, reenqueueMomentJobsForCompanion } from "./image-gen/moment-image";
 import { TASK_OUTFIT_IMAGE, processOutfitImageJob } from "./image-gen/outfit-image";
-import { TASK_PROFILE_OUTFIT_IMAGE, processProfileOutfitImageJob } from "./image-gen/profile-outfit";
+import {
+  TASK_PROFILE_OUTFIT_IMAGE,
+  processProfileOutfitImageJob,
+  reenqueueProfileOutfitJobsForCompanion,
+} from "./image-gen/profile-outfit";
 
 function isSummaryPayload(value: unknown): value is SummaryJobPayload {
   if (!value || typeof value !== "object") return false;
@@ -97,6 +101,7 @@ export async function dispatchQueueBatch(
           const result = await processCutoutJob(env, body.job_id);
           if (result) {
             await reenqueueMomentJobsForCompanion(env, result.companionId);
+            await reenqueueProfileOutfitJobsForCompanion(env, result.companionId);
           }
         } else if (job?.task === TASK_OUTFIT_IMAGE) {
           await processOutfitImageJob(env, body.job_id);

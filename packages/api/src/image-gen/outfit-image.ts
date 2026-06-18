@@ -8,6 +8,8 @@ import {
   completeImageJobWithImage,
   failImageJob,
   loadBaseArtJob,
+  maybeDelayRunningHubCapacityError,
+  maybeDelayRunningHubImageJob,
   updateImageJob,
   type ImageGenJobRow,
   type ImageGenJobStatus,
@@ -515,10 +517,15 @@ export async function processOutfitImageJob(env: Env, jobId: string): Promise<vo
       workflow_key: job.workflow_key ?? OUTFIT_WORKFLOW_KEY,
     };
     const provider = await getImageGenProvider(env, "variation", request.workflow_key);
+    if ((await maybeDelayRunningHubImageJob(env, job, provider)) !== "continue") {
+      return;
+    }
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {
       await updateImageJob(env, job.id, {
+        error_code: null,
+        error_message: null,
         model: response.model,
         provider: response.provider,
         provider_task_id: response.external_task_id,
@@ -535,6 +542,9 @@ export async function processOutfitImageJob(env: Env, jobId: string): Promise<vo
       provider: response.provider,
     });
   } catch (err) {
+    if ((await maybeDelayRunningHubCapacityError(env, job, err)) !== "continue") {
+      return;
+    }
     if (err instanceof ImageGenError && !err.retryable) {
       await failImageJob(env, job, err.code, err.message);
       return;

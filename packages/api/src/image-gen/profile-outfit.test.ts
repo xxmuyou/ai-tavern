@@ -6,8 +6,11 @@ vi.mock("../auth", () => ({
 
 import {
   TASK_PROFILE_OUTFIT_IMAGE,
+  buildProfileRestylePrompt,
+  getProfileRestyleRecommendations,
   handleProfileOutfitRequest,
   processProfileOutfitImageJob,
+  reenqueueProfileOutfitJobsForCompanion,
 } from "./profile-outfit";
 
 type Row = Record<string, any>;
@@ -18,6 +21,7 @@ function createEnv() {
   const userAssets = new Map<string, Row>();
   const r2 = new Map<string, Uint8Array>();
   const companions = new Map<string, Row>();
+  const cutouts = new Map<string, Row>();
 
   jobs.set("job-1", {
     billing_ref: null,
@@ -59,7 +63,7 @@ function createEnv() {
     updated_at: Date.now(),
     user_id: "user-1",
   });
-  companions.set("maya", { art_url: "portraits/maya/neutral.webp" });
+  companions.set("maya", { art_cutout_key: null, art_url: "portraits/maya/neutral.webp" });
   r2.set("portraits/maya/neutral.webp", new Uint8Array([1, 2, 3]));
 
   const env = {
@@ -81,6 +85,32 @@ function createEnv() {
       prepare(sql: string) {
         const exec = (values: unknown[]) => ({
           async all() {
+            if (sql.includes("FROM app_settings")) {
+              return { results: [] };
+            }
+            if (sql.includes("FROM image_generation_jobs j") && sql.includes("JOIN profile_outfit_images p")) {
+              const [companionId, task] = values as [string, string];
+              const activeJobs: Row[] = [];
+              for (const generation of generations.values()) {
+                if (generation.companion_id !== companionId) continue;
+                const job = jobs.get(generation.job_id);
+                if (!job) continue;
+                if (
+                  job.task === task &&
+                  (job.status === "pending" || job.status === "processing") &&
+                  job.provider_task_id == null &&
+                  job.output_key == null
+                ) {
+                  activeJobs.push(job);
+                }
+              }
+              return {
+                results: activeJobs
+                  .sort((a, b) => a.created_at - b.created_at)
+                  .slice(0, 20)
+                  .map((job) => ({ id: job.id })),
+              };
+            }
             return { results: [] };
           },
           async first() {
@@ -126,10 +156,24 @@ function createEnv() {
               return companion
                 ? {
                     art_url: companion.art_url,
+                    art_cutout_key: companion.art_cutout_key ?? null,
                     canonical_art_url: companion.art_url,
                     profile_image_override: null,
                   }
                 : null;
+            }
+            if (sql.includes("FROM companion_cutout_jobs WHERE companion_id = ? AND source_art_url = ?")) {
+              const [companionId, sourceArtUrl] = values as [string, string];
+              return [...cutouts.values()].find((row) =>
+                row.companion_id === companionId && row.source_art_url === sourceArtUrl,
+              ) ?? null;
+            }
+            if (sql.includes("FROM companion_cutout_jobs WHERE image_job_id = ?")) {
+              const [imageJobId] = values as [string];
+              return [...cutouts.values()].find((row) => row.image_job_id === imageJobId) ?? null;
+            }
+            if (sql.includes("FROM companion_cutout_jobs WHERE id = ?")) {
+              return cutouts.get(values[0] as string) ?? null;
             }
             if (sql.includes("FROM relationships")) {
               return null;
@@ -141,8 +185,14 @@ function createEnv() {
           },
           async run() {
             if (sql.startsWith("INSERT INTO image_generation_jobs")) {
-              const [id, userId, task, mode, workflowKey, prompt, outputPrefix, createdAt, updatedAt] =
-                values as [string, string, string, string, string, string, string, number, number];
+              const hasInputKeys = sql.includes("input_keys");
+              const [id, userId, task, mode, workflowKey] =
+                values as [string, string, string, string, string];
+              const prompt = hasInputKeys ? "" : values[5] as string;
+              const inputKeys = hasInputKeys ? values[5] as string : null;
+              const outputPrefix = values[hasInputKeys ? 6 : 6] as string;
+              const createdAt = values[hasInputKeys ? 7 : 7] as number;
+              const updatedAt = values[hasInputKeys ? 8 : 8] as number;
               jobs.set(id, {
                 billing_ref: null,
                 ckpt_name: null,
@@ -151,7 +201,7 @@ function createEnv() {
                 error_code: null,
                 error_message: null,
                 id,
-                input_keys: null,
+                input_keys: inputKeys,
                 mask_key: null,
                 mode,
                 model: null,
@@ -169,6 +219,23 @@ function createEnv() {
                 updated_at: updatedAt,
                 user_id: userId,
                 workflow_key: workflowKey,
+              });
+            } else if (sql.startsWith("INSERT INTO companion_cutout_jobs")) {
+              const [id, companionId, userId, sourceArtUrl, imageJobId, createdAt, updatedAt] =
+                values as [string, string, string | null, string, string, number, number];
+              cutouts.set(id, {
+                companion_id: companionId,
+                completed_at: null,
+                created_at: createdAt,
+                error_code: null,
+                error_message: null,
+                id,
+                image_job_id: imageJobId,
+                output_key: null,
+                source_art_url: sourceArtUrl,
+                status: "pending",
+                updated_at: updatedAt,
+                user_id: userId,
               });
             } else if (sql.startsWith("INSERT INTO profile_outfit_images")) {
               const [
@@ -199,6 +266,16 @@ function createEnv() {
               updateRow(sql, values, jobs);
             } else if (sql.startsWith("UPDATE profile_outfit_images SET")) {
               updateRow(sql, values, generations);
+            } else if (sql.startsWith("UPDATE companion_cutout_jobs SET")) {
+              updateRow(sql, values, cutouts);
+            } else if (sql.startsWith("UPDATE companions") && sql.includes("art_cutout_key")) {
+              const [artCutoutKey, updatedAt, companionId, sourceArtUrl] =
+                values as [string, number, string, string];
+              const companion = companions.get(companionId);
+              if (companion && companion.art_url === sourceArtUrl) {
+                companion.art_cutout_key = artCutoutKey;
+                companion.updated_at = updatedAt;
+              }
             } else if (sql.includes("INSERT INTO user_image_assets")) {
               const [, userId, artKey, prompt] = values as [string, string, string, string | null];
               userAssets.set(`${userId}:${artKey}`, { art_key: artKey, prompt, user_id: userId });
@@ -217,7 +294,7 @@ function createEnv() {
     JOB_QUEUE: { send: vi.fn() },
   } as unknown as Env;
 
-  return { env, generations, jobs, r2, userAssets };
+  return { companions, cutouts, env, generations, jobs, r2, userAssets };
 }
 
 function updateRow(sql: string, values: unknown[], rows: Map<string, Row>) {
@@ -232,6 +309,63 @@ function updateRow(sql: string, values: unknown[], rows: Map<string, Row>) {
 }
 
 describe("profile outfit image pipeline", () => {
+  it("builds profile restyle prompts with pose, camera, and private background", () => {
+    const prompt = buildProfileRestylePrompt(
+      {
+        activity: null,
+        companion: {
+          appearance: "long dark hair, soft cardigan",
+          gender: "female",
+          name: "Maya",
+          personality: "warm and observant",
+          relationship_role: "companion",
+        },
+        scene: { mood: "private profile portrait", name: "Profile portrait", tags: ["profile", "portrait"] },
+        stage: "trusted",
+        timeSlot: "night",
+      },
+      "maya",
+      "black oversized hoodie",
+    );
+
+    expect(prompt).toContain("Change the reference pose to:");
+    expect(prompt).toContain("Camera view:");
+    expect(prompt).toContain("Change the background to:");
+    expect(prompt).toContain("Outfit request (use only for clothing, accessories, and styling): black oversized hoodie.");
+    expect(prompt).toContain("Single companion only");
+    expect(prompt).toContain("viewer/user not visible");
+    expect(prompt).toContain("no duplicate body");
+    expect(prompt).not.toContain("Only change the clothing");
+    expect(prompt).not.toContain("framing, and crop");
+  });
+
+  it("returns three profile restyle recommendations without changing the public schema", async () => {
+    const recommendations = getProfileRestyleRecommendations(
+      {
+        activity: null,
+        companion: {
+          appearance: null,
+          gender: "female",
+          name: "Maya",
+          personality: null,
+          relationship_role: null,
+        },
+        scene: { mood: "private profile portrait", name: "Profile portrait", tags: ["profile", "portrait"] },
+        stage: "dating",
+        timeSlot: "night",
+      },
+      "maya",
+    );
+
+    expect(recommendations).toHaveLength(3);
+    expect(recommendations.map((item) => item.id)).toEqual([
+      "profile_signature",
+      "profile_soft_lounge",
+      "profile_bold_restyle",
+    ]);
+    expect(recommendations.every((item) => item.prompt && item.title)).toBe(true);
+  });
+
   it("rejects profile outfit generation before enqueue when source art is missing from R2", async () => {
     const { env, generations, jobs, r2 } = createEnv();
     r2.delete("portraits/maya/neutral.webp");
@@ -272,10 +406,15 @@ describe("profile outfit image pipeline", () => {
     expect(response?.status).toBe(202);
     const body = (await response?.json()) as { generation_id: string; job_id: string; status: string };
     expect(body.status).toBe("queued");
-    expect(jobs.get(body.job_id)?.prompt).toContain("Outfit request: black oversized hoodie.");
+    expect(jobs.get(body.job_id)?.prompt).toContain(
+      "Outfit request (use only for clothing, accessories, and styling): black oversized hoodie.",
+    );
+    expect(jobs.get(body.job_id)?.prompt).toContain("Change the reference pose to:");
+    expect(jobs.get(body.job_id)?.prompt).toContain("Camera view:");
+    expect(jobs.get(body.job_id)?.prompt).not.toContain("Only change the clothing");
     expect(generations.get(body.generation_id)).toMatchObject({
       outfit_prompt: "black oversized hoodie",
-      prompt_snapshot: expect.stringContaining("Outfit request: black oversized hoodie."),
+      prompt_snapshot: expect.stringContaining("Change the background to:"),
       prompt_source: "custom",
     });
   });
@@ -324,16 +463,25 @@ describe("profile outfit image pipeline", () => {
 
     expect(response?.status).toBe(202);
     const body = (await response?.json()) as { generation_id: string; job_id: string };
-    expect(jobs.get(body.job_id)?.prompt).toContain(`Outfit request: ${recommendation.prompt}.`);
+    expect(recommendationsBody.recommendations.map((item) => item.id)).toEqual([
+      "profile_signature",
+      "profile_soft_lounge",
+      "profile_bold_restyle",
+    ]);
+    expect(jobs.get(body.job_id)?.prompt).toContain(
+      `Outfit request (use only for clothing, accessories, and styling): ${recommendation.prompt}.`,
+    );
     expect(generations.get(body.generation_id)).toMatchObject({
       outfit_prompt: recommendation.prompt,
-      prompt_snapshot: expect.stringContaining(`Outfit request: ${recommendation.prompt}.`),
+      prompt_snapshot: expect.stringContaining("Change the reference pose to:"),
       prompt_source: "recommended",
     });
   });
 
   it("processes a profile outfit job and saves the output to user image assets", async () => {
-    const { env, generations, jobs, r2, userAssets } = createEnv();
+    const { companions, env, generations, jobs, r2, userAssets } = createEnv();
+    companions.get("maya")!.art_cutout_key = "user-art/user-1/companion-cutout/maya.png";
+    r2.set("user-art/user-1/companion-cutout/maya.png", new Uint8Array([8, 9, 10]));
 
     await processProfileOutfitImageJob(env, "job-1");
 
@@ -349,5 +497,65 @@ describe("profile outfit image pipeline", () => {
       art_key: job.output_key,
       user_id: "user-1",
     });
+  });
+
+  it("waits and creates a cutout job when profile outfit has no cutout source yet", async () => {
+    const { cutouts, env, generations, jobs } = createEnv();
+
+    await processProfileOutfitImageJob(env, "job-1");
+
+    const profileJob = jobs.get("job-1")!;
+    expect(profileJob.status).toBe("processing");
+    expect(profileJob.output_key).toBeNull();
+    expect(generations.get("gen-1")?.status).toBe("processing");
+    const cutout = [...cutouts.values()][0]!;
+    expect(cutout).toMatchObject({
+      companion_id: "maya",
+      source_art_url: "portraits/maya/neutral.webp",
+      status: "pending",
+    });
+    expect(jobs.get(cutout.image_job_id)?.task).toBe("companion_cutout");
+    expect(env.JOB_QUEUE.send).toHaveBeenCalledWith(
+      expect.objectContaining({ job_id: cutout.image_job_id, type: "image.generate" }),
+    );
+  });
+
+  it("fails profile outfit clearly when the matching cutout has already failed", async () => {
+    const { cutouts, env, generations, jobs } = createEnv();
+    cutouts.set("cutout-failed", {
+      companion_id: "maya",
+      completed_at: Date.now(),
+      created_at: Date.now(),
+      error_code: "cutout_failed",
+      error_message: "Cutout model failed",
+      id: "cutout-failed",
+      image_job_id: "cutout-job-failed",
+      output_key: null,
+      source_art_url: "portraits/maya/neutral.webp",
+      status: "failed",
+      updated_at: Date.now(),
+      user_id: "user-1",
+    });
+
+    await processProfileOutfitImageJob(env, "job-1");
+
+    expect(jobs.get("job-1")).toMatchObject({
+      error_code: "cutout_failed",
+      error_message: "Cutout model failed",
+      status: "failed",
+    });
+    expect(generations.get("gen-1")?.status).toBe("failed");
+  });
+
+  it("re-enqueues pending profile outfit jobs when a companion cutout completes", async () => {
+    const { env, jobs } = createEnv();
+    jobs.get("job-1")!.status = "processing";
+
+    await reenqueueProfileOutfitJobsForCompanion(env, "maya");
+
+    expect(env.JOB_QUEUE.send).toHaveBeenCalledWith(
+      expect.objectContaining({ job_id: "job-1", type: "image.generate" }),
+      undefined,
+    );
   });
 });

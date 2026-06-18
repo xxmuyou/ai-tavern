@@ -294,6 +294,47 @@ describe("moment image routes", () => {
     expect(moments[0]).toMatchObject({ status: "failed", output_key: null });
   });
 
+  it("returns queued label for provider capacity waits", async () => {
+    const { env, jobs, moments } = createEnv();
+    const now = Date.now();
+    jobs.push({
+      completed_at: null,
+      created_at: now,
+      error_code: "provider_queue_wait",
+      error_message: "Queued",
+      id: "job_queued",
+      output_key: null,
+      provider_task_id: null,
+      status: "processing",
+      updated_at: now,
+    });
+    moments.push({
+      companion_id: "maya",
+      id: "moment_queued",
+      job_id: "job_queued",
+      message_id: "msg_private",
+      output_key: null,
+      status: "processing",
+      updated_at: now,
+      user_id: "usr_1",
+    });
+
+    const response = await handleMomentImageRequest(
+      new Request("https://api.test/moment-images/jobs/job_queued"),
+      env,
+      "/moment-images/jobs/job_queued",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response!.json()).toMatchObject({
+      error_code: "provider_queue_wait",
+      error_message: "Queued",
+      queue_reason: "provider_capacity",
+      status: "processing",
+      status_label: "Queued",
+    });
+  });
+
   it("does not poll RunningHub for a fresh pending moment job", async () => {
     vi.setSystemTime(new Date("2026-06-05T00:00:00.000Z"));
     const { env, jobs, moments } = createEnv();

@@ -527,7 +527,12 @@ function buildWebhookUrl(webhookUrl: string, webhookSecret: string | null): stri
 }
 
 function toProviderError(json: RunningHubCreateResponse, status: number): ImageGenError {
-  const msg = json.msg || `RunningHub request failed with HTTP ${status}`;
+  const msg =
+    [json.msg, json.data?.promptTips].filter(Boolean).join(": ") ||
+    `RunningHub request failed with HTTP ${status}`;
+  if (isCapacityMessage(msg)) {
+    return new ImageGenError("provider_capacity", msg, { retryable: true });
+  }
   const retryable = status >= 500 && status < 600;
   const code = msg.includes("APIKEY_INVALID_NODE_INFO")
     ? "provider_config_error"
@@ -536,6 +541,17 @@ function toProviderError(json: RunningHubCreateResponse, status: number): ImageG
   return new ImageGenError(code, msg, {
     retryable: code === "provider_config_error" ? false : retryable,
   });
+}
+
+function isCapacityMessage(message: string): boolean {
+  const normalized = message.toUpperCase();
+  return (
+    normalized.includes("TASK_QUEUE_MAXED") ||
+    normalized.includes("QUEUE_MAXED") ||
+    normalized.includes("QUEUE FULL") ||
+    normalized.includes("CONCURRENCY") ||
+    normalized.includes("CAPACITY")
+  );
 }
 
 async function readJson<T>(response: Response): Promise<T> {

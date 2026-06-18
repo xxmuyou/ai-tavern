@@ -329,6 +329,15 @@ export const SETTINGS: readonly SettingDef[] = [
     envKey: "RUNNINGHUB_BASE_URL",
   },
   {
+    key: "image_gen.runninghub_max_active_tasks",
+    group: "image_gen",
+    label: "RunningHub max active tasks",
+    type: "number",
+    envKey: "RUNNINGHUB_MAX_ACTIVE_TASKS",
+    description:
+      "Maximum number of active RunningHub tasks this app should submit at once. Extra jobs stay queued and retry later.",
+  },
+  {
     key: "image_gen.api_key",
     group: "image_gen",
     label: "RunningHub API key",

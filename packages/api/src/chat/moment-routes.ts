@@ -7,7 +7,11 @@ import { loadRelationship } from "../relationships/engine";
 import { ZERO_DIMENSIONS } from "../relationships/level";
 import { deriveStage } from "../relationships/stage";
 import { loadStoryBeatForScene } from "../story-beats";
-import { loadBaseArtJob, reserveImageGenerationCredits } from "../image-gen/base-art";
+import {
+  getImageJobQueueStatus,
+  loadBaseArtJob,
+  reserveImageGenerationCredits,
+} from "../image-gen/base-art";
 import { pollRunningHubImageJobIfDue } from "../image-gen/runninghub-results";
 import { releaseReservation } from "../credits";
 import {
@@ -303,12 +307,14 @@ async function handleJobStatus(
     }
   }
   const reconciled = job ? await reconcileMomentFromJob(env, moment, job) : moment;
+  const queueStatus = job ? getImageJobQueueStatus(job) : null;
 
   return jsonResponse({
     error_code: job?.error_code ?? undefined,
     error_message: job?.error_message ?? undefined,
     job_id: jobId,
     output_key: reconciled.output_key ?? undefined,
+    ...(queueStatus ?? {}),
     status: reconciled.status,
   });
 }

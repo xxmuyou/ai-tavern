@@ -8,6 +8,8 @@ import {
   completeImageJobWithImage,
   failImageJob,
   loadBaseArtJob,
+  maybeDelayRunningHubCapacityError,
+  maybeDelayRunningHubImageJob,
   updateImageJob,
   type ImageGenJobRow,
   type ImageGenJobStatus,
@@ -413,10 +415,15 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
       ...(sourceArtUrl ? { source_art_url: sourceArtUrl } : {}),
     };
     const provider = await getImageGenProvider(env, "create", request.workflow_key);
+    if ((await maybeDelayRunningHubImageJob(env, job, provider)) !== "continue") {
+      return;
+    }
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {
       await updateImageJob(env, job.id, {
+        error_code: null,
+        error_message: null,
         model: response.model,
         provider: response.provider,
         provider_task_id: response.external_task_id,
@@ -433,6 +440,9 @@ export async function processMomentImageJob(env: Env, jobId: string): Promise<vo
       provider: response.provider,
     });
   } catch (err) {
+    if ((await maybeDelayRunningHubCapacityError(env, job, err)) !== "continue") {
+      return;
+    }
     if (err instanceof ImageGenError && !err.retryable) {
       await failImageJob(env, job, err.code, err.message);
       return;

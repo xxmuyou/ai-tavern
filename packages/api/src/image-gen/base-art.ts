@@ -4,6 +4,7 @@ import {
   ImageGenError,
   getImageGenProvider,
   resolveImageLoraSelection,
+  type ImageGenProvider,
   type ImageGenRequest,
 } from "./index";
 import {
@@ -81,6 +82,14 @@ export type BaseArtQueuePayload = {
   job_id: string;
   created_at: string;
 };
+
+export const RUNNINGHUB_QUEUE_WAIT_CODE = "provider_queue_wait";
+export const RUNNINGHUB_QUEUE_STATUS_LABEL = "Queued";
+export const RUNNINGHUB_QUEUE_REASON = "provider_capacity";
+export const RUNNINGHUB_CAPACITY_ERROR_CODE = "provider_capacity";
+
+const RUNNINGHUB_QUEUE_MAX_WAIT_MS = 15 * 60 * 1000;
+export type RunningHubCapacityDelayResult = "continue" | "queued" | "timed_out";
 
 const TASK_BASE_ART = "companion_base_art";
 const OUTPUT_PREFIX = "companion-base-art";
@@ -265,13 +274,20 @@ export async function listStalePendingImageJobs(
 }
 
 /** Re-send the queue message for an existing image_generation_jobs row. */
-export async function reenqueueImageJob(env: Env, jobId: string): Promise<void> {
+export async function reenqueueImageJob(
+  env: Env,
+  jobId: string,
+  delaySeconds?: number,
+): Promise<void> {
   const payload: BaseArtQueuePayload = {
     created_at: new Date().toISOString(),
     job_id: jobId,
     type: "image.generate",
   };
-  await env.JOB_QUEUE.send(payload);
+  await env.JOB_QUEUE.send(
+    payload,
+    delaySeconds && delaySeconds > 0 ? { delaySeconds } : undefined,
+  );
 }
 
 type UpdateImageJobInput = {
@@ -287,6 +303,7 @@ type UpdateImageJobInput = {
   output_content_type?: string | null;
   error_code?: string | null;
   error_message?: string | null;
+  retry_count?: number;
   completed_at?: number | null;
 };
 
@@ -323,6 +340,85 @@ export async function markImageJobProviderPolled(
   )
     .bind(timestamp, jobId)
     .run();
+}
+
+export function getImageJobQueueStatus(job: {
+  error_code?: string | null;
+  status?: string | null;
+}): { queue_reason: typeof RUNNINGHUB_QUEUE_REASON; status_label: typeof RUNNINGHUB_QUEUE_STATUS_LABEL } | null {
+  const terminal = job.status === "succeeded" || job.status === "failed" || job.status === "cancelled";
+  if (terminal || job.error_code !== RUNNINGHUB_QUEUE_WAIT_CODE) return null;
+  return {
+    queue_reason: RUNNINGHUB_QUEUE_REASON,
+    status_label: RUNNINGHUB_QUEUE_STATUS_LABEL,
+  };
+}
+
+export function isRunningHubCapacityError(err: unknown): boolean {
+  return err instanceof ImageGenError && err.code === RUNNINGHUB_CAPACITY_ERROR_CODE;
+}
+
+export async function maybeDelayRunningHubImageJob(
+  env: Env,
+  job: ImageGenJobRow,
+  provider: ImageGenProvider,
+): Promise<RunningHubCapacityDelayResult> {
+  if (provider.name !== "runninghub") return "continue";
+
+  const cfg = await resolveImageGenConfig(env);
+  const active = await countActiveRunningHubTasks(env);
+  if (active < cfg.runninghubMaxActiveTasks) return "continue";
+
+  return delayRunningHubImageJob(env, job);
+}
+
+export async function maybeDelayRunningHubCapacityError(
+  env: Env,
+  job: ImageGenJobRow,
+  err: unknown,
+): Promise<RunningHubCapacityDelayResult> {
+  if (!isRunningHubCapacityError(err)) return "continue";
+  return delayRunningHubImageJob(env, job);
+}
+
+async function countActiveRunningHubTasks(env: Env): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS count
+     FROM image_generation_jobs
+     WHERE provider = 'runninghub'
+       AND status = 'processing'
+       AND provider_task_id IS NOT NULL`,
+  ).first<{ count: number }>();
+  const count = Number(row?.count ?? 0);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+async function delayRunningHubImageJob(
+  env: Env,
+  job: ImageGenJobRow,
+): Promise<Exclude<RunningHubCapacityDelayResult, "continue">> {
+  const now = Date.now();
+  if (now - job.created_at > RUNNINGHUB_QUEUE_MAX_WAIT_MS) {
+    await failImageJob(
+      env,
+      job,
+      "provider_capacity_timeout",
+      "RunningHub capacity queue exceeded 15 minutes",
+    );
+    return "timed_out";
+  }
+
+  const retryCount = (job.retry_count ?? 0) + 1;
+  const delaySeconds = Math.min(60, retryCount * 10);
+  await updateImageJob(env, job.id, {
+    error_code: RUNNINGHUB_QUEUE_WAIT_CODE,
+    error_message: RUNNINGHUB_QUEUE_STATUS_LABEL,
+    provider: "runninghub",
+    retry_count: retryCount,
+    status: "processing",
+  });
+  await reenqueueImageJob(env, job.id, delaySeconds);
+  return "queued";
 }
 
 export async function failImageJob(
@@ -428,10 +524,15 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       generation_params: parseGenerationParamValues(job.generation_params_json),
     };
     const provider = await getImageGenProvider(env, "create", request.workflow_key);
+    if ((await maybeDelayRunningHubImageJob(env, job, provider)) !== "continue") {
+      return;
+    }
     const response = await provider.generate(request, env);
 
     if (response.type === "pending") {
       await updateImageJob(env, job.id, {
+        error_code: null,
+        error_message: null,
         model: response.model,
         provider: response.provider,
         provider_task_id: response.external_task_id,
@@ -448,6 +549,9 @@ export async function processBaseArtJob(env: Env, jobId: string): Promise<void> 
       provider: response.provider,
     });
   } catch (err) {
+    if ((await maybeDelayRunningHubCapacityError(env, job, err)) !== "continue") {
+      return;
+    }
     if (err instanceof ImageGenError && !err.retryable) {
       await failImageJob(env, job, err.code, err.message);
       return;
