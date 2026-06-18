@@ -24,6 +24,12 @@ export function RelationshipGoalPanel({ goal }: { goal?: RelationshipGoal | null
             Recommended: {activityLabel(goal.recommended_activity)}
           </Text>
         </View>
+        <View className="gap-1 rounded-md border border-app-line bg-app-sunken px-3 py-3">
+          <Text className="text-sm font-semibold text-app-text">How bonds grow</Text>
+          <Text className="text-sm leading-5 text-app-muted">
+            Companions open up gradually. Shared scenes, story progress, and thoughtful chats can deepen the bond, while rushing or pushing too hard can raise tension or distance.
+          </Text>
+        </View>
       </View>
     </View>
   );

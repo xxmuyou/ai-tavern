@@ -81,9 +81,14 @@ function UnlockRow({ item, tone }: { item: RelationshipUnlockItem; tone: Unlocks
           {item.label}
         </Text>
         {!item.unlocked ? (
-          <Text className={`mt-0.5 text-xs ${mutedClass}`}>
-            Reach the {prettyStage(item.required_stage)} stage
-          </Text>
+          <View className="mt-0.5 gap-0.5">
+            <Text className={`text-xs ${mutedClass}`}>
+              Reach the {prettyStage(item.required_stage)} stage
+            </Text>
+            <Text className={`text-xs ${mutedClass}`}>
+              Keep building the relationship to unlock this naturally.
+            </Text>
+          </View>
         ) : null}
       </View>
     </View>
@@ -110,9 +115,14 @@ function SecretRow({
         <Text className="text-base">🔒</Text>
         <View className="flex-1">
           <Text className={`text-sm font-medium ${mutedClass}`}>{item.label}</Text>
-          <Text className={`mt-0.5 text-xs ${mutedClass}`}>
-            Reach the {prettyStage(item.required_stage)} stage
-          </Text>
+          <View className="mt-0.5 gap-0.5">
+            <Text className={`text-xs ${mutedClass}`}>
+              Reach the {prettyStage(item.required_stage)} stage
+            </Text>
+            <Text className={`text-xs ${mutedClass}`}>
+              Keep building the relationship to unlock this naturally.
+            </Text>
+          </View>
         </View>
       </View>
     );

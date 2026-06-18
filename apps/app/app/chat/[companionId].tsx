@@ -45,6 +45,7 @@ import { LiveStreamingBubble } from '@/components/LiveStreamingBubble';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
 import { PortraitBar } from '@/components/PortraitBar';
+import { RelationshipPacingTip } from '@/components/RelationshipPacingTip';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StoryActionBar } from '@/components/StoryActionBar';
 import { TopBar } from '@/components/TopBar';
@@ -60,6 +61,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { usePendingEvents } from '@/hooks/use-pending-events';
+import { useRelationshipPacingTip } from '@/hooks/use-relationship-pacing-tip';
 import { useSceneStory } from '@/hooks/use-scenes';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { useStreamingChatMessages } from '@/hooks/use-streaming-chat-messages';
@@ -163,6 +165,7 @@ function ChatScreenInner() {
     resetForThread,
   } = autoScroll;
   const relationship = useChatRelationship(companionId);
+  const relationshipPacingTip = useRelationshipPacingTip();
   const personasState = usePersonas();
   const personas = personasState.data?.personas ?? [];
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
@@ -172,8 +175,8 @@ function ChatScreenInner() {
     const favoriteScene = Boolean(sceneId && companion.preferred_scenes.includes(sceneId));
     const storyProgress = activeChatMode === 'story' && Boolean(storyMoment || sceneStoryTask);
     if (favoriteScene && storyProgress) return 'Relationship changes are amplified here';
-    if (favoriteScene) return 'Relationship grows faster here';
-    if (storyProgress) return 'Story progress affects relationship more';
+    if (favoriteScene) return 'Relationship grows faster in one of their favorite places.';
+    if (storyProgress) return 'Story progress can deepen the bond faster.';
     return null;
   }, [activeChatMode, companion.preferred_scenes, sceneId, sceneStoryTask, storyMoment]);
   const noStoryHintVisible = activeChatMode === 'story'
@@ -906,6 +909,10 @@ function ChatScreenInner() {
       />
 
       <ChatRelationshipHud goal={relationship.goal} />
+
+      {relationshipPacingTip.visible ? (
+        <RelationshipPacingTip onDismiss={relationshipPacingTip.dismiss} />
+      ) : null}
 
       <PersonaSelector personas={personas} selectedId={activePersonaId} onSelect={setSelectedPersonaId} />
 

@@ -54,6 +54,7 @@ import { ChatRelationshipHud } from '@/components/ChatRelationshipHud';
 import { LiveStreamingBubble } from '@/components/LiveStreamingBubble';
 import { MessageBubble } from '@/components/MessageBubble';
 import { MomentImageCapture } from '@/components/MomentImageCapture';
+import { RelationshipPacingTip } from '@/components/RelationshipPacingTip';
 import { SceneArtwork, SceneStageBackdrop } from '@/components/SceneArtwork';
 import { SignalFeedback } from '@/components/SignalFeedback';
 import { StoryActionBar } from '@/components/StoryActionBar';
@@ -71,6 +72,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { usePersonas } from '@/hooks/use-personas';
 import { usePendingMomentImages } from '@/hooks/use-pending-moment-images';
 import { usePendingEvents } from '@/hooks/use-pending-events';
+import { useRelationshipPacingTip } from '@/hooks/use-relationship-pacing-tip';
 import { useSceneStory } from '@/hooks/use-scenes';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { ProfileOutfitPanel } from '@/components/ProfileOutfitPanel';
@@ -170,6 +172,7 @@ export default function WebChatScreen() {
   const stream = useChatStream(companionId);
   const activeChatMode: ChatMode = sceneId ? chatMode : 'talk';
   const relationship = useChatRelationship(companionId);
+  const relationshipPacingTip = useRelationshipPacingTip();
   const personasState = usePersonas();
   const personas = personasState.data?.personas ?? [];
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
@@ -241,8 +244,8 @@ export default function WebChatScreen() {
     const favoriteScene = Boolean(sceneId && companion?.preferred_scenes?.includes(sceneId));
     const storyProgress = activeChatMode === 'story' && Boolean(storyMoment || sceneStoryTask);
     if (favoriteScene && storyProgress) return 'Relationship changes are amplified here';
-    if (favoriteScene) return 'Relationship grows faster here';
-    if (storyProgress) return 'Story progress affects relationship more';
+    if (favoriteScene) return 'Relationship grows faster in one of their favorite places.';
+    if (storyProgress) return 'Story progress can deepen the bond faster.';
     return null;
   }, [activeChatMode, companion?.preferred_scenes, sceneId, sceneStoryTask, storyMoment]);
   const noStoryHintVisible = activeChatMode === 'story'
@@ -1393,7 +1396,7 @@ export default function WebChatScreen() {
               />
               <ChatRailButton
                 icon="shirt-outline"
-                label={chatLanguage === 'zh' ? '形象' : 'Outfit'}
+                label={chatLanguage === 'zh' ? '风格' : 'Style'}
                 onPress={() => setOutfitDialogVisible(true)}
               />
               <ChatRailButton
@@ -1452,6 +1455,9 @@ export default function WebChatScreen() {
                   </View>
                 </View>
               </View>
+            ) : null}
+            {relationshipPacingTip.visible ? (
+              <RelationshipPacingTip onDismiss={relationshipPacingTip.dismiss} />
             ) : null}
             {sceneId && (noStoryHintVisible || relationshipBoostHint) ? (
               <View className="gap-1 border-b border-white/10 px-5 py-2" style={twilightStyles.toolsPanel}>
@@ -1627,7 +1633,7 @@ export default function WebChatScreen() {
         onClose={() => setOutfitDialogVisible(false)}
         open={outfitDialogVisible}
         size="lg"
-        title={chatLanguage === 'zh' ? '更换形象' : 'Change outfit'}
+        title={chatLanguage === 'zh' ? '更换风格' : 'Change profile style'}
       >
         <ProfileOutfitPanel
           companionId={companionId}

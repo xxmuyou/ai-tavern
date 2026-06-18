@@ -108,7 +108,7 @@ export function ProfileOutfitPanel({
       setRecommendations(payload.recommendations);
       setSelectedRecommendationId(payload.recommendations[0]?.id ?? null);
     } catch {
-      if (activeRef.current) onError?.('Could not load outfit suggestions.');
+      if (activeRef.current) onError?.('Could not load style suggestions.');
     } finally {
       if (activeRef.current) setIsLoadingRecommendations(false);
     }
@@ -171,7 +171,7 @@ export function ProfileOutfitPanel({
     } catch (error) {
       if (activeRef.current) {
         setPhase('error');
-        onError?.(messageForError(error, 'Could not generate that outfit.'));
+        onError?.(messageForError(error, 'Could not generate that style.'));
       }
     }
   }
@@ -225,7 +225,7 @@ export function ProfileOutfitPanel({
       <View className="gap-3">
         <View className="min-w-0">
           <Text className="text-overline text-rose-200">Profile image</Text>
-          <Text className="mt-1 text-body-sm text-rose-50/75">Upload your own image, or generate a new outfit for {name}.</Text>
+          <Text className="mt-1 text-body-sm text-rose-50/75">Upload your own image, or generate a new profile style for {name}.</Text>
         </View>
         <View className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <WebButton
@@ -239,7 +239,7 @@ export function ProfileOutfitPanel({
           />
           <WebButton
             className="w-full"
-            label={phase === 'generating' ? 'Generating…' : 'Change outfit'}
+            label={phase === 'generating' ? 'Generating…' : 'Change style'}
             isLoading={phase === 'generating'}
             onPress={() => void openChooser()}
             variant="primary"
@@ -280,12 +280,12 @@ export function ProfileOutfitPanel({
           </View>
 
           <TextInput
-            accessibilityLabel="Custom profile outfit prompt"
+            accessibilityLabel="Custom profile style prompt"
             onChangeText={(text) => {
               setCustomPrompt(text);
               if (text.trim()) setSelectedRecommendationId(null);
             }}
-            placeholder="Custom outfit..."
+            placeholder="Custom style prompt..."
             placeholderTextColor={PALETTE.muted}
             value={customPrompt}
             className="min-h-10 rounded-xl border border-white/15 bg-[#130A18] px-3 py-2 text-sm text-white"
@@ -296,12 +296,12 @@ export function ProfileOutfitPanel({
               className={`overflow-hidden rounded-2xl border border-white/12 bg-[#130A18] ${isCompact ? 'self-center' : ''}`}
               style={isCompact ? styles.previewFrameCompact : undefined}
             >
-              <Image accessibilityLabel="Generated profile outfit preview" resizeMode="contain" source={previewSource} style={styles.preview} />
+              <Image accessibilityLabel="Generated profile style preview" resizeMode="contain" source={previewSource} style={styles.preview} />
             </View>
           ) : null}
 
           {phase === 'error' ? (
-            <Text className="text-caption font-semibold text-app-ember">Generation failed. Try another outfit prompt.</Text>
+            <Text className="text-caption font-semibold text-app-ember">Generation failed. Try another style.</Text>
           ) : null}
 
           {outputKey ? (

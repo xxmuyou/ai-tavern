@@ -13,6 +13,14 @@
 - `components/SignalFeedback.tsx`（新增）：每轮 `signals` 增量→过滤非 0 维度→正/负向着色 chip（正向 primary、负向 warning），按 `token` 每轮重触发，~2.8s 自动消失；hostility/tension/distance 上升判为负向。
 - `app/chat/[companionId].tsx` / `.web.tsx`：接 `useChatRelationship`；`stream.send` 接 `onSignals`（存增量 + 自增 token）；回复落地后 `relationship.refresh()` 刷新 HUD。HUD 放 `PortraitBar` 下方（mobile）/ 左侧面板（web），反馈 chip 浮于会话区顶部。
 
+## 实现记录（2026-06-18）
+
+补充 relationship pacing 文案层：
+- `ChatRelationshipHud` 在 next goal 下增加短提示，解释关系、场景和 story progress 是逐步成长的玩法。
+- chat 页面增加一次性可关闭提示，说明 scenes、stories、memories、private details 会随关系发展解锁。
+- `RelationshipGoalPanel` 和 `CompanionUnlocksPanel` 增加自然解锁说明，减少用户把 locked content 误判为功能不可用。
+- favorite scene / active Story progress 的提示只作为 UI chrome，不进入 prompt，不改变关系结算或 companion 话术。
+
 验证：`apps/app` `tsc --noEmit` 与 `expo lint` 均通过。运行端到端（Web 友善/冒犯消息看反馈 + 进度条变化 + 立绘转向）待人工跑。
 
 ---
@@ -39,6 +47,7 @@
 
 ### 目标
 - 聊天界面内常驻一个**紧凑关系 HUD**：当前 stage + 进度条（`stage_progress`）+ next_goal 一句话。两端（`.tsx` / `.web.tsx`）。
+- HUD 同时承担轻量解释职责：告诉用户 companion 会随着真实聊天、共同场景、story progress 逐步打开，避免用户误以为要立刻推进到亲密/私密内容。
 - 每轮 companion 回复后，根据该轮 `signals` 增量给出**即时反馈**：高亮变化的维度（如 `Trust +2`、`Distance +1`），用短暂的 chip / toast 呈现；负向变化用对应措辞与颜色。
 - 每轮结束后**刷新 HUD**（重新取 relationship 或用增量乐观更新），让进度条当场动一下——形成"我的话起作用了"的反馈闭环。
 
@@ -73,6 +82,7 @@
 - 输入：`stage`、`stage_progress`、`next_goal`（可由 `relationshipGoalFromSummary` 产出的 `RelationshipGoal` 直接喂）。
 - 形态：单行/双行紧凑条，放在 `PortraitBar` 下方或叠在其底部——比 `RelationshipGoalPanel`（整块卡片）更轻，适配聊天顶部。可内部复用同款进度条样式。
 - 两端共用同一组件（nativewind className）。
+- 在 next goal 下方使用固定短句提示 relationship pacing；这是 UI 说明，不是 prompt 规则。
 
 ### 3. 每轮反馈组件 — 新增 `components/SignalFeedback.tsx`（或内联）
 - 在两个聊天屏的 `stream.send(..., { onSignals })` 接上回调。

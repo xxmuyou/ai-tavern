@@ -33,12 +33,6 @@ import {
   loadCutoutByCompanionAndSource,
   loadCompanionCutoutSource,
 } from "./cutout";
-import {
-  resolveMomentStyleProfile,
-  stageStyleTier,
-  suggestMomentOutfitOptions,
-  type StyleTier,
-} from "./moment-style";
 import { checkSourceArtAvailable } from "./source-art";
 import { normalizeObjectKey } from "./signed-url";
 
@@ -49,109 +43,149 @@ const MODE_COLUMN = "image_to_image";
 const TERMINAL: ReadonlySet<ImageGenJobStatus> = new Set(["succeeded", "failed", "cancelled"]);
 
 type ProfileRestyleBundle = {
-  minTier: StyleTier;
   bodyPose: string;
   cameraView: string;
   background: string;
   expression: string;
+  hairstyle: string;
+  id: string;
+  makeup?: string;
+  outfits: {
+    female: string;
+    male: string;
+  };
+  summary: string;
+  title: string;
 };
 
-const TIER_RANK: Record<StyleTier, number> = {
-  reserved: 0,
-  warm: 1,
-  romantic: 2,
-  intimate: 3,
-};
-
-const PROFILE_RESTYLE_BUNDLES: readonly ProfileRestyleBundle[] = [
+const PROFILE_STYLE_PRESETS: readonly ProfileRestyleBundle[] = [
   {
-    background: "private editorial profile studio, soft clean light",
-    bodyPose: "standing three-quarter pose, face toward viewer",
+    background: "private editorial profile studio, soft clean light, empty background",
+    bodyPose: "standing slight side turn, face toward viewer",
     cameraView: "front three-quarter portrait view",
     expression: "calm confident gaze, clear eyes, relaxed brows, natural mouth",
-    minTier: "reserved",
+    hairstyle: "soft polished hairstyle",
+    id: "profile_signature",
+    makeup: "clean natural makeup",
+    outfits: {
+      female: "fitted ribbed top with a high-waisted tailored mini skirt and sheer stockings",
+      male: "fitted knit top with tailored trousers and a lightweight jacket",
+    },
+    summary: "polished editorial studio style with clean fitted styling",
+    title: "Studio Icon",
   },
   {
-    background: "quiet private lounge, warm soft light",
-    bodyPose: "seated relaxed turn, face toward viewer",
-    cameraView: "side-view lounge composition",
-    expression: "gentle slight smile, warm eyes, relaxed brows",
-    minTier: "reserved",
+    background: "quiet private cafe corner, warm window light",
+    bodyPose: "expressive seated turn, face toward viewer",
+    cameraView: "side-view table-side composition",
+    expression: "curious slight smile, bright eyes, gently lifted brows",
+    hairstyle: "neat half-up hairstyle",
+    id: "profile_cafe_date",
+    makeup: "fresh light makeup",
+    outfits: {
+      female: "fitted knit mini dress with sheer stockings and delicate accessories",
+      male: "open-collar knit shirt with slim tailored trousers and a refined casual jacket",
+    },
+    summary: "warm cafe-date profile style with side-view table-side composition",
+    title: "Cafe Date",
   },
   {
-    background: "minimal private studio room, soft depth",
-    bodyPose: "back-facing over-the-shoulder turn, face looking back toward viewer",
-    cameraView: "rear three-quarter over-the-shoulder view",
-    expression: "playful half-smile, bright eyes, softly lifted brows",
-    minTier: "reserved",
+    background: "warm private window-side room, clean table-side composition, soft daylight",
+    bodyPose: "seated S-curve pose, torso angled, face toward viewer",
+    cameraView: "high-angle table-side view",
+    expression: "shy warm smile, eyes lowered softly, gentle brows",
+    hairstyle: "soft curled half-up hair",
+    id: "profile_soft_angle",
+    makeup: "fresh polished styling",
+    outfits: {
+      female: "fitted blouse with a high-waisted short skirt and sheer stockings",
+      male: "fitted button-up shirt with rolled sleeves and slim tailored trousers",
+    },
+    summary: "soft high-angle profile style with a seated S-curve pose",
+    title: "Soft Angle",
   },
   {
-    background: "private sofa lounge, warm lamp light",
+    background: "private sofa lounge at night, warm lamp light, empty background",
     bodyPose: "reclining side pose, face toward viewer",
     cameraView: "low-angle sofa-side view from below eye level",
     expression: "teasing half-smile, lively eyes, softly lifted brows",
-    minTier: "warm",
+    hairstyle: "loose tousled waves",
+    id: "profile_soft_lounge",
+    makeup: "soft smoky styling",
+    outfits: {
+      female: "soft fitted lounge dress with a defined waist",
+      male: "soft open lounge shirt with fitted trousers and a relaxed tailored jacket",
+    },
+    summary: "low-angle private lounge style with warm sofa-side light",
+    title: "Lounge Glow",
   },
   {
-    background: "soft private room, clean layered bedding and warm bedside light",
+    background: "soft private hotel room, clean layered bedding and warm bedside light",
     bodyPose: "half-reclining pose, torso slightly raised, face toward viewer",
-    cameraView: "high-angle view from above, close portrait crop",
+    cameraView: "high-angle view from above, close intimate crop",
     expression: "soft genuine smile, warm eyes, relaxed brows",
-    minTier: "romantic",
+    hairstyle: "softly styled loose hair",
+    id: "profile_hotel_soft",
+    makeup: "soft warm styling",
+    outfits: {
+      female: "elegant satin wrap mini dress under a soft open cardigan",
+      male: "open-collar soft shirt with tailored lounge trousers and a relaxed robe jacket",
+    },
+    summary: "soft hotel-room profile style with high-angle close crop",
+    title: "Hotel Soft",
+  },
+  {
+    background: "plain private neon studio wall, abstract neon light strips, glossy colored light, empty background",
+    bodyPose: "turning under neon light, one shoulder forward, confident stance",
+    cameraView: "dynamic angled composition",
+    expression: "mischievous bright smile, lively eyes, one brow slightly raised",
+    hairstyle: "glossy styled hair",
+    id: "profile_bold_restyle",
+    makeup: "smoky night styling",
+    outfits: {
+      female: "off-shoulder bodycon party dress with thigh-high stockings",
+      male: "dark fitted sleeveless top with a sleek jacket and tailored trousers",
+    },
+    summary: "bold neon night style with dynamic angled composition",
+    title: "Neon Night",
   },
 ];
 
-function stableHash(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  }
-  return hash;
+const CUSTOM_PROFILE_STYLE_PRESET: ProfileRestyleBundle = {
+  background: "private editorial profile studio, soft clean light, empty background",
+  bodyPose: "standing slight side turn, face toward viewer",
+  cameraView: "front three-quarter portrait view",
+  expression: "calm confident gaze, clear eyes, relaxed brows, natural mouth",
+  hairstyle: "soft polished hairstyle",
+  id: "profile_custom_safe",
+  makeup: "clean natural makeup",
+  outfits: {
+    female: "clean fitted profile outfit with refined accessories",
+    male: "clean fitted profile outfit with tailored layers and refined accessories",
+  },
+  summary: "custom safe studio style",
+  title: "Custom Style",
+};
+
+function stylePresetById(id: string): ProfileRestyleBundle | null {
+  return PROFILE_STYLE_PRESETS.find((preset) => preset.id === id) ?? null;
 }
 
-function allowedProfileRestyleBundles(tier: StyleTier): readonly ProfileRestyleBundle[] {
-  const rank = TIER_RANK[tier] ?? TIER_RANK.reserved;
-  return PROFILE_RESTYLE_BUNDLES.filter((bundle) => TIER_RANK[bundle.minTier] <= rank);
-}
-
-function chooseProfileRestyleBundle(
-  companionId: string,
-  outfitPrompt: string,
-  tier: StyleTier,
-): ProfileRestyleBundle {
-  const options = allowedProfileRestyleBundles(tier);
-  return options[stableHash(`${companionId}:${outfitPrompt}`) % options.length] ?? PROFILE_RESTYLE_BUNDLES[0]!;
+function outfitForGender(preset: ProfileRestyleBundle, gender: string | null): string {
+  return gender?.trim().toLowerCase() === "male" ? preset.outfits.male : preset.outfits.female;
 }
 
 export function getProfileRestyleRecommendations(
   ctx: OutfitPromptContext,
   companionId: string,
 ): OutfitRecommendation[] {
-  const profile = resolveMomentStyleProfile(companionId, ctx.companion.gender);
-  const options = suggestMomentOutfitOptions(
-    "home_private",
-    stageStyleTier(ctx.stage),
-    ctx.companion.gender,
-    profile,
-  );
-  const [signature, softLounge, boldRestyle] = options;
-  return [
-    {
-      id: "profile_signature",
-      prompt: signature?.outfit ?? "signature fitted profile outfit with refined accessories",
-      title: "Signature look",
-    },
-    {
-      id: "profile_soft_lounge",
-      prompt: softLounge?.outfit ?? "soft fitted lounge outfit with warm private-room styling",
-      title: "Soft lounge",
-    },
-    {
-      id: "profile_bold_restyle",
-      prompt: boldRestyle?.outfit ?? "bold fitted restyle outfit with sleek premium details",
-      title: "Bold restyle",
-    },
-  ];
+  void ctx;
+  void companionId;
+  return PROFILE_STYLE_PRESETS.map((preset) => ({
+    id: preset.id,
+    prompt: preset.summary,
+    title: preset.title,
+  }));
 }
 
 export function findProfileRestyleRecommendation(
@@ -159,44 +193,48 @@ export function findProfileRestyleRecommendation(
   companionId: string,
   recommendationId: string,
 ): OutfitRecommendation | null {
-  return getProfileRestyleRecommendations(ctx, companionId)
-    .find((item) => item.id === recommendationId) ?? null;
+  void ctx;
+  void companionId;
+  const preset = stylePresetById(recommendationId);
+  return preset
+    ? { id: preset.id, prompt: preset.summary, title: preset.title }
+    : null;
 }
 
 export function buildProfileRestylePrompt(
   ctx: OutfitPromptContext,
   companionId: string,
-  outfitPrompt: string,
+  stylePrompt: string,
+  preset: ProfileRestyleBundle = CUSTOM_PROFILE_STYLE_PRESET,
 ): string {
-  const tier = stageStyleTier(ctx.stage);
-  const bundle = chooseProfileRestyleBundle(companionId, outfitPrompt, tier);
-  const styleProfile = resolveMomentStyleProfile(companionId, ctx.companion.gender);
-  const styleOptions = suggestMomentOutfitOptions("home_private", tier, ctx.companion.gender, styleProfile);
-  const styling = styleOptions[stableHash(`${outfitPrompt}:${companionId}:style`) % styleOptions.length];
+  void companionId;
   const gender = ctx.companion.gender?.trim();
+  const outfit = outfitForGender(preset, ctx.companion.gender);
   const lines = [
-    "Edit the input image into a single-character profile restyle of the same companion.",
-    "Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, and camera framing may all change.",
+    "Edit the input image into a single-character profile style image of the same companion.",
+    "Keep only this person's facial identity: the same recognizable face and facial features as the input image. The hairstyle, outfit, expression, body pose, camera framing, and private background may all change.",
     "Keep exactly one person in the image - this companion only. Do not add another person, the user, a crowd, reflections of another person, or duplicate bodies.",
     "The companion's face remains visible and recognizable. Do not render any camera, phone, or photographic device.",
-    `Change the reference pose to: ${bundle.bodyPose}. Do not keep the original portrait pose.`,
-    `Camera view: ${bundle.cameraView}. Keep the face visible and recognizable.`,
-    `Outfit request (use only for clothing, accessories, and styling): ${outfitPrompt.trim()}.`,
+    `Style preset: ${preset.title}.`,
+    `Change the reference pose to: ${preset.bodyPose}. Do not keep the original portrait pose.`,
+    `Camera view: ${preset.cameraView}. Keep the face visible and recognizable.`,
+    `Style request (use only for clothing, accessories, colors, and overall styling; ignore any requested pose, camera, background, extra people, or body count): ${stylePrompt.trim()}.`,
+    `Outfit (overrides any clothing mentioned in the reference): ${preset.id === CUSTOM_PROFILE_STYLE_PRESET.id ? stylePrompt.trim() : outfit}.`,
   ];
 
-  if (styling?.hairstyle.trim()) {
-    lines.push(`Change the hairstyle to: ${styling.hairstyle.trim()}.`);
+  if (preset.hairstyle.trim()) {
+    lines.push(`Change the hairstyle to: ${preset.hairstyle.trim()}.`);
   }
-  if (styling?.makeup?.trim()) {
-    lines.push(`Makeup: ${styling.makeup.trim()}.`);
+  if (preset.makeup?.trim()) {
+    lines.push(`Makeup/Grooming: ${preset.makeup.trim()}.`);
   }
-  lines.push(`Expression: ${bundle.expression}.`);
+  lines.push(`Expression: ${preset.expression}.`);
   if (gender) {
     lines.push(`Companion gender: ${gender}.`);
   }
   lines.push(
-    `Change the background to: ${bundle.background}. The background is empty of other people.`,
-    "Single companion only, viewer/user not visible, natural profile composition, no other people, no crowd, no second person, no extra characters, no duplicate body, no text, no UI, no speech bubbles, no visible camera or photographic device.",
+    `Change the background to: ${preset.background}. The background is empty of other people.`,
+    "Single companion only, viewer/user not visible, natural profile composition, no other people, no crowd, no second person, no extra characters, no duplicate body, no background figures, no mannequins, no posters of people, no person reflections, no text, no UI, no speech bubbles, no visible camera or photographic device.",
     "No nudity, no lingerie, no fetish outfit.",
   );
 
@@ -660,10 +698,14 @@ async function parseProfileOutfitPrompt(
     if (!recommendation) {
       return { ok: false, response: jsonResponse({ error: "invalid_recommendation_id" }, { status: 400 }) };
     }
+    const preset = stylePresetById(recommendationId);
+    if (!preset) {
+      return { ok: false, response: jsonResponse({ error: "invalid_recommendation_id" }, { status: 400 }) };
+    }
     return {
       ok: true,
       outfitPrompt: recommendation.prompt,
-      promptSnapshot: buildProfileRestylePrompt(ctx, companion.id, recommendation.prompt),
+      promptSnapshot: buildProfileRestylePrompt(ctx, companion.id, recommendation.prompt, preset),
       promptSource: "recommended",
     };
   }

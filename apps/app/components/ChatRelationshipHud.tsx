@@ -39,6 +39,9 @@ export function ChatRelationshipHud({ goal }: { goal?: RelationshipGoal | null }
           {goal.label}
         </Text>
       ) : null}
+      <Text className="mt-1 text-xs leading-4 text-app-muted">
+        Take your time. Bonds grow through real conversations, favorite scenes, and story progress.
+      </Text>
     </View>
   );
 }

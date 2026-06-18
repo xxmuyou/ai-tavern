@@ -331,15 +331,23 @@ describe("profile outfit image pipeline", () => {
     expect(prompt).toContain("Change the reference pose to:");
     expect(prompt).toContain("Camera view:");
     expect(prompt).toContain("Change the background to:");
-    expect(prompt).toContain("Outfit request (use only for clothing, accessories, and styling): black oversized hoodie.");
+    expect(prompt).toContain("Style preset: Custom Style.");
+    expect(prompt).toContain(
+      "Style request (use only for clothing, accessories, colors, and overall styling; ignore any requested pose, camera, background, extra people, or body count): black oversized hoodie.",
+    );
+    expect(prompt).toContain("Outfit (overrides any clothing mentioned in the reference): black oversized hoodie.");
     expect(prompt).toContain("Single companion only");
     expect(prompt).toContain("viewer/user not visible");
     expect(prompt).toContain("no duplicate body");
+    expect(prompt).toContain("no background figures");
+    expect(prompt).toContain("no mannequins");
+    expect(prompt).toContain("no posters of people");
+    expect(prompt).toContain("no person reflections");
     expect(prompt).not.toContain("Only change the clothing");
     expect(prompt).not.toContain("framing, and crop");
   });
 
-  it("returns three profile restyle recommendations without changing the public schema", async () => {
+  it("returns curated profile style recommendations without changing the public schema", async () => {
     const recommendations = getProfileRestyleRecommendations(
       {
         activity: null,
@@ -357,13 +365,24 @@ describe("profile outfit image pipeline", () => {
       "maya",
     );
 
-    expect(recommendations).toHaveLength(3);
+    expect(recommendations).toHaveLength(6);
     expect(recommendations.map((item) => item.id)).toEqual([
       "profile_signature",
+      "profile_cafe_date",
+      "profile_soft_angle",
       "profile_soft_lounge",
+      "profile_hotel_soft",
       "profile_bold_restyle",
     ]);
     expect(recommendations.every((item) => item.prompt && item.title)).toBe(true);
+    expect(recommendations.map((item) => item.title)).toEqual([
+      "Studio Icon",
+      "Cafe Date",
+      "Soft Angle",
+      "Lounge Glow",
+      "Hotel Soft",
+      "Neon Night",
+    ]);
   });
 
   it("rejects profile outfit generation before enqueue when source art is missing from R2", async () => {
@@ -390,12 +409,15 @@ describe("profile outfit image pipeline", () => {
     expect([...generations.values()].filter((row) => row.id !== "gen-1")).toEqual([]);
   });
 
-  it("writes the custom outfit prompt snapshot into the queued image job", async () => {
+  it("writes the custom style prompt snapshot into the queued image job with the safe studio preset", async () => {
     const { env, generations, jobs } = createEnv();
 
     const response = await handleProfileOutfitRequest(
       new Request("https://api.test/companions/maya/profile-outfit/generate", {
-        body: JSON.stringify({ prompt: "black oversized hoodie", source: "custom" }),
+        body: JSON.stringify({
+          prompt: "black oversized hoodie, beach background, rear camera view",
+          source: "custom",
+        }),
         headers: { "content-type": "application/json" },
         method: "POST",
       }),
@@ -407,13 +429,18 @@ describe("profile outfit image pipeline", () => {
     const body = (await response?.json()) as { generation_id: string; job_id: string; status: string };
     expect(body.status).toBe("queued");
     expect(jobs.get(body.job_id)?.prompt).toContain(
-      "Outfit request (use only for clothing, accessories, and styling): black oversized hoodie.",
+      "Style request (use only for clothing, accessories, colors, and overall styling; ignore any requested pose, camera, background, extra people, or body count): black oversized hoodie, beach background, rear camera view.",
     );
-    expect(jobs.get(body.job_id)?.prompt).toContain("Change the reference pose to:");
-    expect(jobs.get(body.job_id)?.prompt).toContain("Camera view:");
+    expect(jobs.get(body.job_id)?.prompt).toContain(
+      "Change the reference pose to: standing slight side turn, face toward viewer.",
+    );
+    expect(jobs.get(body.job_id)?.prompt).toContain("Camera view: front three-quarter portrait view.");
+    expect(jobs.get(body.job_id)?.prompt).toContain(
+      "Change the background to: private editorial profile studio, soft clean light, empty background.",
+    );
     expect(jobs.get(body.job_id)?.prompt).not.toContain("Only change the clothing");
     expect(generations.get(body.generation_id)).toMatchObject({
-      outfit_prompt: "black oversized hoodie",
+      outfit_prompt: "black oversized hoodie, beach background, rear camera view",
       prompt_snapshot: expect.stringContaining("Change the background to:"),
       prompt_source: "custom",
     });
@@ -438,44 +465,73 @@ describe("profile outfit image pipeline", () => {
     });
   });
 
-  it("writes the recommended outfit prompt snapshot into the queued image job", async () => {
-    const { env, generations, jobs } = createEnv();
-
-    const recommendationsResponse = await handleProfileOutfitRequest(
-      new Request("https://api.test/companions/maya/profile-outfit/recommendations"),
-      env,
-      "/companions/maya/profile-outfit/recommendations",
-    );
-    const recommendationsBody = (await recommendationsResponse?.json()) as {
-      recommendations: { id: string; prompt: string }[];
+  it("writes fixed recommended style preset snapshots into queued image jobs", async () => {
+    const expected: Record<string, { background: string; camera: string; pose: string; title: string }> = {
+      profile_bold_restyle: {
+        background: "plain private neon studio wall, abstract neon light strips, glossy colored light, empty background",
+        camera: "dynamic angled composition",
+        pose: "turning under neon light, one shoulder forward, confident stance",
+        title: "Neon Night",
+      },
+      profile_cafe_date: {
+        background: "quiet private cafe corner, warm window light",
+        camera: "side-view table-side composition",
+        pose: "expressive seated turn, face toward viewer",
+        title: "Cafe Date",
+      },
+      profile_hotel_soft: {
+        background: "soft private hotel room, clean layered bedding and warm bedside light",
+        camera: "high-angle view from above, close intimate crop",
+        pose: "half-reclining pose, torso slightly raised, face toward viewer",
+        title: "Hotel Soft",
+      },
+      profile_signature: {
+        background: "private editorial profile studio, soft clean light, empty background",
+        camera: "front three-quarter portrait view",
+        pose: "standing slight side turn, face toward viewer",
+        title: "Studio Icon",
+      },
+      profile_soft_angle: {
+        background: "warm private window-side room, clean table-side composition, soft daylight",
+        camera: "high-angle table-side view",
+        pose: "seated S-curve pose, torso angled, face toward viewer",
+        title: "Soft Angle",
+      },
+      profile_soft_lounge: {
+        background: "private sofa lounge at night, warm lamp light, empty background",
+        camera: "low-angle sofa-side view from below eye level",
+        pose: "reclining side pose, face toward viewer",
+        title: "Lounge Glow",
+      },
     };
-    const recommendation = recommendationsBody.recommendations[0]!;
+    const banned = /back-facing over-the-shoulder|rear three-quarter over-the-shoulder/i;
 
-    const response = await handleProfileOutfitRequest(
-      new Request("https://api.test/companions/maya/profile-outfit/generate", {
-        body: JSON.stringify({ recommendation_id: recommendation.id, source: "recommended" }),
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      }),
-      env,
-      "/companions/maya/profile-outfit/generate",
-    );
+    for (const id of Object.keys(expected)) {
+      const { env, generations, jobs } = createEnv();
+      const response = await handleProfileOutfitRequest(
+        new Request("https://api.test/companions/maya/profile-outfit/generate", {
+          body: JSON.stringify({ recommendation_id: id, source: "recommended" }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        }),
+        env,
+        "/companions/maya/profile-outfit/generate",
+      );
 
-    expect(response?.status).toBe(202);
-    const body = (await response?.json()) as { generation_id: string; job_id: string };
-    expect(recommendationsBody.recommendations.map((item) => item.id)).toEqual([
-      "profile_signature",
-      "profile_soft_lounge",
-      "profile_bold_restyle",
-    ]);
-    expect(jobs.get(body.job_id)?.prompt).toContain(
-      `Outfit request (use only for clothing, accessories, and styling): ${recommendation.prompt}.`,
-    );
-    expect(generations.get(body.generation_id)).toMatchObject({
-      outfit_prompt: recommendation.prompt,
-      prompt_snapshot: expect.stringContaining("Change the reference pose to:"),
-      prompt_source: "recommended",
-    });
+      expect(response?.status).toBe(202);
+      const body = (await response?.json()) as { generation_id: string; job_id: string };
+      const prompt = jobs.get(body.job_id)?.prompt ?? "";
+      expect(prompt).toContain(`Style preset: ${expected[id]!.title}.`);
+      expect(prompt).toContain(`Change the reference pose to: ${expected[id]!.pose}.`);
+      expect(prompt).toContain(`Camera view: ${expected[id]!.camera}.`);
+      expect(prompt).toContain(`Change the background to: ${expected[id]!.background}.`);
+      expect(prompt).not.toMatch(banned);
+      expect(prompt).not.toContain("Only change the clothing");
+      expect(generations.get(body.generation_id)).toMatchObject({
+        prompt_snapshot: expect.stringContaining(`Style preset: ${expected[id]!.title}.`),
+        prompt_source: "recommended",
+      });
+    }
   });
 
   it("processes a profile outfit job and saves the output to user image assets", async () => {
