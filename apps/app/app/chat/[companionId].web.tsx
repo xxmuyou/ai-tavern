@@ -1256,13 +1256,13 @@ export default function WebChatScreen() {
 
         <View className="relative z-10 mx-auto min-h-0 w-full max-w-[1280px] flex-1 flex-col justify-center xl:flex-row xl:items-stretch">
           <View className="relative min-h-[300px] min-w-0 overflow-hidden px-8 pb-8 pt-8 xl:flex-1">
-            <View className="flex-row flex-wrap items-start justify-between gap-3">
-              <View className="gap-1">
-                <Text className="text-overline text-rose-soft">{displaySceneName ?? 'No scene selected'}</Text>
-                <Text className="font-serif text-title text-white">{companion?.name ?? 'Companion'}</Text>
-                <Text className="text-caption text-white/65">{companion?.relationship_role ?? 'companion'}</Text>
+            <View className="min-w-0 flex-row flex-wrap items-start justify-between gap-3">
+              <View className="min-w-0 flex-1 gap-1">
+                <Text numberOfLines={1} className="text-overline text-rose-soft">{displaySceneName ?? 'No scene selected'}</Text>
+                <Text numberOfLines={2} className="min-w-0 font-serif text-title text-white">{companion?.name ?? 'Companion'}</Text>
+                <Text numberOfLines={2} className="min-w-0 text-caption text-white/65">{companion?.relationship_role ?? 'companion'}</Text>
               </View>
-              <View className="flex-row flex-wrap items-center gap-2">
+              <View className="shrink-0 flex-row flex-wrap items-center gap-2">
                 <WebTag size="sm" variant="rose">{shownEmotion}</WebTag>
               </View>
             </View>
