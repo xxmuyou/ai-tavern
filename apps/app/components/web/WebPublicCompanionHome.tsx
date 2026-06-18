@@ -29,6 +29,7 @@ const COMMUNITY_PAGE_SIZE = 30;
 const OFFICIAL_PAGE_SIZE = 12;
 const TRENDING_PAGE_SIZE = 10;
 const TOP_TAG_COUNT = 10;
+const HOMEPAGE_OFFICIAL_BATCH_TAG = 'official-batch-20260612';
 const DISCOVERY_GRID_CLASS = 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
 
 export function WebPublicCompanionHome() {
@@ -74,16 +75,24 @@ export function WebPublicCompanionHome() {
     () => (popular.data?.items ?? []).filter((item) => item.art_url),
     [popular.data],
   );
+  const homepagePopularItems = useMemo(
+    () => popularItems.filter(isHomepageDiscoverItem),
+    [popularItems],
+  );
   const recentItems = useMemo(
     () => (recent.data?.items ?? []).filter((item) => item.art_url),
     [recent.data],
   );
+  const homepageRecentItems = useMemo(
+    () => recentItems.filter(isHomepageDiscoverItem),
+    [recentItems],
+  );
   const mostFavoritedItems = useMemo(
-    () => (mostFavorited.data?.items ?? []).filter((item) => item.art_url).slice(0, 10),
+    () => (mostFavorited.data?.items ?? []).filter((item) => item.art_url).filter(isHomepageDiscoverItem).slice(0, 10),
     [mostFavorited.data],
   );
   const officialFeaturedItemsAll = useMemo(
-    () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url),
+    () => (officialFeatured.data?.items ?? []).filter((item) => item.art_url).filter(isHomepageDiscoverItem),
     [officialFeatured.data],
   );
   const officialFeaturedItems = useMemo(
@@ -91,13 +100,13 @@ export function WebPublicCompanionHome() {
     [officialFeaturedItemsAll],
   );
   const rankedTrendingItems = useMemo(
-    () => (rankedTrending.data?.items ?? []).filter((item) => item.art_url),
+    () => (rankedTrending.data?.items ?? []).filter((item) => item.art_url).filter(isHomepageDiscoverItem),
     [rankedTrending.data],
   );
 
   const topTags = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const item of popularItems) {
+    for (const item of homepagePopularItems) {
       for (const tag of item.tags ?? []) {
         counts.set(tag, (counts.get(tag) ?? 0) + 1);
       }
@@ -106,27 +115,31 @@ export function WebPublicCompanionHome() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, TOP_TAG_COUNT)
       .map(([tag]) => tag);
-  }, [popularItems]);
+  }, [homepagePopularItems]);
 
   const isFiltering = Boolean(debouncedQuery || selectedTag);
   const filteredItems = useMemo(() => {
     if (!isFiltering) return [];
-    if (selectedTag) return popularItems.filter((item) => (item.tags ?? []).includes(selectedTag));
-    return popularItems;
-  }, [isFiltering, popularItems, selectedTag]);
+    if (selectedTag) return homepagePopularItems.filter((item) => (item.tags ?? []).includes(selectedTag));
+    return homepagePopularItems;
+  }, [homepagePopularItems, isFiltering, selectedTag]);
 
-  const pinnedIds = useMemo(
-    () => new Set([...mostFavoritedItems, ...officialFeaturedItemsAll].map((item) => item.id)),
-    [mostFavoritedItems, officialFeaturedItemsAll],
+  const firstRowsPinnedIds = useMemo(
+    () => new Set([...mostFavoritedItems, ...officialFeaturedItems].map((item) => item.id)),
+    [mostFavoritedItems, officialFeaturedItems],
   );
   const favoriteIds = useMemo(
     () => new Set((favorites.data?.items ?? []).map((item) => item.id)),
     [favorites.data?.items],
   );
-  const trendingItemsAll = rankedTrendingItems.filter((item) => !pinnedIds.has(item.id));
+  const trendingItemsAll = rankedTrendingItems.filter((item) => !firstRowsPinnedIds.has(item.id));
   const trending = trendingItemsAll.slice(0, TRENDING_PAGE_SIZE);
-  const newArrivals = recentItems.filter((item) => !pinnedIds.has(item.id)).slice(0, 10);
-  const community = popularItems.filter((item) => item.source === 'user' && !pinnedIds.has(item.id));
+  const previousRowsPinnedIds = useMemo(
+    () => new Set([...mostFavoritedItems, ...officialFeaturedItems, ...trending].map((item) => item.id)),
+    [mostFavoritedItems, officialFeaturedItems, trending],
+  );
+  const newArrivals = homepageRecentItems.filter((item) => !previousRowsPinnedIds.has(item.id)).slice(0, 10);
+  const community = homepagePopularItems.filter((item) => item.source === 'user' && !previousRowsPinnedIds.has(item.id));
   const communityPreview = community.slice(0, COMMUNITY_PAGE_SIZE);
   const officialRemaining = Math.max(officialFeaturedItemsAll.length - officialFeaturedItems.length, 0);
   const trendingRemaining = Math.max(trendingItemsAll.length - trending.length, 0);
@@ -310,7 +323,7 @@ export function WebPublicCompanionHome() {
                 </View>
               </DiscoverSection>
             )
-          ) : popularItems.length === 0 ? (
+          ) : homepagePopularItems.length === 0 ? (
             <DarkState
               description="No companions match this combination yet."
               icon="moon-outline"
@@ -412,6 +425,11 @@ export function WebPublicCompanionHome() {
       </View>
     </WebAppShell>
   );
+}
+
+function isHomepageDiscoverItem(item: CompanionListItem): boolean {
+  if (item.source === 'user') return true;
+  return (item.tags ?? []).includes(HOMEPAGE_OFFICIAL_BATCH_TAG);
 }
 
 function PublicCompanionDialog({
