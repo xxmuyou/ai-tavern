@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { normalizeChatDisplayText, normalizeCompanionNarrationPerspective, parseNarration } from '@/utils/narration';
 
@@ -79,12 +79,8 @@ export function TypingBubble() {
 
 export function NarrationLine({ text, trailingCursor }: { text: string; trailingCursor?: boolean }) {
   return (
-    <View className="min-w-0 w-full items-center px-4 py-1">
-      <Text
-        selectable
-        className="min-w-0 max-w-[88%] shrink text-center text-sm italic leading-5 text-app-muted"
-        style={styles.wrappingText}
-      >
+    <View className="w-full items-center px-4 py-1">
+      <Text selectable className="max-w-[88%] text-center text-sm italic leading-5 text-app-muted">
         {text}
         {trailingCursor ? <Text className="text-app-muted">{'▊'}</Text> : null}
       </Text>
@@ -103,20 +99,15 @@ export function DialogueBubble({
 }) {
   const isUser = role === 'user';
   return (
-    <View className={`min-w-0 w-full flex-row px-4 py-0.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <View className={`w-full flex-row px-4 py-0.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
       <View
-        className={`min-w-0 max-w-[80%] shrink rounded-2xl px-4 py-2.5 ${
+        className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
           isUser
             ? 'rounded-tr-md bg-app-primary'
             : 'rounded-tl-md border border-app-line bg-app-card'
         }`}
-        style={styles.dialogueBubble}
       >
-        <Text
-          selectable
-          className={`min-w-0 shrink text-base leading-6 ${isUser ? 'text-white' : 'text-app-text'}`}
-          style={styles.wrappingText}
-        >
+        <Text selectable className={`text-base leading-6 ${isUser ? 'text-white' : 'text-app-text'}`}>
           {text}
           {trailingCursor ? <Text className="text-app-muted">{'▊'}</Text> : null}
         </Text>
@@ -124,24 +115,3 @@ export function DialogueBubble({
     </View>
   );
 }
-
-const webWrappingText = Platform.OS === 'web'
-  ? {
-      overflowWrap: 'anywhere',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-    }
-  : null;
-
-const styles = StyleSheet.create({
-  dialogueBubble: {
-    flexShrink: 1,
-    maxWidth: '80%',
-    minWidth: 0,
-  },
-  wrappingText: {
-    flexShrink: 1,
-    minWidth: 0,
-    ...(webWrappingText as object),
-  },
-});

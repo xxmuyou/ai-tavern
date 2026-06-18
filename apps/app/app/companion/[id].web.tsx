@@ -123,8 +123,8 @@ export default function WebCompanionDetailScreen() {
     >
       <View className="mb-7 flex-row flex-wrap items-start justify-between gap-4">
         <View className="min-w-0 flex-1">
-          <Text numberOfLines={3} className="min-w-0 font-serif text-display-sm text-white">{companion.name}</Text>
-          <Text numberOfLines={4} className="mt-2 min-w-0 text-body-sm leading-6 text-rose-50/60">
+          <Text className="font-serif text-display-sm text-white">{companion.name}</Text>
+          <Text className="mt-2 text-body-sm leading-6 text-rose-50/60">
             {companion.relationship_role ?? companion.greeting ?? 'Open their profile, review the first beat, then start a private chat.'}
           </Text>
         </View>
@@ -163,10 +163,10 @@ export default function WebCompanionDetailScreen() {
                   </WebTag>
                 </View>
               </CompanionArtwork>
-              <View className="min-w-0 items-center gap-2 self-stretch">
-                <Text numberOfLines={2} className="min-w-0 text-center font-serif text-display-sm text-white">{companion.name}</Text>
+              <View className="items-center gap-2">
+                <Text className="font-serif text-display-sm text-white">{companion.name}</Text>
                 {companion.relationship_role ? (
-                  <Text numberOfLines={3} className="min-w-0 text-center text-caption uppercase tracking-wider text-app-rose-deep">
+                  <Text className="text-caption uppercase tracking-wider text-app-rose-deep">
                     {companion.relationship_role}
                   </Text>
                 ) : null}
