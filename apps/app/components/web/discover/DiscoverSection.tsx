@@ -29,14 +29,16 @@ export function DiscoverSection({
 }: DiscoverSectionProps) {
   return (
     <View className={cn('gap-4', className)}>
-      <View className="flex-row items-end justify-between gap-4">
+      <View className="min-w-0 flex-row items-end justify-between gap-4">
         <View className="min-w-0 flex-1 flex-row items-center gap-2.5">
-          <Ionicons color={iconColor} name={icon} size={20} />
-          <Text className="font-serif text-title-sm text-app-ink">{title}</Text>
-          {subtitle ? <Text className="text-caption text-app-muted">{subtitle}</Text> : null}
+          <View className="shrink-0">
+            <Ionicons color={iconColor} name={icon} size={20} />
+          </View>
+          <Text numberOfLines={1} className="min-w-0 shrink font-serif text-title-sm text-app-ink">{title}</Text>
+          {subtitle ? <Text numberOfLines={1} className="shrink-0 text-caption text-app-muted">{subtitle}</Text> : null}
         </View>
         {actionLabel && onAction ? (
-          <Pressable accessibilityRole="button" onPress={onAction} className="flex-row items-center gap-1">
+          <Pressable accessibilityRole="button" onPress={onAction} className="shrink-0 flex-row items-center gap-1">
             <Text className="text-body-sm font-semibold text-app-rose-deep">{actionLabel}</Text>
             <Ionicons color={PALETTE.roseDeep} name="arrow-forward" size={14} />
           </Pressable>

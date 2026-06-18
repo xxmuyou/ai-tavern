@@ -42,7 +42,7 @@ export function DiscoverCompanionCard({
       accessibilityRole="link"
       onPress={onPress}
       className={cn(
-        'group overflow-hidden rounded-2xl border border-white/10 bg-app-surface shadow-card transition-all duration-200 ease-editorial hover:-translate-y-1 hover:border-app-rose/50 hover:shadow-glow',
+        'group min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-app-surface shadow-card transition-all duration-200 ease-editorial hover:-translate-y-1 hover:border-app-rose/50 hover:shadow-glow',
         size === 'lg' ? 'w-[156px]' : '',
         className,
       )}
@@ -105,17 +105,17 @@ export function DiscoverCompanionCard({
         ) : null}
       </View>
 
-      <View className="min-h-[60px] gap-1 border-t border-white/10 bg-app-surface px-2.5 py-2.5">
+      <View className="min-w-0 gap-1 border-t border-white/10 bg-app-surface px-2.5 py-2.5">
         <Text numberOfLines={1} className="font-serif text-body-sm font-semibold text-white">
           {companion.name}
         </Text>
-        <View className="flex-row flex-wrap items-center gap-1.5">
-          <Text numberOfLines={1} className="text-[11px] font-medium text-app-rose-deep">
+        <View className="min-h-[18px] min-w-0 flex-row items-center gap-1.5 overflow-hidden">
+          <Text numberOfLines={1} className="min-w-0 flex-1 text-[11px] font-medium text-app-rose-deep">
             {companion.relationship_role ?? 'Companion'}
           </Text>
           {tags.map((tag) => (
-            <View key={tag} className="rounded-full bg-white/10 px-1.5 py-px">
-              <Text className="text-[9px] font-medium text-app-ink-soft">{tag}</Text>
+            <View key={tag} className="max-w-[52px] shrink-0 rounded-full bg-white/10 px-1.5 py-px">
+              <Text numberOfLines={1} className="text-[9px] font-medium text-app-ink-soft">{tag}</Text>
             </View>
           ))}
         </View>

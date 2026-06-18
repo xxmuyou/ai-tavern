@@ -218,7 +218,7 @@ export function WebPublicCompanionHome() {
         <View pointerEvents="none" className="absolute inset-x-0 bottom-0 h-[360px] bg-[radial-gradient(ellipse_at_bottom,rgba(166,107,250,0.08)_0%,transparent_70%)]" />
 
         <ScrollView className="editorial-scroll h-full" contentContainerStyle={{ minHeight: '100%' }}>
-          <View className="relative mx-auto w-full max-w-[1600px] px-8 pb-16 pt-8">
+          <View className="relative mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-8 sm:pt-8">
           {/* ── Hero ────────────────────────────────────────────── */}
           {!isFiltering ? (
             <View className="mb-8 overflow-hidden rounded-3xl border border-white/10 bg-gradient-hero px-10 py-12">
@@ -237,7 +237,7 @@ export function WebPublicCompanionHome() {
           {/* ── Filters ─────────────────────────────────────────── */}
           <View className="mb-8 gap-4">
             <View className="flex-row flex-wrap items-center gap-3">
-              <View className="min-w-[260px] flex-1 flex-row items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3.5">
+              <View className="min-w-0 flex-1 basis-[240px] flex-row items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3.5">
                 <Ionicons color={PALETTE.muted} name="search-outline" size={16} />
                 <TextInput
                   className="min-h-10 flex-1 text-body-sm text-app-ink"
@@ -268,13 +268,13 @@ export function WebPublicCompanionHome() {
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
                       onPress={() => setSelectedTag(active ? null : tag)}
-                      className={`rounded-full border px-3 py-1.5 transition-colors ${
+                      className={`max-w-full rounded-full border px-3 py-1.5 transition-colors ${
                         active
                           ? 'border-app-rose/70 bg-app-canvas/70'
                           : 'border-white/10 bg-white/[0.04] hover:border-app-rose/40 hover:bg-app-rose-soft/50'
                       }`}
                     >
-                      <Text className={`text-caption font-medium ${active ? 'text-app-rose-deep' : 'text-app-ink-soft'}`}>
+                      <Text numberOfLines={1} className={`text-caption font-medium ${active ? 'text-app-rose-deep' : 'text-app-ink-soft'}`}>
                         #{tag}
                       </Text>
                     </Pressable>
@@ -455,16 +455,14 @@ function PublicCompanionDialog({
       title={dialog?.title ?? 'Companions'}
     >
       {dialog ? (
-        <View className="gap-4">
+        <View className="min-w-0 gap-4">
           <View className="flex-row items-center gap-2 rounded-xl border border-app-line bg-app-solid-surface px-4 py-3">
             <Ionicons color={PALETTE.roseDeep} name={dialog.icon} size={18} />
             <Text className="text-body-sm font-semibold text-app-ink">{dialog.items.length} public companions</Text>
           </View>
-          <ScrollView className="-mx-1 max-h-[70vh] px-1" contentContainerStyle={{ paddingBottom: 8 }}>
-            <View className={DISCOVERY_GRID_CLASS}>
-              {dialog.items.map((companion) => renderCard(companion))}
-            </View>
-          </ScrollView>
+          <View className={DISCOVERY_GRID_CLASS}>
+            {dialog.items.map((companion) => renderCard(companion))}
+          </View>
         </View>
       ) : null}
     </WebDialog>
