@@ -77,7 +77,6 @@ export default function WebCompanionDetailScreen() {
   const isPublic = companion.is_public === true;
   const isFavorite = companion.is_favorite === true;
   const relationshipGoal = relationshipGoalFromSummary(companion.relationship);
-  const traits = (companion.personality ?? '').split(/[.,;]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4);
 
   async function handleTogglePublish(shareStoryArcs = false) {
     setIsPublishing(true);
@@ -172,16 +171,6 @@ export default function WebCompanionDetailScreen() {
                 ) : null}
               </View>
             </View>
-
-            {traits.length > 0 ? (
-              <View className="flex-row flex-wrap justify-center gap-1.5">
-                {traits.map((trait) => (
-                  <WebTag key={trait} size="sm" variant="rose">
-                    {trait}
-                  </WebTag>
-                ))}
-              </View>
-            ) : null}
 
             <View className="border-t border-app-line-soft pt-4">
               <Text className="text-overline text-app-rose-deep">Relationship goal</Text>
