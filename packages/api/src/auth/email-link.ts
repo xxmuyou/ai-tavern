@@ -11,6 +11,7 @@ import type { AuthEnv } from "./types";
 const TOKEN_TTL_SECONDS = 900;
 const THROTTLE_TTL_SECONDS = 3600;
 const THROTTLE_LIMIT = 3;
+const PRODUCT_NAME = "CharaPal";
 
 type SendLinkRequest = {
   email?: string;
@@ -93,7 +94,7 @@ export async function handleSendLink(
     await sender({
       to: email,
       from: fromAddress!,
-      subject: "Your AI Apps Box sign-in link",
+      subject: `Your ${PRODUCT_NAME} sign-in link`,
       html: renderMagicLinkEmail(verifyUrl),
       text: renderMagicLinkText(verifyUrl),
       apiKey,
@@ -208,16 +209,16 @@ function renderMagicLinkEmail(verifyUrl: string): string {
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
       <tr>
         <td style="padding:32px 32px 12px;">
-          <p style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0f766e;">AI Apps Box</p>
+          <p style="margin:0 0 12px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0f766e;">${PRODUCT_NAME}</p>
           <h1 style="margin:0 0 16px;font-size:28px;line-height:1.2;color:#111827;">Sign in or create your account</h1>
           <p style="margin:0 0 16px;font-size:16px;color:#374151;">
-            Use the secure link below to continue to AI Apps Box. This sign-in link expires in 15 minutes and can only be used once.
+            Use the secure link below to continue to ${PRODUCT_NAME}. This sign-in link expires in 15 minutes and can only be used once.
           </p>
           <p style="margin:0 0 24px;font-size:16px;color:#374151;">
             If this is your first time using this email address, we will create your account after you confirm the link.
           </p>
           <p style="margin:0 0 24px;">
-            <a href="${verifyUrl}" style="display:inline-block;padding:12px 20px;background:#111827;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">Sign in to AI Apps Box</a>
+            <a href="${verifyUrl}" style="display:inline-block;padding:12px 20px;background:#111827;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">Sign in to ${PRODUCT_NAME}</a>
           </p>
           <p style="margin:0 0 12px;font-size:14px;color:#6b7280;">If the button does not work, copy and paste this URL into your browser:</p>
           <p style="margin:0 0 24px;font-size:14px;word-break:break-all;color:#2563eb;">${verifyUrl}</p>
@@ -233,10 +234,10 @@ function renderMagicLinkEmail(verifyUrl: string): string {
 
 function renderMagicLinkText(verifyUrl: string): string {
   return [
-    "AI Apps Box",
+    PRODUCT_NAME,
     "",
     "Sign in or create your account.",
-    "Use the secure link below to continue to AI Apps Box.",
+    `Use the secure link below to continue to ${PRODUCT_NAME}.`,
     "This sign-in link expires in 15 minutes and can only be used once.",
     "",
     verifyUrl,

@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { isApiRequestError } from '@/api/companion-client';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import { WebButton, WebInput } from '@/components/web/ui';
 import { BRAND_NAME } from '@/constants/brand';
 import { DISCOVER_ROUTE } from '@/constants/routes';
@@ -111,6 +112,7 @@ export default function WebLoginScreen() {
           {notice ? <Text className="text-caption leading-5 text-rose-200">{notice}</Text> : null}
         </View>
       </View>
+      <WebLegalLinks className="mt-6" />
     </View>
   );
 }

@@ -9,6 +9,7 @@ import type { CompanionListItem } from '@/api/types';
 import { DiscoverCompanionCard } from '@/components/web/discover/DiscoverCompanionCard';
 import { DiscoverRail, DiscoverSection } from '@/components/web/discover/DiscoverSection';
 import { WebAppShell } from '@/components/web/WebAppShell';
+import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import { WebDialog } from '@/components/web/ui';
 import { BRAND_NAME, BRAND_TAGLINE } from '@/constants/brand';
 import { PALETTE } from '@/constants/palette';
@@ -398,6 +399,9 @@ export function WebPublicCompanionHome() {
               ) : null}
             </View>
           )}
+          <View className="mt-14 border-t border-white/10 pt-5">
+            <WebLegalLinks />
+          </View>
           </View>
         </ScrollView>
         <PublicCompanionDialog
