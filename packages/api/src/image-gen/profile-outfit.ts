@@ -12,6 +12,7 @@ import {
   maybeDelayRunningHubCapacityError,
   maybeDelayRunningHubImageJob,
   reenqueueImageJob,
+  sendImageJob,
   updateImageJob,
   type ImageGenJobRow,
   type ImageGenJobStatus,
@@ -599,7 +600,7 @@ async function generateProfileOutfit(
     .bind(generationId, user.id, companionId, parsed.promptSource, parsed.outfitPrompt, parsed.promptSnapshot, jobId, now, now)
     .run();
 
-  await env.JOB_QUEUE.send({
+  await sendImageJob(env, {
     created_at: new Date(now).toISOString(),
     job_id: jobId,
     type: "image.generate",

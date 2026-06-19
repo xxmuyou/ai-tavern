@@ -611,7 +611,6 @@ describe("profile outfit image pipeline", () => {
 
     expect(env.JOB_QUEUE.send).toHaveBeenCalledWith(
       expect.objectContaining({ job_id: "job-1", type: "image.generate" }),
-      undefined,
     );
   });
 });

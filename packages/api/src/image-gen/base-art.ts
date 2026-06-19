@@ -120,6 +120,23 @@ export type CreateBaseArtJobInput = {
   billingRef?: string | null;
 };
 
+function imageQueue(env: Env): Queue {
+  return (env as Env & { IMAGE_QUEUE?: Queue }).IMAGE_QUEUE ?? env.JOB_QUEUE;
+}
+
+export async function sendImageJob(
+  env: Env,
+  payload: BaseArtQueuePayload,
+  options?: QueueSendOptions,
+): Promise<void> {
+  const queue = imageQueue(env);
+  if (options) {
+    await queue.send(payload, options);
+    return;
+  }
+  await queue.send(payload);
+}
+
 /**
  * Reserves credits for one image generation (spec-021 §F). Returns the
  * reservation id to store on the job's `billing_ref`; callers surface a 402 when
@@ -199,7 +216,7 @@ export async function createBaseArtJob(
     job_id: id,
     type: "image.generate",
   };
-  await env.JOB_QUEUE.send(payload);
+  await sendImageJob(env, payload);
 
   return id;
 }
@@ -284,7 +301,8 @@ export async function reenqueueImageJob(
     job_id: jobId,
     type: "image.generate",
   };
-  await env.JOB_QUEUE.send(
+  await sendImageJob(
+    env,
     payload,
     delaySeconds && delaySeconds > 0 ? { delaySeconds } : undefined,
   );
@@ -438,6 +456,9 @@ export async function failImageJob(
   if (job.billing_ref) {
     await releaseReservation(env, job.billing_ref, errorCode);
   }
+  if (job.provider === "runninghub") {
+    await wakeNextQueuedRunningHubImageJob(env, job.id);
+  }
 }
 
 export async function completeImageJobWithImage(
@@ -488,7 +509,34 @@ export async function completeImageJobWithImage(
     await commitReservation(env, job.billing_ref);
   }
 
+  if (input.provider === "runninghub" || job.provider === "runninghub") {
+    await wakeNextQueuedRunningHubImageJob(env, job.id);
+  }
   return outputKey;
+}
+
+export async function wakeNextQueuedRunningHubImageJob(
+  env: Env,
+  excludeJobId?: string,
+): Promise<string | null> {
+  const row = await env.DB.prepare(
+    `SELECT id
+     FROM image_generation_jobs
+     WHERE provider = 'runninghub'
+       AND error_code = ?
+       AND status IN ('pending', 'processing')
+       AND provider_task_id IS NULL
+       AND output_key IS NULL
+       AND completed_at IS NULL
+       AND (? IS NULL OR id != ?)
+     ORDER BY created_at ASC
+     LIMIT 1`,
+  )
+    .bind(RUNNINGHUB_QUEUE_WAIT_CODE, excludeJobId ?? null, excludeJobId ?? null)
+    .first<{ id: string }>();
+  if (!row?.id) return null;
+  await reenqueueImageJob(env, row.id);
+  return row.id;
 }
 
 export async function processBaseArtJob(env: Env, jobId: string): Promise<void> {

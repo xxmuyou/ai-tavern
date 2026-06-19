@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBaseArtJob, loadBaseArtJob, processBaseArtJob, type ImageGenJobRow } from "./base-art";
+import {
+  completeImageJobWithImage,
+  createBaseArtJob,
+  loadBaseArtJob,
+  processBaseArtJob,
+  type ImageGenJobRow,
+} from "./base-art";
 import { mockImageGenProvider } from "./mock-provider";
 
 type Row = Record<string, unknown>;
@@ -31,6 +37,22 @@ function createEnv(extra: Record<string, unknown> = {}): {
             r.provider_task_id != null,
         ).length,
       };
+    }
+
+    if (sql.includes("provider = 'runninghub'") && sql.includes("error_code = ?")) {
+      const [errorCode, excludeJobId] = values as [string, string | null, string | null];
+      return [...jobs.values()]
+        .filter(
+          (r) =>
+            r.provider === "runninghub" &&
+            r.error_code === errorCode &&
+            (r.status === "pending" || r.status === "processing") &&
+            r.provider_task_id == null &&
+            r.output_key == null &&
+            r.completed_at == null &&
+            (excludeJobId == null || r.id !== excludeJobId),
+        )
+        .sort((a, b) => Number(a.created_at ?? 0) - Number(b.created_at ?? 0))[0] ?? null;
     }
 
     if (sql.includes("FROM image_workflow_model_loras wml")) {
@@ -217,6 +239,29 @@ describe("base-art job pipeline", () => {
     ]);
   });
 
+  it("sends image jobs to IMAGE_QUEUE when the binding exists", async () => {
+    const imageQueue: unknown[] = [];
+    const { env, queue } = createEnv({
+      IMAGE_QUEUE: {
+        send: async (msg: unknown, options?: unknown) => {
+          imageQueue.push(options ? { msg, options } : msg);
+        },
+      },
+    });
+
+    const jobId = await createBaseArtJob(env, {
+      prompt: "a calm girl",
+      source: "text",
+      workflowKey: "portrait_create",
+      userId: "usr_1",
+    });
+
+    expect(queue).toEqual([]);
+    expect(imageQueue).toEqual([
+      expect.objectContaining({ job_id: jobId, type: "image.generate" }),
+    ]);
+  });
+
   it("createBaseArtJob stores the selected checkpoint and generation params", async () => {
     const { env, jobs } = createEnv();
 
@@ -399,6 +444,65 @@ describe("base-art job pipeline", () => {
       msg: { job_id: jobId, type: "image.generate" },
       options: { delaySeconds: 10 },
     });
+  });
+
+  it("wakes the oldest queued RunningHub job when a task completes", async () => {
+    const imageQueue: unknown[] = [];
+    const { env, jobs } = createEnv({
+      IMAGE_QUEUE: {
+        send: async (msg: unknown, options?: unknown) => {
+          imageQueue.push(options ? { msg, options } : msg);
+        },
+      },
+    });
+    const now = Date.now();
+    jobs.set("finished", {
+      billing_ref: null,
+      completed_at: null,
+      created_at: now - 5_000,
+      error_code: null,
+      error_message: null,
+      id: "finished",
+      output_key: null,
+      output_prefix: "companion-base-art",
+      provider: "runninghub",
+      provider_task_id: "rh-finished",
+      status: "processing",
+      task: "companion_base_art",
+      updated_at: now - 5_000,
+      user_id: "usr_1",
+    });
+    jobs.set("newer-waiting", {
+      completed_at: null,
+      created_at: now - 1_000,
+      error_code: "provider_queue_wait",
+      id: "newer-waiting",
+      output_key: null,
+      provider: "runninghub",
+      provider_task_id: null,
+      status: "processing",
+    });
+    jobs.set("older-waiting", {
+      completed_at: null,
+      created_at: now - 2_000,
+      error_code: "provider_queue_wait",
+      id: "older-waiting",
+      output_key: null,
+      provider: "runninghub",
+      provider_task_id: null,
+      status: "processing",
+    });
+
+    await completeImageJobWithImage(env, jobs.get("finished") as ImageGenJobRow, {
+      bytes: new Uint8Array([1, 2, 3]),
+      contentType: "image/png",
+      model: "m",
+      provider: "runninghub",
+    });
+
+    expect(imageQueue).toEqual([
+      expect.objectContaining({ job_id: "older-waiting", type: "image.generate" }),
+    ]);
   });
 
   it("requeues instead of failing when RunningHub reports TASK_QUEUE_MAXED", async () => {

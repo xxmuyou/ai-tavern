@@ -10,6 +10,7 @@ import {
   loadBaseArtJob,
   maybeDelayRunningHubCapacityError,
   maybeDelayRunningHubImageJob,
+  sendImageJob,
   updateImageJob,
   type ImageGenJobRow,
   type ImageGenJobStatus,
@@ -410,7 +411,7 @@ async function insertImageJob(
 }
 
 async function enqueue(env: Env, jobId: string, now: number): Promise<void> {
-  await env.JOB_QUEUE.send({
+  await sendImageJob(env, {
     created_at: new Date(now).toISOString(),
     job_id: jobId,
     type: "image.generate",

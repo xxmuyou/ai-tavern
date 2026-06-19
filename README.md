@@ -1,6 +1,13 @@
 # xtbit-apps
 
-> **AI Companion** — 现代都市互动陪伴 RPG。Cloudflare 全栈 + Expo 三端（Web / iOS / Android）。
+> **CharaPal / AI Companion** — 现代都市互动陪伴 RPG。Cloudflare 全栈 + Expo 三端（Web / iOS / Android）。
+
+## 当前状态
+
+- **Web 端已上线生产首版**：当前本地 `main` 已标记为 `v1.0.0`，作为第一版生产发布基线。
+- **移动端仍在后续迭代中**：iOS / Android 代码与 Web 共用 Expo app，但当前生产上线重点是 Web。
+- **生产资料已补齐**：Web 端已包含 Terms、Privacy、Refund、Safety、Contact 等外部审核所需页面与站内浮窗入口。
+- **日常开发仍以 local/dev 环境为准**：本地开发走 local API + local D1，dev 环境用于集成验收，prod 仅用于正式发布。
 
 ## 文档入口
 
@@ -55,8 +62,11 @@ pnpm test
 ```bash
 pnpm deploy:api:dev    # API 到 dev
 pnpm deploy:web:dev    # Web 到 dev
+pnpm deploy:api:prod   # API 到 prod
+pnpm deploy:web:prod   # Web 到 prod
+pnpm deploy:prod       # API + Web 到 prod
 ```
 
 ## 状态
 
-🚧 项目在 2026-05 进入重新规划阶段，正在按 [`docs/specs/`](./docs/specs/) 中的 spec 推进 v1 实现。
+✅ Web 端生产首版已上线；后续功能与体验优化继续按 [`docs/specs/`](./docs/specs/) 中的 spec 推进。
