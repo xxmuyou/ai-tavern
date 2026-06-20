@@ -36,6 +36,16 @@
 | `billing_checkout_started` | Subscription, credit, or portal checkout intent | `checkout_type`, `credit_package_id`, `surface` |
 | `billing_checkout_returned` | Billing success return | `status` |
 
+## Advertising Landing Page
+
+`/landing` is the only production advertising landing route in v1. The page uses one main creative/copy version and does not expose A/B variants through public URL parameters.
+
+- `/landing` renders the main landing page.
+- Query params such as `?variant=control`, `?variant=city`, or `?variant=creator` are not product behavior in v1 and must not change copy, layout, images, CTA behavior, or analytics fields.
+- CTA navigation may preserve `utm_*` parameters for attribution, but must not add or forward `variant`.
+- `landing_cta_clicked` records only `cta_id` and `destination`; page views use the normal `web_page_viewed` fields with `path_template = /landing`.
+- Future A/B testing should reintroduce variants deliberately with a new implementation note, explicit analytics fields, QA coverage for each variant, and a rollout plan. Do not infer A/B support from older landing drafts.
+
 ## Privacy Rules
 
 Do not add event fields that contain:
