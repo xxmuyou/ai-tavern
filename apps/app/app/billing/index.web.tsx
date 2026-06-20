@@ -36,6 +36,7 @@ import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useBilling } from '@/hooks/use-billing';
 import { useCredits } from '@/hooks/use-credits';
 import { useErrorBanner } from '@/hooks/use-error-banner';
+import { trackWebEvent, trackWebPageView } from '@/utils/analytics';
 import { formatDateTime } from '@/utils/format';
 import { openExternalUrl } from '@/utils/linking';
 
@@ -211,6 +212,10 @@ export default function WebBillingScreen() {
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const isSuccess = params.status === 'success';
 
+  useEffect(() => {
+    trackWebPageView('Billing', '/billing');
+  }, []);
+
   const loadLedger = useCallback(async () => {
     try {
       const payload = await getCreditLedger({ limit: 20 });
@@ -226,6 +231,9 @@ export default function WebBillingScreen() {
 
   useEffect(() => {
     if (!isSuccess) return;
+    trackWebEvent('billing_checkout_returned', {
+      status: 'success',
+    });
     void refetch();
     void credits.refetch();
     void loadLedger();
@@ -235,6 +243,11 @@ export default function WebBillingScreen() {
 
   async function handleCreditsCheckout(pkg: CreditPackageId) {
     setCheckoutPackage(pkg);
+    trackWebEvent('billing_checkout_started', {
+      checkout_type: 'credits',
+      credit_package_id: pkg,
+      surface: 'billing',
+    });
     try {
       const payload = await startCreditsCheckout(pkg);
       openExternalUrl(payload.checkout_url);
@@ -247,6 +260,10 @@ export default function WebBillingScreen() {
 
   async function handleCheckout() {
     setIsCheckingOut(true);
+    trackWebEvent('billing_checkout_started', {
+      checkout_type: 'subscription',
+      surface: 'billing',
+    });
     try {
       const payload = await startCheckout();
       openExternalUrl(payload.checkout_url);
@@ -258,6 +275,10 @@ export default function WebBillingScreen() {
 
   async function handlePortal() {
     setIsOpeningPortal(true);
+    trackWebEvent('billing_checkout_started', {
+      checkout_type: 'portal',
+      surface: 'billing',
+    });
     try {
       const payload = await openBillingPortal();
       openExternalUrl(payload.portal_url);

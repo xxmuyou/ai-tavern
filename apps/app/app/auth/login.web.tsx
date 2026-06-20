@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { isApiRequestError } from '@/api/companion-client';
@@ -11,6 +11,7 @@ import { BRAND_NAME } from '@/constants/brand';
 import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
+import { trackWebEvent, trackWebPageView } from '@/utils/analytics';
 
 function signInErrorMessage(error: unknown): string {
   if (isApiRequestError(error) && error.code === 'api_unreachable') {
@@ -30,6 +31,10 @@ export default function WebLoginScreen() {
 
   const target = ((params.redirect && params.redirect.startsWith('/')) ? params.redirect : DISCOVER_ROUTE) as Href;
 
+  useEffect(() => {
+    trackWebPageView('Login', '/auth/login');
+  }, []);
+
   if (isLoading) {
     return <LoadingScreen label="Checking your session..." />;
   }
@@ -47,9 +52,17 @@ export default function WebLoginScreen() {
 
     setIsSendingLink(true);
     setNotice(null);
+    trackWebEvent('auth_started', {
+      method: 'email',
+      redirect_target: String(target),
+    });
     try {
       const response = await sendMagicLink(trimmedEmail);
       if (response.token) {
+        trackWebEvent('auth_completed', {
+          method: 'email',
+          result: 'success',
+        });
         router.replace(target);
         return;
       }
@@ -84,7 +97,13 @@ export default function WebLoginScreen() {
           <WebButton
             iconLeft={<Ionicons color="#bae6fd" name="logo-google" size={18} />}
             label="Continue with Google"
-            onPress={signInGoogle}
+            onPress={() => {
+              trackWebEvent('auth_started', {
+                method: 'google',
+                redirect_target: String(target),
+              });
+              signInGoogle();
+            }}
             size="lg"
             variant="google"
           />

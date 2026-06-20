@@ -1156,7 +1156,42 @@ export type AdminAnalyticsRevenueStatus = {
   message: string | null;
 };
 
+export type AdminAnalyticsBehaviorFunnel = {
+  authenticated_users: number;
+  chat_starters: number;
+  checkout_starters: number;
+  companion_clickers: number;
+  message_senders: number;
+  visitors: number;
+};
+
+export type AdminAnalyticsBehaviorEventCounts = {
+  billing_checkout_starts: number;
+  chat_attempts: number;
+  chat_failures: number;
+  chat_successes: number;
+  companion_card_clicks: number;
+  favorites: number;
+  page_views: number;
+};
+
+export type AdminAnalyticsBehaviorTopCompanion = {
+  chat_starts: number;
+  clicks: number;
+  companion_id: string;
+  favorites: number;
+  gender: string | null;
+  source: string | null;
+};
+
+export type AdminAnalyticsBehavior = {
+  event_counts: AdminAnalyticsBehaviorEventCounts;
+  funnel: AdminAnalyticsBehaviorFunnel;
+  top_companions: AdminAnalyticsBehaviorTopCompanion[];
+};
+
 export type AdminAnalyticsOverviewResponse = {
+  behavior: AdminAnalyticsBehavior;
   from: string;
   recent_signups: AdminAnalyticsUser[];
   revenue_by_day: AdminAnalyticsRevenuePoint[];

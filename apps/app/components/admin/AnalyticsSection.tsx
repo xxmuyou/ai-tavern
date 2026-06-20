@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 
 import type {
+  AdminAnalyticsBehaviorTopCompanion,
   AdminAnalyticsRevenuePoint,
   AdminAnalyticsSignupPoint,
   AdminAnalyticsUser,
@@ -189,6 +190,36 @@ export function AnalyticsSection() {
         />
       </View>
 
+      <View className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <SummaryPanel
+          items={[
+            { eyebrow: 'Visitors', value: formatInteger(overview.behavior.funnel.visitors) },
+            { eyebrow: 'Authenticated', value: formatInteger(overview.behavior.funnel.authenticated_users) },
+            { eyebrow: 'Companion clickers', value: formatInteger(overview.behavior.funnel.companion_clickers) },
+            { eyebrow: 'Chat starters', value: formatInteger(overview.behavior.funnel.chat_starters) },
+            { eyebrow: 'Message senders', value: formatInteger(overview.behavior.funnel.message_senders) },
+            { eyebrow: 'Checkout starters', value: formatInteger(overview.behavior.funnel.checkout_starters) },
+          ]}
+          subtitle="Anonymous-to-user funnel from Web tracking events."
+          title="Behavior funnel"
+        />
+
+        <SummaryPanel
+          items={[
+            { eyebrow: 'Page views', value: formatInteger(overview.behavior.event_counts.page_views) },
+            { eyebrow: 'Card clicks', value: formatInteger(overview.behavior.event_counts.companion_card_clicks) },
+            { eyebrow: 'Favorites', value: formatInteger(overview.behavior.event_counts.favorites) },
+            { eyebrow: 'Chat attempts', value: formatInteger(overview.behavior.event_counts.chat_attempts) },
+            { eyebrow: 'Chat successes', value: formatInteger(overview.behavior.event_counts.chat_successes) },
+            { eyebrow: 'Checkouts', value: formatInteger(overview.behavior.event_counts.billing_checkout_starts) },
+          ]}
+          subtitle={`${formatInteger(overview.behavior.event_counts.chat_failures)} chat failures in this window.`}
+          title="Key events"
+        />
+      </View>
+
+      <TopCompanionsPanel companions={overview.behavior.top_companions} />
+
       <WebDialog
         description="Browse the complete signup list without leaving the dashboard."
         footer={
@@ -228,6 +259,48 @@ export function AnalyticsSection() {
   );
 }
 
+function TopCompanionsPanel({ companions }: { companions: AdminAnalyticsBehaviorTopCompanion[] }) {
+  return (
+    <AdminPanel>
+      <AdminPanelHeader
+        subtitle="Ranked by chat starts first, then clicks and favorites."
+        title="Top companions"
+      />
+      <View className="gap-2">
+        {companions.length === 0 ? (
+          <Text className="text-sm text-app-muted">No companion behavior events yet.</Text>
+        ) : (
+          companions.map((companion) => (
+            <WebCard key={companion.companion_id} padding="none" variant="sunken">
+              <WebFieldRow
+                className="px-4 py-3"
+                description={[
+                  companion.source ? humanizeStatus(companion.source) : null,
+                  companion.gender ? humanizeStatus(companion.gender) : null,
+                ].filter(Boolean).join(' · ') || 'Unknown companion attributes'}
+                label={companion.companion_id}
+                value={
+                  <View className="flex-row flex-wrap justify-end gap-2">
+                    <WebTag size="sm" variant="brand">
+                      {formatInteger(companion.chat_starts)} chats
+                    </WebTag>
+                    <WebTag size="sm" variant="neutral">
+                      {formatInteger(companion.clicks)} clicks
+                    </WebTag>
+                    <WebTag size="sm" variant="rose">
+                      {formatInteger(companion.favorites)} favs
+                    </WebTag>
+                  </View>
+                }
+              />
+            </WebCard>
+          ))
+        )}
+      </View>
+    </AdminPanel>
+  );
+}
+
 function SummaryPanel({
   children,
   items,
@@ -235,7 +308,7 @@ function SummaryPanel({
   title,
 }: {
   children?: ReactNode;
-  items: Array<{ eyebrow: string; value: string }>;
+  items: { eyebrow: string; value: string }[];
   subtitle: string;
   title: string;
 }) {

@@ -16,6 +16,7 @@ import { PALETTE } from '@/constants/palette';
 import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useCompanions, usePublicCompanions } from '@/hooks/use-companions';
 import { useSession } from '@/hooks/use-session';
+import { trackWebEvent, trackWebPageView } from '@/utils/analytics';
 
 type GenderFilter = 'female' | 'male';
 type DiscoverBrowseDialog = 'community' | 'official' | 'trending';
@@ -46,6 +47,10 @@ export function WebPublicCompanionHome() {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => clearTimeout(handle);
   }, [query]);
+
+  useEffect(() => {
+    trackWebPageView('Discover', '/');
+  }, []);
 
   useEffect(() => {
     setBrowseDialog(null);
@@ -145,6 +150,17 @@ export function WebPublicCompanionHome() {
   const trendingRemaining = Math.max(trendingItemsAll.length - trending.length, 0);
   const communityRemaining = Math.max(community.length - communityPreview.length, 0);
 
+  useEffect(() => {
+    if (!debouncedQuery) return;
+    trackWebEvent('discover_search_performed', {
+      gender,
+      has_query: true,
+      query_length: debouncedQuery.length,
+      result_count: filteredItems.length,
+      selected_tag: selectedTag,
+    });
+  }, [debouncedQuery, filteredItems.length, gender, selectedTag]);
+
   const activeDialog = useMemo(() => {
     if (!browseDialog) return null;
     if (browseDialog === 'official') {
@@ -177,19 +193,48 @@ export function WebPublicCompanionHome() {
       router.push(target);
       return;
     }
+    trackWebEvent('login_redirect_started', {
+      reason: 'companion_card_click',
+      redirect_target: String(target),
+      source_route: String(DISCOVER_ROUTE),
+    });
     router.push(`/auth/login?redirect=${encodeURIComponent(String(target))}` as Href);
   }
 
-  async function toggleFavorite(id: string, next: boolean) {
+  async function toggleFavorite(companion: CompanionListItem, next: boolean) {
     if (!session) {
+      trackWebEvent('login_redirect_started', {
+        reason: 'favorite',
+        redirect_target: String(DISCOVER_ROUTE),
+        source_route: String(DISCOVER_ROUTE),
+      });
       router.push(`/auth/login?redirect=${encodeURIComponent(String(DISCOVER_ROUTE))}` as Href);
       return;
     }
     if (favoriteBusyId) return;
-    setFavoriteBusyId(id);
+    setFavoriteBusyId(companion.id);
     try {
-      await favoriteCompanion(id, next);
+      await favoriteCompanion(companion.id, next);
       await favorites.refetch();
+      trackWebEvent('favorite_toggled', {
+        companion_id: companion.id,
+        gender: companion.gender,
+        next_state: next,
+        result: 'success',
+        source: companion.source,
+        surface: 'discover',
+      });
+    } catch (error) {
+      trackWebEvent('favorite_toggled', {
+        companion_id: companion.id,
+        error_code: isApiRequestError(error) ? error.code ?? 'api_error' : 'unknown',
+        gender: companion.gender,
+        next_state: next,
+        result: 'failed',
+        source: companion.source,
+        surface: 'discover',
+      });
+      throw error;
     } finally {
       setFavoriteBusyId(null);
     }
@@ -197,14 +242,25 @@ export function WebPublicCompanionHome() {
 
   const renderCard = (
     companion: CompanionListItem,
-    options: { rank?: number; size?: 'md' | 'lg' } = {},
+    options: { cardPosition?: number; rank?: number; section?: string; size?: 'md' | 'lg' } = {},
   ) => (
     <DiscoverCompanionCard
       key={companion.id}
       companion={companion}
       isFavorite={favoriteIds.has(companion.id)}
-      onPress={() => openCompanion(companion)}
-      onToggleFavorite={() => void toggleFavorite(companion.id, !favoriteIds.has(companion.id))}
+      onPress={() => {
+        trackWebEvent('companion_card_clicked', {
+          card_position: options.cardPosition,
+          companion_id: companion.id,
+          gender: companion.gender,
+          is_authenticated: Boolean(session),
+          rank: options.rank,
+          section: options.section,
+          source: companion.source,
+        });
+        openCompanion(companion);
+      }}
+      onToggleFavorite={() => void toggleFavorite(companion, !favoriteIds.has(companion.id))}
       rank={options.rank}
       size={options.size}
     />
@@ -247,7 +303,19 @@ export function WebPublicCompanionHome() {
                   onChangeText={setQuery}
                 />
                 {query ? (
-                  <Pressable accessibilityRole="button" onPress={() => setQuery('')}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setQuery('');
+                      trackWebEvent('discover_filter_changed', {
+                        filter_type: 'clear_query',
+                        gender,
+                        has_query: false,
+                        result_count: homepagePopularItems.length,
+                        tag: selectedTag,
+                      });
+                    }}
+                  >
                     <Ionicons color={PALETTE.muted} name="close-circle" size={16} />
                   </Pressable>
                 ) : null}
@@ -255,7 +323,16 @@ export function WebPublicCompanionHome() {
               <SegmentedControl
                 options={GENDER_OPTIONS}
                 value={gender}
-                onChange={(value) => setGender(value as GenderFilter)}
+                onChange={(value) => {
+                  setGender(value as GenderFilter);
+                  trackWebEvent('discover_filter_changed', {
+                    filter_type: 'gender',
+                    gender: value,
+                    has_query: Boolean(debouncedQuery),
+                    result_count: filteredItems.length || homepagePopularItems.length,
+                    tag: selectedTag,
+                  });
+                }}
               />
             </View>
             {topTags.length > 0 ? (
@@ -267,7 +344,17 @@ export function WebPublicCompanionHome() {
                       key={tag}
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
-                      onPress={() => setSelectedTag(active ? null : tag)}
+                      onPress={() => {
+                        const nextTag = active ? null : tag;
+                        setSelectedTag(nextTag);
+                        trackWebEvent('discover_filter_changed', {
+                          filter_type: nextTag ? 'tag' : 'clear_tag',
+                          gender,
+                          has_query: Boolean(debouncedQuery),
+                          result_count: filteredItems.length || homepagePopularItems.length,
+                          tag: nextTag,
+                        });
+                      }}
                       className={`rounded-full border px-3 py-1.5 transition-colors ${
                         active
                           ? 'border-app-rose/70 bg-app-canvas/70'
@@ -304,6 +391,13 @@ export function WebPublicCompanionHome() {
                 onAction={() => {
                   setQuery('');
                   setSelectedTag(null);
+                  trackWebEvent('discover_filter_changed', {
+                    filter_type: 'clear',
+                    gender,
+                    has_query: false,
+                    result_count: homepagePopularItems.length,
+                    tag: null,
+                  });
                 }}
                 title="No one answers"
               />
@@ -316,10 +410,20 @@ export function WebPublicCompanionHome() {
                 onAction={() => {
                   setQuery('');
                   setSelectedTag(null);
+                  trackWebEvent('discover_filter_changed', {
+                    filter_type: 'clear',
+                    gender,
+                    has_query: false,
+                    result_count: homepagePopularItems.length,
+                    tag: null,
+                  });
                 }}
               >
                 <View className={DISCOVERY_GRID_CLASS}>
-                  {filteredItems.map((companion) => renderCard(companion))}
+                  {filteredItems.map((companion, index) => renderCard(companion, {
+                    cardPosition: index + 1,
+                    section: selectedTag ? 'tag_results' : 'search_results',
+                  }))}
                 </View>
               </DiscoverSection>
             )
@@ -340,7 +444,7 @@ export function WebPublicCompanionHome() {
                 >
                   <DiscoverRail>
                     {mostFavoritedItems.map((companion, index) => (
-                      renderCard(companion, { rank: index + 1, size: 'lg' })
+                      renderCard(companion, { cardPosition: index + 1, rank: index + 1, section: 'most_favorited', size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -350,13 +454,22 @@ export function WebPublicCompanionHome() {
                 <DiscoverSection
                   actionLabel={officialRemaining > 0 ? 'Show all' : undefined}
                   icon="ribbon"
-                  onAction={officialRemaining > 0 ? () => setBrowseDialog('official') : undefined}
+                  onAction={officialRemaining > 0 ? () => {
+                    trackWebEvent('discover_filter_changed', {
+                      filter_type: 'show_all',
+                      gender,
+                      has_query: false,
+                      result_count: officialFeaturedItemsAll.length,
+                      tag: 'official',
+                    });
+                    setBrowseDialog('official');
+                  } : undefined}
                   subtitle="Curated by the house"
                   title="Official Picks"
                 >
                   <DiscoverRail>
                     {officialFeaturedItems.map((companion, index) => (
-                      renderCard(companion, { rank: index + 1, size: 'lg' })
+                      renderCard(companion, { cardPosition: index + 1, rank: index + 1, section: 'official_picks', size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -367,13 +480,22 @@ export function WebPublicCompanionHome() {
                   actionLabel={trendingRemaining > 0 ? 'Show all' : undefined}
                   icon="flame"
                   iconColor={PALETTE.ember}
-                  onAction={trendingRemaining > 0 ? () => setBrowseDialog('trending') : undefined}
+                  onAction={trendingRemaining > 0 ? () => {
+                    trackWebEvent('discover_filter_changed', {
+                      filter_type: 'show_all',
+                      gender,
+                      has_query: false,
+                      result_count: trendingItemsAll.length,
+                      tag: 'trending',
+                    });
+                    setBrowseDialog('trending');
+                  } : undefined}
                   subtitle="Rising picks"
                   title="Trending"
                 >
                   <DiscoverRail>
                     {trending.map((companion, index) => (
-                      renderCard(companion, { rank: index + 1, size: 'lg' })
+                      renderCard(companion, { cardPosition: index + 1, rank: index + 1, section: 'trending', size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -382,8 +504,8 @@ export function WebPublicCompanionHome() {
               {newArrivals.length > 0 ? (
                 <DiscoverSection icon="sparkles" iconColor={PALETTE.brand} subtitle="Fresh faces" title="New arrivals">
                   <DiscoverRail>
-                    {newArrivals.map((companion) => (
-                      renderCard(companion, { size: 'lg' })
+                    {newArrivals.map((companion, index) => (
+                      renderCard(companion, { cardPosition: index + 1, section: 'new_arrivals', size: 'lg' })
                     ))}
                   </DiscoverRail>
                 </DiscoverSection>
@@ -397,12 +519,24 @@ export function WebPublicCompanionHome() {
                   title="Community creations"
                 >
                   <View className={DISCOVERY_GRID_CLASS}>
-                    {communityPreview.map((companion) => renderCard(companion))}
+                    {communityPreview.map((companion, index) => renderCard(companion, {
+                      cardPosition: index + 1,
+                      section: 'community',
+                    }))}
                   </View>
                   {communityRemaining > 0 ? (
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => setBrowseDialog('community')}
+                      onPress={() => {
+                        trackWebEvent('discover_filter_changed', {
+                          filter_type: 'show_all',
+                          gender,
+                          has_query: false,
+                          result_count: community.length,
+                          tag: 'community',
+                        });
+                        setBrowseDialog('community');
+                      }}
                       className="mt-2 min-h-11 items-center justify-center self-center rounded-xl border border-white/15 px-8 hover:border-app-rose/50 hover:bg-app-rose-soft/40"
                     >
                       <Text className="text-body-sm font-semibold text-app-ink-soft">Show all</Text>

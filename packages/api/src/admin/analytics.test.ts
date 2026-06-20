@@ -26,12 +26,22 @@ type SubscriptionFixture = {
   updated_at: number;
 };
 
+type AnalyticsEventFixture = {
+  anonymous_id: string;
+  event_name: string;
+  properties: Record<string, unknown>;
+  received_at: number;
+  user_id: string | null;
+};
+
 type TestEnv = AuthEnv & {
+  analyticsEvents: AnalyticsEventFixture[];
   subscriptions: SubscriptionFixture[];
   usersStore: UsersStore;
 };
 
 function createEnv(options: {
+  analyticsEvents?: AnalyticsEventFixture[];
   users?: UserFixture[];
   subscriptions?: SubscriptionFixture[];
   stripeSecretKey?: string;
@@ -41,6 +51,7 @@ function createEnv(options: {
   const sessionsStore = createSessionsStore();
   const identitiesStore = createIdentitiesStore();
   const kvStore = createKvStore();
+  const analyticsEvents = [...(options.analyticsEvents ?? [])];
   const subscriptions = [...(options.subscriptions ?? [])];
 
   usersStore.seed({
@@ -69,6 +80,7 @@ function createEnv(options: {
     prepare(sql: string) {
       return buildStatement(sql, {
         identitiesStore,
+        analyticsEvents,
         proMonthlyPriceId: options.proMonthlyPriceId ?? "price_pro_monthly",
         sessionsStore,
         subscriptions,
@@ -84,6 +96,7 @@ function createEnv(options: {
     CONFIG: kvStore.asKV(),
     DB: db,
     STRIPE_SECRET_KEY: options.stripeSecretKey ?? "sk_test_123",
+    analyticsEvents,
     subscriptions,
     usersStore,
   } as unknown as TestEnv;
@@ -92,6 +105,7 @@ function createEnv(options: {
 function buildStatement(
   sql: string,
   stores: {
+    analyticsEvents: AnalyticsEventFixture[];
     identitiesStore: ReturnType<typeof createIdentitiesStore>;
     proMonthlyPriceId: string;
     sessionsStore: ReturnType<typeof createSessionsStore>;
@@ -101,6 +115,34 @@ function buildStatement(
 ) {
   const exec = (values: unknown[]) => ({
     async first<T>(): Promise<T | null> {
+      if (sql.includes("COUNT(DISTINCT anonymous_id) AS visitors")) {
+        const [fromMs, toMs] = values as [number, number];
+        const events = eventsInRange(stores.analyticsEvents, fromMs, toMs);
+        return {
+          visitors: uniqueCount(events.map((event) => event.anonymous_id)),
+          authenticated_users: uniqueCount(events.map((event) => event.user_id).filter(Boolean)),
+          companion_clickers: uniqueCount(events
+            .filter((event) => event.event_name === "companion_card_clicked")
+            .map((event) => event.anonymous_id)),
+          chat_starters: uniqueCount(events
+            .filter((event) => event.event_name === "companion_detail_action_clicked" && event.properties.action === "start_chat")
+            .map((event) => event.anonymous_id)),
+          message_senders: uniqueCount(events
+            .filter((event) => event.event_name === "chat_message_send_completed")
+            .map((event) => event.anonymous_id)),
+          checkout_starters: uniqueCount(events
+            .filter((event) => event.event_name === "billing_checkout_started")
+            .map((event) => event.anonymous_id)),
+        } as T;
+      }
+      if (sql.includes("FROM analytics_events") && sql.includes("$.result") && sql.includes("failed")) {
+        const [fromMs, toMs] = values as [number, number];
+        return {
+          count: eventsInRange(stores.analyticsEvents, fromMs, toMs)
+            .filter((event) => event.event_name === "chat_message_send_completed" && event.properties.result === "failed")
+            .length,
+        } as T;
+      }
       if (sql.includes("COUNT(*) AS total_users")) {
         return { total_users: stores.usersStore.list().length } as T;
       }
@@ -211,6 +253,52 @@ function buildStatement(
 
         return { results: rows as unknown as T[] };
       }
+      if (sql.includes("SELECT event_name, COUNT(*) AS count") && sql.includes("FROM analytics_events")) {
+        const [fromMs, toMs] = values as [number, number];
+        const grouped = new Map<string, number>();
+        for (const event of eventsInRange(stores.analyticsEvents, fromMs, toMs)) {
+          grouped.set(event.event_name, (grouped.get(event.event_name) ?? 0) + 1);
+        }
+        return {
+          results: [...grouped.entries()].map(([event_name, count]) => ({ event_name, count })) as T[],
+        };
+      }
+      if (sql.includes("FROM analytics_events") && sql.includes("GROUP BY companion_id")) {
+        const [fromMs, toMs] = values as [number, number];
+        const grouped = new Map<string, {
+          chat_starts: number;
+          clicks: number;
+          companion_id: string;
+          favorites: number;
+          gender: string | null;
+          source: string | null;
+        }>();
+        for (const event of eventsInRange(stores.analyticsEvents, fromMs, toMs)) {
+          const companionId = typeof event.properties.companion_id === "string" ? event.properties.companion_id : null;
+          if (!companionId) continue;
+          const current = grouped.get(companionId) ?? {
+            companion_id: companionId,
+            source: null,
+            gender: null,
+            clicks: 0,
+            favorites: 0,
+            chat_starts: 0,
+          };
+          if (typeof event.properties.source === "string") current.source = event.properties.source;
+          if (typeof event.properties.gender === "string") current.gender = event.properties.gender;
+          if (event.event_name === "companion_card_clicked") current.clicks += 1;
+          if (event.event_name === "favorite_toggled") current.favorites += 1;
+          if (event.event_name === "companion_detail_action_clicked" && event.properties.action === "start_chat") {
+            current.chat_starts += 1;
+          }
+          grouped.set(companionId, current);
+        }
+        return {
+          results: [...grouped.values()]
+            .sort((a, b) => b.chat_starts - a.chat_starts || b.clicks - a.clicks || b.favorites - a.favorites || a.companion_id.localeCompare(b.companion_id))
+            .slice(0, 10) as T[],
+        };
+      }
       const identityResult = stores.identitiesStore.handle(sql, values);
       if (identityResult?.kind === "all") {
         return { results: identityResult.result as unknown as T[] };
@@ -286,6 +374,14 @@ function latestSubscriptionMap(subscriptions: SubscriptionFixture[]): Map<string
     }
   }
   return map;
+}
+
+function eventsInRange(events: AnalyticsEventFixture[], fromMs: number, toMs: number): AnalyticsEventFixture[] {
+  return events.filter((event) => event.received_at >= fromMs && event.received_at < toMs);
+}
+
+function uniqueCount(values: Array<string | null | undefined>): number {
+  return new Set(values.filter((value): value is string => Boolean(value))).size;
 }
 
 function utcDate(timestampMs: number): string {
@@ -573,6 +669,111 @@ describe("GET /admin/analytics/overview", () => {
       },
     ]);
     expect(body.revenue_status).toEqual({ available: true, message: null });
+  });
+
+  it("returns behavior funnel, event counts, and top companions", async () => {
+    env = createEnv({
+      analyticsEvents: [
+        {
+          anonymous_id: "anon-1",
+          event_name: "web_page_viewed",
+          properties: {},
+          received_at: Date.UTC(2026, 5, 15, 9, 0, 0),
+          user_id: null,
+        },
+        {
+          anonymous_id: "anon-1",
+          event_name: "companion_card_clicked",
+          properties: { companion_id: "companion-a", source: "official", gender: "female" },
+          received_at: Date.UTC(2026, 5, 15, 9, 1, 0),
+          user_id: USER_ID,
+        },
+        {
+          anonymous_id: "anon-1",
+          event_name: "companion_detail_action_clicked",
+          properties: { action: "start_chat", companion_id: "companion-a", source: "official", gender: "female" },
+          received_at: Date.UTC(2026, 5, 15, 9, 2, 0),
+          user_id: USER_ID,
+        },
+        {
+          anonymous_id: "anon-1",
+          event_name: "chat_message_send_attempted",
+          properties: { companion_id: "companion-a" },
+          received_at: Date.UTC(2026, 5, 15, 9, 3, 0),
+          user_id: USER_ID,
+        },
+        {
+          anonymous_id: "anon-1",
+          event_name: "chat_message_send_completed",
+          properties: { companion_id: "companion-a", result: "success" },
+          received_at: Date.UTC(2026, 5, 15, 9, 4, 0),
+          user_id: USER_ID,
+        },
+        {
+          anonymous_id: "anon-2",
+          event_name: "favorite_toggled",
+          properties: { companion_id: "companion-b", source: "user", gender: "male" },
+          received_at: Date.UTC(2026, 5, 15, 10, 0, 0),
+          user_id: null,
+        },
+        {
+          anonymous_id: "anon-2",
+          event_name: "chat_message_send_completed",
+          properties: { companion_id: "companion-b", result: "failed" },
+          received_at: Date.UTC(2026, 5, 15, 10, 1, 0),
+          user_id: null,
+        },
+        {
+          anonymous_id: "anon-3",
+          event_name: "billing_checkout_started",
+          properties: { checkout_type: "credits" },
+          received_at: Date.UTC(2026, 5, 15, 11, 0, 0),
+          user_id: null,
+        },
+      ],
+    });
+
+    const res = await handleAdminAnalyticsRequest(
+      new Request("http://api/admin/analytics/overview?window=today", {
+        headers: await adminHeaders(env),
+      }),
+      env,
+      "/admin/analytics/overview",
+      { now: () => NOW },
+    );
+
+    expect(res?.status).toBe(200);
+    const body = (await res!.json()) as {
+      behavior: {
+        event_counts: Record<string, number>;
+        funnel: Record<string, number>;
+        top_companions: Array<{ companion_id: string; clicks: number; favorites: number; chat_starts: number }>;
+      };
+    };
+
+    expect(body.behavior.funnel).toEqual({
+      visitors: 3,
+      authenticated_users: 1,
+      companion_clickers: 1,
+      chat_starters: 1,
+      message_senders: 2,
+      checkout_starters: 1,
+    });
+    expect(body.behavior.event_counts).toMatchObject({
+      page_views: 1,
+      companion_card_clicks: 1,
+      favorites: 1,
+      chat_attempts: 1,
+      chat_successes: 1,
+      chat_failures: 1,
+      billing_checkout_starts: 1,
+    });
+    expect(body.behavior.top_companions[0]).toMatchObject({
+      companion_id: "companion-a",
+      clicks: 1,
+      favorites: 0,
+      chat_starts: 1,
+    });
   });
 
   it("uses correct boundaries for today, 7d, and 30d", async () => {

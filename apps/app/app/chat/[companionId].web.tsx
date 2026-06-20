@@ -83,6 +83,7 @@ import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
 import { VoiceSettingsPanel } from '@/components/VoiceSettingsPanel';
 import { inviteTextForTarget, sceneTransitionText } from '@/utils/chat-actions';
+import { messageLengthBucket, trackWebEvent, trackWebPageView } from '@/utils/analytics';
 import { detectChatLanguage, type ChatLanguage } from '@/utils/chat-language';
 import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionText, type SceneAction } from '@/utils/scene-actions';
 
@@ -149,6 +150,13 @@ const ARRIVAL_COPY: Record<ChatLanguage, {
     refused: (name) => `${name}没有答应这次邀约。`,
   },
 };
+
+function chatAnalyticsErrorCode(error: unknown): string {
+  if (error instanceof QuotaExceededError) return 'quota_exceeded';
+  if (error instanceof RateLimitedError) return 'rate_limited';
+  if (error instanceof ApiError) return error.code ?? `http_${error.status ?? 'error'}`;
+  return 'unknown';
+}
 
 export default function WebChatScreen() {
   const params = useLocalSearchParams<{ activityId?: string; chatMode?: string; companionId?: string; sceneId?: string; sceneArt?: string; storyId?: string }>();
@@ -258,6 +266,10 @@ export default function WebChatScreen() {
     getItems: () => items,
     listRef: threadScrollRef,
   });
+
+  useEffect(() => {
+    trackWebPageView('Chat', '/chat/[companionId]');
+  }, [companionId]);
   const {
     detachFromBottom,
     followBottom,
@@ -876,6 +888,13 @@ export default function WebChatScreen() {
   const handleSend = useCallback(async () => {
     const text = draft.trim();
     if (!text || stream.isStreaming || remainingSeconds > 0) return;
+    const lengthBucket = messageLengthBucket(text.length);
+    trackWebEvent('chat_message_send_attempted', {
+      chat_mode: activeChatMode,
+      companion_id: companionId,
+      message_length_bucket: lengthBucket,
+      scene_id: sceneId ?? null,
+    });
 
     const messageSceneId = sceneId ?? null;
     appendLocalUserMessage(text, messageSceneId);
@@ -916,12 +935,31 @@ export default function WebChatScreen() {
       }
       // Pull server truth so the HUD progress bar reflects this turn.
       void relationship.refresh();
+      trackWebEvent('chat_message_send_completed', {
+        chat_mode: activeChatMode,
+        companion_id: companionId,
+        message_length_bucket: lengthBucket,
+        quota_blocked: false,
+        rate_limited: false,
+        result: 'success',
+        scene_id: sceneId ?? null,
+      });
     } catch (error) {
       if (error instanceof ApiError && error.code === 'aborted') {
         // Caller-initiated cancel (left the chat); stay silent and just clean up.
         cleanupFailedStreamingCompanionMessage(streamingMessageId, streamedText);
         return;
       }
+      trackWebEvent('chat_message_send_completed', {
+        chat_mode: activeChatMode,
+        companion_id: companionId,
+        error_code: chatAnalyticsErrorCode(error),
+        message_length_bucket: lengthBucket,
+        quota_blocked: error instanceof QuotaExceededError,
+        rate_limited: error instanceof RateLimitedError,
+        result: 'failed',
+        scene_id: sceneId ?? null,
+      });
       if (error instanceof QuotaExceededError) {
         setQuotaModalVisible(true);
       } else if (error instanceof RateLimitedError) {
@@ -942,7 +980,7 @@ export default function WebChatScreen() {
       // already started a new message.
       setDraft((current) => (current.length > 0 ? current : text));
     }
-  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, storyId, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, companionId, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, storyId, stream]);
 
   const sendSceneAction = useCallback(async (action: SceneAction) => {
     if (stream.isStreaming || remainingSeconds > 0) return;

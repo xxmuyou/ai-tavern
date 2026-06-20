@@ -1,5 +1,6 @@
 import { API_VERSION, type HealthResponse } from "@xtbit/shared";
 
+import { cleanupOldAnalyticsEvents, handleAnalyticsRequest } from "./analytics/events";
 import { handleAdminRequest } from "./admin";
 import { handleAuthRequest, requireAdminUser } from "./auth";
 import { handleBillingRequest } from "./billing";
@@ -74,6 +75,11 @@ export default {
       const authResponse = await handleAuthRequest(request, env, pathname);
       if (authResponse) {
         return await withCors(request, env, authResponse);
+      }
+
+      const analyticsResponse = await handleAnalyticsRequest(request, env, pathname);
+      if (analyticsResponse) {
+        return await withCors(request, env, analyticsResponse);
       }
 
       const adminLlmResponse = await handleAdminLlmRequest(request, env, pathname);
@@ -272,6 +278,7 @@ export default {
   },
   async scheduled(_controller, env, ctx): Promise<void> {
     ctx.waitUntil(pollStaleRunningHubArtJobs(env));
+    ctx.waitUntil(cleanupOldAnalyticsEvents(env));
   },
 } satisfies ExportedHandler<Env>;
 

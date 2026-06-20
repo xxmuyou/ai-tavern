@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { Href } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { deleteCompanion, favoriteCompanion, mediaSource, setCompanionPublic } from '@/api/companion-client';
+import { deleteCompanion, favoriteCompanion, isApiRequestError, mediaSource, setCompanionPublic } from '@/api/companion-client';
 import { CompanionArtwork } from '@/components/CompanionArtwork';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebButton, WebCard, WebDialog, WebEmptyState, WebLoading, WebPanel, WebTabs, WebTag } from '@/components/web/ui';
@@ -21,6 +21,7 @@ import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useMe } from '@/hooks/use-me';
 import { formatDateTime } from '@/utils/format';
 import { relationshipGoalFromSummary } from '@/utils/relationship';
+import { trackWebEvent, trackWebPageView } from '@/utils/analytics';
 
 type Tab = { id: string; label: string };
 
@@ -45,6 +46,10 @@ export default function WebCompanionDetailScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFavoriteBusy, setIsFavoriteBusy] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+
+  useEffect(() => {
+    trackWebPageView('Companion Detail', '/companion/[id]');
+  }, [companionId]);
 
   if (isLoading) {
     return <WebLoading label="Loading companion..." />;
@@ -95,11 +100,38 @@ export default function WebCompanionDetailScreen() {
     try {
       await favoriteCompanion(companion.id, !isFavorite);
       await refetch();
+      trackWebEvent('favorite_toggled', {
+        companion_id: companion.id,
+        gender: companion.gender,
+        next_state: !isFavorite,
+        result: 'success',
+        source: companion.source,
+        surface: 'companion_detail',
+      });
     } catch (nextError) {
+      trackWebEvent('favorite_toggled', {
+        companion_id: companion.id,
+        error_code: isApiRequestError(nextError) ? nextError.code ?? 'api_error' : 'unknown',
+        gender: companion.gender,
+        next_state: !isFavorite,
+        result: 'failed',
+        source: companion.source,
+        surface: 'companion_detail',
+      });
       pushError(nextError instanceof Error ? nextError.message : 'Favorite state could not be updated.');
     } finally {
       setIsFavoriteBusy(false);
     }
+  }
+
+  function handleStartChat() {
+    trackWebEvent('companion_detail_action_clicked', {
+      action: 'start_chat',
+      companion_id: companion.id,
+      gender: companion.gender,
+      source: companion.source,
+    });
+    router.push(`/chat/${encodeURIComponent(companion.id)}` as Href);
   }
 
   async function handleDelete() {
@@ -138,7 +170,7 @@ export default function WebCompanionDetailScreen() {
           />
           <WebButton
             label="Start chat"
-            onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+            onPress={handleStartChat}
             variant="primary"
             size="lg"
             iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={18} />}
@@ -192,7 +224,7 @@ export default function WebCompanionDetailScreen() {
             <View className="gap-3 border-t border-white/8 pt-4">
               <WebButton
                 label="Start chat"
-                onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+                onPress={handleStartChat}
                 variant="primary"
                 iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
                 className="w-full"
@@ -274,11 +306,23 @@ export default function WebCompanionDetailScreen() {
                 <View className="flex-row flex-wrap gap-2">
                   <WebButton
                     label="Start chat"
-                    onPress={() => router.push(`/chat/${encodeURIComponent(companion.id)}` as Href)}
+                    onPress={handleStartChat}
                     variant="primary"
                     iconLeft={<Ionicons color="#9A2F4F" name="chatbubble-ellipses" size={16} />}
                   />
-                  <WebButton label="View story" onPress={() => setTab('story')} variant="outline" />
+                  <WebButton
+                    label="View story"
+                    onPress={() => {
+                      trackWebEvent('companion_detail_action_clicked', {
+                        action: 'view_story',
+                        companion_id: companion.id,
+                        gender: companion.gender,
+                        source: companion.source,
+                      });
+                      setTab('story');
+                    }}
+                    variant="outline"
+                  />
                 </View>
               </WebCard>
               <RelationshipGoalPanel goal={relationshipGoal} />
