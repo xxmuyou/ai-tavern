@@ -70,7 +70,7 @@ const EVENT_PROPERTY_ALLOWLIST: Record<AnalyticsEventName, readonly string[]> = 
   discover_filter_changed: ["filter_type", "gender", "tag", "has_query", "result_count"],
   discover_search_performed: ["query_length", "has_query", "gender", "selected_tag", "result_count"],
   favorite_toggled: ["companion_id", "source", "gender", "next_state", "surface", "result", "error_code"],
-  landing_cta_clicked: ["landing_variant", "cta_id", "destination"],
+  landing_cta_clicked: ["cta_id", "destination"],
   login_redirect_started: ["source_route", "redirect_target", "reason"],
   web_page_viewed: [
     "route_name",
@@ -79,7 +79,6 @@ const EVENT_PROPERTY_ALLOWLIST: Record<AnalyticsEventName, readonly string[]> = 
     "utm_medium",
     "utm_campaign",
     "referrer_domain",
-    "landing_variant",
   ],
 };
 

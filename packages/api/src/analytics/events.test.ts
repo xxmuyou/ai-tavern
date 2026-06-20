@@ -196,7 +196,7 @@ describe("handleAnalyticsRequest", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("accepts landing CTA events with variant metadata", async () => {
+  it("accepts landing CTA events", async () => {
     const { env, rows } = createEnv();
 
     const response = await handleAnalyticsRequest(
@@ -208,7 +208,6 @@ describe("handleAnalyticsRequest", () => {
           properties: {
             cta_id: "explore_companions",
             destination: "/",
-            landing_variant: "city",
           },
         },
       }),
@@ -221,35 +220,6 @@ describe("handleAnalyticsRequest", () => {
     expect(JSON.parse(rows[0]!.properties_json)).toEqual({
       cta_id: "explore_companions",
       destination: "/",
-      landing_variant: "city",
-    });
-  });
-
-  it("accepts landing variant metadata on page views", async () => {
-    const { env, rows } = createEnv();
-
-    const response = await handleAnalyticsRequest(
-      eventRequest({
-        event: {
-          anonymous_id: "anon-page",
-          event_name: "web_page_viewed",
-          occurred_at: NOW,
-          properties: {
-            landing_variant: "creator",
-            path_template: "/landing",
-            route_name: "Landing",
-          },
-        },
-      }),
-      env,
-      "/analytics/events",
-    );
-
-    expect(response?.status).toBe(202);
-    expect(JSON.parse(rows[0]!.properties_json)).toMatchObject({
-      landing_variant: "creator",
-      path_template: "/landing",
-      route_name: "Landing",
     });
   });
 

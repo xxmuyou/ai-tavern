@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { Image, Pressable, ScrollView, Text, View, type ImageSourcePropType } from 'react-native';
 
@@ -7,7 +7,7 @@ import { CharaPalLogo } from '@/components/web/CharaPalLogo';
 import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import { WebButton } from '@/components/web/ui';
 import { BRAND_NAME } from '@/constants/brand';
-import { LANDING_VARIANTS, landingVariantFromParam, type LandingVariant } from '@/constants/landing';
+import { LANDING_CONFIG } from '@/constants/landing';
 import { DISCOVER_ROUTE } from '@/constants/routes';
 import { PALETTE } from '@/constants/palette';
 import { trackWebEvent, trackWebPageView } from '@/utils/analytics';
@@ -42,24 +42,19 @@ const VALUE_PROPS = [
 ];
 
 export default function LandingPage() {
-  const params = useLocalSearchParams<{ variant?: string }>();
   const router = useRouter();
-  const variant = landingVariantFromParam(params.variant);
-  const config = LANDING_VARIANTS[variant];
+  const config = LANDING_CONFIG;
 
   useEffect(() => {
-    trackWebPageView('Landing', '/landing', {
-      landing_variant: variant,
-    });
-  }, [variant]);
+    trackWebPageView('Landing', '/landing');
+  }, []);
 
   function openCta(cta: typeof config.primaryCta) {
     trackWebEvent('landing_cta_clicked', {
       cta_id: cta.id,
       destination: String(cta.destination),
-      landing_variant: variant,
     });
-    router.push(withLandingAttribution(cta.destination, variant));
+    router.push(withLandingAttribution(cta.destination));
   }
 
   return (
@@ -203,14 +198,13 @@ function HeroProductPreview() {
   );
 }
 
-function withLandingAttribution(destination: Href, variant: LandingVariant): Href {
+function withLandingAttribution(destination: Href): Href {
   if (typeof window === 'undefined') return destination;
   const current = new URLSearchParams(window.location.search);
   const next = new URLSearchParams();
   for (const [key, value] of current.entries()) {
     if (key.startsWith('utm_')) next.set(key, value);
   }
-  next.set('variant', variant);
   const query = next.toString();
   return `${String(destination)}${query ? `?${query}` : ''}` as Href;
 }
