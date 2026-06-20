@@ -5,9 +5,9 @@ import { Pressable, Text, View } from 'react-native';
 
 import { isApiRequestError } from '@/api/companion-client';
 import { LoadingScreen } from '@/components/LoadingScreen';
+import { CharaPalLogo } from '@/components/web/CharaPalLogo';
 import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import { WebButton, WebInput } from '@/components/web/ui';
-import { BRAND_NAME } from '@/constants/brand';
 import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
@@ -81,11 +81,8 @@ export default function WebLoginScreen() {
       <View pointerEvents="none" className="absolute inset-x-0 top-0 h-[460px] bg-[radial-gradient(ellipse_at_top,rgba(201,72,107,0.32)_0%,rgba(93,24,54,0.20)_38%,transparent_72%)]" />
       <View className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06] shadow-[0_24px_80px_rgba(0,0,0,0.38)]">
         <View className="border-b border-white/10 px-7 py-6">
-          <Pressable accessibilityRole="link" onPress={() => router.push(DISCOVER_ROUTE)} className="mb-7 flex-row items-center gap-2.5">
-            <View className="h-8 w-8 items-center justify-center rounded-xl border border-rose-200/20 bg-white/8">
-              <Ionicons color="#FBE6EC" name="sparkles" size={15} />
-            </View>
-            <Text className="font-serif text-title-sm text-white">{BRAND_NAME}</Text>
+          <Pressable accessibilityRole="link" onPress={() => router.push(DISCOVER_ROUTE)} className="mb-7">
+            <CharaPalLogo markSize={32} />
           </Pressable>
           <Text className="font-serif text-display-sm text-white">Sign in</Text>
           <Text className="mt-2 text-body-sm leading-6 text-rose-50/64">

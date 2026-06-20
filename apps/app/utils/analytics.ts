@@ -6,6 +6,7 @@ export type AnalyticsEventName =
   | 'discover_search_performed'
   | 'companion_card_clicked'
   | 'favorite_toggled'
+  | 'landing_cta_clicked'
   | 'login_redirect_started'
   | 'auth_started'
   | 'auth_completed'
@@ -64,8 +65,13 @@ export function trackWebEvent(eventName: AnalyticsEventName, properties: Analyti
   }
 }
 
-export function trackWebPageView(routeName: string, pathTemplate: string): void {
+export function trackWebPageView(
+  routeName: string,
+  pathTemplate: string,
+  properties: AnalyticsProperties = {},
+): void {
   trackWebEvent('web_page_viewed', {
+    ...properties,
     path_template: pathTemplate,
     route_name: routeName,
   });

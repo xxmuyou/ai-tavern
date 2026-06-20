@@ -21,11 +21,12 @@
 
 | Event | Purpose | Allowed properties |
 | --- | --- | --- |
-| `web_page_viewed` | Web page exposure | `route_name`, `path_template`, `utm_source`, `utm_medium`, `utm_campaign`, `referrer_domain` |
+| `web_page_viewed` | Web page exposure | `route_name`, `path_template`, `utm_source`, `utm_medium`, `utm_campaign`, `referrer_domain`, `landing_variant` |
 | `discover_filter_changed` | Discovery filter/search clear/show-all actions | `filter_type`, `gender`, `tag`, `has_query`, `result_count` |
 | `discover_search_performed` | Debounced discovery search | `query_length`, `has_query`, `gender`, `selected_tag`, `result_count` |
 | `companion_card_clicked` | Discovery card click | `companion_id`, `source`, `gender`, `section`, `rank`, `card_position`, `is_authenticated` |
 | `favorite_toggled` | Favorite/unfavorite result | `companion_id`, `source`, `gender`, `next_state`, `surface`, `result`, `error_code` |
+| `landing_cta_clicked` | Advertising landing CTA click | `landing_variant`, `cta_id`, `destination` |
 | `login_redirect_started` | Auth redirect from a gated action | `source_route`, `redirect_target`, `reason` |
 | `auth_started` | Google/email auth button pressed | `method`, `redirect_target` |
 | `auth_completed` | Auth success/failure | `method`, `result` |

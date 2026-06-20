@@ -4,10 +4,10 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AuthGuard } from '@/components/AuthGuard';
-import { BRAND_NAME } from '@/constants/brand';
 import { BILLING_ROUTE, COMPANIONS_ROUTE, DISCOVER_ROUTE, MEMORIES_ROUTE, PERSONAS_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
 
+import { CharaPalLogo } from './CharaPalLogo';
 import { WebAuthControls } from './WebAuthControls';
 import {
   WebButton,
@@ -67,14 +67,9 @@ export function WebAppShell({
           <Pressable
             accessibilityRole="link"
             onPress={() => router.push(DISCOVER_ROUTE)}
-            className="min-w-[150px] flex-row items-center gap-2.5"
+            className="min-w-[150px]"
           >
-            <View className="h-8 w-8 items-center justify-center rounded-xl border border-rose-200/20 bg-white/8">
-              <Ionicons color="#FBE6EC" name="sparkles" size={15} />
-            </View>
-            <View>
-              <Text className="font-serif text-title-sm text-white">{BRAND_NAME}</Text>
-            </View>
+            <CharaPalLogo markSize={32} />
           </Pressable>
 
           <View className="min-w-0 flex-1 flex-row items-center justify-center gap-1 px-4">
