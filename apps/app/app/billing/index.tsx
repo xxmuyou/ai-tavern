@@ -9,7 +9,7 @@ import {
   startCheckout,
   startCreditsCheckout,
 } from '@/api/companion-client';
-import type { CreditLedgerEntry, CreditLedgerType, CreditPackageId } from '@/api/types';
+import type { CreditActivityEntry, CreditPackageId } from '@/api/types';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingScreen } from '@/components/LoadingScreen';
@@ -28,16 +28,9 @@ const PRO_FEATURES = [
   'Buy extra credits any time without changing your plan',
 ];
 
-const LEDGER_LABELS: Record<CreditLedgerType, string> = {
-  adjustment: 'Adjustment',
-  commit: 'Spent',
-  expire: 'Expired',
-  grant_monthly: 'Monthly grant',
-  purchase: 'Purchase',
-  refund: 'Refund',
-  release: 'Released',
-  reserve: 'Reserved',
-};
+function formatCreditAmount(amount: number) {
+  return `${amount > 0 ? '+' : ''}${amount}`;
+}
 
 export default function BillingScreen() {
   const router = useRouter();
@@ -45,7 +38,7 @@ export default function BillingScreen() {
   const { pushError } = useErrorBanner();
   const { data, error, isLoading, refetch } = useBilling();
   const credits = useCredits();
-  const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
+  const [activities, setActivities] = useState<CreditActivityEntry[]>([]);
   const [checkoutPackage, setCheckoutPackage] = useState<CreditPackageId | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
@@ -55,7 +48,7 @@ export default function BillingScreen() {
   const loadLedger = useCallback(async () => {
     try {
       const payload = await getCreditLedger({ limit: 20 });
-      setLedger(payload.entries);
+      setActivities(payload.activities);
     } catch {
       // Ledger is best-effort; the balance card still renders without it.
     }
@@ -160,7 +153,7 @@ export default function BillingScreen() {
               {credits.data ? (
                 <>
                   <BillingRow label="Available" value={credits.data.available_credits.toLocaleString()} />
-                  <BillingRow label="Reserved" value={credits.data.reserved_credits.toLocaleString()} />
+                  <BillingRow label="Pending credits" value={credits.data.reserved_credits.toLocaleString()} />
                   {credits.data.monthly_grant ? (
                     <BillingRow
                       label="This month's grant"
@@ -239,15 +232,15 @@ export default function BillingScreen() {
             </View>
           ) : null}
 
-          {ledger.length ? (
+          {activities.length ? (
             <View className="rounded-lg border border-app-line bg-app-card p-5">
               <Text className="text-lg font-semibold text-app-text">Recent activity</Text>
               <View className="mt-4 gap-3">
-                {ledger.map((entry) => (
+                {activities.map((entry) => (
                   <BillingRow
                     key={entry.id}
-                    label={`${LEDGER_LABELS[entry.type]} · ${formatDateTime(entry.created_at)}`}
-                    value={`${entry.amount > 0 ? '+' : ''}${entry.amount}`}
+                    label={`${entry.title} · ${formatDateTime(entry.created_at)}`}
+                    value={formatCreditAmount(entry.amount)}
                   />
                 ))}
               </View>

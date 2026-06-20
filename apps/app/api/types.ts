@@ -1048,7 +1048,28 @@ export type CreditLedgerEntry = {
   type: CreditLedgerType;
 };
 
+export type CreditActivityType =
+  | 'spent'
+  | 'released'
+  | 'pending'
+  | 'credit_purchase'
+  | 'monthly_credits'
+  | 'signup_credits'
+  | 'refund'
+  | 'adjustment'
+  | 'expired';
+
+export type CreditActivityEntry = {
+  amount: number;
+  created_at: number;
+  id: string;
+  task_type: string | null;
+  title: string;
+  type: CreditActivityType;
+};
+
 export type CreditLedgerResponse = {
+  activities: CreditActivityEntry[];
   entries: CreditLedgerEntry[];
 };
 

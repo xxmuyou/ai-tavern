@@ -10,7 +10,7 @@ import {
   startCheckout,
   startCreditsCheckout,
 } from '@/api/companion-client';
-import type { CreditLedgerEntry, CreditLedgerType, CreditPackageId } from '@/api/types';
+import type { CreditActivityEntry, CreditPackageId } from '@/api/types';
 import { WebAppShell } from '@/components/web/WebAppShell';
 import { WebLegalLinks } from '@/components/web/WebLegalLinks';
 import {
@@ -91,17 +91,6 @@ const USAGE_COSTS = [
   },
 ] as const;
 
-const LEDGER_LABELS: Record<CreditLedgerType, string> = {
-  adjustment: 'Adjustment',
-  commit: 'Spent',
-  expire: 'Expired',
-  grant_monthly: 'Monthly grant',
-  purchase: 'Purchase',
-  refund: 'Refund',
-  release: 'Released',
-  reserve: 'Reserved',
-};
-
 function formatPackageExamples(credits: number) {
   const imageCount = Math.floor(credits / CREDIT_TASK_COST.image);
   const chatCount = Math.floor(credits / CREDIT_TASK_COST.chat);
@@ -109,6 +98,10 @@ function formatPackageExamples(credits: number) {
     chat: `About ${chatCount.toLocaleString()} chats`,
     image: `About ${imageCount.toLocaleString()} images`,
   };
+}
+
+function formatCreditAmount(amount: number) {
+  return `${amount > 0 ? '+' : ''}${amount}`;
 }
 
 function formatSubscriptionStatus(status: string) {
@@ -206,7 +199,7 @@ export default function WebBillingScreen() {
   const { pushError } = useErrorBanner();
   const { data, error, isLoading, refetch } = useBilling();
   const credits = useCredits();
-  const [ledger, setLedger] = useState<CreditLedgerEntry[]>([]);
+  const [activities, setActivities] = useState<CreditActivityEntry[]>([]);
   const [checkoutPackage, setCheckoutPackage] = useState<CreditPackageId | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
@@ -219,7 +212,7 @@ export default function WebBillingScreen() {
   const loadLedger = useCallback(async () => {
     try {
       const payload = await getCreditLedger({ limit: 20 });
-      setLedger(payload.entries);
+      setActivities(payload.activities);
     } catch {
       // Ledger is best-effort; the balance panel still renders without it.
     }
@@ -293,10 +286,10 @@ export default function WebBillingScreen() {
   }
 
   const isPro = data?.subscription.tier === 'pro';
-  const ledgerEntries: WebTimelineEntry[] = ledger.map((entry) => ({
+  const ledgerEntries: WebTimelineEntry[] = activities.map((entry) => ({
     id: entry.id,
     meta: formatDateTime(entry.created_at),
-    title: `${LEDGER_LABELS[entry.type]} · ${entry.amount > 0 ? '+' : ''}${entry.amount}`,
+    title: `${entry.title} · ${formatCreditAmount(entry.amount)}`,
   }));
 
   return (
@@ -423,7 +416,7 @@ export default function WebBillingScreen() {
                   {credits.data ? (
                     <View>
                       <WebFieldRow label="Available" value={credits.data.available_credits.toLocaleString()} />
-                      <WebFieldRow label="Reserved" value={credits.data.reserved_credits.toLocaleString()} />
+                      <WebFieldRow label="Pending credits" value={credits.data.reserved_credits.toLocaleString()} />
                       {credits.data.monthly_grant ? (
                         <WebFieldRow
                           label="Monthly grant"

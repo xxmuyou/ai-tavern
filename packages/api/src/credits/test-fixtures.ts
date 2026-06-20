@@ -55,6 +55,21 @@ function execute(state: State, sql: string, values: unknown[], mode: Mode): unkn
     return state.ledger.find((row) => row.id === id && row.type === "reserve") ?? null;
   }
 
+  if (sql.includes("reference_type = 'reservation'") && sql.includes("reference_id IN")) {
+    const [userId, ...reservationIds] = values as [string, ...string[]];
+    const reservationIdSet = new Set(reservationIds);
+    return {
+      results: state.ledger.filter(
+        (row) =>
+          row.user_id === userId &&
+          row.reference_type === "reservation" &&
+          (row.type === "commit" || row.type === "release") &&
+          row.reference_id !== null &&
+          reservationIdSet.has(row.reference_id),
+      ),
+    };
+  }
+
   if (sql.includes("type IN ('commit', 'release')")) {
     const [referenceId] = values as [string];
     return (
@@ -79,6 +94,12 @@ function execute(state: State, sql: string, values: unknown[], mode: Mode): unkn
   if (sql.includes("credit_ledger_entries WHERE id = ?")) {
     const [id] = values as [string];
     return state.ledger.find((row) => row.id === id) ?? null;
+  }
+
+  if (sql.includes("WHERE user_id = ? AND id IN")) {
+    const [userId, ...ids] = values as [string, ...string[]];
+    const idSet = new Set(ids);
+    return { results: state.ledger.filter((row) => row.user_id === userId && idSet.has(row.id)) };
   }
 
   if (sql.includes("ORDER BY created_at DESC")) {

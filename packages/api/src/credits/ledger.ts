@@ -348,6 +348,43 @@ export async function listLedger(
   return results ?? [];
 }
 
+export async function listLedgerRowsByIds(
+  env: Env,
+  userId: string,
+  ids: string[],
+): Promise<CreditLedgerRow[]> {
+  const uniqueIds = [...new Set(ids)].filter(Boolean);
+  if (uniqueIds.length === 0) return [];
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(
+    `SELECT ${LEDGER_COLUMNS} FROM credit_ledger_entries
+     WHERE user_id = ? AND id IN (${placeholders})`,
+  )
+    .bind(userId, ...uniqueIds)
+    .all<CreditLedgerRow>();
+  return results ?? [];
+}
+
+export async function listSettlementsByReservationIds(
+  env: Env,
+  userId: string,
+  reservationIds: string[],
+): Promise<CreditLedgerRow[]> {
+  const uniqueIds = [...new Set(reservationIds)].filter(Boolean);
+  if (uniqueIds.length === 0) return [];
+  const placeholders = uniqueIds.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(
+    `SELECT ${LEDGER_COLUMNS} FROM credit_ledger_entries
+     WHERE user_id = ?
+       AND reference_type = 'reservation'
+       AND type IN ('commit', 'release')
+       AND reference_id IN (${placeholders})`,
+  )
+    .bind(userId, ...uniqueIds)
+    .all<CreditLedgerRow>();
+  return results ?? [];
+}
+
 async function getAccount(env: Env, userId: string): Promise<CreditAccountRow | null> {
   return env.DB.prepare(
     "SELECT user_id, available_credits, reserved_credits, updated_at FROM credit_accounts WHERE user_id = ?",

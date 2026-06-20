@@ -4,8 +4,18 @@ import type { BillingTier } from "../billing/types";
 import { jsonResponse, readJson } from "../http";
 import { createCreditsCheckout } from "./checkout";
 import { ensureMonthlyGrant, ensureSignupGrant } from "./grants";
-import { getCreditBalance, listLedger } from "./ledger";
-import { CreditsError, type CreditLedgerRow, type CreditsEnv } from "./types";
+import {
+  getCreditBalance,
+  listLedger,
+  listLedgerRowsByIds,
+  listSettlementsByReservationIds,
+} from "./ledger";
+import {
+  CreditsError,
+  type CreditActivityEntry,
+  type CreditLedgerRow,
+  type CreditsEnv,
+} from "./types";
 
 export async function handleCreditsRequest(
   request: Request,
@@ -57,8 +67,9 @@ async function handleLedger(request: Request, env: Env): Promise<Response> {
     beforeId: url.searchParams.get("before_id"),
     limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
   });
+  const activities = await buildCreditActivities(env, user.id, entries);
 
-  return jsonResponse({ entries: entries.map(serializeLedger) });
+  return jsonResponse({ activities, entries: entries.map(serializeLedger) });
 }
 
 async function handleCheckout(request: Request, env: Env): Promise<Response> {
@@ -103,6 +114,183 @@ function serializeLedger(row: CreditLedgerRow): Record<string, unknown> {
   };
 }
 
+async function buildCreditActivities(
+  env: Env,
+  userId: string,
+  entries: CreditLedgerRow[],
+): Promise<CreditActivityEntry[]> {
+  const entryIds = new Set(entries.map((entry) => entry.id));
+  const reserveIds = new Set<string>();
+  const reservesById = new Map<string, CreditLedgerRow>();
+  const settlementsByReserveId = new Map<string, CreditLedgerRow>();
+
+  for (const entry of entries) {
+    if (entry.type === "reserve") {
+      reserveIds.add(entry.id);
+      reservesById.set(entry.id, entry);
+      continue;
+    }
+    if (isReservationSettlement(entry)) {
+      reserveIds.add(entry.reference_id);
+      settlementsByReserveId.set(entry.reference_id, entry);
+    }
+  }
+
+  const missingReserveIds = [...reserveIds].filter((id) => !reservesById.has(id));
+  for (const row of await listLedgerRowsByIds(env, userId, missingReserveIds)) {
+    if (row.type === "reserve") {
+      reservesById.set(row.id, row);
+    }
+  }
+
+  const reserveIdsMissingSettlements = [...reserveIds].filter((id) => !settlementsByReserveId.has(id));
+  for (const row of await listSettlementsByReservationIds(env, userId, reserveIdsMissingSettlements)) {
+    if (isReservationSettlement(row)) {
+      settlementsByReserveId.set(row.reference_id, row);
+    }
+  }
+
+  const usedSettlementIds = new Set<string>();
+  const activities: CreditActivityEntry[] = [];
+  for (const entry of entries) {
+    if (isReservationSettlement(entry)) {
+      const reserve = reservesById.get(entry.reference_id);
+      if (!reserve || usedSettlementIds.has(entry.id)) continue;
+      activities.push(settlementActivity(entry, reserve));
+      usedSettlementIds.add(entry.id);
+      continue;
+    }
+
+    if (entry.type === "reserve") {
+      const settlement = settlementsByReserveId.get(entry.id);
+      if (settlement) {
+        // The final, user-facing activity belongs to the settlement row. If it
+        // is not in this raw page, it appeared in a newer page and should not
+        // be duplicated here.
+        if (entryIds.has(settlement.id) && !usedSettlementIds.has(settlement.id)) {
+          activities.push(settlementActivity(settlement, entry));
+          usedSettlementIds.add(settlement.id);
+        }
+        continue;
+      }
+      activities.push({
+        amount: entry.amount,
+        created_at: entry.created_at,
+        id: entry.id,
+        task_type: entry.task_type,
+        title: `Pending · ${taskLabel(entry.task_type)}`,
+        type: "pending",
+      });
+      continue;
+    }
+
+    const directActivity = directLedgerActivity(entry);
+    if (directActivity) activities.push(directActivity);
+  }
+
+  return activities;
+}
+
+function isReservationSettlement(
+  entry: CreditLedgerRow,
+): entry is CreditLedgerRow & { reference_id: string; reference_type: "reservation"; type: "commit" | "release" } {
+  return (
+    (entry.type === "commit" || entry.type === "release") &&
+    entry.reference_type === "reservation" &&
+    typeof entry.reference_id === "string" &&
+    entry.reference_id.length > 0
+  );
+}
+
+function settlementActivity(settlement: CreditLedgerRow, reserve: CreditLedgerRow): CreditActivityEntry {
+  if (settlement.type === "release") {
+    return {
+      amount: settlement.amount > 0 ? settlement.amount : Math.abs(reserve.amount),
+      created_at: settlement.created_at,
+      id: settlement.id,
+      task_type: reserve.task_type,
+      title: `Released · ${taskLabel(reserve.task_type)}`,
+      type: "released",
+    };
+  }
+
+  return {
+    amount: reserve.amount,
+    created_at: settlement.created_at,
+    id: settlement.id,
+    task_type: reserve.task_type,
+    title: `Spent · ${taskLabel(reserve.task_type)}`,
+    type: "spent",
+  };
+}
+
+function directLedgerActivity(entry: CreditLedgerRow): CreditActivityEntry | null {
+  switch (entry.type) {
+    case "purchase":
+      return {
+        amount: entry.amount,
+        created_at: entry.created_at,
+        id: entry.id,
+        task_type: entry.task_type,
+        title: "Credit purchase",
+        type: "credit_purchase",
+      };
+    case "grant_monthly": {
+      const signup = entry.reference_type === "signup_grant";
+      return {
+        amount: entry.amount,
+        created_at: entry.created_at,
+        id: entry.id,
+        task_type: entry.task_type,
+        title: signup ? "Signup credits" : "Monthly credits",
+        type: signup ? "signup_credits" : "monthly_credits",
+      };
+    }
+    case "refund":
+      return {
+        amount: entry.amount,
+        created_at: entry.created_at,
+        id: entry.id,
+        task_type: entry.task_type,
+        title: "Refund",
+        type: "refund",
+      };
+    case "adjustment":
+      return {
+        amount: entry.amount,
+        created_at: entry.created_at,
+        id: entry.id,
+        task_type: entry.task_type,
+        title: "Adjustment",
+        type: "adjustment",
+      };
+    case "expire":
+      return {
+        amount: entry.amount,
+        created_at: entry.created_at,
+        id: entry.id,
+        task_type: entry.task_type,
+        title: "Expired",
+        type: "expired",
+      };
+    default:
+      return null;
+  }
+}
+
+function taskLabel(taskType: string | null): string {
+  switch (taskType) {
+    case "chat_message":
+      return "Chat message";
+    case "image_generation":
+      return "Image generation";
+    case "voice_generation":
+      return "Voice generation";
+    default:
+      return "Credit usage";
+  }
+}
+
 function parseMetadata(value: string | null): Record<string, unknown> | null {
   if (!value) return null;
   try {
@@ -117,7 +305,9 @@ export {
   adjustCredits,
   commitReservation,
   getCreditBalance,
+  listLedgerRowsByIds,
   listLedger,
+  listSettlementsByReservationIds,
   refundCredits,
   releaseReservation,
   reserveCredits,

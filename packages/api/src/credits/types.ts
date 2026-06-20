@@ -52,6 +52,26 @@ export type CreditLedgerRow = {
   created_at: number;
 };
 
+export type CreditActivityType =
+  | "spent"
+  | "released"
+  | "pending"
+  | "credit_purchase"
+  | "monthly_credits"
+  | "signup_credits"
+  | "refund"
+  | "adjustment"
+  | "expired";
+
+export type CreditActivityEntry = {
+  id: string;
+  type: CreditActivityType;
+  title: string;
+  amount: number;
+  created_at: number;
+  task_type: string | null;
+};
+
 export type CreditBalance = {
   available_credits: number;
   reserved_credits: number;
