@@ -92,7 +92,7 @@ task_api_d1_migrate_local() {
 
 task_api_d1_migrate_prod() {
     load_env_file "$REPO_ROOT/.env.prod"
-    run_in "packages/api" npx wrangler d1 migrations apply xtbit-apps-prod --remote --config "$WRANGLER_CFG"
+    run_in "packages/api" npx wrangler d1 migrations apply xtbit-apps-prod --remote --config "$WRANGLER_CFG" --env prod
 }
 
 task_api_deploy_dev() {
