@@ -5,8 +5,6 @@
   "scripts": {
     "generate:env": "bash ./scripts/generate-env-files.sh local",
     "generate:env:local": "bash ./scripts/generate-env-files.sh local",
-    "generate:env:dev": "bash ./scripts/generate-env-files.sh dev",
-    "generate:env:prod": "bash ./scripts/generate-env-files.sh prod",
     "run:local": "bash ./scripts/run-local-stack.sh",
     "run:local:app": "bash ./scripts/tasks/run.sh app:local",
     "run:local:api": "bash ./scripts/tasks/run.sh api:local",

@@ -12,8 +12,14 @@ const NOW = Date.now();
 type AnalyticsRow = {
   anonymous_id: string;
   event_name: string;
+  gclid: string | null;
   properties_json: string;
   received_at: number;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_medium: string | null;
+  utm_source: string | null;
+  utm_term: string | null;
   user_id: string | null;
 };
 
@@ -86,13 +92,25 @@ function statement(
           receivedAt,
           ,
           propertiesJson,
-        ] = values as [string, string, string, string | null, string | null, number, number, string | null, string];
+          utmSource,
+          utmMedium,
+          utmCampaign,
+          utmContent,
+          utmTerm,
+          gclid,
+        ] = values as unknown[];
         rows.push({
-          anonymous_id: anonymousId,
-          event_name: eventName,
-          properties_json: propertiesJson,
-          received_at: receivedAt,
-          user_id: userId,
+          anonymous_id: anonymousId as string,
+          event_name: eventName as string,
+          gclid: gclid as string | null,
+          properties_json: propertiesJson as string,
+          received_at: receivedAt as number,
+          utm_campaign: utmCampaign as string | null,
+          utm_content: utmContent as string | null,
+          utm_medium: utmMedium as string | null,
+          utm_source: utmSource as string | null,
+          utm_term: utmTerm as string | null,
+          user_id: userId as string | null,
         });
         return { meta: { changes: 1 } };
       }
@@ -223,21 +241,71 @@ describe("handleAnalyticsRequest", () => {
     });
   });
 
+  it("stores paid acquisition attribution fields", async () => {
+    const { env, rows } = createEnv();
+
+    const response = await handleAnalyticsRequest(
+      eventRequest({
+        event: {
+          anonymous_id: "anon-ad",
+          event_name: "signup_completed",
+          occurred_at: NOW,
+          properties: {
+            method: "email",
+            result: "success",
+          },
+          utm_source: "google",
+          utm_medium: "cpc",
+          utm_campaign: "launch",
+          utm_content: "hero",
+          utm_term: "ai_character_chat",
+          gclid: "test-gclid",
+        },
+      }),
+      env,
+      "/analytics/events",
+    );
+
+    expect(response?.status).toBe(202);
+    expect(rows[0]).toMatchObject({
+      anonymous_id: "anon-ad",
+      event_name: "signup_completed",
+      gclid: "test-gclid",
+      utm_campaign: "launch",
+      utm_content: "hero",
+      utm_medium: "cpc",
+      utm_source: "google",
+      utm_term: "ai_character_chat",
+    });
+  });
+
   it("cleans up analytics rows older than 180 days", async () => {
     const { env, rows } = createEnv();
     rows.push(
       {
         anonymous_id: "old",
         event_name: "web_page_viewed",
+        gclid: null,
         properties_json: "{}",
         received_at: NOW - 181 * 24 * 60 * 60 * 1000,
+        utm_campaign: null,
+        utm_content: null,
+        utm_medium: null,
+        utm_source: null,
+        utm_term: null,
         user_id: null,
       },
       {
         anonymous_id: "fresh",
         event_name: "web_page_viewed",
+        gclid: null,
         properties_json: "{}",
         received_at: NOW - 10 * 24 * 60 * 60 * 1000,
+        utm_campaign: null,
+        utm_content: null,
+        utm_medium: null,
+        utm_source: null,
+        utm_term: null,
         user_id: null,
       },
     );

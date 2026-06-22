@@ -1,6 +1,7 @@
 import { getBillingCustomer, upsertBillingCustomer } from "../billing/repository";
 import { createCustomer, createStripeClient } from "../billing/stripe";
 import type { UserRecord } from "../identity";
+import { analyticsContextToStripeMetadata, normalizeAnalyticsAttributionContext } from "../analytics/attribution";
 import { getSetting } from "../settings/store";
 import { CREDIT_PACKAGES, isCreditPackageId } from "./pricing";
 import { CreditsError, type CreditsEnv } from "./types";
@@ -9,11 +10,13 @@ export async function createCreditsCheckout(
   env: CreditsEnv,
   user: UserRecord,
   packageRaw: unknown,
+  analyticsRaw?: unknown,
 ): Promise<string> {
   if (!isCreditPackageId(packageRaw)) {
     throw new CreditsError("invalid_credit_package", 400);
   }
   const pkg = CREDIT_PACKAGES[packageRaw];
+  const analytics = normalizeAnalyticsAttributionContext(analyticsRaw);
 
   const secretKey = await getSetting(env, "billing.stripe_secret_key");
   const priceId = await getSetting(env, pkg.priceSettingKey);
@@ -55,6 +58,7 @@ export async function createCreditsCheckout(
       customer: customer.stripe_customer_id,
       line_items: [{ price: priceId, quantity: 1 }],
       metadata: {
+        ...analyticsContextToStripeMetadata(analytics),
         credit_package: packageRaw,
         credits: String(pkg.credits),
         user_id: user.id,

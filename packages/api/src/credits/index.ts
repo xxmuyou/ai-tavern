@@ -77,8 +77,8 @@ async function handleCheckout(request: Request, env: Env): Promise<Response> {
     return methodNotAllowed();
   }
   const user = await requireAuthUser(env, request);
-  const body = await readJson<{ package?: unknown }>(request);
-  const checkoutUrl = await createCreditsCheckout(env as CreditsEnv, user, body?.package);
+  const body = await readJson<{ analytics?: unknown; package?: unknown }>(request);
+  const checkoutUrl = await createCreditsCheckout(env as CreditsEnv, user, body?.package, body.analytics);
   return jsonResponse({ checkout_url: checkoutUrl });
 }
 

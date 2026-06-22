@@ -7,7 +7,7 @@ import { LoadingScreen } from '@/components/LoadingScreen';
 import { consumePendingAuthRedirect } from '@/components/web/WebAuthControls';
 import { AUTH_LOGIN_ROUTE, DISCOVER_ROUTE, SCENES_ROUTE } from '@/constants/routes';
 import { useSession } from '@/hooks/use-session';
-import { trackWebEvent } from '@/utils/analytics';
+import { trackSignupCompleted, trackWebEvent } from '@/utils/analytics';
 
 const errorMessages: Record<string, string> = {
   email_unverified: 'Your Google account email is not verified. Please verify it and try again.',
@@ -37,6 +37,7 @@ export default function AuthSuccessScreen() {
         trackWebEvent('auth_completed', {
           result: 'success',
         });
+        trackSignupCompleted('oauth_or_magic_link');
         const fallback = Platform.OS === 'web' ? DISCOVER_ROUTE : SCENES_ROUTE;
         router.replace((consumePendingAuthRedirect() ?? fallback) as Href);
         return;

@@ -86,6 +86,8 @@ function createEnv(): Env & {
                   statuses.set(values[3] as string, values[0] as string);
                 } else if (sql.includes("INSERT INTO billing_subscriptions")) {
                   env.subscriptionUpserts += 1;
+                } else if (sql.includes("INSERT INTO analytics_events")) {
+                  // Analytics is best-effort in webhook flows.
                 }
                 return { meta: { changes: 1 } };
               },

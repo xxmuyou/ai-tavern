@@ -2,7 +2,7 @@
 
 > 本文档是 `scripts/` 下脚本与对应 `pnpm` 命令的权威清单。环境配置见 [`environments.md`](./environments.md),密钥管理见 [`secrets.md`](./secrets.md),部署流程见 [`deployment.md`](./deployment.md)。
 
-命名遵循「**动作 : 对象 : 目标**」,读命令名即知职责,例如 `run:local`(运行本地)、`generate:env:dev`(生成 dev env 文件)、`upload:secrets:dev`(上传 dev 密钥)、`migrate:db:prod`(迁移 prod 数据库)。
+命名遵循「**动作 : 对象 : 目标**」,读命令名即知职责,例如 `run:local`(运行本地)、`generate:env:local`(生成本地 Worker env)、`upload:secrets:dev`(上传 dev 密钥)、`migrate:db:prod`(迁移 prod 数据库)。
 
 ---
 
@@ -14,9 +14,7 @@
 | `run:local:api` | `tasks/run.sh api:local` | 只启动本地 API(Wrangler dev) |
 | `run:local:app` | `tasks/run.sh app:local` | 只启动本地 App(Expo Web) |
 | `generate:env` | `scripts/generate-env-files.sh local` | 同 `generate:env:local` |
-| `generate:env:local` | `scripts/generate-env-files.sh local` | 从 `.env.local` 派生本地 env 文件 + `.dev.vars` |
-| `generate:env:dev` | `scripts/generate-env-files.sh dev` | 从 `.env.dev` 派生 `apps/app/.env.dev` |
-| `generate:env:prod` | `scripts/generate-env-files.sh prod` | 从 `.env.prod` 派生 `apps/app/.env.prod` |
+| `generate:env:local` | `scripts/generate-env-files.sh local` | 从 `.env.local` 派生 `infra/cloudflare/.dev.vars` |
 | `generate:cf-types` | `tasks/run.sh api:cf-types` | 生成 Worker 类型定义 `worker-configuration.d.ts` |
 | `migrate:db:local` | `tasks/run.sh api:d1-migrate-local` | 在本地 D1(SQLite)上应用迁移 |
 | `migrate:db:dev` | `tasks/run.sh api:d1-migrate-dev` | 在远端 dev D1 上应用迁移 |
@@ -41,7 +39,7 @@
 启动本地开发全栈,流程:
 
 1. 杀掉占用 8081 / 8787 的旧进程。
-2. 调 `generate-env-files.sh local` 准备本地 env 文件(失败则拒绝启动,避免用陈旧 env)。
+2. 调 `generate-env-files.sh local` 准备本地 Worker env(失败则拒绝启动,避免用陈旧 env)。
 3. 应用本地 D1 迁移(`--skip-migrate` 可跳过)。
 4. 并行启动 API(`run:local:api`)与 App(`run:local:app`),日志同时输出到终端与 `tmp/local.log`。
 5. `Ctrl+C` 或任一子进程退出时,清理另一个并退出。
@@ -57,18 +55,17 @@ pnpm run:local:app             # 只跑 App
 
 ### `generate-env-files.sh`(`pnpm generate:env:*`)
 
-把根目录单一来源 `.env.<target>` 派生到下游消费位置。**派生文件均带 `# AUTO-GENERATED ... DO NOT EDIT` banner,不要手改。**
+把根目录 `.env.local` 派生到本地 Worker 消费位置。**派生文件带 `# AUTO-GENERATED ... DO NOT EDIT` banner,不要手改。**
 
-- 所有 target:派生 `apps/app/.env.<target>`(仅 `EXPO_PUBLIC_*`,给 Expo 打包用)。
-- 仅 `local` target:额外派生 `infra/cloudflare/.dev.vars`(本地 Worker 运行时读取,按脚本顶部 `WORKER_KEYS` 白名单)。
+- 仅支持 `local` target:派生 `infra/cloudflare/.dev.vars`(本地 Worker 运行时读取,按脚本顶部 `WORKER_KEYS` 白名单)。
+- 不再生成 `apps/app/.env.*`。App/Web 标准命令通过 `scripts/tasks/run.sh` 直接读取根目录 `.env.local` / `.env.dev` / `.env.prod`。
 
 ```bash
-pnpm generate:env:local            # 本地:apps/app/.env.local + .dev.vars
-pnpm generate:env:dev              # dev:仅 apps/app/.env.dev
-pnpm generate:env:dev --dry-run    # 只打印计划,不写文件
+pnpm generate:env:local            # 本地:生成 infra/cloudflare/.dev.vars
+pnpm generate:env:local --dry-run  # 只打印计划,不写文件
 ```
 
-远端 Worker 的密钥不走这里,走 `upload:secrets:*`(见下)。
+dev/prod 不需要派生 env 文件:部署、导出与远端密钥分别走 `deploy:*` / `export:web:*` / `upload:secrets:*`。
 
 ### `upload-worker-secrets.sh`(`pnpm upload:secrets:*`)
 

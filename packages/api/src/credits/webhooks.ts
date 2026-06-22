@@ -1,4 +1,6 @@
 import type Stripe from "stripe";
+import { analyticsContextFromStripeMetadata } from "../analytics/attribution";
+import { recordAnalyticsEvent } from "../analytics/events";
 import { stripeId } from "../billing/repository";
 import { recordPurchase } from "./ledger";
 import { CREDIT_PACKAGES, isCreditPackageId } from "./pricing";
@@ -41,6 +43,12 @@ export async function handleCreditsCheckoutCompleted(
     sessionId: session.id,
     userId,
   });
+  await recordCreditsAnalytics(env, session, {
+    credits,
+    now,
+    packageId,
+    userId,
+  });
   return true;
 }
 
@@ -50,4 +58,54 @@ function resolveCredits(session: Stripe.Checkout.Session, packageId: keyof typeo
     return fromMetadata;
   }
   return CREDIT_PACKAGES[packageId].credits;
+}
+
+async function recordCreditsAnalytics(
+  env: Env,
+  session: Stripe.Checkout.Session,
+  input: {
+    credits: number;
+    now: number;
+    packageId: keyof typeof CREDIT_PACKAGES;
+    userId: string;
+  },
+): Promise<void> {
+  const attribution = analyticsContextFromStripeMetadata(session.metadata);
+  const common = compactProperties({
+    amount_total: session.amount_total ?? null,
+    checkout_type: "credits",
+    credit_package_id: input.packageId,
+    credits: input.credits,
+    currency: session.currency ?? null,
+    livemode: session.livemode ?? null,
+    payment_status: session.payment_status ?? null,
+    stripe_session_id: session.id,
+  });
+
+  try {
+    await recordAnalyticsEvent(env, {
+      attribution,
+      eventName: "billing_checkout_completed",
+      occurredAt: secondsToMillis(session.created) ?? input.now,
+      properties: common,
+      userId: input.userId,
+    });
+    await recordAnalyticsEvent(env, {
+      attribution,
+      eventName: "credits_purchased",
+      occurredAt: secondsToMillis(session.created) ?? input.now,
+      properties: common,
+      userId: input.userId,
+    });
+  } catch (error) {
+    console.error(JSON.stringify({ error: String(error), message: "Credits analytics write failed" }));
+  }
+}
+
+function secondsToMillis(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value * 1000 : null;
+}
+
+function compactProperties(properties: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
 }

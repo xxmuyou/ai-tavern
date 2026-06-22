@@ -2,6 +2,8 @@
 
 > **类型：** 新建  |  **依赖：** —  |  **估时：** 0.5 天  |  **状态：** ⚪ todo（详细）
 
+> **2026-06-22 更新：** 本 spec 中“派生 `apps/app/.env.*`”的设计已废弃。当前标准流程是:App/Web 命令通过 `scripts/tasks/run.sh` 直接读取根目录 `.env.local` / `.env.dev` / `.env.prod`;`scripts/generate-env-files.sh` 只为本地 Worker 生成 `infra/cloudflare/.dev.vars`。以 `docs/ops/scripts.md` 与 `docs/ops/secrets.md` 为准。
+
 ---
 
 ## Context

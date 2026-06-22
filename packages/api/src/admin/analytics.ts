@@ -55,22 +55,32 @@ type RevenueStatus = {
 };
 
 type BehaviorFunnel = {
+  activated_chatters: number;
   authenticated_users: number;
   chat_starters: number;
   checkout_starters: number;
   companion_clickers: number;
+  first_chat_starters: number;
   message_senders: number;
+  purchasers: number;
+  signups: number;
   visitors: number;
 };
 
 type BehaviorEventCounts = {
   billing_checkout_starts: number;
+  billing_checkout_completions: number;
+  chat_3_messages: number;
   chat_failures: number;
+  chat_first_starts: number;
   chat_successes: number;
   chat_attempts: number;
   companion_card_clicks: number;
+  credits_purchased: number;
   favorites: number;
   page_views: number;
+  signups: number;
+  subscription_starts: number;
 };
 
 type BehaviorTopCompanion = {
@@ -83,9 +93,25 @@ type BehaviorTopCompanion = {
 };
 
 type BehaviorAnalytics = {
+  acquisition_channels: BehaviorAcquisitionChannel[];
   event_counts: BehaviorEventCounts;
   funnel: BehaviorFunnel;
   top_companions: BehaviorTopCompanion[];
+};
+
+type BehaviorAcquisitionChannel = {
+  activated_chatters: number;
+  checkout_starters: number;
+  first_chat_starters: number;
+  google_click_id: string | null;
+  purchasers: number;
+  revenue_usd: number;
+  signups: number;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_source: string | null;
+  utm_term: string | null;
+  visitors: number;
 };
 
 type CursorPayload = {
@@ -322,18 +348,22 @@ async function loadBehaviorMetrics(
   env: Env,
   range: { fromMs: number; toMs: number },
 ): Promise<BehaviorAnalytics> {
-  const [funnelRow, eventRows, topRows] = await Promise.all([
+  const [funnelRow, eventRows, topRows, acquisitionRows] = await Promise.all([
     env.DB.prepare(
       `SELECT
          COUNT(DISTINCT anonymous_id) AS visitors,
          COUNT(DISTINCT user_id) AS authenticated_users,
+         COUNT(DISTINCT CASE WHEN event_name = 'signup_completed' THEN anonymous_id END) AS signups,
          COUNT(DISTINCT CASE WHEN event_name = 'companion_card_clicked' THEN anonymous_id END) AS companion_clickers,
          COUNT(DISTINCT CASE
            WHEN event_name = 'companion_detail_action_clicked'
             AND json_extract(properties_json, '$.action') = 'start_chat'
            THEN anonymous_id END) AS chat_starters,
+         COUNT(DISTINCT CASE WHEN event_name = 'first_chat_started' THEN anonymous_id END) AS first_chat_starters,
+         COUNT(DISTINCT CASE WHEN event_name = 'chat_3_messages_reached' THEN anonymous_id END) AS activated_chatters,
          COUNT(DISTINCT CASE WHEN event_name = 'chat_message_send_completed' THEN anonymous_id END) AS message_senders,
-         COUNT(DISTINCT CASE WHEN event_name = 'billing_checkout_started' THEN anonymous_id END) AS checkout_starters
+         COUNT(DISTINCT CASE WHEN event_name = 'billing_checkout_started' THEN anonymous_id END) AS checkout_starters,
+         COUNT(DISTINCT CASE WHEN event_name = 'billing_checkout_completed' THEN anonymous_id END) AS purchasers
        FROM analytics_events
        WHERE received_at >= ? AND received_at < ?`,
     )
@@ -364,10 +394,36 @@ async function loadBehaviorMetrics(
          AND json_extract(properties_json, '$.companion_id') IS NOT NULL
        GROUP BY companion_id
        ORDER BY chat_starts DESC, clicks DESC, favorites DESC, companion_id ASC
-       LIMIT 10`,
+      LIMIT 10`,
     )
       .bind(range.fromMs, range.toMs)
       .all<BehaviorTopCompanion>(),
+    env.DB.prepare(
+      `SELECT
+         COALESCE(utm_source, '(direct)') AS utm_source,
+         COALESCE(utm_campaign, '') AS utm_campaign,
+         COALESCE(utm_term, '') AS utm_term,
+         COALESCE(utm_content, '') AS utm_content,
+         COALESCE(gclid, gbraid, wbraid, '') AS google_click_id,
+         COUNT(DISTINCT anonymous_id) AS visitors,
+         COUNT(DISTINCT CASE WHEN event_name = 'signup_completed' THEN anonymous_id END) AS signups,
+         COUNT(DISTINCT CASE WHEN event_name = 'first_chat_started' THEN anonymous_id END) AS first_chat_starters,
+         COUNT(DISTINCT CASE WHEN event_name = 'chat_3_messages_reached' THEN anonymous_id END) AS activated_chatters,
+         COUNT(DISTINCT CASE WHEN event_name = 'billing_checkout_started' THEN anonymous_id END) AS checkout_starters,
+         COUNT(DISTINCT CASE WHEN event_name = 'billing_checkout_completed' THEN anonymous_id END) AS purchasers,
+         SUM(CASE
+           WHEN event_name = 'billing_checkout_completed'
+           THEN COALESCE(CAST(json_extract(properties_json, '$.amount_total') AS REAL), 0)
+           ELSE 0
+         END) / 100.0 AS revenue_usd
+       FROM analytics_events
+       WHERE received_at >= ? AND received_at < ?
+       GROUP BY utm_source, utm_campaign, utm_term, utm_content, google_click_id
+       ORDER BY revenue_usd DESC, purchasers DESC, first_chat_starters DESC, visitors DESC
+       LIMIT 10`,
+    )
+      .bind(range.fromMs, range.toMs)
+      .all<BehaviorAcquisitionChannel>(),
   ]);
 
   const counts = new Map((eventRows.results ?? []).map((row) => [row.event_name, row.count ?? 0]));
@@ -384,22 +440,46 @@ async function loadBehaviorMetrics(
   const chatFailures = chatFailureRow?.count ?? 0;
 
   return {
+    acquisition_channels: (acquisitionRows.results ?? []).map((row) => ({
+      activated_chatters: row.activated_chatters ?? 0,
+      checkout_starters: row.checkout_starters ?? 0,
+      first_chat_starters: row.first_chat_starters ?? 0,
+      google_click_id: emptyToNull(row.google_click_id),
+      purchasers: row.purchasers ?? 0,
+      revenue_usd: row.revenue_usd ?? 0,
+      signups: row.signups ?? 0,
+      utm_campaign: emptyToNull(row.utm_campaign),
+      utm_content: emptyToNull(row.utm_content),
+      utm_source: emptyToNull(row.utm_source),
+      utm_term: emptyToNull(row.utm_term),
+      visitors: row.visitors ?? 0,
+    })),
     funnel: {
+      activated_chatters: funnelRow?.activated_chatters ?? 0,
       visitors: funnelRow?.visitors ?? 0,
       authenticated_users: funnelRow?.authenticated_users ?? 0,
+      signups: funnelRow?.signups ?? 0,
       companion_clickers: funnelRow?.companion_clickers ?? 0,
       chat_starters: funnelRow?.chat_starters ?? 0,
+      first_chat_starters: funnelRow?.first_chat_starters ?? 0,
       message_senders: funnelRow?.message_senders ?? 0,
       checkout_starters: funnelRow?.checkout_starters ?? 0,
+      purchasers: funnelRow?.purchasers ?? 0,
     },
     event_counts: {
       page_views: counts.get("web_page_viewed") ?? 0,
       companion_card_clicks: counts.get("companion_card_clicked") ?? 0,
       favorites: counts.get("favorite_toggled") ?? 0,
+      signups: counts.get("signup_completed") ?? 0,
+      chat_first_starts: counts.get("first_chat_started") ?? 0,
+      chat_3_messages: counts.get("chat_3_messages_reached") ?? 0,
       chat_attempts: counts.get("chat_message_send_attempted") ?? 0,
       chat_successes: Math.max(0, chatCompletedCount - chatFailures),
       chat_failures: chatFailures,
       billing_checkout_starts: counts.get("billing_checkout_started") ?? 0,
+      billing_checkout_completions: counts.get("billing_checkout_completed") ?? 0,
+      credits_purchased: counts.get("credits_purchased") ?? 0,
+      subscription_starts: counts.get("subscription_started") ?? 0,
     },
     top_companions: (topRows.results ?? []).map((row) => ({
       companion_id: row.companion_id,
@@ -816,6 +896,10 @@ function toMillis(seconds: number | null): number | null {
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function emptyToNull(value: string | null): string | null {
+  return value && value.length > 0 ? value : null;
 }
 
 async function guard(handler: () => Promise<Response>): Promise<Response> {

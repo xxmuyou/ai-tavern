@@ -83,7 +83,7 @@ import { useEditMessage } from '@/hooks/use-edit-message';
 import { UserMessageEditor } from '@/components/UserMessageEditor';
 import { VoiceSettingsPanel } from '@/components/VoiceSettingsPanel';
 import { inviteTextForTarget, sceneTransitionText } from '@/utils/chat-actions';
-import { messageLengthBucket, trackWebEvent, trackWebPageView } from '@/utils/analytics';
+import { messageLengthBucket, trackChatActivationMilestones, trackWebEvent, trackWebPageView } from '@/utils/analytics';
 import { detectChatLanguage, type ChatLanguage } from '@/utils/chat-language';
 import { customSceneActionText, sceneActionLabel, sceneActionsFor, sceneActionText, type SceneAction } from '@/utils/scene-actions';
 
@@ -944,6 +944,12 @@ export default function WebChatScreen() {
         result: 'success',
         scene_id: sceneId ?? null,
       });
+      trackChatActivationMilestones({
+        chatMode: activeChatMode,
+        companionId,
+        messageCount: history.messages.filter((message) => message.role === 'user').length + 1,
+        sceneId: sceneId ?? null,
+      });
     } catch (error) {
       if (error instanceof ApiError && error.code === 'aborted') {
         // Caller-initiated cancel (left the chat); stay silent and just clean up.
@@ -980,7 +986,7 @@ export default function WebChatScreen() {
       // already started a new message.
       setDraft((current) => (current.length > 0 ? current : text));
     }
-  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, companionId, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, storyId, stream]);
+  }, [activeActivityId, activeChatMode, activePersonaId, appendLocalUserMessage, appendStreamingCompanionMessage, autoVoice.enabled, chatLanguage, cleanupFailedStreamingCompanionMessage, companionId, draft, enqueueCelebrations, finishStreamingCompanionMessage, followBottom, history.messages, messageActions, notifyNewReply, pushError, pushStreamingCompanionDelta, relationship, remainingSeconds, sceneId, storyId, stream]);
 
   const sendSceneAction = useCallback(async (action: SceneAction) => {
     if (stream.isStreaming || remainingSeconds > 0) return;

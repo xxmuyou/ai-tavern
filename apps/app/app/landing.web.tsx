@@ -203,7 +203,9 @@ function withLandingAttribution(destination: Href): Href {
   const current = new URLSearchParams(window.location.search);
   const next = new URLSearchParams();
   for (const [key, value] of current.entries()) {
-    if (key.startsWith('utm_')) next.set(key, value);
+    if (key.startsWith('utm_') || key === 'gclid' || key === 'gbraid' || key === 'wbraid') {
+      next.set(key, value);
+    }
   }
   const query = next.toString();
   return `${String(destination)}${query ? `?${query}` : ''}` as Href;

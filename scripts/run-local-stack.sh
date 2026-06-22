@@ -96,7 +96,7 @@ cleanup() {
 
 stop_ports
 
-echo "Preparing local env files..."
+echo "Preparing local Worker env..."
 if ! bash "$SCRIPT_DIR/generate-env-files.sh" local; then
     echo "Local env preparation failed. Refusing to start with stale env files." >&2
     exit 1

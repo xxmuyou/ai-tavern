@@ -12,6 +12,7 @@ export function createStripeClient(config: Pick<BillingConfig, "secretKey">): St
 export async function createCheckoutSession(
   stripe: Stripe,
   input: {
+    analyticsMetadata?: Record<string, string>;
     cancelUrl: string;
     customerId: string;
     priceId: string;
@@ -19,14 +20,15 @@ export async function createCheckoutSession(
     userId: string;
   },
 ): Promise<Stripe.Checkout.Session> {
+  const metadata = { ...(input.analyticsMetadata ?? {}), user_id: input.userId };
   return stripe.checkout.sessions.create({
     cancel_url: input.cancelUrl,
     client_reference_id: input.userId,
     customer: input.customerId,
     line_items: [{ price: input.priceId, quantity: 1 }],
-    metadata: { user_id: input.userId },
+    metadata,
     mode: "subscription",
-    subscription_data: { metadata: { user_id: input.userId } },
+    subscription_data: { metadata },
     success_url: input.successUrl,
   });
 }

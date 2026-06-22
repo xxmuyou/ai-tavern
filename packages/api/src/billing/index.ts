@@ -1,5 +1,6 @@
 import { isAdminUser, requireAuthUser } from "../auth";
-import { jsonResponse } from "../http";
+import { analyticsContextToStripeMetadata, normalizeAnalyticsAttributionContext } from "../analytics/attribution";
+import { jsonResponse, readJson } from "../http";
 import { readBillingConfig } from "./config";
 import { getBillingStatus } from "./entitlements";
 import {
@@ -51,6 +52,8 @@ async function handleCheckout(request: Request, env: BillingEnv): Promise<Respon
   }
 
   const user = await requireAuthUser(env, request);
+  const body = await readOptionalJson<{ analytics?: unknown }>(request);
+  const analytics = normalizeAnalyticsAttributionContext(body.analytics);
   const config = await readBillingConfig(env, "checkout");
   const stripe = createStripeClient(config);
   const now = Date.now();
@@ -77,6 +80,7 @@ async function handleCheckout(request: Request, env: BillingEnv): Promise<Respon
     }
 
     const session = await createCheckoutSession(stripe, {
+      analyticsMetadata: analyticsContextToStripeMetadata(analytics),
       cancelUrl: config.cancelUrl,
       customerId: customer.stripe_customer_id,
       priceId: config.priceProMonthly,
@@ -94,6 +98,12 @@ async function handleCheckout(request: Request, env: BillingEnv): Promise<Respon
     console.error(JSON.stringify({ error: String(err), message: "Stripe checkout failed" }));
     return jsonResponse({ error: "stripe_error" }, { status: 502 });
   }
+}
+
+async function readOptionalJson<T>(request: Request): Promise<T> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) return {} as T;
+  return readJson<T>(request);
 }
 
 async function handlePortal(request: Request, env: BillingEnv): Promise<Response> {

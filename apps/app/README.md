@@ -11,6 +11,8 @@ pnpm run:local
 
 The app reads `EXPO_PUBLIC_API_URL` and defaults to `http://127.0.0.1:8787` for local development. Use `pnpm run:local` to run both the local API and web app, or `pnpm preview:web:local` to export a static web bundle that still talks to the local API.
 
+Do not create or edit `apps/app/.env.*` files. Standard repo commands load root `.env.local`, `.env.dev`, and `.env.prod` directly before running Expo, so app-local env copies are intentionally not generated.
+
 ## Web / Mobile UI split
 
 Web and mobile can have completely different UI while sharing the same API client, hooks, session, types, and utilities.

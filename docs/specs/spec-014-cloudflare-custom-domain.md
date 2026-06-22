@@ -47,7 +47,7 @@ v1 RC 上线 [`README.md §4`](./README.md#4-v1-上线门槛) 要求所有配置
 | **Google Cloud Console → OAuth 2.0 client** | Authorized redirect URI 加 `https://aiappsbox.com/api/auth/oidc/google/callback` 和 `https://dev.aiappsbox.com/api/auth/oidc/google/callback` |
 | **Resend → Sender domain** | 验证 `aiappsbox.com` 或 `mail.aiappsbox.com`（SPF / DKIM 记录） |
 | `infra/cloudflare/wrangler.jsonc` | 无修改 —— `ALLOWED_ORIGINS` / `AUTH_SUCCESS_URL` / `STRIPE_*_URL` 已是目标域 |
-| `apps/app/.env.dev` / `apps/app/.env.prod` | 确认 `EXPO_PUBLIC_API_URL` 指向新域（dev: `https://dev.aiappsbox.com/api`、prod: `https://aiappsbox.com/api`） |
+| `scripts/tasks/run.sh` | 确认 Web export 任务注入的 `EXPO_PUBLIC_API_URL` 指向新域（dev: `https://dev.aiappsbox.com/api`、prod: `https://aiappsbox.com/api`） |
 
 ---
 
@@ -99,7 +99,7 @@ v1 RC 上线 [`README.md §4`](./README.md#4-v1-上线门槛) 要求所有配置
 
 ### 6. 前端环境变量同步
 
-确认 `apps/app/.env.dev` 与 `apps/app/.env.prod` 中：
+确认 `scripts/tasks/run.sh` 的 `app:export-web-dev` 与 `app:export-web-prod` 注入：
 
 ```bash
 EXPO_PUBLIC_API_URL=https://dev.aiappsbox.com/api    # dev

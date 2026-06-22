@@ -1,5 +1,7 @@
 import { Linking, type ImageSourcePropType } from 'react-native';
 
+import { readAnalyticsContext } from '@/utils/analytics-context';
+
 import type {
   ActivityCreateInput,
   ActivityResponse,
@@ -1600,7 +1602,11 @@ export async function getBillingStatus(): Promise<BillingStatusResponse> {
 }
 
 export async function startCheckout(): Promise<{ checkout_url: string }> {
-  return requestJson<{ checkout_url: string }>('/billing/checkout', { method: 'POST' });
+  return requestJson<{ checkout_url: string }>('/billing/checkout', {
+    body: JSON.stringify({ analytics: readAnalyticsContext() }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
 }
 
 export async function openBillingPortal(): Promise<{ portal_url: string }> {
@@ -1629,7 +1635,7 @@ export async function startCreditsCheckout(
   pkg: CreditPackageId,
 ): Promise<{ checkout_url: string }> {
   return requestJson<{ checkout_url: string }>('/credits/checkout', {
-    body: JSON.stringify({ package: pkg }),
+    body: JSON.stringify({ analytics: readAnalyticsContext(), package: pkg }),
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   });

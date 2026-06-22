@@ -29,9 +29,17 @@ type SubscriptionFixture = {
 type AnalyticsEventFixture = {
   anonymous_id: string;
   event_name: string;
+  gbraid?: string | null;
+  gclid?: string | null;
   properties: Record<string, unknown>;
   received_at: number;
+  utm_campaign?: string | null;
+  utm_content?: string | null;
+  utm_medium?: string | null;
+  utm_source?: string | null;
+  utm_term?: string | null;
   user_id: string | null;
+  wbraid?: string | null;
 };
 
 type TestEnv = AuthEnv & {
@@ -121,17 +129,29 @@ function buildStatement(
         return {
           visitors: uniqueCount(events.map((event) => event.anonymous_id)),
           authenticated_users: uniqueCount(events.map((event) => event.user_id).filter(Boolean)),
+          signups: uniqueCount(events
+            .filter((event) => event.event_name === "signup_completed")
+            .map((event) => event.anonymous_id)),
           companion_clickers: uniqueCount(events
             .filter((event) => event.event_name === "companion_card_clicked")
             .map((event) => event.anonymous_id)),
           chat_starters: uniqueCount(events
             .filter((event) => event.event_name === "companion_detail_action_clicked" && event.properties.action === "start_chat")
             .map((event) => event.anonymous_id)),
+          first_chat_starters: uniqueCount(events
+            .filter((event) => event.event_name === "first_chat_started")
+            .map((event) => event.anonymous_id)),
+          activated_chatters: uniqueCount(events
+            .filter((event) => event.event_name === "chat_3_messages_reached")
+            .map((event) => event.anonymous_id)),
           message_senders: uniqueCount(events
             .filter((event) => event.event_name === "chat_message_send_completed")
             .map((event) => event.anonymous_id)),
           checkout_starters: uniqueCount(events
             .filter((event) => event.event_name === "billing_checkout_started")
+            .map((event) => event.anonymous_id)),
+          purchasers: uniqueCount(events
+            .filter((event) => event.event_name === "billing_checkout_completed")
             .map((event) => event.anonymous_id)),
         } as T;
       }
@@ -261,6 +281,76 @@ function buildStatement(
         }
         return {
           results: [...grouped.entries()].map(([event_name, count]) => ({ event_name, count })) as T[],
+        };
+      }
+      if (sql.includes("COALESCE(utm_source, '(direct)') AS utm_source")) {
+        const [fromMs, toMs] = values as [number, number];
+        const grouped = new Map<string, {
+          activated_chatters: Set<string>;
+          checkout_starters: Set<string>;
+          first_chat_starters: Set<string>;
+          google_click_id: string;
+          purchasers: Set<string>;
+          revenue_usd: number;
+          signups: Set<string>;
+          utm_campaign: string;
+          utm_content: string;
+          utm_source: string;
+          utm_term: string;
+          visitors: Set<string>;
+        }>();
+        for (const event of eventsInRange(stores.analyticsEvents, fromMs, toMs)) {
+          const utm_source = event.utm_source ?? "(direct)";
+          const utm_campaign = event.utm_campaign ?? "";
+          const utm_term = event.utm_term ?? "";
+          const utm_content = event.utm_content ?? "";
+          const google_click_id = event.gclid ?? event.gbraid ?? event.wbraid ?? "";
+          const key = [utm_source, utm_campaign, utm_term, utm_content, google_click_id].join("\u0001");
+          const current = grouped.get(key) ?? {
+            activated_chatters: new Set<string>(),
+            checkout_starters: new Set<string>(),
+            first_chat_starters: new Set<string>(),
+            google_click_id,
+            purchasers: new Set<string>(),
+            revenue_usd: 0,
+            signups: new Set<string>(),
+            utm_campaign,
+            utm_content,
+            utm_source,
+            utm_term,
+            visitors: new Set<string>(),
+          };
+          current.visitors.add(event.anonymous_id);
+          if (event.event_name === "signup_completed") current.signups.add(event.anonymous_id);
+          if (event.event_name === "first_chat_started") current.first_chat_starters.add(event.anonymous_id);
+          if (event.event_name === "chat_3_messages_reached") current.activated_chatters.add(event.anonymous_id);
+          if (event.event_name === "billing_checkout_started") current.checkout_starters.add(event.anonymous_id);
+          if (event.event_name === "billing_checkout_completed") {
+            current.purchasers.add(event.anonymous_id);
+            current.revenue_usd += typeof event.properties.amount_total === "number"
+              ? event.properties.amount_total / 100
+              : 0;
+          }
+          grouped.set(key, current);
+        }
+        return {
+          results: [...grouped.values()]
+            .map((row) => ({
+              activated_chatters: row.activated_chatters.size,
+              checkout_starters: row.checkout_starters.size,
+              first_chat_starters: row.first_chat_starters.size,
+              google_click_id: row.google_click_id,
+              purchasers: row.purchasers.size,
+              revenue_usd: row.revenue_usd,
+              signups: row.signups.size,
+              utm_campaign: row.utm_campaign,
+              utm_content: row.utm_content,
+              utm_source: row.utm_source,
+              utm_term: row.utm_term,
+              visitors: row.visitors.size,
+            }))
+            .sort((a, b) => b.revenue_usd - a.revenue_usd || b.purchasers - a.purchasers || b.first_chat_starters - a.first_chat_starters || b.visitors - a.visitors)
+            .slice(0, 10) as T[],
         };
       }
       if (sql.includes("FROM analytics_events") && sql.includes("GROUP BY companion_id")) {
@@ -400,7 +490,12 @@ describe("admin analytics auth", () => {
       new Request("http://api/admin/analytics/overview"),
       env,
       "/admin/analytics/overview",
-      { now: () => NOW },
+      {
+        now: () => NOW,
+        createStripeClient: () => ({}) as never,
+        listCreditsRevenueSessions: async () => [],
+        listSubscriptionRevenueInvoices: async () => [],
+      },
     );
 
     expect(res?.status).toBe(401);
@@ -414,7 +509,12 @@ describe("admin analytics auth", () => {
       }),
       env,
       "/admin/analytics/overview",
-      { now: () => NOW },
+      {
+        now: () => NOW,
+        createStripeClient: () => ({}) as never,
+        listCreditsRevenueSessions: async () => [],
+        listSubscriptionRevenueInvoices: async () => [],
+      },
     );
 
     expect(res?.status).toBe(403);
@@ -429,7 +529,12 @@ describe("admin analytics auth", () => {
       }),
       env,
       "/admin/analytics/overview",
-      { now: () => NOW },
+      {
+        now: () => NOW,
+        createStripeClient: () => ({}) as never,
+        listCreditsRevenueSessions: async () => [],
+        listSubscriptionRevenueInvoices: async () => [],
+      },
     );
 
     expect(res?.status).toBe(405);
@@ -739,7 +844,12 @@ describe("GET /admin/analytics/overview", () => {
       }),
       env,
       "/admin/analytics/overview",
-      { now: () => NOW },
+      {
+        now: () => NOW,
+        createStripeClient: () => ({}) as never,
+        listCreditsRevenueSessions: async () => [],
+        listSubscriptionRevenueInvoices: async () => [],
+      },
     );
 
     expect(res?.status).toBe(200);
@@ -754,10 +864,14 @@ describe("GET /admin/analytics/overview", () => {
     expect(body.behavior.funnel).toEqual({
       visitors: 3,
       authenticated_users: 1,
+      signups: 0,
       companion_clickers: 1,
       chat_starters: 1,
+      first_chat_starters: 0,
+      activated_chatters: 0,
       message_senders: 2,
       checkout_starters: 1,
+      purchasers: 0,
     });
     expect(body.behavior.event_counts).toMatchObject({
       page_views: 1,

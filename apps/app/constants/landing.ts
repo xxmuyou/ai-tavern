@@ -17,8 +17,8 @@ export type LandingConfig = {
 };
 
 export const LANDING_CONFIG: LandingConfig = {
-  eyebrow: 'AI relationship life sim',
-  headline: 'Meet companions who live beyond the chat box.',
+  eyebrow: 'Story-driven AI character chat',
+  headline: 'Meet fictional AI companions with scenes and memories.',
   primaryCta: {
     destination: '/' as Href,
     id: 'explore_companions',
@@ -30,5 +30,5 @@ export const LANDING_CONFIG: LandingConfig = {
     label: 'Create your companion',
   },
   subcopy:
-    'Choose a companion, enter a scene, and let daily conversations, memories, and relationship progress shape your story.',
+    'Choose a character, enter a roleplay scene, and let daily conversations, memories, and relationship progress shape a PG-13 story.',
 };

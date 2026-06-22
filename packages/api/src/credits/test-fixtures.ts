@@ -28,6 +28,10 @@ type Mode = "run" | "first" | "all";
  * faithfully (there is no real SQLite in the test harness).
  */
 function execute(state: State, sql: string, values: unknown[], mode: Mode): unknown {
+  if (sql.includes("INSERT INTO analytics_events")) {
+    return { meta: { changes: 1 } };
+  }
+
   if (sql.includes("INSERT OR IGNORE INTO credit_accounts")) {
     const [userId, now] = values as [string, number];
     if (!state.accounts.has(userId)) {

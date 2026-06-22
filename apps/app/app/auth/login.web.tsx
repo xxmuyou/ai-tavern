@@ -11,7 +11,7 @@ import { WebButton, WebInput } from '@/components/web/ui';
 import { DISCOVER_ROUTE } from '@/constants/routes';
 import { useErrorBanner } from '@/hooks/use-error-banner';
 import { useSession } from '@/hooks/use-session';
-import { trackWebEvent, trackWebPageView } from '@/utils/analytics';
+import { trackSignupCompleted, trackWebEvent, trackWebPageView } from '@/utils/analytics';
 
 function signInErrorMessage(error: unknown): string {
   if (isApiRequestError(error) && error.code === 'api_unreachable') {
@@ -63,6 +63,7 @@ export default function WebLoginScreen() {
           method: 'email',
           result: 'success',
         });
+        trackSignupCompleted('email');
         router.replace(target);
         return;
       }

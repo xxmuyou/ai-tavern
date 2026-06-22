@@ -31,7 +31,11 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+# App-local env files are intentionally not generated; root .env.* files are
+# loaded by repo scripts before Expo starts.
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo

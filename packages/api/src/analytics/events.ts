@@ -1,8 +1,9 @@
 import { jsonResponse, readJson } from "../http";
 import { verifyRequestAuth } from "../auth/session";
 import type { AuthEnv } from "../auth/types";
+import type { AnalyticsAttributionContext } from "./attribution";
 
-type AnalyticsEventName =
+export type AnalyticsEventName =
   | "web_page_viewed"
   | "discover_filter_changed"
   | "discover_search_performed"
@@ -12,10 +13,16 @@ type AnalyticsEventName =
   | "login_redirect_started"
   | "auth_started"
   | "auth_completed"
+  | "signup_completed"
   | "companion_detail_action_clicked"
+  | "first_chat_started"
+  | "chat_3_messages_reached"
   | "chat_message_send_attempted"
   | "chat_message_send_completed"
   | "billing_checkout_started"
+  | "billing_checkout_completed"
+  | "subscription_started"
+  | "credits_purchased"
   | "billing_checkout_returned";
 
 type AnalyticsEventInput = {
@@ -27,8 +34,13 @@ type AnalyticsEventInput = {
   route_name?: unknown;
   session_id?: unknown;
   utm_campaign?: unknown;
+  utm_content?: unknown;
   utm_medium?: unknown;
   utm_source?: unknown;
+  utm_term?: unknown;
+  gbraid?: unknown;
+  gclid?: unknown;
+  wbraid?: unknown;
 };
 
 type AnalyticsPayload = {
@@ -44,8 +56,20 @@ const MAX_STRING_LENGTH = 160;
 const EVENT_PROPERTY_ALLOWLIST: Record<AnalyticsEventName, readonly string[]> = {
   auth_completed: ["method", "result"],
   auth_started: ["method", "redirect_target"],
+  billing_checkout_completed: [
+    "checkout_type",
+    "credit_package_id",
+    "credits",
+    "amount_total",
+    "currency",
+    "payment_status",
+    "stripe_session_id",
+    "subscription_id",
+    "livemode",
+  ],
   billing_checkout_returned: ["status"],
   billing_checkout_started: ["checkout_type", "credit_package_id", "surface"],
+  chat_3_messages_reached: ["companion_id", "chat_mode", "scene_id", "message_count"],
   chat_message_send_attempted: ["companion_id", "chat_mode", "scene_id", "message_length_bucket"],
   chat_message_send_completed: [
     "companion_id",
@@ -67,17 +91,43 @@ const EVENT_PROPERTY_ALLOWLIST: Record<AnalyticsEventName, readonly string[]> = 
     "is_authenticated",
   ],
   companion_detail_action_clicked: ["companion_id", "source", "gender", "action"],
+  credits_purchased: [
+    "checkout_type",
+    "credit_package_id",
+    "credits",
+    "amount_total",
+    "currency",
+    "payment_status",
+    "stripe_session_id",
+    "livemode",
+  ],
   discover_filter_changed: ["filter_type", "gender", "tag", "has_query", "result_count"],
   discover_search_performed: ["query_length", "has_query", "gender", "selected_tag", "result_count"],
   favorite_toggled: ["companion_id", "source", "gender", "next_state", "surface", "result", "error_code"],
+  first_chat_started: ["companion_id", "chat_mode", "scene_id", "message_count"],
   landing_cta_clicked: ["cta_id", "destination"],
   login_redirect_started: ["source_route", "redirect_target", "reason"],
+  signup_completed: ["method", "result"],
+  subscription_started: [
+    "checkout_type",
+    "amount_total",
+    "currency",
+    "payment_status",
+    "stripe_session_id",
+    "subscription_id",
+    "livemode",
+  ],
   web_page_viewed: [
     "route_name",
     "path_template",
     "utm_source",
     "utm_medium",
     "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "gclid",
+    "gbraid",
+    "wbraid",
     "referrer_domain",
   ],
 };
@@ -119,28 +169,11 @@ export async function handleAnalyticsRequest(
   for (const event of events) {
     const normalized = normalizeEvent(event, now);
     if (normalized instanceof Response) return normalized;
-    await env.DB.prepare(
-      `INSERT INTO analytics_events
-         (id, event_name, anonymous_id, user_id, session_id, occurred_at, received_at,
-          route_name, properties_json, utm_source, utm_medium, utm_campaign, referrer_domain)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        crypto.randomUUID(),
-        normalized.eventName,
-        normalized.anonymousId,
-        userId,
-        normalized.sessionId,
-        normalized.occurredAt,
-        now,
-        normalized.routeName,
-        JSON.stringify(normalized.properties),
-        normalized.utmSource,
-        normalized.utmMedium,
-        normalized.utmCampaign,
-        normalized.referrerDomain,
-      )
-      .run();
+    await insertAnalyticsEvent(env, {
+      ...normalized,
+      receivedAt: now,
+      userId,
+    });
   }
 
   return jsonResponse({ ok: true, accepted: events.length }, { status: 202 });
@@ -149,6 +182,52 @@ export async function handleAnalyticsRequest(
 export async function cleanupOldAnalyticsEvents(env: Env, now: number = Date.now()): Promise<void> {
   const cutoff = now - RETENTION_DAYS * 24 * 60 * 60 * 1000;
   await env.DB.prepare(`DELETE FROM analytics_events WHERE received_at < ?`).bind(cutoff).run();
+}
+
+export async function recordAnalyticsEvent(
+  env: Env,
+  input: {
+    anonymousId?: string | null;
+    attribution?: AnalyticsAttributionContext;
+    eventName: AnalyticsEventName;
+    occurredAt?: number;
+    properties?: Record<string, unknown>;
+    routeName?: string | null;
+    sessionId?: string | null;
+    userId?: string | null;
+  },
+): Promise<void> {
+  const now = Date.now();
+  const properties = normalizeProperties(input.eventName, input.properties ?? {});
+  if (properties instanceof Response) {
+    throw new Error("invalid_internal_analytics_event");
+  }
+  const anonymousId = normalizedString(input.anonymousId, 120) ||
+    normalizedString(input.attribution?.anonymousId, 120) ||
+    (input.userId ? `user_${input.userId}` : null);
+  if (!anonymousId) {
+    throw new Error("analytics_event_requires_anonymous_or_user_id");
+  }
+
+  await insertAnalyticsEvent(env, {
+    anonymousId,
+    eventName: input.eventName,
+    occurredAt: input.occurredAt ?? now,
+    properties,
+    receivedAt: now,
+    referrerDomain: input.attribution?.referrerDomain ?? null,
+    routeName: input.routeName ?? null,
+    sessionId: input.sessionId ?? input.attribution?.sessionId ?? null,
+    userId: input.userId ?? null,
+    utmCampaign: input.attribution?.utmCampaign ?? null,
+    utmContent: input.attribution?.utmContent ?? null,
+    utmMedium: input.attribution?.utmMedium ?? null,
+    utmSource: input.attribution?.utmSource ?? null,
+    utmTerm: input.attribution?.utmTerm ?? null,
+    gbraid: input.attribution?.gbraid ?? null,
+    gclid: input.attribution?.gclid ?? null,
+    wbraid: input.attribution?.wbraid ?? null,
+  });
 }
 
 async function optionalAuthUserId(env: Env, request: Request): Promise<string | null> {
@@ -175,6 +254,8 @@ function normalizeEventBatch(payload: AnalyticsPayload): AnalyticsEventInput[] |
 }
 
 function normalizeEvent(event: AnalyticsEventInput, now: number): {
+  gbraid: string | null;
+  gclid: string | null;
   anonymousId: string;
   eventName: AnalyticsEventName;
   occurredAt: number;
@@ -183,8 +264,11 @@ function normalizeEvent(event: AnalyticsEventInput, now: number): {
   routeName: string | null;
   sessionId: string | null;
   utmCampaign: string | null;
+  utmContent: string | null;
   utmMedium: string | null;
   utmSource: string | null;
+  utmTerm: string | null;
+  wbraid: string | null;
 } | Response {
   const eventName = typeof event.event_name === "string" ? event.event_name : "";
   if (!isAnalyticsEventName(eventName)) return invalidPayload();
@@ -204,14 +288,71 @@ function normalizeEvent(event: AnalyticsEventInput, now: number): {
     anonymousId,
     eventName,
     occurredAt,
+    gbraid: normalizedString(event.gbraid, 160),
+    gclid: normalizedString(event.gclid, 160),
     properties,
     referrerDomain: normalizedString(event.referrer_domain, 160),
     routeName: normalizedString(event.route_name, 80),
     sessionId: normalizedString(event.session_id, 120),
     utmCampaign: normalizedString(event.utm_campaign, 120),
+    utmContent: normalizedString(event.utm_content, 120),
     utmMedium: normalizedString(event.utm_medium, 80),
     utmSource: normalizedString(event.utm_source, 80),
+    utmTerm: normalizedString(event.utm_term, 120),
+    wbraid: normalizedString(event.wbraid, 160),
   };
+}
+
+async function insertAnalyticsEvent(
+  env: Env,
+  input: {
+    anonymousId: string;
+    eventName: AnalyticsEventName;
+    occurredAt: number;
+    properties: Record<string, unknown>;
+    receivedAt: number;
+    referrerDomain: string | null;
+    routeName: string | null;
+    sessionId: string | null;
+    userId: string | null;
+    utmCampaign: string | null;
+    utmContent: string | null;
+    utmMedium: string | null;
+    utmSource: string | null;
+    utmTerm: string | null;
+    gbraid: string | null;
+    gclid: string | null;
+    wbraid: string | null;
+  },
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO analytics_events
+       (id, event_name, anonymous_id, user_id, session_id, occurred_at, received_at,
+        route_name, properties_json, utm_source, utm_medium, utm_campaign, utm_content,
+        utm_term, gclid, gbraid, wbraid, referrer_domain)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      input.eventName,
+      input.anonymousId,
+      input.userId,
+      input.sessionId,
+      input.occurredAt,
+      input.receivedAt,
+      input.routeName,
+      JSON.stringify(input.properties),
+      input.utmSource,
+      input.utmMedium,
+      input.utmCampaign,
+      input.utmContent,
+      input.utmTerm,
+      input.gclid,
+      input.gbraid,
+      input.wbraid,
+      input.referrerDomain,
+    )
+    .run();
 }
 
 function normalizeProperties(

@@ -1178,22 +1178,32 @@ export type AdminAnalyticsRevenueStatus = {
 };
 
 export type AdminAnalyticsBehaviorFunnel = {
+  activated_chatters: number;
   authenticated_users: number;
   chat_starters: number;
   checkout_starters: number;
   companion_clickers: number;
+  first_chat_starters: number;
   message_senders: number;
+  purchasers: number;
+  signups: number;
   visitors: number;
 };
 
 export type AdminAnalyticsBehaviorEventCounts = {
+  billing_checkout_completions: number;
   billing_checkout_starts: number;
+  chat_3_messages: number;
   chat_attempts: number;
   chat_failures: number;
+  chat_first_starts: number;
   chat_successes: number;
   companion_card_clicks: number;
+  credits_purchased: number;
   favorites: number;
   page_views: number;
+  signups: number;
+  subscription_starts: number;
 };
 
 export type AdminAnalyticsBehaviorTopCompanion = {
@@ -1206,9 +1216,25 @@ export type AdminAnalyticsBehaviorTopCompanion = {
 };
 
 export type AdminAnalyticsBehavior = {
+  acquisition_channels: AdminAnalyticsAcquisitionChannel[];
   event_counts: AdminAnalyticsBehaviorEventCounts;
   funnel: AdminAnalyticsBehaviorFunnel;
   top_companions: AdminAnalyticsBehaviorTopCompanion[];
+};
+
+export type AdminAnalyticsAcquisitionChannel = {
+  activated_chatters: number;
+  checkout_starters: number;
+  first_chat_starters: number;
+  google_click_id: string | null;
+  purchasers: number;
+  revenue_usd: number;
+  signups: number;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_source: string | null;
+  utm_term: string | null;
+  visitors: number;
 };
 
 export type AdminAnalyticsOverviewResponse = {

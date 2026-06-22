@@ -1,4 +1,6 @@
 import type Stripe from "stripe";
+import { analyticsContextFromStripeMetadata } from "../analytics/attribution";
+import { recordAnalyticsEvent } from "../analytics/events";
 import { handleCreditsCheckoutCompleted, isCreditsCheckoutSession } from "../credits/webhooks";
 import {
   beginWebhookEvent,
@@ -88,6 +90,13 @@ async function handleCheckoutCompleted(
     await upsertSubscriptionFromStripe(env, subscription, userId, now);
   }
 
+  await recordCheckoutAnalytics(env, session, {
+    checkoutType: "subscription",
+    livemode,
+    subscriptionId,
+    userId,
+  });
+
   return true;
 }
 
@@ -148,4 +157,51 @@ function readInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
 
 export function eventTimeMillis(event: Stripe.Event): number {
   return secondsToMillis(event.created) ?? Date.now();
+}
+
+async function recordCheckoutAnalytics(
+  env: BillingEnv,
+  session: Stripe.Checkout.Session,
+  input: {
+    checkoutType: "subscription";
+    livemode: boolean;
+    subscriptionId: string | null;
+    userId: string;
+  },
+): Promise<void> {
+  const attribution = analyticsContextFromStripeMetadata(session.metadata);
+  const common = compactProperties({
+    amount_total: session.amount_total ?? null,
+    checkout_type: input.checkoutType,
+    currency: session.currency ?? null,
+    livemode: input.livemode,
+    payment_status: session.payment_status ?? null,
+    stripe_session_id: session.id,
+    subscription_id: input.subscriptionId,
+  });
+
+  try {
+    await recordAnalyticsEvent(env, {
+      attribution,
+      eventName: "billing_checkout_completed",
+      occurredAt: secondsToMillis(session.created) ?? Date.now(),
+      properties: common,
+      userId: input.userId,
+    });
+    if (input.subscriptionId) {
+      await recordAnalyticsEvent(env, {
+        attribution,
+        eventName: "subscription_started",
+        occurredAt: secondsToMillis(session.created) ?? Date.now(),
+        properties: common,
+        userId: input.userId,
+      });
+    }
+  } catch (error) {
+    console.error(JSON.stringify({ error: String(error), message: "Subscription analytics write failed" }));
+  }
+}
+
+function compactProperties(properties: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
 }

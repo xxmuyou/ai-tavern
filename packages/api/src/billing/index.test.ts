@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { signSession } from "../auth/session";
 import { createSessionsStore, createUsersStore } from "../auth/test-fixtures";
 import { handleBillingRequest } from "./index";
+import { createCheckoutSession } from "./stripe";
 
 vi.mock("./stripe", () => ({
   constructWebhookEvent: vi.fn(),
@@ -78,6 +79,45 @@ describe("billing routes", () => {
 
     expect(response?.status).toBe(200);
     await expect(response?.json()).resolves.toEqual({ checkout_url: "https://checkout.stripe.test/session" });
+    expect(vi.mocked(createCheckoutSession).mock.calls.at(-1)?.[1]).toMatchObject({
+      analyticsMetadata: {},
+      priceId: "price_pro",
+      userId: "user-1",
+    });
+  });
+
+  it("passes advertising attribution into checkout metadata", async () => {
+    const env = createEnv();
+    const token = await issueToken(env);
+    const response = await handleBillingRequest(
+      new Request("http://api/billing/checkout", {
+        body: JSON.stringify({
+          analytics: {
+            anonymous_id: "anon-ad",
+            session_id: "sess-ad",
+            utm_source: "google",
+            utm_campaign: "launch",
+            utm_term: "ai_character_chat",
+            gclid: "gclid-test",
+          },
+        }),
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        method: "POST",
+      }),
+      env,
+      ctx(),
+      "/billing/checkout",
+    );
+
+    expect(response?.status).toBe(200);
+    expect(vi.mocked(createCheckoutSession).mock.calls.at(-1)?.[1].analyticsMetadata).toMatchObject({
+      analytics_anonymous_id: "anon-ad",
+      analytics_session_id: "sess-ad",
+      gclid: "gclid-test",
+      utm_campaign: "launch",
+      utm_source: "google",
+      utm_term: "ai_character_chat",
+    });
   });
 
 
